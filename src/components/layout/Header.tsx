@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown, Wrench, Home } from "lucide-react";
+import { Menu, ChevronDown, Wrench, Home, UserPlus } from "lucide-react";
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -88,7 +88,7 @@ export function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem>
-                <Link href="/login/homeowner" className="w-full flex items-center gap-2">
+                <Link href="/login" className="w-full flex items-center gap-2">
                   <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
                     <Home className="h-3.5 w-3.5 text-primary" />
                   </div>
@@ -96,11 +96,19 @@ export function Header() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <Link href="/login/vendor" className="w-full flex items-center gap-2">
+                <Link href="/login?type=vendor" className="w-full flex items-center gap-2">
                   <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
                     <Wrench className="h-3.5 w-3.5 text-primary" />
                   </div>
                   Vendor Sign In
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Link href="/register" className="w-full flex items-center gap-2 font-medium text-accent">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/10">
+                    <UserPlus className="h-3.5 w-3.5 text-accent" />
+                  </div>
+                  Create Homeowner Account
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -155,15 +163,23 @@ export function Header() {
 
                 <div className="flex flex-col space-y-3 pt-4 border-t">
                   <Button variant="outline" className="w-full" asChild>
-                    <Link href="/login/homeowner" onClick={() => setIsOpen(false)}>
+                    <Link href="/login" onClick={() => setIsOpen(false)}>
                       Homeowner Sign In
                     </Link>
                   </Button>
                   <Button variant="outline" className="w-full" asChild>
-                    <Link href="/login/vendor" onClick={() => setIsOpen(false)}>
+                    <Link href="/login?type=vendor" onClick={() => setIsOpen(false)}>
                       Vendor Sign In
                     </Link>
                   </Button>
+                  <Link
+                    href="/register"
+                    onClick={() => setIsOpen(false)}
+                    className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Create Homeowner Account
+                  </Link>
                   <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground rounded-full" asChild>
                     <Link href="/request" onClick={() => setIsOpen(false)}>
                       Request Service
