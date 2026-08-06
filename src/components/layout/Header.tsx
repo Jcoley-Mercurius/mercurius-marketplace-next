@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   DropdownMenu,
@@ -12,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Menu, ChevronDown, Wrench, Home, UserPlus } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,7 +22,7 @@ export function Header() {
   const navigation = [
     { name: "For Homeowners", href: "/homeowners" },
     { name: "Find a Pro", href: "/providers" },
-    { name: "For Vendors", href: "/vendors/apply" },
+    { name: "For Vendors", href: "/vendors" },
   ];
 
   const isActive = (path: string) => pathname === path;
@@ -30,9 +32,11 @@ export function Header() {
       <div className="container mx-auto flex h-16 items-center px-4 relative">
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-2 flex-shrink-0">
-          <img
+          <Image
             src="/mercurius-logo.png"
             alt="Mercurius"
+            width={64}
+            height={64}
             className="h-14 w-14 md:h-16 md:w-16 object-contain"
           />
           <span className="text-xl font-semibold text-foreground">Mercurius</span>
@@ -114,9 +118,7 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-full" asChild>
-            <Link href="/request">Get Started</Link>
-          </Button>
+          <Link href="/request" className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent/90")}>Get Started</Link>
         </div>
 
         {/* Mobile Menu */}
@@ -162,16 +164,8 @@ export function Header() {
                 </nav>
 
                 <div className="flex flex-col space-y-3 pt-4 border-t">
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link href="/login" onClick={() => setIsOpen(false)}>
-                      Homeowner Sign In
-                    </Link>
-                  </Button>
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link href="/login/vendor" onClick={() => setIsOpen(false)}>
-                      Vendor Sign In
-                    </Link>
-                  </Button>
+                  <Link href="/login" onClick={() => setIsOpen(false)} className={cn(buttonVariants({ variant: "outline" }), "w-full")}>Homeowner Sign In</Link>
+                  <Link href="/login/vendor" onClick={() => setIsOpen(false)} className={cn(buttonVariants({ variant: "outline" }), "w-full")}>Vendor Sign In</Link>
                   <Link
                     href="/register"
                     onClick={() => setIsOpen(false)}
@@ -180,11 +174,7 @@ export function Header() {
                     <UserPlus className="h-4 w-4" />
                     Create Homeowner Account
                   </Link>
-                  <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground rounded-full" asChild>
-                    <Link href="/request" onClick={() => setIsOpen(false)}>
-                      Request Service
-                    </Link>
-                  </Button>
+                  <Link href="/request" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent/90")}>Request Service</Link>
                 </div>
               </div>
             </SheetContent>

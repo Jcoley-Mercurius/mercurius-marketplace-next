@@ -48,7 +48,10 @@ type ServiceOption = {
   oneTimePrice: number;
   defaultFrequency: Frequency;
   frequencies: Frequency[];
+  livePrices?: Partial<Record<Frequency, number>>;
 };
+
+type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>> };
 
 const serviceOptions: ServiceOption[] = [
   { id: "lawn-mowing", name: "Lawn Mowing", description: "Mowing, edging, and cleanup", icon: Leaf, monthlyPrice: 120, oneTimePrice: 45, defaultFrequency: "weekly", frequencies: ["weekly", "monthly", "one-time"] },
@@ -84,6 +87,7 @@ export default function RequestServicePage() {
   const [hydrated, setHydrated] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [serviceOverrides, setServiceOverrides] = useState<Record<string, Partial<ServiceOption>>>({});
   const { user } = useAuth();
   const router = useRouter();
 
@@ -109,14 +113,44 @@ export default function RequestServicePage() {
         if (typeof value.email === "string") setEmail(value.email);
         if (typeof value.phone === "string") setPhone(value.phone);
         if (typeof value.smsUpdates === "boolean") setSmsUpdates(value.smsUpdates);
-      } else if (builder) {
-        const value = JSON.parse(builder) as { selectedServiceIds?: unknown; frequencies?: unknown };
-        if (Array.isArray(value.selectedServiceIds)) {
+      }
+      if (builder) {
+        const value = JSON.parse(builder) as { selectedServiceIds?: unknown; frequencies?: unknown; requestedServices?: unknown };
+        const requestedServices = Array.isArray(value.requestedServices) ? value.requestedServices.filter(isBuilderRequestedService) : [];
+        if (requestedServices.length > 0) {
+          const directlyRequestableItems = requestedServices.filter((item) => item.availability === "fixed" && serviceOptions.some((service) => service.id === item.id));
+          const directlyRequestable = directlyRequestableItems.map((item) => item.id);
+          const needsMatching = requestedServices.filter((item) => item.availability !== "fixed" || !serviceOptions.some((service) => service.id === item.id));
+          setSelectedIds([...directlyRequestable, ...(needsMatching.length > 0 ? ["general-home-service"] : [])]);
+          setServiceOverrides(Object.fromEntries(directlyRequestableItems.map((item) => [item.id, {
+            name: item.name,
+            description: item.descriptor,
+            defaultFrequency: item.defaultFrequency,
+            frequencies: item.frequencies,
+            livePrices: item.prices,
+          }])));
+          if (needsMatching.length > 0) setDescription((current) => current || `Please help me with: ${needsMatching.map((item) => item.name).join(", ")}. I understand provider coverage and pricing still need to be confirmed.`);
+        } else if (Array.isArray(value.selectedServiceIds)) {
           const knownIds = value.selectedServiceIds.filter((id): id is string => typeof id === "string" && serviceOptions.some((service) => service.id === id));
           setSelectedIds(knownIds);
         }
         if (value.frequencies && typeof value.frequencies === "object") setFrequencies(value.frequencies as Record<string, Frequency>);
         window.sessionStorage.removeItem("homePlanSelection");
+      }
+
+      const query = new URLSearchParams(window.location.search);
+      const requestedServiceId = query.get("service");
+      const requestedServiceName = query.get("requested");
+      if (requestedServiceId && !builder) {
+        const knownService = serviceOptions.find((service) => service.id === requestedServiceId);
+        const selectedService = knownService ?? (requestedServiceName ? serviceOptions.find((service) => service.id === "general-home-service") : undefined);
+        if (selectedService) {
+          setSelectedIds((current) => current.includes(selectedService.id) ? current : [...current, selectedService.id]);
+          setFrequencies((current) => current[selectedService.id] ? current : { ...current, [selectedService.id]: selectedService.defaultFrequency });
+        }
+        if (requestedServiceName && !knownService) {
+          setDescription((current) => current || `I'm interested in ${requestedServiceName}. Please help me find a vetted local provider.`);
+        }
       }
     } catch {
       window.sessionStorage.removeItem(storageKey);
@@ -148,7 +182,8 @@ export default function RequestServicePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step, isComplete]);
 
-  const selectedServices = useMemo(() => serviceOptions.filter((service) => selectedIds.includes(service.id)), [selectedIds]);
+  const requestServiceOptions = useMemo(() => serviceOptions.map((service) => ({ ...service, ...serviceOverrides[service.id] })), [serviceOverrides]);
+  const selectedServices = useMemo(() => requestServiceOptions.filter((service) => selectedIds.includes(service.id)), [requestServiceOptions, selectedIds]);
   const estimate = useMemo(() => selectedServices.reduce((total, service) => total + servicePrice(service, frequencies[service.id] ?? service.defaultFrequency), 0), [frequencies, selectedServices]);
   const stepIndex = stepOrder.indexOf(step);
 
@@ -285,7 +320,7 @@ export default function RequestServicePage() {
         <section className="py-12 md:py-16">
           <div className="container-narrow">
             <form onSubmit={handleSubmit}>
-              {step === "services" && <ServicesStep selectedIds={selectedIds} frequencies={frequencies} onToggle={toggleService} onFrequencyChange={(id, frequency) => setFrequencies((current) => ({ ...current, [id]: frequency }))} estimate={estimate} onContinue={continueFromServices} />}
+              {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} onToggle={toggleService} onFrequencyChange={(id, frequency) => setFrequencies((current) => ({ ...current, [id]: frequency }))} estimate={estimate} onContinue={continueFromServices} />}
               {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} photos={photos} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onPhotos={addPhotos} onDrop={handleDrop} onRemovePhoto={(index) => setPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index))} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
               {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} estimate={estimate} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
             </form>
@@ -297,8 +332,8 @@ export default function RequestServicePage() {
   );
 }
 
-function ServicesStep({ selectedIds, frequencies, onToggle, onFrequencyChange, estimate, onContinue }: { selectedIds: string[]; frequencies: Record<string, Frequency>; onToggle: (id: string) => void; onFrequencyChange: (id: string, value: Frequency) => void; estimate: number; onContinue: () => void }) {
-  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">What does your home need?</h2><p className="mt-2 text-muted-foreground">Choose one or more services. You can adjust the preferred cadence before continuing.</p></div><div className="grid gap-4 sm:grid-cols-2">{serviceOptions.map((service) => { const selected = selectedIds.includes(service.id); const Icon = service.icon; const frequency = frequencies[service.id] ?? service.defaultFrequency; return <Card key={service.id} className={cn("cursor-pointer transition-all", selected ? "ring-2 ring-accent" : "hover:ring-accent/30")} onClick={() => onToggle(service.id)}><CardContent className="flex gap-4"><span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", selected ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{service.name}</p><p className="mt-1 text-sm text-muted-foreground">{service.description}</p></div>{selected && <CheckCircle2 className="h-5 w-5 shrink-0 text-accent" />}</div>{selected && <div className="mt-4" onClick={(event) => event.stopPropagation()}><Label htmlFor={`frequency-${service.id}`} className="text-xs text-muted-foreground">Frequency</Label><select id={`frequency-${service.id}`} value={frequency} onChange={(event) => onFrequencyChange(service.id, event.target.value as Frequency)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">{service.frequencies.map((item) => <option key={item} value={item}>{frequencyLabel(item)} · {servicePriceLabel(service, item)}</option>)}</select></div>}</div></CardContent></Card>; })}</div><div className="mt-8 flex flex-col gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm text-muted-foreground">Estimated plan total</p><p className="text-2xl font-bold">{estimate > 0 ? `$${estimate}` : "Custom quote"}</p><p className="text-xs text-muted-foreground">Preview pricing; final scope is confirmed before service.</p></div><Button type="button" size="lg" onClick={onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Your Home <ArrowRight className="h-4 w-4" /></Button></div></div>;
+function ServicesStep({ services, selectedIds, frequencies, onToggle, onFrequencyChange, estimate, onContinue }: { services: ServiceOption[]; selectedIds: string[]; frequencies: Record<string, Frequency>; onToggle: (id: string) => void; onFrequencyChange: (id: string, value: Frequency) => void; estimate: number; onContinue: () => void }) {
+  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">What does your home need?</h2><p className="mt-2 text-muted-foreground">Choose one or more services. You can adjust the preferred cadence before continuing.</p></div><div className="grid gap-4 sm:grid-cols-2">{services.map((service) => { const selected = selectedIds.includes(service.id); const Icon = service.icon; const frequency = frequencies[service.id] ?? service.defaultFrequency; return <Card key={service.id} className={cn("cursor-pointer transition-all", selected ? "ring-2 ring-accent" : "hover:ring-accent/30")} onClick={() => onToggle(service.id)}><CardContent className="flex gap-4"><span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", selected ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{service.name}</p><p className="mt-1 text-sm text-muted-foreground">{service.description}</p></div>{selected && <CheckCircle2 className="h-5 w-5 shrink-0 text-accent" />}</div>{selected && <div className="mt-4" onClick={(event) => event.stopPropagation()}><Label htmlFor={`frequency-${service.id}`} className="text-xs text-muted-foreground">Frequency</Label><select id={`frequency-${service.id}`} value={frequency} onChange={(event) => onFrequencyChange(service.id, event.target.value as Frequency)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">{service.frequencies.map((item) => <option key={item} value={item}>{frequencyLabel(item)} · {servicePriceLabel(service, item)}</option>)}</select></div>}</div></CardContent></Card>; })}</div><div className="mt-8 flex flex-col gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm text-muted-foreground">Estimated plan total</p><p className="text-2xl font-bold">{estimate > 0 ? `$${estimate}` : "Custom quote"}</p><p className="text-xs text-muted-foreground">Live package pricing when supplied; final scope is confirmed before service.</p></div><Button type="button" size="lg" onClick={onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Your Home <ArrowRight className="h-4 w-4" /></Button></div></div>;
 }
 
 type DetailsStepProps = { streetAddress: string; city: string; stateCode: string; zipCode: string; preferredDate: string; description: string; photos: File[]; onStreetAddress: (value: string) => void; onCity: (value: string) => void; onStateCode: (value: string) => void; onZipCode: (value: string) => void; onPreferredDate: (value: string) => void; onDescription: (value: string) => void; onPhotos: (files: File[]) => void; onDrop: (event: DragEvent<HTMLLabelElement>) => void; onRemovePhoto: (index: number) => void; onBack: () => void; onContinue: () => void };
@@ -320,7 +355,14 @@ function SuccessState({ services }: { services: ServiceOption[] }) {
 
 function servicePrice(service: ServiceOption, frequency: Frequency) {
   if (service.id === "general-home-service") return 0;
+  if (service.livePrices) return service.livePrices[frequency] ?? 0;
   return frequency === "one-time" ? service.oneTimePrice : service.monthlyPrice;
+}
+
+function isBuilderRequestedService(item: unknown): item is BuilderRequestedService {
+  if (!item || typeof item !== "object") return false;
+  const value = item as Partial<BuilderRequestedService>;
+  return typeof value.id === "string" && typeof value.name === "string" && ["fixed", "quote", "sourcing"].includes(String(value.availability));
 }
 
 function servicePriceLabel(service: ServiceOption, frequency: Frequency) {

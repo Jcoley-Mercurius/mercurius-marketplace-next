@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Bug,
   Check,
+  Clock3,
   Droplets,
   Leaf,
   Plus,
@@ -19,8 +20,9 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { cn } from "@/lib/utils";
 
 type Category = "outdoor" | "indoor" | "maintenance" | "repairs" | "specialty";
@@ -33,9 +35,12 @@ type Service = {
   category: Category;
   icon: typeof Leaf;
   monthlyPrice: number;
+  weeklyPrice?: number;
+  quarterlyPrice?: number;
   oneTimePrice: number;
   defaultFrequency: Frequency;
   frequencies: Frequency[];
+  availability: "fixed" | "quote" | "sourcing";
 };
 
 const categoryLabels: Record<Category, string> = {
@@ -53,7 +58,7 @@ const frequencyLabels: Record<Frequency, string> = {
   "one-time": "One-time",
 };
 
-const services: Service[] = [
+const fallbackBuilderServices: Omit<Service, "availability">[] = [
   {
     id: "lawn-mowing",
     name: "Lawn Mowing",
@@ -161,13 +166,36 @@ const darkThemeStyle = {
 } as CSSProperties;
 
 export function PlanBuilderSection() {
+  const { services: catalogServices, loading } = useServiceCatalog();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category | "all">("all");
-  const [selectedIds, setSelectedIds] = useState<string[]>([
-    "lawn-mowing",
-    "pool-service",
-  ]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [frequencies, setFrequencies] = useState<Record<string, Frequency>>({});
+
+  const services = useMemo<Service[]>(() => fallbackBuilderServices.map((service) => {
+    const catalogService = catalogServices.find((item) => item.id === service.id);
+    if (!catalogService) return { ...service, monthlyPrice: 0, oneTimePrice: 0, availability: "sourcing" };
+    const availability = catalogService.availability ?? "sourcing";
+    const liveFrequencies: Frequency[] = availability === "fixed" ? [
+      catalogService.weeklyPrice ? "weekly" : null,
+      catalogService.avgMonthlyPrice ? "monthly" : null,
+      catalogService.quarterlyPrice ? "quarterly" : null,
+      catalogService.oneTimePrice ? "one-time" : null,
+    ].filter((value): value is Frequency => value !== null) : ["one-time"];
+    const defaultFrequency = liveFrequencies.includes(service.defaultFrequency) ? service.defaultFrequency : liveFrequencies[0] ?? "one-time";
+    return {
+      ...service,
+      name: catalogService.name,
+      descriptor: catalogService.descriptor,
+      weeklyPrice: catalogService.weeklyPrice,
+      monthlyPrice: catalogService.avgMonthlyPrice,
+      quarterlyPrice: catalogService.quarterlyPrice,
+      oneTimePrice: catalogService.oneTimePrice,
+      defaultFrequency,
+      frequencies: liveFrequencies,
+      availability,
+    };
+  }), [catalogServices]);
 
   const filteredServices = services.filter((service) => {
     const matchesSearch = service.name
@@ -183,25 +211,25 @@ export function PlanBuilderSection() {
     selectedIds.includes(service.id),
   );
 
-  const getFrequency = (service: Service) =>
-    frequencies[service.id] ?? service.defaultFrequency;
+  const getFrequency = (service: Service) => {
+    const selected = frequencies[service.id];
+    return selected && service.frequencies.includes(selected) ? selected : service.defaultFrequency;
+  };
 
-  const recurringTotal = selectedServices.reduce((total, service) => {
-    return getFrequency(service) === "one-time"
-      ? total
-      : total + service.monthlyPrice;
-  }, 0);
-
-  const oneTimeTotal = selectedServices.reduce((total, service) => {
-    return getFrequency(service) === "one-time"
-      ? total + service.oneTimePrice
-      : total;
-  }, 0);
+  const pricedTotals = selectedServices.reduce<Record<Frequency, number>>((totals, service) => {
+    if (service.availability !== "fixed") return totals;
+    const frequency = getFrequency(service);
+    totals[frequency] += getServicePrice(service, frequency);
+    return totals;
+  }, { weekly: 0, monthly: 0, quarterly: 0, "one-time": 0 });
+  const hasLiveTotal = Object.values(pricedTotals).some((total) => total > 0);
 
   const recommendedServices = useMemo(
-    () => services.filter((service) => !selectedIds.includes(service.id)).slice(0, 2),
-    [selectedIds],
+    () => services.filter((service) => !selectedIds.includes(service.id)).sort((a, b) => availabilityRank(a.availability) - availabilityRank(b.availability)).slice(0, 2),
+    [selectedIds, services],
   );
+
+  const selectedNeedsMatching = selectedServices.filter((service) => service.availability !== "fixed");
 
   const toggleService = (id: string) => {
     setSelectedIds((current) =>
@@ -232,9 +260,13 @@ export function PlanBuilderSection() {
             Build Your Home Service Plan
           </h2>
           <p className="max-w-xl text-base text-white/60">
-            Choose the services your home needs. Pick recurring for the best
-            rates, or one-time when you just need a single visit.
+            Choose what your home needs. Live vendor prices appear when
+            available; otherwise, request a quote or ask us to source a vetted pro.
           </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
+            {loading ? <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-white/55"><RefreshCw className="h-3 w-3 animate-spin" />Checking live coverage</span> : <><span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-accent">Available now</span><span className="rounded-full border border-info/30 bg-info/10 px-3 py-1.5 text-info">Quote / matching</span><span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-white/50">Request &amp; source</span></>}
+          </div>
 
           <div className="mt-2 flex w-full max-w-full items-start justify-center gap-1.5 overflow-hidden sm:gap-6 md:gap-10">
             {[
@@ -325,7 +357,8 @@ export function PlanBuilderSection() {
                     <button
                       type="button"
                       onClick={() => toggleService(service.id)}
-                      className="w-full text-left"
+                      disabled={loading}
+                      className="w-full text-left disabled:cursor-wait disabled:opacity-70"
                     >
                       <div className="flex items-center justify-between gap-3 p-4 sm:gap-4 sm:p-6">
                         <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
@@ -351,22 +384,13 @@ export function PlanBuilderSection() {
                             <p className="mt-0.5 truncate text-xs leading-tight text-white/50 sm:text-sm">
                               {service.descriptor}
                             </p>
-                            <div className="mt-1 text-sm font-bold text-foreground sm:hidden">
-                              ${oneTime ? service.oneTimePrice : service.monthlyPrice}
-                              <span className="text-[10px] font-normal text-white/40">
-                                {oneTime ? "" : "/mo"}
-                              </span>
-                            </div>
+                            <AvailabilityBadge availability={service.availability} className="mt-2" />
+                            <div className="mt-2 sm:hidden"><ServicePrice service={service} frequency={frequency} compact /></div>
                           </div>
                         </div>
                         <div className="hidden flex-shrink-0 text-right sm:block">
-                          <div className="whitespace-nowrap text-xl font-bold text-foreground">
-                            ${oneTime ? service.oneTimePrice : service.monthlyPrice}
-                            <span className="text-xs font-normal text-white/40">
-                              {oneTime ? "" : "/mo"}
-                            </span>
-                          </div>
-                          {!oneTime && (
+                          <ServicePrice service={service} frequency={frequency} />
+                          {service.availability === "fixed" && !oneTime && service.oneTimePrice > 0 && (
                             <div className="mt-1 text-[10px] uppercase tracking-widest text-white/30">
                               or ${service.oneTimePrice} one-time
                             </div>
@@ -389,7 +413,7 @@ export function PlanBuilderSection() {
                       </div>
                     </button>
 
-                    {selected && service.frequencies.length > 1 && (
+                    {selected && service.availability === "fixed" && service.frequencies.length > 1 && (
                       <div className="-mt-1 flex flex-wrap items-center gap-2 px-5 pb-4 sm:px-6">
                         <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-white/40" />
                         <span className="mr-1 text-xs uppercase tracking-wider text-white/40">
@@ -417,7 +441,7 @@ export function PlanBuilderSection() {
                             </button>
                           ))}
                         </div>
-                        {oneTime && (
+                        {oneTime && service.frequencies.some((option) => option !== "one-time") && (
                           <span className="ml-auto text-xs text-accent">
                             Save with recurring service
                           </span>
@@ -462,28 +486,23 @@ export function PlanBuilderSection() {
                   <div className="mb-6 space-y-3">
                     {selectedServices.map((service) => {
                       const frequency = getFrequency(service);
-                      const price =
-                        frequency === "one-time"
-                          ? service.oneTimePrice
-                          : service.monthlyPrice;
+                      const price = getServicePrice(service, frequency);
                       return (
                         <div
                           key={service.id}
                           className="group flex items-start gap-3"
                         >
-                          <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-coral" />
+                          <span className={cn("mt-2 h-2 w-2 flex-shrink-0 rounded-full", service.availability === "fixed" ? "bg-accent" : service.availability === "quote" ? "bg-info" : "bg-coral")} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <span className="truncate text-sm font-semibold text-foreground">
                                 {service.name}
                               </span>
-                              <span className="flex-shrink-0 text-sm text-white/70">
-                                ${price}
-                              </span>
+                              <span className="flex-shrink-0 text-sm text-white/70">{service.availability === "fixed" ? `$${price}` : service.availability === "quote" ? "Quote" : "Sourcing"}</span>
                             </div>
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[10px] uppercase tracking-wider text-white/30">
-                                {frequencyLabels[frequency]} cadence
+                                {service.availability === "fixed" ? `${frequencyLabels[frequency]} cadence` : service.availability === "quote" ? "Matching required" : "Coverage request"}
                               </span>
                               <button
                                 type="button"
@@ -504,28 +523,15 @@ export function PlanBuilderSection() {
                 {selectedServices.length > 0 && (
                   <>
                     <div className="space-y-3 border-t border-white/10 pt-6">
-                      {recurringTotal > 0 && (
-                        <div className="flex items-baseline justify-between">
-                          <span className="text-sm text-white/60">Plan Total</span>
-                          <div className="text-right">
-                              <div className="font-display text-4xl font-bold tracking-tight text-white">
-                              ${recurringTotal}
-                            </div>
-                            <div className="text-[10px] uppercase tracking-widest text-white/40">
-                              Per Month
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {oneTimeTotal > 0 && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-white/60">One-time services</span>
-                          <span className="font-semibold text-foreground">
-                            ${oneTimeTotal}
-                          </span>
-                        </div>
+                      {(["weekly", "monthly", "quarterly", "one-time"] as Frequency[]).map((frequency) => pricedTotals[frequency] > 0 && <div key={frequency} className="flex items-baseline justify-between"><span className="text-sm text-white/60">{frequencyLabels[frequency]} services</span><div className="text-right"><div className={cn("font-display font-bold tracking-tight text-white", frequency === "monthly" ? "text-3xl" : "text-xl")}>${pricedTotals[frequency]}</div><div className="text-[10px] uppercase tracking-widest text-white/40">{frequency === "one-time" ? "Live total" : `Per ${frequency === "weekly" ? "visit" : frequency === "monthly" ? "month" : "quarter"}`}</div></div></div>)}
+                      {!hasLiveTotal && (
+                        <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] p-4 text-center"><p className="text-sm font-medium text-white/75">Pricing confirmed after matching</p><p className="mt-1 text-xs text-white/40">No estimate is shown without live vendor pricing.</p></div>
                       )}
                     </div>
+
+                    {selectedNeedsMatching.length > 0 && (
+                      <div className="mt-5 rounded-xl border border-coral/20 bg-coral/[0.06] p-4"><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-coral"><Clock3 className="h-3.5 w-3.5" />{selectedNeedsMatching.length} service{selectedNeedsMatching.length === 1 ? "" : "s"} need matching</p><p className="mt-2 text-xs leading-relaxed text-white/50">Continue with your request. We&apos;ll confirm coverage and pricing before any work begins.</p></div>
+                    )}
 
                     <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4">
                       <p className="text-xs font-semibold uppercase tracking-wider text-white/40">
@@ -537,27 +543,27 @@ export function PlanBuilderSection() {
                     </div>
 
                     <div className="mt-6 flex flex-col gap-2">
-                      <Button
-                        size="lg"
-                        asChild
-                        className="h-14 w-full rounded-2xl bg-coral text-base font-bold text-coral-foreground shadow-xl shadow-coral/20 hover:bg-coral-dark"
+                      <Link
+                        href="/request"
+                        onClick={() => {
+                          window.sessionStorage.setItem("homePlanSelection", JSON.stringify({
+                            selectedServiceIds: selectedIds,
+                            frequencies,
+                            requestedServices: selectedServices.map((service) => ({
+                              id: service.id,
+                              name: service.name,
+                              availability: service.availability,
+                              descriptor: service.descriptor,
+                              defaultFrequency: service.defaultFrequency,
+                              frequencies: service.frequencies,
+                              prices: { weekly: service.weeklyPrice ?? 0, monthly: service.monthlyPrice, quarterly: service.quarterlyPrice ?? 0, "one-time": service.oneTimePrice },
+                            })),
+                          }));
+                        }}
+                        className={cn(buttonVariants({ size: "lg" }), "h-14 w-full rounded-2xl bg-coral text-base font-bold text-coral-foreground shadow-xl shadow-coral/20 hover:bg-coral-dark")}
                       >
-                        <Link
-                          href="/request"
-                          onClick={() => {
-                            window.sessionStorage.setItem(
-                              "homePlanSelection",
-                              JSON.stringify({
-                                selectedServiceIds: selectedIds,
-                                frequencies,
-                              }),
-                            );
-                          }}
-                        >
-                          Continue to Address
-                          <ArrowRight className="ml-2 h-5 w-5" />
-                        </Link>
-                      </Button>
+                        Continue to Request <ArrowRight className="ml-2 h-5 w-5" />
+                      </Link>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -568,8 +574,8 @@ export function PlanBuilderSection() {
                       </Button>
                     </div>
                     <p className="mt-4 text-center text-[10px] uppercase leading-relaxed tracking-wider text-white/25">
-                      Sample prices based on a standard home in Cape Coral &amp;
-                      Fort Myers. Final quote provided after home validation.
+                      Live prices come from active vendor packages. Quote and sourcing
+                      requests are confirmed before work begins.
                     </p>
                   </>
                 )}
@@ -602,6 +608,7 @@ export function PlanBuilderSection() {
                             <p className="text-xs text-white/40">
                               {service.descriptor}
                             </p>
+                            <AvailabilityBadge availability={service.availability} className="mt-1.5" />
                           </div>
                         </div>
                         <Plus className="h-4 w-4 flex-shrink-0 text-accent" />
@@ -641,4 +648,29 @@ function CategoryButton({
       {children}
     </button>
   );
+}
+
+function AvailabilityBadge({ availability, className }: { availability: Service["availability"]; className?: string }) {
+  const label = availability === "fixed" ? "Available now" : availability === "quote" ? "Quote / matching required" : "Not available yet — request & source";
+  return <span className={cn("inline-flex w-fit rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider", availability === "fixed" ? "border-accent/30 bg-accent/10 text-accent" : availability === "quote" ? "border-info/30 bg-info/10 text-info" : "border-white/15 bg-white/5 text-white/45", className)}>{label}</span>;
+}
+
+function ServicePrice({ service, frequency, compact = false }: { service: Service; frequency: Frequency; compact?: boolean }) {
+  if (service.availability === "quote") return <div className={cn("font-semibold text-info", compact ? "text-xs" : "text-sm")}><span className="block">Quote required</span><span className="text-[10px] font-normal text-white/40">Matched after details</span></div>;
+  if (service.availability === "sourcing") return <div className={cn("font-semibold text-white/65", compact ? "text-xs" : "text-sm")}><span className="block">Request this service</span><span className="text-[10px] font-normal text-white/40">We&apos;ll source a vetted pro</span></div>;
+  const price = getServicePrice(service, frequency);
+  const suffix = frequency === "weekly" ? "/visit" : frequency === "monthly" ? "/mo" : frequency === "quarterly" ? "/quarter" : "";
+  return <div className={cn("whitespace-nowrap font-bold text-foreground", compact ? "text-sm" : "text-xl")}>${price}<span className="text-[10px] font-normal text-white/40">{suffix}</span></div>;
+}
+
+function getServicePrice(service: Service, frequency: Frequency) {
+  if (service.availability !== "fixed") return 0;
+  if (frequency === "weekly") return service.weeklyPrice ?? 0;
+  if (frequency === "quarterly") return service.quarterlyPrice ?? 0;
+  if (frequency === "one-time") return service.oneTimePrice;
+  return service.monthlyPrice;
+}
+
+function availabilityRank(availability: Service["availability"]) {
+  return availability === "fixed" ? 0 : availability === "quote" ? 1 : 2;
 }

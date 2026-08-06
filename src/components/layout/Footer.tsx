@@ -1,12 +1,13 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Mail, MapPin } from "lucide-react";
 
 const footerLinks = {
   services: [
-    { name: "Lawn Care", href: "/services/lawn-mowing" },
-    { name: "Pool Service", href: "/services/pool-service" },
-    { name: "House Cleaning", href: "/services/house-cleaning" },
-    { name: "Handyman", href: "/services/handyman" },
+    { name: "Lawn Care", href: "/services" },
+    { name: "Pool Service", href: "/services" },
+    { name: "House Cleaning", href: "/services" },
+    { name: "Handyman", href: "/services" },
     { name: "All Services", href: "/services" },
   ],
   company: [
@@ -14,9 +15,8 @@ const footerLinks = {
     { name: "Services", href: "/services" },
     { name: "Pricing", href: "/pricing" },
     { name: "For Homeowners", href: "/homeowners" },
-    { name: "Snowbird Care", href: "/snowbirds" },
-    { name: "Marketplace", href: "/marketplace" },
-    { name: "For Vendors", href: "/vendors/apply" },
+    { name: "Find a Provider", href: "/providers" },
+    { name: "For Vendors", href: "/vendors" },
     { name: "FAQ", href: "/faq" },
   ],
   support: [
@@ -37,9 +37,11 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-5 lg:gap-12">
           <div className="lg:col-span-2">
             <Link href="/" className="mb-4 flex items-center space-x-2">
-              <img
+              <Image
                 src="/mercurius-logo.png"
                 alt="Mercurius"
+                width={36}
+                height={36}
                 className="h-9 w-9 object-contain"
               />
               <span className="text-xl font-semibold">Mercurius</span>
