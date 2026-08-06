@@ -76,7 +76,7 @@ export function FinalCTASection() {
               asChild
               className="w-full bg-coral text-coral-foreground shadow-lg shadow-coral/20 hover:bg-coral-dark sm:w-auto"
             >
-              <Link href="/vendor-apply">
+              <Link href="/vendors/apply">
                 Apply as Provider <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>

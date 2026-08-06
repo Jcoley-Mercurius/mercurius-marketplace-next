@@ -16,7 +16,7 @@ const footerLinks = {
     { name: "For Homeowners", href: "/homeowners" },
     { name: "Snowbird Care", href: "/snowbirds" },
     { name: "Marketplace", href: "/marketplace" },
-    { name: "For Vendors", href: "/vendors" },
+    { name: "For Vendors", href: "/vendors/apply" },
     { name: "FAQ", href: "/faq" },
   ],
   support: [

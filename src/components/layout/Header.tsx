@@ -20,7 +20,7 @@ export function Header() {
   const navigation = [
     { name: "For Homeowners", href: "/homeowners" },
     { name: "Find a Pro", href: "/providers" },
-    { name: "For Vendors", href: "/vendors" },
+    { name: "For Vendors", href: "/vendors/apply" },
   ];
 
   const isActive = (path: string) => pathname === path;
@@ -96,7 +96,7 @@ export function Header() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <Link href="/login?type=vendor" className="w-full flex items-center gap-2">
+                <Link href="/login/vendor" className="w-full flex items-center gap-2">
                   <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
                     <Wrench className="h-3.5 w-3.5 text-primary" />
                   </div>
@@ -168,7 +168,7 @@ export function Header() {
                     </Link>
                   </Button>
                   <Button variant="outline" className="w-full" asChild>
-                    <Link href="/login?type=vendor" onClick={() => setIsOpen(false)}>
+                    <Link href="/login/vendor" onClick={() => setIsOpen(false)}>
                       Vendor Sign In
                     </Link>
                   </Button>

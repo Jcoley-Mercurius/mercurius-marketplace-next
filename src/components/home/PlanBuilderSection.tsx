@@ -542,7 +542,18 @@ export function PlanBuilderSection() {
                         asChild
                         className="h-14 w-full rounded-2xl bg-coral text-base font-bold text-coral-foreground shadow-xl shadow-coral/20 hover:bg-coral-dark"
                       >
-                        <Link href="/request">
+                        <Link
+                          href="/request"
+                          onClick={() => {
+                            window.sessionStorage.setItem(
+                              "homePlanSelection",
+                              JSON.stringify({
+                                selectedServiceIds: selectedIds,
+                                frequencies,
+                              }),
+                            );
+                          }}
+                        >
                           Continue to Address
                           <ArrowRight className="ml-2 h-5 w-5" />
                         </Link>
