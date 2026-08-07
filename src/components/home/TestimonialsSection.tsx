@@ -2,6 +2,7 @@
 
 import { Star } from "lucide-react";
 import { RevealItem, ScrollReveal } from "@/components/home/ScrollReveal";
+import { formatPublicReviewerName } from "@/lib/reviews/publicIdentity";
 
 const testimonials = [
   {
@@ -74,7 +75,7 @@ export function TestimonialsSection() {
                   </p>
                   <div>
                     <p className="font-semibold text-foreground">
-                      {testimonial.author}
+                      {formatPublicReviewerName(testimonial.author)}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {testimonial.role}

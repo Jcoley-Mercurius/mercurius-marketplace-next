@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { PublicReviewAuthor } from "@/components/reviews/PublicReviewAuthor";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -277,6 +278,9 @@ export default function ProviderStorefrontPage() {
           defaultFrequency: frequency,
           frequencies: [frequency],
           prices,
+          packageId: selectedPackage?.id,
+          tierId: tier?.id,
+          pricingMode: selectedPackage?.pricing_mode,
         }],
       }));
     }
@@ -395,7 +399,7 @@ export default function ProviderStorefrontPage() {
                 {gallery.length > 0 && <SectionCard title="Gallery"><div className="grid grid-cols-2 gap-4 sm:grid-cols-3">{gallery.map((item) => <figure key={item.id} className="overflow-hidden rounded-xl border border-border bg-muted"><div className="aspect-square overflow-hidden"><img src={item.image_url} alt={item.caption || `${contractor.name} project`} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 hover:scale-105" /></div>{item.caption && <figcaption className="px-3 py-2 text-xs text-muted-foreground">{item.caption}</figcaption>}</figure>)}</div></SectionCard>}
 
                 <SectionCard title={`Reviews (${reviews.length})`}>
-                  {reviews.length === 0 ? <div className="py-4 text-center"><Star className="mx-auto h-8 w-8 text-muted-foreground/50" /><p className="mt-2 text-sm text-muted-foreground">No shareable customer reviews yet.</p></div> : <div className="space-y-6">{reviews.map((review, index) => <article key={review.id} className={cn("pb-6", index < reviews.length - 1 && "border-b border-border")}><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><p className="font-semibold">Verified Homeowner</p><div className="flex gap-0.5" aria-label={`${review.rating} out of 5 stars`}>{Array.from({ length: 5 }, (_, star) => <Star key={star} className={cn("h-3.5 w-3.5", star < review.rating ? "fill-amber-400 text-amber-400" : "text-muted")} />)}</div></div><time className="text-xs text-muted-foreground" dateTime={review.created_at}>{formatDate(review.created_at)}</time></div>{review.comment && <p className="text-sm leading-relaxed text-muted-foreground">{review.comment}</p>}</article>)}</div>}
+                  {reviews.length === 0 ? <div className="py-4 text-center"><Star className="mx-auto h-8 w-8 text-muted-foreground/50" /><p className="mt-2 text-sm text-muted-foreground">No shareable customer reviews yet.</p></div> : <div className="space-y-6">{reviews.map((review, index) => <article key={review.id} className={cn("pb-6", index < reviews.length - 1 && "border-b border-border")}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-3"><PublicReviewAuthor /><div className="flex gap-0.5" aria-label={`${review.rating} out of 5 stars`}>{Array.from({ length: 5 }, (_, star) => <Star key={star} className={cn("h-3.5 w-3.5", star < review.rating ? "fill-amber-400 text-amber-400" : "text-muted")} />)}</div></div><time className="text-xs text-muted-foreground" dateTime={review.created_at}>{formatDate(review.created_at)}</time></div>{review.comment && <p className="text-sm leading-relaxed text-muted-foreground">{review.comment}</p>}</article>)}</div>}
                 </SectionCard>
               </div>
 

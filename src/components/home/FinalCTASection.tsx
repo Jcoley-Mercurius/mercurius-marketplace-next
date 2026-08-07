@@ -4,7 +4,8 @@ import { useCallback, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import Link from "next/link";
 import { ArrowRight, Briefcase } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function FinalCTASection() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -48,15 +49,15 @@ export function FinalCTASection() {
               Clear pricing. Managed jobs. Photo proof. One platform between you
               and your provider.
             </p>
-            <Button
-              size="lg"
-              asChild
-              className="w-full bg-accent text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent/90 sm:w-auto"
+            <Link
+              href="#bundle-builder"
+              className={cn(
+                buttonVariants({ size: "lg" }),
+                "h-11 w-full gap-2 rounded-md bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent/90 sm:w-auto",
+              )}
             >
-              <Link href="#bundle-builder">
-                Build My Plan <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+              Build My Plan <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </div>
 
           <div className="rounded-3xl border border-primary-foreground/10 bg-primary-foreground/5 p-8 backdrop-blur-sm md:p-10">
@@ -71,15 +72,15 @@ export function FinalCTASection() {
               More recurring customers, automated scheduling, secure payments.
               Less time chasing leads.
             </p>
-            <Button
-              size="lg"
-              asChild
-              className="w-full bg-coral text-coral-foreground shadow-lg shadow-coral/20 hover:bg-coral-dark sm:w-auto"
+            <Link
+              href="/vendors/apply"
+              className={cn(
+                buttonVariants({ size: "lg" }),
+                "h-11 w-full gap-2 rounded-md bg-coral px-8 text-coral-foreground shadow-lg shadow-coral/20 hover:bg-coral-dark sm:w-auto",
+              )}
             >
-              <Link href="/vendors/apply">
-                Apply as Provider <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+              Apply as Provider <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </div>
         </div>
       </div>

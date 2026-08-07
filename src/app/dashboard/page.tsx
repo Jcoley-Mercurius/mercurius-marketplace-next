@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
+  ExternalLink,
   Home,
   Loader2,
   MessageSquare,
@@ -31,8 +32,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { paymentFunctionError } from "@/lib/payments";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type ServiceRequest = {
   id: string;
@@ -58,6 +61,8 @@ type Invoice = {
 };
 
 type DataMode = "loading" | "live" | "preview";
+type PaymentMethod = { id: string; brand: string; last4: string; exp_month: number | null; exp_year: number | null; is_default: boolean };
+type PaymentNotice = { tone: "success" | "warning"; title: string; description: string };
 
 const previewRequests: ServiceRequest[] = [
   {
@@ -107,7 +112,8 @@ const previewInvoices: Invoice[] = [
 ];
 
 const closedStatuses = new Set(["completed", "cancelled", "closed", "reviewed"]);
-const payableStatuses = new Set(["draft", "pending", "overdue", "sent"]);
+// Keep this aligned with the create-checkout Edge Function's accepted statuses.
+const payableStatuses = new Set(["draft", "pending"]);
 
 const statusColor: Record<string, string> = {
   pending: "border-yellow-200 bg-yellow-100 text-yellow-800",
@@ -137,12 +143,38 @@ export default function DashboardPage() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [dataMode, setDataMode] = useState<DataMode>("loading");
+  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  const [paymentMethodsError, setPaymentMethodsError] = useState("");
+  const [openingPortal, setOpeningPortal] = useState(false);
+  const [paymentNotice, setPaymentNotice] = useState<PaymentNotice | null>(null);
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
   }, [authLoading, router, user]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const query = new URLSearchParams(window.location.search);
+      const requestedTab = query.get("tab");
+      if (["overview", "upcoming", "past", "invoices", "payment-methods"].includes(requestedTab ?? "")) setActiveTab(requestedTab!);
+      if (query.has("paid")) {
+        setActiveTab("invoices");
+        setPaymentNotice({ tone: "success", title: "Payment submitted securely", description: "Stripe returned you to Mercurius. The invoice status below is authoritative and will update after webhook confirmation." });
+      } else if (query.has("subscribed")) {
+        setActiveTab("invoices");
+        setPaymentNotice({ tone: "success", title: "Subscription checkout submitted", description: "Stripe is confirming the subscription. Your service and invoice status will update after confirmation." });
+      } else if (query.has("cancelled")) {
+        setActiveTab("invoices");
+        setPaymentNotice({ tone: "warning", title: "Checkout cancelled", description: "No new payment was completed. An eligible invoice can be paid from this page when you’re ready." });
+      }
+      if (query.has("paid") || query.has("subscribed") || query.has("cancelled")) window.history.replaceState({}, "", "/dashboard?tab=invoices");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -185,6 +217,61 @@ export default function DashboardPage() {
       active = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!user || activeTab !== "payment-methods" || dataMode !== "live") return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setPaymentMethodsLoading(true);
+      setPaymentMethodsError("");
+      createClient().functions.invoke("list-payment-methods", { body: {} }).then(async ({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          const detail = await paymentFunctionError(error);
+          setPaymentMethodsError(detail.message);
+          setPaymentMethods([]);
+        } else {
+          setPaymentMethods(Array.isArray(data?.payment_methods) ? data.payment_methods as PaymentMethod[] : []);
+        }
+        setPaymentMethodsLoading(false);
+      });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [activeTab, dataMode, user]);
+
+  async function startInvoiceCheckout(invoiceId: string) {
+    if (dataMode !== "live") return;
+    setPayingInvoiceId(invoiceId);
+    try {
+      const { data, error } = await createClient().functions.invoke("create-checkout", { body: { invoice_id: invoiceId } });
+      if (error) {
+        const detail = await paymentFunctionError(error);
+        throw new Error(detail.message);
+      }
+      if (typeof data?.url !== "string") throw new Error("Secure checkout did not return a payment link.");
+      window.location.assign(data.url);
+    } catch (reason) {
+      toast.error("Payment could not be started", { description: reason instanceof Error ? reason.message : "Please try again or contact support." });
+      setPayingInvoiceId(null);
+    }
+  }
+
+  async function openPaymentPortal() {
+    if (dataMode !== "live") return;
+    setOpeningPortal(true);
+    try {
+      const { data, error } = await createClient().functions.invoke("customer-portal", { body: {} });
+      if (error) {
+        const detail = await paymentFunctionError(error);
+        throw new Error(detail.message);
+      }
+      if (typeof data?.url !== "string") throw new Error("Card management did not return a secure link.");
+      window.location.assign(data.url);
+    } catch (reason) {
+      toast.error("Card management could not be opened", { description: reason instanceof Error ? reason.message : "Please try again later." });
+      setOpeningPortal(false);
+    }
+  }
 
   const { upcoming, past, quoted, awaitingConfirmation, awaitingReview } = useMemo(
     () => ({
@@ -231,6 +318,13 @@ export default function DashboardPage() {
               <div className="mb-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p><strong>Preview mode:</strong> Live dashboard data is unavailable, so sample services and invoices are shown below.</p>
+              </div>
+            )}
+
+            {paymentNotice && (
+              <div className={cn("mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", paymentNotice.tone === "success" ? "border-sage/30 bg-sage-light/60 text-sage-dark" : "border-amber-200 bg-amber-50 text-amber-950")}>
+                {paymentNotice.tone === "success" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+                <div><p className="font-semibold">{paymentNotice.title}</p><p className="mt-0.5 text-current/80">{paymentNotice.description}</p></div>
               </div>
             )}
 
@@ -338,8 +432,9 @@ export default function DashboardPage() {
                   <CardHeader><CardTitle>Invoices &amp; Payments</CardTitle><CardDescription>Review charges and track payment status.</CardDescription></CardHeader>
                   <CardContent>
                     {dataMode === "loading" ? <ListLoading large /> : invoices.length === 0 ? <EmptyState icon={CreditCard} title="No invoices yet" description="Invoices will appear after a provider bills completed work." /> : (
-                      <div className="divide-y divide-border">{invoices.map((invoice) => <InvoiceRow key={invoice.id} invoice={invoice} />)}</div>
+                      <div className="divide-y divide-border">{invoices.map((invoice) => <InvoiceRow key={invoice.id} invoice={invoice} paying={payingInvoiceId === invoice.id} paymentsEnabled={dataMode === "live"} onPay={startInvoiceCheckout} />)}</div>
                     )}
+                    <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Card details are entered on Stripe Checkout. Mercurius shows an invoice as paid only after server-side confirmation.</p></div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -347,12 +442,9 @@ export default function DashboardPage() {
               <TabsContent value="payment-methods">
                 <Card>
                   <CardHeader><CardTitle className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-accent" /> Payment Methods</CardTitle><CardDescription>Manage how you pay for Mercurius services.</CardDescription></CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-muted/40 px-6 py-12 text-center">
-                      <ShieldCheck className="mb-4 h-10 w-10 text-accent" />
-                      <p className="font-medium">Secure payment setup is coming soon</p>
-                      <p className="mt-1 max-w-md text-sm text-muted-foreground">Your payment details will be securely managed by our connected payment provider.</p>
-                    </div>
+                  <CardContent className="space-y-4">
+                    {dataMode === "preview" ? <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center"><ShieldCheck className="mx-auto mb-4 h-10 w-10 text-accent" /><p className="font-medium">Live billing is currently unavailable</p><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Payment methods are never simulated in preview mode.</p></div> : paymentMethodsLoading ? <ListLoading large /> : paymentMethodsError ? <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-6 text-center"><p className="font-medium text-red-900">Payment methods could not be loaded</p><p className="mt-1 text-sm text-red-800">{paymentMethodsError}</p></div> : paymentMethods.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center"><CreditCard className="mx-auto mb-4 h-9 w-9 text-muted-foreground" /><p className="font-medium">No saved cards yet</p><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Cards saved through Stripe can make future invoice checkout faster.</p></div> : <div className="space-y-3">{paymentMethods.map((method) => <div key={method.id} className="flex items-center justify-between rounded-xl border border-border p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-12 items-center justify-center rounded-lg bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></span><div><p className="font-medium capitalize">{cardBrand(method.brand)} •••• {method.last4}</p>{method.exp_month && method.exp_year && <p className="text-sm text-muted-foreground">Expires {String(method.exp_month).padStart(2, "0")}/{String(method.exp_year).slice(-2)}</p>}</div></div>{method.is_default && <Badge className="bg-sage-light text-sage-dark">Default</Badge>}</div>)}</div>}
+                    <div className="flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-2 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Cards are stored and managed by Stripe, not in the Mercurius app.</p></div><Button variant="outline" disabled={openingPortal || dataMode !== "live"} onClick={() => void openPaymentPortal()}>{openingPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}Manage Cards</Button></div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -394,8 +486,14 @@ function ServiceRow({ job, compact = false }: { job: ServiceRequest; compact?: b
   return <div className={cn("flex flex-col justify-between gap-4 rounded-xl bg-muted p-4 sm:flex-row sm:items-center", !compact && "border border-border bg-card p-5 hover:bg-muted/40")}><div className="flex min-w-0 items-start gap-4"><div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", closedStatuses.has(job.status) ? "bg-sage-light" : "bg-background")} >{closedStatuses.has(job.status) ? <CheckCircle2 className="h-5 w-5 text-sage-dark" /> : <Calendar className="h-5 w-5 text-accent" />}</div><div className="min-w-0"><p className="font-semibold">{job.service_type}</p><p className="text-sm text-muted-foreground">{job.contractor_id ? "Provider assigned" : "Awaiting assignment"}</p>{!compact && location && <p className="truncate text-sm text-muted-foreground">{location}</p>}<p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" />{displayDate}{job.preferred_time ? ` • ${job.preferred_time}` : ""}</p></div></div><Badge className={cn("w-fit border capitalize", statusColor[job.status] ?? "border-border bg-muted text-muted-foreground")}>{formatStatus(job.status)}</Badge></div>;
 }
 
-function InvoiceRow({ invoice, compact = false }: { invoice: Invoice; compact?: boolean }) {
-  return <div className={cn("flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center", compact && "first:pt-0 last:pb-0", !compact && "sm:py-5")}><div className="flex items-center gap-4">{!compact && <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></div>}<div><p className="font-semibold">{invoice.invoice_number}</p><p className="text-sm text-muted-foreground">{formatDate(invoice.created_at)}</p></div></div><div className="flex items-center justify-between gap-4 sm:justify-end"><div className="text-right"><p className="font-semibold">${Number(invoice.amount).toFixed(2)}</p><Badge variant="secondary" className={cn("capitalize", invoiceStatusColor[invoice.status] ?? "bg-muted text-muted-foreground")}>{formatStatus(invoice.status)}</Badge></div>{!compact && <Button variant="outline" disabled>{payableStatuses.has(invoice.status) ? "Review & Pay" : "View Details"}</Button>}</div></div>;
+function InvoiceRow({ invoice, compact = false, paying = false, paymentsEnabled = false, onPay }: { invoice: Invoice; compact?: boolean; paying?: boolean; paymentsEnabled?: boolean; onPay?: (invoiceId: string) => Promise<void> }) {
+  const payable = payableStatuses.has(invoice.status);
+  return <div className={cn("flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center", compact && "first:pt-0 last:pb-0", !compact && "sm:py-5")}><div className="flex items-center gap-4">{!compact && <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></div>}<div><p className="font-semibold">{invoice.invoice_number}</p><p className="text-sm text-muted-foreground">{formatDate(invoice.created_at)}</p>{invoice.paid_at && <p className="mt-1 text-xs text-sage-dark">Confirmed {formatDate(invoice.paid_at)}</p>}</div></div><div className="flex items-center justify-between gap-4 sm:justify-end"><div className="text-right"><p className="font-semibold">${Number(invoice.amount).toFixed(2)}</p><Badge variant="secondary" className={cn("capitalize", invoiceStatusColor[invoice.status] ?? "bg-muted text-muted-foreground")}>{formatStatus(invoice.status)}</Badge></div>{!compact && payable && <Button variant="outline" disabled={!paymentsEnabled || paying} onClick={() => void onPay?.(invoice.id)}>{paying ? <><Loader2 className="h-4 w-4 animate-spin" />Opening Stripe...</> : "Pay Securely"}</Button>}{!compact && !payable && ["sent", "overdue"].includes(invoice.status) && <Link href="/contact" className={buttonVariants({ variant: "outline", size: "sm" })}>Contact Support</Link>}</div></div>;
+}
+
+function cardBrand(value: string) {
+  const labels: Record<string, string> = { visa: "Visa", mastercard: "Mastercard", amex: "American Express", discover: "Discover", jcb: "JCB", diners: "Diners Club", unionpay: "UnionPay", card: "Card" };
+  return labels[value] ?? value;
 }
 
 function formatDate(value: string) {

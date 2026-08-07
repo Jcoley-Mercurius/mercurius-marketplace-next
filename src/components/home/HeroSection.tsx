@@ -11,7 +11,8 @@ import {
   Shield,
   Star,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function HeroSection() {
   return (
@@ -90,23 +91,24 @@ export function HeroSection() {
               transition={{ duration: 0.5, delay: 0.75 }}
               className="flex flex-col gap-4 sm:flex-row"
             >
-              <Button
-                size="lg"
-                asChild
-                className="btn-hero-primary px-8 text-base shadow-md shadow-accent/25 transition-all duration-300 hover:shadow-lg hover:shadow-accent/30"
+              <Link
+                href="#bundle-builder"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "btn-hero-primary h-11 gap-2 rounded-md bg-accent px-8 text-base shadow-md shadow-accent/25 transition-all duration-300 hover:shadow-lg hover:shadow-accent/30",
+                )}
               >
-                <Link href="#bundle-builder">
-                  Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                asChild
-                className="border-border bg-card px-8 text-base text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-md"
+                Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+              <Link
+                href="/services"
+                className={cn(
+                  buttonVariants({ size: "lg", variant: "outline" }),
+                  "h-11 gap-2 rounded-md border-border bg-card px-8 text-base text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-md",
+                )}
               >
-                <Link href="/services">Browse Services</Link>
-              </Button>
+                Browse Services
+              </Link>
             </motion.div>
 
             <motion.p
