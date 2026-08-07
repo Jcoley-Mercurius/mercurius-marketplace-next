@@ -338,7 +338,7 @@ function ProviderCard({
     ?? `services from ${contractor.name}`;
 
   return (
-    <Card className="group border border-border transition-all hover:-translate-y-0.5 hover:shadow-lg">
+    <Card id={`provider-${contractor.id}`} className="group scroll-mt-28 border border-border transition-all hover:-translate-y-0.5 hover:shadow-lg">
       <CardContent className="flex h-full flex-col gap-4 p-6">
         <div className="flex items-start gap-4">
           {contractor.logo_url ? (

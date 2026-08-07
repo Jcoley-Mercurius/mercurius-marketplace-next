@@ -11,6 +11,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  fetchRoles,
+  postLoginPathForRoles,
+} from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -42,20 +46,17 @@ export default function LoginPage() {
       const searchParams = new URLSearchParams(window.location.search);
       const requestedDestination = searchParams.get("redirect");
       const supabase = createClient();
-      const { data: userResult } = await supabase.auth.getUser();
-      const { data: isVendor } = userResult.user
-        ? await supabase.rpc("has_role", {
-            _user_id: userResult.user.id,
-            _role: "vendor",
-          })
-        : { data: false };
-      const destination =
-        requestedDestination?.startsWith("/") &&
-        !requestedDestination.startsWith("//")
-          ? requestedDestination
-          : isVendor
-            ? "/vendor"
-            : "/dashboard";
+      const { data: userResult, error: userError } =
+        await supabase.auth.getUser();
+      if (userError || !userResult.user) {
+        throw userError ?? new Error("Unable to verify your account.");
+      }
+
+      const roles = await fetchRoles(userResult.user.id);
+      const destination = postLoginPathForRoles(
+        roles,
+        requestedDestination,
+      );
 
       router.replace(destination);
       router.refresh();

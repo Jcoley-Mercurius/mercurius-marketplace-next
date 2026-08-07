@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -12,12 +13,92 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, ChevronDown, Wrench, Home, UserPlus } from "lucide-react";
+import {
+  ChevronDown,
+  CircleUserRound,
+  Home,
+  Loader2,
+  LogOut,
+  Menu,
+  Shield,
+  UserPlus,
+  Wrench,
+} from "lucide-react";
+import { fetchRoles } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
+
+const accountPortals = [
+  {
+    role: "admin",
+    roleLabel: "Admin",
+    linkLabel: "Admin Portal",
+    href: "/admin",
+    icon: Shield,
+  },
+  {
+    role: "vendor",
+    roleLabel: "Vendor",
+    linkLabel: "Vendor Portal",
+    href: "/vendor",
+    icon: Wrench,
+  },
+  {
+    role: "homeowner",
+    roleLabel: "Homeowner",
+    linkLabel: "Homeowner Dashboard",
+    href: "/dashboard",
+    icon: Home,
+  },
+] as const;
+
+type RoleState = {
+  userId: string;
+  roles: string[];
+  status: "loaded" | "error";
+};
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [roleState, setRoleState] = useState<RoleState | null>(null);
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading: authLoading, signOut } = useAuth();
+  const userId = user?.id;
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+
+    void fetchRoles(userId)
+      .then((roles) => {
+        if (active) {
+          setRoleState({ userId, roles, status: "loaded" });
+        }
+      })
+      .catch((error) => {
+        console.error("Unable to load Header account roles", error);
+        if (active) {
+          setRoleState({ userId, roles: [], status: "error" });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  const currentRoleState =
+    userId && roleState?.userId === userId ? roleState : null;
+  const rolesLoading = Boolean(userId && !currentRoleState);
+  const portalLinks = accountPortals.filter(({ role }) =>
+    currentRoleState?.roles.includes(role),
+  );
+  const metadataName =
+    typeof user?.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name.trim()
+      : "";
+  const displayName = metadataName || user?.email || "Signed in";
 
   const navigation = [
     { name: "For Homeowners", href: "/homeowners" },
@@ -26,6 +107,19 @@ export function Header() {
   ];
 
   const isActive = (path: string) => pathname === path;
+
+  async function handleSignOut() {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      setIsOpen(false);
+      router.replace("/login");
+      router.refresh();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
@@ -84,39 +178,114 @@ export function Header() {
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center space-x-3 ml-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-1">
-              <Button variant="ghost">
+          {authLoading ? (
+            <Button variant="ghost" disabled>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Account
+            </Button>
+          ) : user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="ghost" />}
+                className="flex items-center gap-1"
+              >
+                <CircleUserRound className="h-4 w-4" />
+                Account <ChevronDown className="h-4 w-4 ml-1" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <div className="px-2 py-2.5">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {displayName}
+                  </p>
+                  {metadataName && user.email ? (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {user.email}
+                    </p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {rolesLoading ? (
+                      <span className="text-xs text-muted-foreground">
+                        Loading roles...
+                      </span>
+                    ) : portalLinks.length > 0 ? (
+                      portalLinks.map(({ role, roleLabel }) => (
+                        <span
+                          key={role}
+                          className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent"
+                        >
+                          {roleLabel}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {currentRoleState?.status === "error"
+                          ? "Roles unavailable"
+                          : "Account"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {portalLinks.map(({ role, linkLabel, href, icon: Icon }) => (
+                  <DropdownMenuItem
+                    key={role}
+                    render={<Link href={href} />}
+                    className="cursor-pointer px-2 py-2"
+                  >
+                    <Icon />
+                    {linkLabel}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={isSigningOut}
+                  onClick={() => void handleSignOut()}
+                  className="mt-1 cursor-pointer border-t border-border px-2 py-2"
+                >
+                  {isSigningOut ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <LogOut />
+                  )}
+                  {isSigningOut ? "Signing Out..." : "Sign Out"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="ghost" />}
+                className="flex items-center gap-1"
+              >
                 Sign In <ChevronDown className="h-4 w-4 ml-1" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
-                <Link href="/login" className="w-full flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-                    <Home className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                  Homeowner Sign In
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/login/vendor" className="w-full flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-                    <Wrench className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                  Vendor Sign In
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/register" className="w-full flex items-center gap-2 font-medium text-accent">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/10">
-                    <UserPlus className="h-3.5 w-3.5 text-accent" />
-                  </div>
-                  Create Homeowner Account
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem>
+                  <Link href="/login" className="w-full flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+                      <Home className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    Homeowner Sign In
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Link href="/login/vendor" className="w-full flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+                      <Wrench className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    Vendor Sign In
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Link href="/register" className="w-full flex items-center gap-2 font-medium text-accent">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/10">
+                      <UserPlus className="h-3.5 w-3.5 text-accent" />
+                    </div>
+                    Create Homeowner Account
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <Link href="/request" className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent/90")}>Get Started</Link>
         </div>
@@ -164,16 +333,89 @@ export function Header() {
                 </nav>
 
                 <div className="flex flex-col space-y-3 pt-4 border-t">
-                  <Link href="/login" onClick={() => setIsOpen(false)} className={cn(buttonVariants({ variant: "outline" }), "w-full")}>Homeowner Sign In</Link>
-                  <Link href="/login/vendor" onClick={() => setIsOpen(false)} className={cn(buttonVariants({ variant: "outline" }), "w-full")}>Vendor Sign In</Link>
-                  <Link
-                    href="/register"
-                    onClick={() => setIsOpen(false)}
-                    className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    Create Homeowner Account
-                  </Link>
+                  {!authLoading && user ? (
+                    <>
+                      <div className="rounded-xl border border-border bg-muted/40 p-4">
+                        <p className="truncate font-semibold text-foreground">
+                          {displayName}
+                        </p>
+                        {metadataName && user.email ? (
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {user.email}
+                          </p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {rolesLoading ? (
+                            <span className="text-xs text-muted-foreground">
+                              Loading roles...
+                            </span>
+                          ) : portalLinks.length > 0 ? (
+                            portalLinks.map(({ role, roleLabel }) => (
+                              <span
+                                key={role}
+                                className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent"
+                              >
+                                {roleLabel}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {currentRoleState?.status === "error"
+                                ? "Roles unavailable"
+                                : "Account"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {portalLinks.map(
+                        ({ role, linkLabel, href, icon: Icon }) => (
+                          <Link
+                            key={role}
+                            href={href}
+                            onClick={() => setIsOpen(false)}
+                            className={cn(
+                              buttonVariants({ variant: "outline" }),
+                              "w-full justify-start gap-2",
+                            )}
+                          >
+                            <Icon />
+                            {linkLabel}
+                          </Link>
+                        ),
+                      )}
+                      <Button
+                        variant="outline"
+                        className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={isSigningOut}
+                        onClick={() => void handleSignOut()}
+                      >
+                        {isSigningOut ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <LogOut />
+                        )}
+                        {isSigningOut ? "Signing Out..." : "Sign Out"}
+                      </Button>
+                    </>
+                  ) : !authLoading ? (
+                    <>
+                      <Link href="/login" onClick={() => setIsOpen(false)} className={cn(buttonVariants({ variant: "outline" }), "w-full")}>Homeowner Sign In</Link>
+                      <Link href="/login/vendor" onClick={() => setIsOpen(false)} className={cn(buttonVariants({ variant: "outline" }), "w-full")}>Vendor Sign In</Link>
+                      <Link
+                        href="/register"
+                        onClick={() => setIsOpen(false)}
+                        className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Create Homeowner Account
+                      </Link>
+                    </>
+                  ) : (
+                    <Button variant="outline" disabled className="w-full">
+                      <Loader2 className="animate-spin" />
+                      Loading Account...
+                    </Button>
+                  )}
                   <Link href="/request" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent/90")}>Request Service</Link>
                 </div>
               </div>

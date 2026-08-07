@@ -11,24 +11,37 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { buttonVariants } from "@/components/ui/button";
 
+const LAST_UPDATED = "August 5, 2026";
+
 export default function ReschedulePolicyPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main>
-        <section className="bg-hero py-12 md:py-16">
-          <div className="container-narrow text-center">
-            <h1 className="mb-4 text-foreground">Reschedule &amp; Cancellation Policy</h1>
-            <p className="mx-auto max-w-xl text-lg text-muted-foreground">
-              We understand plans change. Here&apos;s everything you need to know about modifying your service appointments.
-            </p>
+        <section className="bg-hero relative overflow-hidden py-16 md:py-20 lg:py-24">
+          <div className="bg-pattern absolute inset-0 opacity-30" />
+          <div className="pointer-events-none absolute -left-24 top-10 h-80 w-80 rounded-full bg-sage/10 blur-3xl" />
+          <div className="pointer-events-none absolute -right-24 -top-20 h-96 w-96 rounded-full bg-coral/10 blur-3xl" />
+          <div className="container-wide relative">
+            <div className="mx-auto max-w-3xl text-center">
+              <span className="mb-6 inline-flex items-center rounded-full bg-sage-light px-4 py-2 text-sm font-medium text-sage-dark shadow-sm ring-1 ring-sage/20">
+                <Calendar className="mr-2 h-4 w-4" /> Appointment Policy
+              </span>
+              <h1 className="mb-5 text-4xl font-bold leading-tight text-foreground md:text-5xl lg:text-6xl">
+                Reschedule &amp; <span className="hero-gradient-text">Cancellation</span>
+              </h1>
+              <p className="mx-auto max-w-2xl text-lg leading-relaxed text-muted-foreground">
+                We understand plans change. Here&apos;s everything you need to know about modifying your service appointments.
+              </p>
+              <p className="mt-6 text-sm font-medium text-muted-foreground">Last updated: {LAST_UPDATED}</p>
+            </div>
           </div>
         </section>
 
         <section className="section bg-background">
           <div className="container-narrow">
             <div className="grid gap-8">
-              <div className="rounded-2xl border border-border bg-card p-8">
+              <div className="rounded-3xl border border-border/40 bg-card p-8 shadow-sm">
                 <div className="mb-6 flex items-start gap-4">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sage-light">
                     <Calendar className="h-6 w-6 text-sage" />
@@ -54,7 +67,7 @@ export default function ReschedulePolicyPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border bg-card p-8">
+              <div className="rounded-3xl border border-border/40 bg-card p-8 shadow-sm">
                 <div className="mb-6 flex items-start gap-4">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted">
                     <XCircle className="h-6 w-6 text-muted-foreground" />
@@ -80,7 +93,7 @@ export default function ReschedulePolicyPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border bg-card p-8">
+              <div className="rounded-3xl border border-border/40 bg-card p-8 shadow-sm">
                 <h2 className="mb-6 text-xl font-semibold text-foreground">How to Reschedule or Cancel</h2>
                 <div className="grid gap-6 sm:grid-cols-3">
                   <PolicyStep number="1" title="Log In">Access your account dashboard</PolicyStep>

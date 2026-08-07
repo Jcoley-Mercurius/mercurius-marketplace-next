@@ -21,6 +21,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  fetchRoles,
+  postLoginPathForRoles,
+} from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -67,12 +71,10 @@ export default function VendorLoginPage() {
         throw userError ?? new Error("Unable to verify your account.");
       }
 
-      const { data: isVendor, error: roleError } = await supabase.rpc("has_role", {
-        _user_id: userResult.user.id,
-        _role: "vendor",
-      });
-
-      if (roleError) {
+      let roles: string[];
+      try {
+        roles = await fetchRoles(userResult.user.id);
+      } catch {
         await signOut();
         toast.error("Unable to verify vendor access", {
           description: "Please try again or contact Mercurius support.",
@@ -80,16 +82,25 @@ export default function VendorLoginPage() {
         return;
       }
 
-      if (!isVendor) {
+      const requestedDestination = new URLSearchParams(
+        window.location.search,
+      ).get("redirect");
+      const destination = postLoginPathForRoles(
+        roles,
+        requestedDestination,
+      );
+
+      if (!roles.includes("vendor")) {
         toast.info("This account does not have vendor access", {
-          description: "We’ll take you to your homeowner dashboard instead.",
+          description: destination.startsWith("/admin")
+            ? "We’ll take you to your admin portal instead."
+            : destination.startsWith("/dashboard")
+              ? "We’ll take you to your homeowner dashboard instead."
+              : "We’ll continue to your requested page instead.",
         });
-        router.replace("/dashboard");
-        router.refresh();
-        return;
       }
 
-      router.replace("/vendor");
+      router.replace(destination);
       router.refresh();
     } catch (error) {
       toast.error("Unable to finish signing in", {
