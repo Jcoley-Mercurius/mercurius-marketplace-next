@@ -88,6 +88,8 @@ export default function RequestServicePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [serviceOverrides, setServiceOverrides] = useState<Record<string, Partial<ServiceOption>>>({});
+  const [preferredProviders, setPreferredProviders] = useState<Record<string, string>>({});
+  const [preferredProviderNames, setPreferredProviderNames] = useState<Record<string, string>>({});
   const { user } = useAuth();
   const router = useRouter();
 
@@ -95,6 +97,7 @@ export default function RequestServicePage() {
     try {
       const saved = window.sessionStorage.getItem(storageKey);
       const builder = window.sessionStorage.getItem("homePlanSelection");
+      const providerSelection = window.sessionStorage.getItem("preferredProviderSelection");
       if (saved) {
         const value = JSON.parse(saved) as Record<string, unknown>;
         // Restoring a browser-only draft necessarily hydrates the controlled form after mount.
@@ -113,22 +116,23 @@ export default function RequestServicePage() {
         if (typeof value.email === "string") setEmail(value.email);
         if (typeof value.phone === "string") setPhone(value.phone);
         if (typeof value.smsUpdates === "boolean") setSmsUpdates(value.smsUpdates);
+        if (value.serviceOverrides && typeof value.serviceOverrides === "object") setServiceOverrides(value.serviceOverrides as Record<string, Partial<ServiceOption>>);
+        if (value.preferredProviders && typeof value.preferredProviders === "object") setPreferredProviders(value.preferredProviders as Record<string, string>);
+        if (value.preferredProviderNames && typeof value.preferredProviderNames === "object") setPreferredProviderNames(value.preferredProviderNames as Record<string, string>);
       }
       if (builder) {
         const value = JSON.parse(builder) as { selectedServiceIds?: unknown; frequencies?: unknown; requestedServices?: unknown };
         const requestedServices = Array.isArray(value.requestedServices) ? value.requestedServices.filter(isBuilderRequestedService) : [];
         if (requestedServices.length > 0) {
-          const directlyRequestableItems = requestedServices.filter((item) => item.availability === "fixed" && serviceOptions.some((service) => service.id === item.id));
-          const directlyRequestable = directlyRequestableItems.map((item) => item.id);
-          const needsMatching = requestedServices.filter((item) => item.availability !== "fixed" || !serviceOptions.some((service) => service.id === item.id));
-          setSelectedIds([...directlyRequestable, ...(needsMatching.length > 0 ? ["general-home-service"] : [])]);
-          setServiceOverrides(Object.fromEntries(directlyRequestableItems.map((item) => [item.id, {
+          setSelectedIds(requestedServices.map((item) => item.id));
+          setServiceOverrides(Object.fromEntries(requestedServices.map((item) => [item.id, {
             name: item.name,
             description: item.descriptor,
             defaultFrequency: item.defaultFrequency,
             frequencies: item.frequencies,
             livePrices: item.prices,
           }])));
+          const needsMatching = requestedServices.filter((item) => item.availability !== "fixed");
           if (needsMatching.length > 0) setDescription((current) => current || `Please help me with: ${needsMatching.map((item) => item.name).join(", ")}. I understand provider coverage and pricing still need to be confirmed.`);
         } else if (Array.isArray(value.selectedServiceIds)) {
           const knownIds = value.selectedServiceIds.filter((id): id is string => typeof id === "string" && serviceOptions.some((service) => service.id === id));
@@ -143,15 +147,23 @@ export default function RequestServicePage() {
       const requestedServiceName = query.get("requested");
       if (requestedServiceId && !builder) {
         const knownService = serviceOptions.find((service) => service.id === requestedServiceId);
-        const selectedService = knownService ?? (requestedServiceName ? serviceOptions.find((service) => service.id === "general-home-service") : undefined);
-        if (selectedService) {
-          setSelectedIds((current) => current.includes(selectedService.id) ? current : [...current, selectedService.id]);
-          setFrequencies((current) => current[selectedService.id] ? current : { ...current, [selectedService.id]: selectedService.defaultFrequency });
-        }
+        const selectedServiceId = knownService?.id ?? requestedServiceId;
+        setSelectedIds((current) => current.includes(selectedServiceId) ? current : [...current, selectedServiceId]);
+        setFrequencies((current) => current[selectedServiceId] ? current : { ...current, [selectedServiceId]: knownService?.defaultFrequency ?? "one-time" });
         if (requestedServiceName && !knownService) {
-          setDescription((current) => current || `I'm interested in ${requestedServiceName}. Please help me find a vetted local provider.`);
+          setServiceOverrides((current) => ({ ...current, [selectedServiceId]: { name: requestedServiceName, description: "Provider-specific service request", defaultFrequency: "one-time", frequencies: ["one-time"], livePrices: {} } }));
         }
       }
+
+      const storedProvider = providerSelection ? JSON.parse(providerSelection) as { contractorId?: unknown; contractorName?: unknown; serviceId?: unknown } : null;
+      const providerId = typeof storedProvider?.contractorId === "string" ? storedProvider.contractorId : query.get("provider");
+      const providerName = typeof storedProvider?.contractorName === "string" ? storedProvider.contractorName : query.get("providerName");
+      const providerServiceId = typeof storedProvider?.serviceId === "string" ? storedProvider.serviceId : requestedServiceId;
+      if (providerId && providerServiceId) {
+        setPreferredProviders((current) => ({ ...current, [providerServiceId]: providerId }));
+        if (providerName) setPreferredProviderNames((current) => ({ ...current, [providerServiceId]: providerName }));
+      }
+      window.sessionStorage.removeItem("preferredProviderSelection");
     } catch {
       window.sessionStorage.removeItem(storageKey);
     } finally {
@@ -175,20 +187,43 @@ export default function RequestServicePage() {
     window.sessionStorage.setItem(storageKey, JSON.stringify({
       step, selectedIds, frequencies, streetAddress, city, stateCode, zipCode,
       preferredDate, description, firstName, lastName, email, phone, smsUpdates,
+      serviceOverrides, preferredProviders, preferredProviderNames,
     }));
-  }, [city, description, email, firstName, frequencies, hydrated, isComplete, lastName, phone, preferredDate, selectedIds, smsUpdates, stateCode, step, streetAddress, zipCode]);
+  }, [city, description, email, firstName, frequencies, hydrated, isComplete, lastName, phone, preferredDate, preferredProviderNames, preferredProviders, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, zipCode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step, isComplete]);
 
-  const requestServiceOptions = useMemo(() => serviceOptions.map((service) => ({ ...service, ...serviceOverrides[service.id] })), [serviceOverrides]);
+  const requestServiceOptions = useMemo(() => {
+    const knownIds = new Set(serviceOptions.map((service) => service.id));
+    const known = serviceOptions.map((service) => ({ ...service, ...serviceOverrides[service.id] }));
+    const live = Object.entries(serviceOverrides)
+      .filter(([id]) => !knownIds.has(id))
+      .map(([id, override]): ServiceOption => ({
+        id,
+        name: override.name ?? formatServiceName(id),
+        description: override.description ?? "Tell us what you need and we’ll confirm the details.",
+        icon: override.icon ?? Home,
+        monthlyPrice: override.monthlyPrice ?? 0,
+        oneTimePrice: override.oneTimePrice ?? 0,
+        defaultFrequency: override.defaultFrequency ?? "one-time",
+        frequencies: override.frequencies?.length ? override.frequencies : ["one-time"],
+        livePrices: override.livePrices,
+      }));
+    return [...known, ...live];
+  }, [serviceOverrides]);
   const selectedServices = useMemo(() => requestServiceOptions.filter((service) => selectedIds.includes(service.id)), [requestServiceOptions, selectedIds]);
   const estimate = useMemo(() => selectedServices.reduce((total, service) => total + servicePrice(service, frequencies[service.id] ?? service.defaultFrequency), 0), [frequencies, selectedServices]);
   const stepIndex = stepOrder.indexOf(step);
 
   function toggleService(id: string) {
-    setSelectedIds((current) => current.includes(id) ? current.filter((serviceId) => serviceId !== id) : [...current, id]);
+    const removing = selectedIds.includes(id);
+    setSelectedIds((current) => removing ? current.filter((serviceId) => serviceId !== id) : [...current, id]);
+    if (removing) {
+      setPreferredProviders((providers) => withoutKey(providers, id));
+      setPreferredProviderNames((names) => withoutKey(names, id));
+    }
   }
 
   function continueFromServices() {
@@ -245,7 +280,7 @@ export default function RequestServicePage() {
         return {
           customer_id: user.id,
           service_type: service.name,
-          contractor_id: null,
+          contractor_id: preferredProviders[service.id] ?? null,
           address: streetAddress.trim(),
           city: city.trim(),
           state: stateCode.trim().toUpperCase(),
@@ -275,7 +310,7 @@ export default function RequestServicePage() {
   }
 
   if (isComplete) {
-    return <SuccessState services={selectedServices} />;
+    return <SuccessState services={selectedServices} preferredProviderNames={preferredProviderNames} />;
   }
 
   return (
@@ -320,9 +355,9 @@ export default function RequestServicePage() {
         <section className="py-12 md:py-16">
           <div className="container-narrow">
             <form onSubmit={handleSubmit}>
-              {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} onToggle={toggleService} onFrequencyChange={(id, frequency) => setFrequencies((current) => ({ ...current, [id]: frequency }))} estimate={estimate} onContinue={continueFromServices} />}
+              {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} onToggle={toggleService} onFrequencyChange={(id, frequency) => setFrequencies((current) => ({ ...current, [id]: frequency }))} estimate={estimate} onContinue={continueFromServices} />}
               {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} photos={photos} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onPhotos={addPhotos} onDrop={handleDrop} onRemovePhoto={(index) => setPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index))} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
-              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} estimate={estimate} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
+              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
             </form>
           </div>
         </section>
@@ -332,8 +367,8 @@ export default function RequestServicePage() {
   );
 }
 
-function ServicesStep({ services, selectedIds, frequencies, onToggle, onFrequencyChange, estimate, onContinue }: { services: ServiceOption[]; selectedIds: string[]; frequencies: Record<string, Frequency>; onToggle: (id: string) => void; onFrequencyChange: (id: string, value: Frequency) => void; estimate: number; onContinue: () => void }) {
-  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">What does your home need?</h2><p className="mt-2 text-muted-foreground">Choose one or more services. You can adjust the preferred cadence before continuing.</p></div><div className="grid gap-4 sm:grid-cols-2">{services.map((service) => { const selected = selectedIds.includes(service.id); const Icon = service.icon; const frequency = frequencies[service.id] ?? service.defaultFrequency; return <Card key={service.id} className={cn("cursor-pointer transition-all", selected ? "ring-2 ring-accent" : "hover:ring-accent/30")} onClick={() => onToggle(service.id)}><CardContent className="flex gap-4"><span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", selected ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{service.name}</p><p className="mt-1 text-sm text-muted-foreground">{service.description}</p></div>{selected && <CheckCircle2 className="h-5 w-5 shrink-0 text-accent" />}</div>{selected && <div className="mt-4" onClick={(event) => event.stopPropagation()}><Label htmlFor={`frequency-${service.id}`} className="text-xs text-muted-foreground">Frequency</Label><select id={`frequency-${service.id}`} value={frequency} onChange={(event) => onFrequencyChange(service.id, event.target.value as Frequency)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">{service.frequencies.map((item) => <option key={item} value={item}>{frequencyLabel(item)} · {servicePriceLabel(service, item)}</option>)}</select></div>}</div></CardContent></Card>; })}</div><div className="mt-8 flex flex-col gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm text-muted-foreground">Estimated plan total</p><p className="text-2xl font-bold">{estimate > 0 ? `$${estimate}` : "Custom quote"}</p><p className="text-xs text-muted-foreground">Live package pricing when supplied; final scope is confirmed before service.</p></div><Button type="button" size="lg" onClick={onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Your Home <ArrowRight className="h-4 w-4" /></Button></div></div>;
+function ServicesStep({ services, selectedIds, frequencies, preferredProviderNames, onToggle, onFrequencyChange, estimate, onContinue }: { services: ServiceOption[]; selectedIds: string[]; frequencies: Record<string, Frequency>; preferredProviderNames: Record<string, string>; onToggle: (id: string) => void; onFrequencyChange: (id: string, value: Frequency) => void; estimate: number; onContinue: () => void }) {
+  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">What does your home need?</h2><p className="mt-2 text-muted-foreground">Choose one or more services. You can adjust the preferred cadence before continuing.</p></div><div className="grid gap-4 sm:grid-cols-2">{services.map((service) => { const selected = selectedIds.includes(service.id); const Icon = service.icon; const frequency = frequencies[service.id] ?? service.defaultFrequency; return <Card key={service.id} className={cn("cursor-pointer transition-all", selected ? "ring-2 ring-accent" : "hover:ring-accent/30")} onClick={() => onToggle(service.id)}><CardContent className="flex gap-4"><span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", selected ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{service.name}</p><p className="mt-1 text-sm text-muted-foreground">{service.description}</p>{preferredProviderNames[service.id] && <p className="mt-2 flex items-center gap-1 text-xs font-medium text-accent"><ShieldCheck className="h-3.5 w-3.5" />Requested provider: {preferredProviderNames[service.id]}</p>}</div>{selected && <CheckCircle2 className="h-5 w-5 shrink-0 text-accent" />}</div>{selected && <div className="mt-4" onClick={(event) => event.stopPropagation()}><Label htmlFor={`frequency-${service.id}`} className="text-xs text-muted-foreground">Frequency</Label><select id={`frequency-${service.id}`} value={frequency} onChange={(event) => onFrequencyChange(service.id, event.target.value as Frequency)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">{service.frequencies.map((item) => <option key={item} value={item}>{frequencyLabel(item)} · {servicePriceLabel(service, item)}</option>)}</select></div>}</div></CardContent></Card>; })}</div><div className="mt-8 flex flex-col gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm text-muted-foreground">Estimated plan total</p><p className="text-2xl font-bold">{estimate > 0 ? `$${estimate}` : "Custom quote"}</p><p className="text-xs text-muted-foreground">Live package pricing when supplied; final scope is confirmed before service.</p></div><Button type="button" size="lg" onClick={onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Your Home <ArrowRight className="h-4 w-4" /></Button></div></div>;
 }
 
 type DetailsStepProps = { streetAddress: string; city: string; stateCode: string; zipCode: string; preferredDate: string; description: string; photos: File[]; onStreetAddress: (value: string) => void; onCity: (value: string) => void; onStateCode: (value: string) => void; onZipCode: (value: string) => void; onPreferredDate: (value: string) => void; onDescription: (value: string) => void; onPhotos: (files: File[]) => void; onDrop: (event: DragEvent<HTMLLabelElement>) => void; onRemovePhoto: (index: number) => void; onBack: () => void; onContinue: () => void };
@@ -343,14 +378,15 @@ function DetailsStep(props: DetailsStepProps) {
   return <div><div className="mb-8"><h2 className="text-2xl font-semibold">Tell us about your home</h2><p className="mt-2 text-muted-foreground">Add the service location, timing, and anything our team should know.</p></div><Card><CardHeader><CardTitle>Service Details</CardTitle></CardHeader><CardContent className="space-y-6"><div className="space-y-2"><Label htmlFor="streetAddress">Street address</Label><Input id="streetAddress" autoComplete="address-line1" placeholder="123 Main St" className="h-12" value={props.streetAddress} onChange={(event) => props.onStreetAddress(event.target.value)} /></div><div className="grid gap-4 sm:grid-cols-6"><div className="space-y-2 sm:col-span-3"><Label htmlFor="city">City</Label><Input id="city" autoComplete="address-level2" className="h-12" value={props.city} onChange={(event) => props.onCity(event.target.value)} /></div><div className="space-y-2 sm:col-span-1"><Label htmlFor="state">State</Label><Input id="state" autoComplete="address-level1" maxLength={2} className="h-12 uppercase" value={props.stateCode} onChange={(event) => props.onStateCode(event.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="zip">ZIP code</Label><Input id="zip" autoComplete="postal-code" inputMode="numeric" maxLength={10} className="h-12" value={props.zipCode} onChange={(event) => props.onZipCode(event.target.value.replace(/[^\d-]/g, ""))} /></div></div><div className="space-y-2"><Label htmlFor="preferredDate">Preferred date</Label><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} /></div><p className="text-xs text-muted-foreground">This is a preference. We&apos;ll confirm the actual appointment with you.</p></div><div className="space-y-2"><Label htmlFor="description">Description</Label><textarea id="description" rows={5} placeholder="Describe the work, access instructions, or anything else we should know..." value={props.description} onChange={(event) => props.onDescription(event.target.value)} className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" /></div><div className="space-y-2"><Label>Photos (optional)</Label><label htmlFor="photo-upload" onDragOver={(event) => event.preventDefault()} onDrop={props.onDrop} className="block cursor-pointer rounded-xl border-2 border-dashed border-border p-7 text-center transition-colors hover:border-accent/50"><Upload className="mx-auto mb-2 h-7 w-7 text-muted-foreground" /><p className="text-sm text-muted-foreground">Drag and drop images, or click to browse</p><p className="mt-1 text-xs text-muted-foreground">Up to 6 photos; upload connection coming in a later version.</p><input id="photo-upload" type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { props.onPhotos(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></label>{props.photos.length > 0 && <div className="flex flex-wrap gap-2">{props.photos.map((file, index) => <button key={`${file.name}-${index}`} type="button" onClick={() => props.onRemovePhoto(index)} className="rounded-lg border border-border bg-muted px-3 py-2 text-xs hover:border-destructive" title="Remove photo">{file.name} ×</button>)}</div>}</div></CardContent></Card><div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row"><Button type="button" variant="outline" size="lg" onClick={props.onBack}><ArrowLeft className="h-4 w-4" /> Back</Button><Button type="button" size="lg" onClick={props.onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Review <ArrowRight className="h-4 w-4" /></Button></div></div>;
 }
 
-type ContactStepProps = { selectedServices: ServiceOption[]; frequencies: Record<string, Frequency>; estimate: number; firstName: string; lastName: string; email: string; phone: string; smsUpdates: boolean; isSubmitting: boolean; isSignedIn: boolean; onFirstName: (value: string) => void; onLastName: (value: string) => void; onEmail: (value: string) => void; onPhone: (value: string) => void; onSmsUpdates: (value: boolean) => void; onBack: () => void };
+type ContactStepProps = { selectedServices: ServiceOption[]; frequencies: Record<string, Frequency>; preferredProviderNames: Record<string, string>; estimate: number; firstName: string; lastName: string; email: string; phone: string; smsUpdates: boolean; isSubmitting: boolean; isSignedIn: boolean; onFirstName: (value: string) => void; onLastName: (value: string) => void; onEmail: (value: string) => void; onPhone: (value: string) => void; onSmsUpdates: (value: boolean) => void; onBack: () => void };
 
 function ContactStep(props: ContactStepProps) {
   return <div><div className="mb-8"><h2 className="text-2xl font-semibold">Review and confirm</h2><p className="mt-2 text-muted-foreground">Tell us how to reach you and review your service plan.</p></div><div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]"><Card><CardHeader><CardTitle>Contact Information</CardTitle></CardHeader><CardContent className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="firstName">First Name</Label><Input id="firstName" autoComplete="given-name" className="h-12" value={props.firstName} onChange={(event) => props.onFirstName(event.target.value)} required /></div><div className="space-y-2"><Label htmlFor="lastName">Last Name</Label><Input id="lastName" autoComplete="family-name" className="h-12" value={props.lastName} onChange={(event) => props.onLastName(event.target.value)} required /></div></div><div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" className="h-12" value={props.email} onChange={(event) => props.onEmail(event.target.value)} required /></div><div className="space-y-2"><Label htmlFor="phone">Phone</Label><Input id="phone" type="tel" autoComplete="tel" placeholder="(239) 555-0123" className="h-12" value={props.phone} onChange={(event) => props.onPhone(event.target.value)} required /></div><label className="flex cursor-pointer items-start gap-3 text-sm text-muted-foreground"><input type="checkbox" checked={props.smsUpdates} onChange={(event) => props.onSmsUpdates(event.target.checked)} className="mt-1 h-4 w-4 accent-accent" /><span>I agree to receive SMS updates about this service request. Standard messaging rates may apply.</span></label></CardContent></Card><Card className="h-fit border-accent/20 bg-accent/5 ring-accent/20"><CardHeader><CardTitle>Your Plan</CardTitle></CardHeader><CardContent><div className="space-y-3">{props.selectedServices.map((service) => { const frequency = props.frequencies[service.id] ?? service.defaultFrequency; return <div key={service.id} className="flex justify-between gap-4 border-b border-accent/10 pb-3 last:border-0"><div><p className="font-medium">{service.name}</p><p className="text-xs capitalize text-muted-foreground">{frequencyLabel(frequency)}</p></div><p className="font-semibold">{servicePriceLabel(service, frequency)}</p></div>; })}</div><div className="mt-5 border-t border-accent/20 pt-4"><div className="flex items-baseline justify-between"><span className="text-sm text-muted-foreground">Estimated total</span><span className="text-2xl font-bold">{props.estimate > 0 ? `$${props.estimate}` : "Quote"}</span></div><div className="mt-4 flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p className="text-xs text-muted-foreground">Preview pricing only. Scope, provider, schedule, and final pricing are confirmed before work begins.</p></div></div></CardContent></Card></div><div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row"><Button type="button" variant="outline" size="lg" onClick={props.onBack}><ArrowLeft className="h-4 w-4" /> Back</Button><Button type="submit" size="lg" disabled={props.isSubmitting} className="bg-accent text-accent-foreground hover:bg-accent/90">{props.isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</> : props.isSignedIn ? "Submit Request" : "Sign In to Submit"}</Button></div></div>;
 }
 
-function SuccessState({ services }: { services: ServiceOption[] }) {
-  return <div className="min-h-screen bg-background"><Header /><main className="py-16 md:py-24"><div className="container-narrow"><div className="mb-10 text-center"><span className="mx-auto mb-7 flex h-20 w-20 items-center justify-center rounded-full bg-sage-light"><CheckCircle2 className="h-10 w-10 text-sage-dark" /></span><h1 className="mb-4 text-3xl font-semibold">Request Submitted!</h1><p className="mx-auto max-w-xl text-lg text-muted-foreground">Thank you for your request. Our team will review the details and contact you to confirm next steps.</p></div><Card className="mx-auto mb-8 max-w-xl"><CardHeader><CardTitle>Booking Summary</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="flex justify-between gap-4"><span className="text-muted-foreground">Services</span><span className="text-right font-medium">{services.map((service) => service.name).join(", ")}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Provider</span><span className="font-medium">Matching in progress</span></div><div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-semibold text-sage-dark">Request Sent</span></div></CardContent></Card><div className="mx-auto mb-8 max-w-xl"><h2 className="mb-5 text-center font-semibold">What happens next</h2>{["Sent", "Provider confirmed", "Service in progress", "Completed", "Leave a review"].map((label, index, items) => <div key={label} className="flex items-start gap-4"><div className="flex flex-col items-center"><span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium", index === 0 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{index === 0 ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>{index < items.length - 1 && <span className="h-6 w-0.5 bg-border" />}</div><p className={cn("pt-1.5 text-sm", index === 0 ? "font-medium" : "text-muted-foreground")}>{label}</p></div>)}</div><div className="flex justify-center gap-3"><Link href="/dashboard" className={buttonVariants({ variant: "outline", size: "lg" })}>View Dashboard</Link><Link href="/" className={buttonVariants({ size: "lg" })}>Return Home</Link></div></div></main></div>;
+function SuccessState({ services, preferredProviderNames }: { services: ServiceOption[]; preferredProviderNames: Record<string, string> }) {
+  const providerNames = [...new Set(Object.values(preferredProviderNames))];
+  return <div className="min-h-screen bg-background"><Header /><main className="py-16 md:py-24"><div className="container-narrow"><div className="mb-10 text-center"><span className="mx-auto mb-7 flex h-20 w-20 items-center justify-center rounded-full bg-sage-light"><CheckCircle2 className="h-10 w-10 text-sage-dark" /></span><h1 className="mb-4 text-3xl font-semibold">Request Submitted!</h1><p className="mx-auto max-w-xl text-lg text-muted-foreground">Thank you for your request. Our team will review the details and contact you to confirm next steps.</p></div><Card className="mx-auto mb-8 max-w-xl"><CardHeader><CardTitle>Booking Summary</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="flex justify-between gap-4"><span className="text-muted-foreground">Services</span><span className="text-right font-medium">{services.map((service) => service.name).join(", ")}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Provider</span><span className="text-right font-medium">{providerNames.length ? providerNames.join(", ") : "Matching in progress"}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-semibold text-sage-dark">Request Sent</span></div></CardContent></Card><div className="mx-auto mb-8 max-w-xl"><h2 className="mb-5 text-center font-semibold">What happens next</h2>{["Sent", "Provider confirmed", "Service in progress", "Completed", "Leave a review"].map((label, index, items) => <div key={label} className="flex items-start gap-4"><div className="flex flex-col items-center"><span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium", index === 0 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{index === 0 ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>{index < items.length - 1 && <span className="h-6 w-0.5 bg-border" />}</div><p className={cn("pt-1.5 text-sm", index === 0 ? "font-medium" : "text-muted-foreground")}>{label}</p></div>)}</div><div className="flex justify-center gap-3"><Link href="/dashboard" className={buttonVariants({ variant: "outline", size: "lg" })}>View Dashboard</Link><Link href="/" className={buttonVariants({ size: "lg" })}>Return Home</Link></div></div></main></div>;
 }
 
 function servicePrice(service: ServiceOption, frequency: Frequency) {
@@ -368,9 +404,22 @@ function isBuilderRequestedService(item: unknown): item is BuilderRequestedServi
 function servicePriceLabel(service: ServiceOption, frequency: Frequency) {
   const price = servicePrice(service, frequency);
   if (!price) return "Quote";
-  return frequency === "one-time" ? `$${price}` : `$${price}/mo`;
+  if (frequency === "one-time") return `$${price}`;
+  if (frequency === "weekly") return `$${price}/wk`;
+  if (frequency === "quarterly") return `$${price}/qtr`;
+  return `$${price}/mo`;
 }
 
 function frequencyLabel(frequency: Frequency) {
   return frequency === "one-time" ? "One-time" : frequency.charAt(0).toUpperCase() + frequency.slice(1);
+}
+
+function formatServiceName(id: string) {
+  return id.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function withoutKey<T>(record: Record<string, T>, key: string) {
+  const next = { ...record };
+  delete next[key];
+  return next;
 }

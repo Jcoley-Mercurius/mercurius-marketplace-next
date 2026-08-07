@@ -1,298 +1,136 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Provider logos are user-managed Supabase assets. */
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import {
-  ArrowRight,
-  Award,
-  BadgeCheck,
-  MapPin,
-  Play,
-  Star,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, Award, BadgeCheck, Briefcase, MapPin, ShieldCheck, Star } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
-type SpotlightProvider = {
+type FeaturedRow = {
   id: string;
-  name: string;
-  initials: string;
-  rating: number;
-  jobsCompleted: number;
-  services: string[];
-  location: string;
-  headline: string;
-  bio: string;
-  yearsExperience: number;
-  badges: string[];
+  contractor_id: string;
+  tier: string;
+  headline: string | null;
+  created_at: string;
 };
 
-const providers: SpotlightProvider[] = [
-  {
-    id: "gulf-coast-lawn-care",
-    name: "Gulf Coast Lawn Care",
-    initials: "GC",
-    rating: 4.9,
-    jobsCompleted: 347,
-    services: ["Lawn Mowing", "Edging", "Hedge Trimming", "Yard Cleanup"],
-    location: "Cape Coral, FL",
-    headline: "Reliable weekly care, made for Southwest Florida lawns.",
-    bio: "A locally owned crew known for consistent scheduling, clean edges, and careful property maintenance.",
-    yearsExperience: 12,
-    badges: ["Top Rated", "Insured", "Fast Response"],
-  },
-  {
-    id: "blue-palm-pool-service",
-    name: "Blue Palm Pool Service",
-    initials: "BP",
-    rating: 4.8,
-    jobsCompleted: 281,
-    services: ["Pool Cleaning", "Chemical Balance", "Filter Care", "Equipment Checks"],
-    location: "Fort Myers, FL",
-    headline: "Clear water, dependable visits, zero guesswork.",
-    bio: "Residential pool specialists providing documented weekly service and proactive equipment monitoring.",
-    yearsExperience: 9,
-    badges: ["Verified Pro", "Pool Specialist", "Photo Updates"],
-  },
-  {
-    id: "suncoast-home-care",
-    name: "Suncoast Home Care",
-    initials: "SH",
-    rating: 5,
-    jobsCompleted: 196,
-    services: ["House Cleaning", "Deep Cleaning", "Move-In Care", "Snowbird Checks", "Windows"],
-    location: "Cape Coral & Fort Myers",
-    headline: "Thoughtful home care from a team you can trust.",
-    bio: "A detail-focused cleaning and home-watch team serving busy homeowners and seasonal residents.",
-    yearsExperience: 7,
-    badges: ["Homeowner Favorite", "Background Checked", "Insured"],
-  },
-];
+type Contractor = {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  bio: string | null;
+  location: string | null;
+  rating: number | null;
+  jobs_completed: number | null;
+  years_experience: number | null;
+  services: string[] | null;
+  badges: string[] | null;
+};
+
+type Spotlight = Contractor & {
+  featureId: string;
+  tier: string;
+  headline: string | null;
+};
+
+type Mode = "loading" | "ready" | "error";
+
+const contractorSafeSelect = "id, name, logo_url, bio, location, rating, jobs_completed, years_experience, services, badges";
 
 export function SpotlightProviders() {
+  const [providers, setProviders] = useState<Spotlight[]>([]);
+  const [mode, setMode] = useState<Mode>("loading");
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const supabase = createClient();
+        const featuredResult = await supabase
+          .from("featured_providers")
+          .select("id, contractor_id, tier, headline, created_at")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(4);
+        if (featuredResult.error) throw featuredResult.error;
+        const featured = (featuredResult.data ?? []) as FeaturedRow[];
+        if (!featured.length) {
+          if (active) { setProviders([]); setMode("ready"); }
+          return;
+        }
+        const contractorResult = await supabase
+          .from("contractors")
+          .select(contractorSafeSelect)
+          .in("id", featured.map((item) => item.contractor_id))
+          .eq("is_active", true);
+        if (contractorResult.error) throw contractorResult.error;
+        const byId = Object.fromEntries(((contractorResult.data ?? []) as Contractor[]).map((item) => [item.id, item]));
+        const live = featured.flatMap((item) => {
+          const contractor = byId[item.contractor_id];
+          return contractor ? [{ ...contractor, featureId: item.id, tier: item.tier, headline: item.headline }] : [];
+        });
+        if (active) { setProviders(live); setMode("ready"); }
+      } catch (error) {
+        console.error("Unable to load live spotlight providers", error);
+        if (active) { setProviders([]); setMode("error"); }
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, []);
+
   return (
-    <section className="section relative overflow-hidden band-slate band-divider">
+    <section className="section band-slate band-divider relative overflow-hidden">
       <div className="pointer-events-none absolute left-0 top-0 h-80 w-80 rounded-full bg-coral/5 blur-3xl" />
       <div className="pointer-events-none absolute bottom-0 right-0 h-64 w-96 rounded-full bg-sage/5 blur-3xl" />
-
       <div className="container-wide relative">
         <div className="mb-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-coral/15">
-              <Award className="h-5 w-5 text-coral" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold leading-tight text-foreground">
-                Spotlight Providers
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Handpicked partners delivering exceptional service
-              </p>
-            </div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-coral/15"><Award className="h-5 w-5 text-coral" /></div>
+            <div><h2 className="text-2xl font-bold leading-tight">Spotlight Providers</h2><p className="mt-0.5 text-sm text-muted-foreground">Live Mercurius partners recognized for strong service</p></div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="flex-shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <Link href="/vendors">
-              View all <ArrowRight className="ml-1 h-4 w-4" />
+          <Link href="/providers" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 text-muted-foreground hover:text-foreground")}>View all<ArrowRight /></Link>
+        </div>
+
+        {mode === "loading" && <div className="grid gap-6 md:grid-cols-2">{Array.from({ length: 2 }, (_, index) => <div key={index} className="h-72 animate-pulse rounded-2xl border border-border bg-muted/50" />)}</div>}
+
+        {mode !== "loading" && providers.length === 0 && <div className="rounded-3xl border border-border/70 bg-card p-8 text-center shadow-sm md:p-12"><ShieldCheck className="mx-auto h-10 w-10 text-accent" /><h3 className="mt-4 text-xl font-semibold">Explore our live provider network</h3><p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">{mode === "error" ? "Spotlight placements could not be confirmed right now. The provider directory remains the source of current public listings." : "Featured placements are currently being curated. Browse every provider currently available through Mercurius."}</p><Link href="/providers" className={cn(buttonVariants({ size: "lg" }), "mt-6")}>Browse Providers<ArrowRight /></Link></div>}
+
+        {providers.length > 0 && <div className="grid gap-6 md:grid-cols-2">
+          {providers.map((provider, index) => <motion.div key={provider.featureId} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.45, delay: index * 0.08 }}>
+            <Link href={`/providers/${provider.id}`} className="group block h-full">
+              <article className="relative h-full overflow-hidden rounded-2xl border border-coral/20 bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-coral/35 hover:shadow-lg">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-coral/60 via-coral to-coral/60" />
+                <div className="p-6 md:p-8">
+                  <div className="mb-5 flex items-start gap-4">
+                    {provider.logo_url ? <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border bg-white p-1.5 shadow-sm"><img src={provider.logo_url} alt={`${provider.name} logo`} className="h-full w-full object-contain" /></div> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-sage-light text-xl font-bold text-sage-dark">{initials(provider.name)}</div>}
+                    <div className="min-w-0 flex-1"><div className="mb-1 flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold transition-colors group-hover:text-accent">{provider.name}</h3><span className="inline-flex items-center gap-1 rounded-full bg-coral/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral ring-1 ring-coral/25"><Award className="h-3 w-3" />{provider.tier}</span></div>{provider.location && <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{provider.location}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm"><span className="flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-coral text-coral" /><strong>{provider.rating === null ? "New" : Number(provider.rating).toFixed(1)}</strong></span><span className="flex items-center gap-1 text-muted-foreground"><Briefcase className="h-3.5 w-3.5" />{provider.jobs_completed ?? 0} jobs</span>{provider.years_experience !== null && <span className="text-muted-foreground">{provider.years_experience}+ yrs</span>}</div></div>
+                  </div>
+                  {provider.headline && <p className="mb-3 text-sm font-medium leading-relaxed text-foreground/85">“{provider.headline}”</p>}
+                  {provider.bio && <p className="mb-5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{provider.bio}</p>}
+                  <div className="flex flex-wrap gap-1.5">{provider.badges?.slice(0, 3).map((badge) => <span key={badge} className="inline-flex items-center gap-1 rounded-md bg-sage-light px-2 py-1 text-[11px] font-medium text-sage-dark"><BadgeCheck className="h-3 w-3" />{badge}</span>)}{provider.services?.slice(0, 3).map((service) => <span key={service} className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">{formatService(service)}</span>)}</div>
+                  <p className="mt-6 flex items-center text-sm font-semibold text-accent">View full storefront<ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" /></p>
+                </div>
+              </article>
             </Link>
-          </Button>
-        </div>
+          </motion.div>)}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {providers.map((provider, index) => (
-            <motion.div
-              key={provider.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{
-                duration: 0.45,
-                delay: index * 0.1,
-                ease: [0.25, 0.4, 0.25, 1],
-              }}
-            >
-              <Link
-                href={`/vendor-profile/${provider.id}`}
-                className="group block h-full"
-              >
-                <div className="relative h-full overflow-hidden rounded-2xl border border-coral/20 bg-card shadow-sm transition-all duration-300 hover:border-coral/35 hover:shadow-lg">
-                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-coral/60 via-coral to-coral/60" />
-
-                  <div className="p-5 sm:p-6 md:p-8">
-                    <div className="mb-5 flex items-start gap-4 sm:gap-5">
-                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-sage-light to-card p-1.5 shadow-sm sm:h-16 sm:w-16">
-                        <span className="text-lg font-bold text-sage-dark sm:text-xl">
-                          {provider.initials}
-                        </span>
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex flex-wrap items-center gap-2">
-                          <h3 className="text-base font-semibold text-foreground transition-colors group-hover:text-accent sm:text-lg">
-                            {provider.name}
-                          </h3>
-                          <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-coral/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral ring-1 ring-coral/25">
-                            <Award className="h-3 w-3" />
-                            Spotlight
-                          </span>
-                        </div>
-
-                        <p className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                          {provider.location}
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                          <div className="flex items-center gap-1">
-                            <Star className="h-3.5 w-3.5 fill-coral text-coral" />
-                            <span className="font-semibold text-foreground">
-                              {provider.rating.toFixed(1)}
-                            </span>
-                          </div>
-                          <span className="whitespace-nowrap text-muted-foreground">
-                            {provider.jobsCompleted} jobs completed
-                          </span>
-                          <span className="whitespace-nowrap text-muted-foreground">
-                            {provider.yearsExperience}+ yrs experience
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="mb-4 text-sm leading-relaxed text-foreground/80">
-                      &quot;{provider.headline}&quot;
-                    </p>
-                    <p className="mb-5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                      {provider.bio}
-                    </p>
-
-                    <div className="flex items-end gap-4">
-                      <div className="group/video relative flex h-20 w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-muted transition-colors hover:bg-muted/80">
-                        <div className="absolute inset-0 bg-gradient-to-br from-foreground/5 to-foreground/10" />
-                        <div className="relative flex flex-col items-center gap-1">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground/10">
-                            <Play className="ml-0.5 h-3.5 w-3.5 text-foreground/60" />
-                          </div>
-                          <span className="text-[10px] font-medium text-muted-foreground">
-                            Watch intro
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-2 flex flex-wrap gap-1.5">
-                          {provider.badges.slice(0, 3).map((badge) => (
-                            <span
-                              key={badge}
-                              className="inline-flex items-center gap-1 rounded-md bg-sage-light px-2 py-0.5 text-[11px] font-medium text-sage-dark"
-                            >
-                              <BadgeCheck className="h-3 w-3" />
-                              {badge}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {provider.services.slice(0, 4).map((service) => (
-                            <span
-                              key={service}
-                              className="rounded-lg bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
-                            >
-                              {service}
-                            </span>
-                          ))}
-                          {provider.services.length > 4 && (
-                            <span className="rounded-lg bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                              +{provider.services.length - 4}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{
-              duration: 0.45,
-              delay: providers.length * 0.1,
-              ease: [0.25, 0.4, 0.25, 1],
-            }}
-          >
-            <div className="group relative h-full overflow-hidden rounded-2xl border border-coral/20 shadow-sm">
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(135deg, color-mix(in srgb, var(--color-coral) 8%, transparent) 0%, var(--color-coral-light) 50%, color-mix(in srgb, var(--color-coral) 6%, transparent) 100%)",
-                }}
-              />
-              <div className="absolute right-8 top-6 h-24 w-24 animate-pulse rounded-full bg-coral/10 blur-2xl" />
-              <div
-                className="absolute bottom-10 left-6 h-20 w-20 animate-pulse rounded-full bg-coral/8 blur-2xl"
-                style={{ animationDelay: "1s" }}
-              />
-
-              <div className="relative flex h-full flex-col justify-between p-6 md:p-8">
-                <div>
-                  <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-coral/15 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-coral ring-1 ring-coral/20">
-                    <Award className="h-3.5 w-3.5" />
-                    What Makes Them Spotlight
-                  </div>
-                  <h3 className="mb-3 text-xl font-bold leading-snug text-foreground">
-                    Not Just Good. <br />
-                    <span className="text-coral">Proven.</span>
-                  </h3>
-                  <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-                    Spotlight providers earn their place through verified track
-                    records, consistently high ratings, and real results for
-                    homeowners like you.
-                  </p>
-
-                  <div className="space-y-3">
-                    {[
-                      { icon: BadgeCheck, text: "Background checked and insured" },
-                      { icon: Star, text: "Top 10% in customer satisfaction" },
-                      { icon: Award, text: "Performance monitored in real time" },
-                    ].map((item) => (
-                      <div key={item.text} className="flex items-center gap-2.5">
-                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-coral/10">
-                          <item.icon className="h-3.5 w-3.5 text-coral" />
-                        </div>
-                        <span className="text-sm font-medium text-foreground/80">
-                          {item.text}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    asChild
-                    className="border-coral/30 text-foreground hover:border-coral/50 hover:bg-coral/10"
-                  >
-                    <Link href="/vendors">
-                      Explore all providers
-                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.45, delay: providers.length * 0.08 }}>
+            <div className="relative h-full overflow-hidden rounded-2xl border border-coral/20 bg-gradient-to-br from-coral/5 via-card to-sage-light/40 p-7 shadow-sm md:p-8"><div className="mb-5 inline-flex items-center gap-2 rounded-full bg-coral/15 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-coral ring-1 ring-coral/20"><Award className="h-3.5 w-3.5" />Why Spotlight</div><h3 className="text-xl font-bold">Not just listed. <span className="text-coral">Recognized.</span></h3><p className="mt-3 text-sm leading-relaxed text-muted-foreground">Spotlight placements are tied to real active Mercurius provider records and are managed by our team.</p><div className="mt-6 space-y-3">{["Active public provider profile", "Customer-facing services and credentials", "Performance information from live records"].map((text) => <div key={text} className="flex items-center gap-2.5"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-coral/10"><BadgeCheck className="h-3.5 w-3.5 text-coral" /></span><span className="text-sm font-medium text-foreground/80">{text}</span></div>)}</div><Link href="/providers" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-7 border-coral/30")}>Explore all providers<ArrowRight /></Link></div>
           </motion.div>
-        </div>
+        </div>}
       </div>
     </section>
   );
+}
+
+function initials(name: string) {
+  return name.split(/\s+/).slice(0, 2).map((word) => word.charAt(0)).join("").toUpperCase();
+}
+
+function formatService(value: string) {
+  return value.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

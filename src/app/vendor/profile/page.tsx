@@ -338,11 +338,11 @@ export default function VendorProfilePage() {
           </p>
         </div>
         <Link
-          href="/providers"
+          href={`/providers/${profile.id}`}
           className={cn(buttonVariants(), "min-h-11 w-full shrink-0 sm:w-auto")}
         >
           <ExternalLink />
-          View provider directory
+          View public storefront
         </Link>
       </header>
 
@@ -585,14 +585,14 @@ export default function VendorProfilePage() {
 
         <div className="flex flex-col-reverse gap-2 pb-[env(safe-area-inset-bottom)] sm:flex-row sm:justify-end">
           <Link
-            href="/providers"
+            href={`/providers/${profile.id}`}
             className={cn(
               buttonVariants({ variant: "outline" }),
               "min-h-11 w-full sm:w-auto",
             )}
           >
             <ExternalLink />
-            View provider directory
+            View public storefront
           </Link>
           <Button
             className="min-h-12 w-full bg-accent text-accent-foreground hover:bg-accent/90 sm:w-auto"

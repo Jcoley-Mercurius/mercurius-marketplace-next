@@ -187,8 +187,8 @@ export default function VendorOverviewPage() {
       description: overview.isPublic
         ? "See how your business appears in the provider directory."
         : "Public visibility is enabled by Mercurius after your listing is ready.",
-      href: "/providers",
-      cta: "Open provider directory",
+      href: `/providers/${contractor.id}`,
+      cta: "Open public storefront",
       icon: ExternalLink,
       primary: false,
     },

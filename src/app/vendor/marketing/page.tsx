@@ -148,7 +148,7 @@ export default function VendorMarketingPage() {
 }
 
 function FreeTools({ contractor }: { contractor: Contractor }) {
-  const listingPath = `/providers#provider-${contractor.id}`;
+  const listingPath = `/providers/${contractor.id}`;
 
   const copy = async (value: string, title: string) => {
     try {

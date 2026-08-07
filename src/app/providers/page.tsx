@@ -333,10 +333,6 @@ function ProviderCard({
   contractor: Contractor;
   serviceNames: Map<string, string>;
 }) {
-  const requestLabel = contractor.verified_specialty
-    ?? contractor.services?.map((serviceId) => serviceNames.get(serviceId)).find(Boolean)
-    ?? `services from ${contractor.name}`;
-
   return (
     <Card id={`provider-${contractor.id}`} className="group scroll-mt-28 border border-border transition-all hover:-translate-y-0.5 hover:shadow-lg">
       <CardContent className="flex h-full flex-col gap-4 p-6">
@@ -353,9 +349,9 @@ function ProviderCard({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-semibold text-foreground transition-colors group-hover:text-accent">
+            <Link href={`/providers/${contractor.id}`} className="block truncate font-semibold text-foreground transition-colors group-hover:text-accent">
               {contractor.name}
-            </h3>
+            </Link>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
@@ -387,13 +383,13 @@ function ProviderCard({
         </div>
 
         <Link
-          href={`/request?service=provider-match&requested=${encodeURIComponent(requestLabel)}`}
+          href={`/providers/${contractor.id}`}
           className={cn(
             buttonVariants({ variant: "outline" }),
             "mt-auto transition-colors group-hover:border-accent group-hover:text-accent",
           )}
         >
-          Request This Provider <ArrowRight className="ml-1 h-4 w-4" />
+          View Full Profile <ArrowRight className="ml-1 h-4 w-4" />
         </Link>
       </CardContent>
     </Card>
