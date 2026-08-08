@@ -145,7 +145,7 @@ export function TrustPositioningSection() {
         </div>
 
         <motion.div
-          className="elev-2 mb-8 overflow-hidden rounded-3xl border border-accent/20 bg-accent/5 p-8 md:p-12"
+          className="elev-2 mb-8 overflow-hidden rounded-3xl border border-accent-border bg-accent-subtle p-8 md:p-12"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-60px" }}
@@ -153,7 +153,7 @@ export function TrustPositioningSection() {
         >
           <div className="grid items-start gap-8 md:grid-cols-2">
             <div className="text-center md:text-left">
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 md:mx-0">
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft md:mx-0">
                 <ShieldCheck className="h-7 w-7 text-accent" />
               </div>
               <h3 className="mb-3 text-2xl font-bold text-foreground md:text-3xl">
@@ -168,7 +168,7 @@ export function TrustPositioningSection() {
               <ul className="space-y-3 text-left">
                 {warrantyBullets.map((point) => (
                   <li key={point.label} className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft">
                       <point.icon className="h-4 w-4 text-accent" />
                     </div>
                     <span className="text-sm text-foreground">{point.label}</span>

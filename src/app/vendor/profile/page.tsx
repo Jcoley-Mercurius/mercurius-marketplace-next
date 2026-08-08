@@ -12,14 +12,19 @@ import {
   AlertCircle,
   ArrowRight,
   Award,
+  Building2,
   Camera,
   ExternalLink,
   HandHeart,
   Loader2,
+  Mail,
+  MapPin,
   PenLine,
+  Phone,
   Plus,
   RefreshCw,
   Save,
+  ShieldCheck,
   Sparkles,
   Tag,
   TrendingUp,
@@ -40,10 +45,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { calculateVendorProfileStrength, vendorBioPoints } from "@/lib/vendorProfileStrength";
 
 type Profile = {
   id: string;
   name: string;
+  logo_url: string | null;
   bio: string | null;
   location: string | null;
   phone: string | null;
@@ -68,8 +75,25 @@ type StrengthAction = {
   key: string;
   icon: typeof Tag;
   label: string;
-  points: string;
+  description: string;
+  points: number;
   targetId?: string;
+  href?: string;
+};
+
+type StrengthCategory = {
+  key: "essentials" | "trust" | "visual" | "differentiation";
+  label: string;
+  earned: number;
+  total: number;
+  description: string;
+  icon: typeof Tag;
+};
+
+type StrengthModel = {
+  score: number;
+  categories: StrengthCategory[];
+  actions: StrengthAction[];
 };
 
 const textareaClass =
@@ -94,7 +118,7 @@ export default function VendorProfilePage() {
       const { data, error } = await supabase
         .from("contractors")
         .select(
-          "id, name, bio, location, services, years_experience, special_offer, our_promise, verified_specialty, is_active, marketing_enabled",
+          "id, name, logo_url, bio, location, services, years_experience, special_offer, our_promise, verified_specialty, is_active, marketing_enabled",
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -122,12 +146,8 @@ export default function VendorProfilePage() {
         Array.isArray(contactData) ? contactData[0] : contactData
       ) as ContactRow | null;
 
-      if (galleryResult.error) {
-        console.warn("Unable to load profile gallery count", galleryResult.error);
-        setGalleryCount(null);
-      } else {
-        setGalleryCount(galleryResult.count ?? 0);
-      }
+      if (galleryResult.error) throw galleryResult.error;
+      setGalleryCount(galleryResult.count ?? 0);
 
       setProfile({
         ...data,
@@ -156,13 +176,8 @@ export default function VendorProfilePage() {
     void loadProfile();
   }, [loadProfile, user]);
 
-  const strength = useMemo(
-    () => calculateStrength(profile, galleryCount),
-    [galleryCount, profile],
-  );
-
-  const strengthActions = useMemo(
-    () => getStrengthActions(profile, galleryCount),
+  const strength = useMemo<StrengthModel>(
+    () => buildStrength(profile, galleryCount),
     [galleryCount, profile],
   );
 
@@ -215,10 +230,10 @@ export default function VendorProfilePage() {
       .map((service) => service.trim())
       .filter(Boolean);
 
-    if (!name || !location || !bio || services.length === 0) {
+    if (!name || !location || services.length === 0) {
       toast.error("Complete the essential profile fields", {
         description:
-          "Business name, location, bio, and at least one service are required.",
+          "Business name, location, and at least one service are required.",
       });
       return;
     }
@@ -348,8 +363,7 @@ export default function VendorProfilePage() {
 
       <div className="space-y-6">
         <ProfileStrengthCard
-          score={strength}
-          actions={strengthActions}
+          model={strength}
           onFocus={focusField}
         />
 
@@ -359,13 +373,13 @@ export default function VendorProfilePage() {
               Essentials for your listing
             </CardTitle>
             <CardDescription>
-              Name, location, bio, and services — what customers need to trust
-              and request your business.
+              Business identity and services — the foundation customers need
+              before requesting your business.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Business Name" id="name" essential>
+              <Field label="Business Name" id="name" essential earned={profile.name.trim() ? 8 : 0} points={8}>
                 <Input
                   id="name"
                   className="h-11"
@@ -373,7 +387,7 @@ export default function VendorProfilePage() {
                   onChange={(event) => update("name", event.target.value)}
                 />
               </Field>
-              <Field label="Location" id="location" essential>
+              <Field label="Location" id="location" essential earned={profile.location?.trim() ? 8 : 0} points={8}>
                 <Input
                   id="location"
                   className="h-11"
@@ -384,29 +398,8 @@ export default function VendorProfilePage() {
               </Field>
             </div>
 
-            <Field label="Bio / About" id="bio" essential>
-              <textarea
-                id="bio"
-                rows={5}
-                placeholder="Tell customers about your business..."
-                value={profile.bio ?? ""}
-                onChange={(event) => update("bio", event.target.value)}
-                className={textareaClass}
-              />
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  {(profile.bio?.length ?? 0) < 80
-                    ? "A longer bio converts better — aim for 80+ characters."
-                    : "Nice — your bio is a good length."}
-                </p>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {profile.bio?.length ?? 0}/80
-                </span>
-              </div>
-            </Field>
-
-            <div className="space-y-2">
-              <FieldLabel essential>Services Offered</FieldLabel>
+            <div id="services" className="space-y-2 scroll-mt-24">
+              <FieldLabel essential earned={profile.services.length > 0 ? 10 : 0} points={10}>Services Offered</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {profile.services.map((service) => (
                   <Badge
@@ -458,6 +451,43 @@ export default function VendorProfilePage() {
           </CardContent>
         </Card>
 
+        <Card id="visual-proof">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Camera className="h-4 w-4 text-accent" />
+              Visual Proof
+              <ScorePill earned={(profile.logo_url ? 8 : 0) + Math.min(galleryCount ?? 0, 3) * 4} total={20} />
+            </CardTitle>
+            <CardDescription>
+              A real business logo and completed-project photos help homeowners recognize and evaluate your work.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ProofRow
+              icon={Building2}
+              title="Business logo"
+              description={profile.logo_url ? "A logo is saved on your live contractor profile." : "No logo is currently saved."}
+              earned={profile.logo_url ? 8 : 0}
+              total={8}
+              complete={Boolean(profile.logo_url)}
+            />
+            <ProofRow
+              icon={Camera}
+              title="Project gallery"
+              description={`${galleryCount ?? 0} ${galleryCount === 1 ? "photo" : "photos"} saved. Up to three photos count toward strength.`}
+              earned={Math.min(galleryCount ?? 0, 3) * 4}
+              total={12}
+              complete={(galleryCount ?? 0) >= 3}
+            />
+            {(!profile.logo_url || (galleryCount ?? 0) < 3) && (
+              <div className="flex flex-col gap-3 rounded-xl border border-dashed bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-5 text-muted-foreground">Vendor self-service media uploads are not available on this page yet. Mercurius onboarding can add approved logo and gallery assets.</p>
+                <Link href="/contact" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "min-h-10 shrink-0")}>Contact onboarding<ArrowRight /></Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -470,7 +500,7 @@ export default function VendorProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Business Email" id="email" optional>
+              <Field label="Business Email" id="email" earned={profile.email?.trim() ? 7 : 0} points={7}>
                 <Input
                   id="email"
                   type="email"
@@ -479,7 +509,7 @@ export default function VendorProfilePage() {
                   onChange={(event) => update("email", event.target.value)}
                 />
               </Field>
-              <Field label="Phone" id="phone" optional>
+              <Field label="Phone" id="phone" earned={profile.phone?.trim() ? 7 : 0} points={7}>
                 <Input
                   id="phone"
                   type="tel"
@@ -489,7 +519,7 @@ export default function VendorProfilePage() {
                   onChange={(event) => update("phone", event.target.value)}
                 />
               </Field>
-              <Field label="Years of Experience" id="years" optional>
+              <Field label="Years of Experience" id="years" earned={(profile.years_experience ?? 0) > 0 ? 10 : 0} points={10}>
                 <Input
                   id="years"
                   type="number"
@@ -505,6 +535,20 @@ export default function VendorProfilePage() {
                     )
                   }
                 />
+              </Field>
+              <Field label="Verified Specialty" id="verified_specialty" earned={profile.verified_specialty?.trim() ? 10 : 0} points={10}>
+                <div className="relative">
+                  <Award className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-700" />
+                  <Input
+                    id="verified_specialty"
+                    className="pl-9"
+                    readOnly
+                    disabled
+                    placeholder="Set by Mercurius after verification"
+                    value={profile.verified_specialty ?? ""}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">This trust field is assigned by Mercurius after review. Contact onboarding to request verification.</p>
               </Field>
             </div>
           </CardContent>
@@ -527,7 +571,29 @@ export default function VendorProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <Field label="Special Offer" id="special_offer">
+            <Field label="Bio / About" id="bio" earned={vendorBioPoints(profile.bio)} points={10}>
+              <textarea
+                id="bio"
+                rows={5}
+                placeholder="Tell customers about your business..."
+                value={profile.bio ?? ""}
+                onChange={(event) => update("bio", event.target.value)}
+                className={textareaClass}
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {(profile.bio?.length ?? 0) < 80
+                    ? "A clear bio earns partial credit; aim for 80+ characters for the full 10 points."
+                    : "Your bio earns the full 10 points."
+                  }
+                </p>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {profile.bio?.length ?? 0}/80
+                </span>
+              </div>
+            </Field>
+
+            <Field label="Special Offer" id="special_offer" earned={profile.special_offer?.trim() ? 5 : 0} points={5}>
               <div className="relative">
                 <Tag className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent" />
                 <Input
@@ -545,7 +611,7 @@ export default function VendorProfilePage() {
               </p>
             </Field>
 
-            <Field label="Our Promise" id="our_promise">
+            <Field label="Our Promise" id="our_promise" earned={profile.our_promise?.trim() ? 5 : 0} points={5}>
               <div className="relative">
                 <HandHeart className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent" />
                 <Input
@@ -563,23 +629,6 @@ export default function VendorProfilePage() {
               </p>
             </Field>
 
-            <Field label="Verified Specialty" id="verified_specialty">
-              <div className="relative">
-                <Award className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-700" />
-                <Input
-                  id="verified_specialty"
-                  className="pl-9"
-                  readOnly
-                  disabled
-                  placeholder="Set by the Mercurius team after verification"
-                  value={profile.verified_specialty ?? ""}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Verified and assigned by Mercurius. Contact support to request a
-                review or change.
-              </p>
-            </Field>
           </CardContent>
         </Card>
 
@@ -595,7 +644,7 @@ export default function VendorProfilePage() {
             View public storefront
           </Link>
           <Button
-            className="min-h-12 w-full bg-accent text-accent-foreground hover:bg-accent/90 sm:w-auto"
+            className="min-h-12 w-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active sm:w-auto"
             onClick={() => void saveProfile()}
             disabled={saving}
           >
@@ -609,16 +658,14 @@ export default function VendorProfilePage() {
 }
 
 function ProfileStrengthCard({
-  score,
-  actions,
+  model,
   onFocus,
 }: {
-  score: number;
-  actions: StrengthAction[];
+  model: StrengthModel;
   onFocus: (id: string) => void;
 }) {
   return (
-    <Card className="border-sage/30 bg-sage/5 shadow-md">
+    <Card className="overflow-hidden border-accent-border bg-card shadow-md">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -627,48 +674,51 @@ function ProfileStrengthCard({
               Profile Strength
             </CardTitle>
             <CardDescription className="mt-1">
-              Complete your profile to improve visibility and help customers
-              choose confidently.
+              A transparent completeness score based only on available vendor fields and media records.
             </CardDescription>
           </div>
-          <div className="text-4xl font-semibold leading-none text-sage-dark tabular-nums">
-            {score}%
-          </div>
+          <div className="text-right"><div className="text-4xl font-semibold leading-none text-sage-dark tabular-nums">{model.score}</div><p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">out of 100</p></div>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
         <div
-          className="h-2.5 w-full overflow-hidden rounded-full bg-sage/15"
+          className="h-3 w-full overflow-hidden rounded-full bg-accent-soft ring-1 ring-accent-border"
           role="progressbar"
-          aria-valuenow={score}
+          aria-valuenow={model.score}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label="Profile strength"
         >
           <div
-            className="h-full rounded-full bg-sage transition-all duration-700"
-            style={{ width: score + "%" }}
+            className="h-full rounded-full bg-accent transition-all duration-700"
+            style={{ width: model.score + "%" }}
           />
         </div>
 
-        {actions.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {model.categories.map((category) => {
+            const Icon = category.icon;
+            const complete = category.earned === category.total;
+            return <div key={category.key} className={cn("rounded-xl border p-3", complete ? "border-accent-border bg-accent-subtle" : "border-border bg-background")}><div className="flex items-center justify-between gap-2"><span className={cn("flex h-8 w-8 items-center justify-center rounded-lg", complete ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><Icon className="h-4 w-4" /></span><span className="text-sm font-semibold tabular-nums">{category.earned}/{category.total}</span></div><p className="mt-2 text-xs font-medium text-foreground">{category.label}</p><p className="mt-0.5 text-[10px] leading-4 text-muted-foreground">{category.description}</p></div>;
+          })}
+        </div>
+
+        {model.actions.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Next best actions
             </p>
             <ul className="space-y-2">
-              {actions.slice(0, 3).map((action, index) => {
+              {model.actions.slice(0, 4).map((action, index) => {
                 const Icon = action.icon;
                 const content = (
                   <>
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sage/15 text-sage-dark">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-sage-dark">
                       <Icon className="h-4 w-4" />
                     </span>
-                    <span className="min-w-0 flex-1 text-sm text-foreground">
-                      {action.label}
-                    </span>
-                    <PointsPill>{action.points}</PointsPill>
-                    {action.targetId && (
+                    <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-foreground">{action.label}</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{action.description}</span></span>
+                    <PointsPill>+{action.points} pts</PointsPill>
+                    {(action.targetId || action.href) && (
                       <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     )}
                   </>
@@ -683,14 +733,18 @@ function ProfileStrengthCard({
                         className={cn(
                           "group flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
                           index === 0
-                            ? "border-sage/40 bg-background hover:bg-sage/10"
-                            : "border-border/60 bg-background/60 hover:bg-muted/50",
+                            ? "border-accent-border bg-accent-subtle hover:bg-accent-soft"
+                            : "border-border bg-background hover:bg-surface-hover",
                         )}
                       >
                         {content}
                       </button>
+                    ) : action.href ? (
+                      <Link href={action.href} className={cn("group flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors", index === 0 ? "border-accent-border bg-accent-subtle hover:bg-accent-soft" : "border-border bg-background hover:bg-surface-hover")}>
+                        {content}
+                      </Link>
                     ) : (
-                      <div className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-2.5">
+                      <div className="flex w-full items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
                         {content}
                       </div>
                     )}
@@ -700,27 +754,12 @@ function ProfileStrengthCard({
             </ul>
           </div>
         ) : (
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <div className="flex items-center gap-3 rounded-xl border border-accent-border bg-accent-soft p-3 text-sm text-sage-dark">
             <Sparkles className="h-4 w-4" />
-            Your listing profile is complete.
+            Your profile has earned all 100 available points.
           </div>
         )}
-
-        {actions.find((action) => action.targetId) && (
-          <Button
-            type="button"
-            onClick={() =>
-              onFocus(
-                actions.find((action) => action.targetId)?.targetId ??
-                  "special_offer",
-              )
-            }
-            className="min-h-11 w-full sm:w-auto"
-          >
-            Improve your profile
-            <ArrowRight />
-          </Button>
-        )}
+        <p className="text-xs leading-5 text-muted-foreground">The score updates as you edit this form. Use Save Changes to publish supported field improvements to your live contractor record.</p>
       </CardContent>
     </Card>
   );
@@ -731,17 +770,21 @@ function Field({
   id,
   essential,
   optional,
+  earned,
+  points,
   children,
 }: {
   label: string;
   id: string;
   essential?: boolean;
   optional?: boolean;
+  earned?: number;
+  points?: number;
   children: ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <FieldLabel htmlFor={id} essential={essential} optional={optional}>
+      <FieldLabel htmlFor={id} essential={essential} optional={optional} earned={earned} points={points}>
         {label}
       </FieldLabel>
       {children}
@@ -754,11 +797,15 @@ function FieldLabel({
   children,
   essential,
   optional,
+  earned,
+  points,
 }: {
   htmlFor?: string;
   children: ReactNode;
   essential?: boolean;
   optional?: boolean;
+  earned?: number;
+  points?: number;
 }) {
   return (
     <Label htmlFor={htmlFor} className="flex flex-wrap items-center gap-2">
@@ -779,8 +826,18 @@ function FieldLabel({
           Optional
         </Badge>
       )}
+      {typeof points === "number" && typeof earned === "number" && <ScorePill earned={earned} total={points} />}
     </Label>
   );
+}
+
+function ScorePill({ earned, total }: { earned: number; total: number }) {
+  const complete = earned >= total;
+  return <span className={cn("ml-auto inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums", complete ? "border-accent-border bg-accent-soft text-sage-dark" : "border-border bg-muted text-muted-foreground")}>{earned}/{total} pts</span>;
+}
+
+function ProofRow({ icon: Icon, title, description, earned, total, complete }: { icon: typeof Camera; title: string; description: string; earned: number; total: number; complete: boolean }) {
+  return <div className="flex items-start gap-3 rounded-xl border bg-background p-4"><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", complete ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium text-foreground">{title}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</p></div><ScorePill earned={earned} total={total} /></div>;
 }
 
 function PointsPill({ children }: { children: ReactNode }) {
@@ -816,84 +873,48 @@ function StateCard({
   );
 }
 
-function calculateStrength(profile: Profile | null, galleryCount: number | null) {
-  if (!profile) return 0;
-  let score = 0;
-  let possible = 90;
-  if (profile.name.trim()) score += 10;
-  if (profile.location?.trim()) score += 10;
-  if ((profile.bio?.trim().length ?? 0) >= 80) {
-    score += 15;
-  } else if (profile.bio?.trim()) {
-    score += 8;
+function buildStrength(profile: Profile | null, galleryCount: number | null): StrengthModel {
+  if (!profile) {
+    return {
+      score: 0,
+      categories: [
+        { key: "essentials", label: "Essentials", earned: 0, total: 40, description: "Identity, services, and contact", icon: Building2 },
+        { key: "trust", label: "Trust", earned: 0, total: 20, description: "Experience and verification", icon: ShieldCheck },
+        { key: "visual", label: "Visual proof", earned: 0, total: 20, description: "Logo and project gallery", icon: Camera },
+        { key: "differentiation", label: "Differentiation", earned: 0, total: 20, description: "Bio, offer, and promise", icon: Sparkles },
+      ],
+      actions: [],
+    };
   }
-  if (profile.services.length > 0) score += 15;
-  if (profile.phone?.trim()) score += 8;
-  if (profile.email?.trim()) score += 8;
-  if ((profile.years_experience ?? 0) > 0) score += 6;
-  if (profile.special_offer?.trim()) score += 8;
-  if (profile.our_promise?.trim()) score += 6;
-  if (profile.verified_specialty?.trim()) score += 4;
-  if (galleryCount !== null) {
-    possible += 10;
-    score += Math.round((Math.min(galleryCount, 3) / 3) * 10);
-  }
-  return Math.min(100, Math.round((score / possible) * 100));
-}
 
-function getStrengthActions(
-  profile: Profile | null,
-  galleryCount: number | null,
-): StrengthAction[] {
-  if (!profile) return [];
+  const galleryPhotos = Math.min(galleryCount ?? 0, 3);
+  const breakdown = calculateVendorProfileStrength(profile, galleryPhotos);
+  const categories: StrengthCategory[] = [
+    { key: "essentials", label: "Essentials", earned: breakdown.essentials, total: 40, description: "Identity, services, and contact", icon: Building2 },
+    { key: "trust", label: "Trust", earned: breakdown.trust, total: 20, description: "Experience and verification", icon: ShieldCheck },
+    { key: "visual", label: "Visual proof", earned: breakdown.visual, total: 20, description: "Logo and up to 3 photos", icon: Camera },
+    { key: "differentiation", label: "Differentiation", earned: breakdown.differentiation, total: 20, description: "Bio, offer, and promise", icon: Sparkles },
+  ];
+
   const actions: StrengthAction[] = [];
+  if (!profile.name.trim()) actions.push({ key: "name", icon: Building2, label: "Add your business name", description: "Give homeowners the verified name they should recognize.", points: 8, targetId: "name" });
+  if (!profile.location?.trim()) actions.push({ key: "location", icon: MapPin, label: "Add your service location", description: "Clarify where your business serves homeowners.", points: 8, targetId: "location" });
+  if (!profile.services.length) actions.push({ key: "services", icon: Sparkles, label: "List at least one service", description: "Services connect your profile to pricing and matching.", points: 10, targetId: "services" });
+  if (!profile.email?.trim()) actions.push({ key: "email", icon: Mail, label: "Add a business email", description: "Private contact data supports Mercurius operations and coordination.", points: 7, targetId: "email" });
+  if (!profile.phone?.trim()) actions.push({ key: "phone", icon: Phone, label: "Add a business phone", description: "Give authorized Mercurius workflows a reliable contact number.", points: 7, targetId: "phone" });
+  if ((profile.years_experience ?? 0) <= 0) actions.push({ key: "experience", icon: Award, label: "Add years of experience", description: "Help homeowners understand your practical trade experience.", points: 10, targetId: "years" });
 
-  if (!profile.special_offer?.trim()) {
-    actions.push({
-      key: "offer",
-      icon: Tag,
-      label: "Add a Special Offer",
-      points: "+8 pts",
-      targetId: "special_offer",
-    });
-  }
-  if (galleryCount !== null && galleryCount < 3) {
-    actions.push({
-      key: "photos",
-      icon: Camera,
-      label:
-        galleryCount === 0
-          ? "Upload 3 before/after photos"
-          : "Add " + (3 - galleryCount) + " more project photos",
-      points: "+" + Math.round(((3 - galleryCount) / 3) * 10) + " pts",
-    });
-  }
-  if ((profile.bio?.trim().length ?? 0) < 80) {
-    actions.push({
-      key: "bio",
-      icon: PenLine,
-      label: "Strengthen your bio (aim for 80+ characters)",
-      points: "+7 pts",
-      targetId: "bio",
-    });
-  }
-  if (!profile.our_promise?.trim()) {
-    actions.push({
-      key: "promise",
-      icon: HandHeart,
-      label: "Add your customer promise",
-      points: "+6 pts",
-      targetId: "our_promise",
-    });
-  }
-  if (!profile.location?.trim()) {
-    actions.push({
-      key: "location",
-      icon: Award,
-      label: "Add your service location",
-      points: "+10 pts",
-      targetId: "location",
-    });
-  }
-  return actions;
+  const currentBioPoints = vendorBioPoints(profile.bio);
+  if (currentBioPoints < 10) actions.push({ key: "bio", icon: PenLine, label: currentBioPoints ? "Strengthen your business bio" : "Add a business bio", description: "Aim for at least 80 useful characters to earn the full score.", points: 10 - currentBioPoints, targetId: "bio" });
+  if (!profile.logo_url) actions.push({ key: "logo", icon: Building2, label: "Add an approved business logo", description: "Self-service upload is not available yet; onboarding can add it.", points: 8, href: "/contact" });
+  if (galleryPhotos < 3) actions.push({ key: "gallery", icon: Camera, label: galleryPhotos ? `Add ${3 - galleryPhotos} more project ${3 - galleryPhotos === 1 ? "photo" : "photos"}` : "Add project gallery photos", description: "Up to three real completed-project photos count toward profile strength.", points: (3 - galleryPhotos) * 4, href: "/contact" });
+  if (!profile.verified_specialty?.trim()) actions.push({ key: "specialty", icon: ShieldCheck, label: "Request specialty verification", description: "Mercurius controls this field after reviewing the vendor’s specialty.", points: 10, href: "/contact" });
+  if (!profile.special_offer?.trim()) actions.push({ key: "offer", icon: Tag, label: "Add a special offer", description: "Use a truthful, supportable offer that differentiates your listing.", points: 5, targetId: "special_offer" });
+  if (!profile.our_promise?.trim()) actions.push({ key: "promise", icon: HandHeart, label: "Add your customer promise", description: "State a practical commitment your business can consistently honor.", points: 5, targetId: "our_promise" });
+
+  return {
+    score: breakdown.score,
+    categories,
+    actions,
+  };
 }

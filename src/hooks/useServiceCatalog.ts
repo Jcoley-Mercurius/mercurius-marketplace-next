@@ -42,7 +42,12 @@ export function useServiceCatalog() {
       const priceIndex: Record<string, PriceBucket> = {};
       const coveredServices = new Set<string>();
       const tiersByPackage: Record<string, number[]> = {};
-      tierRows.forEach((tier) => { if (tier.price != null) (tiersByPackage[tier.package_id] ||= []).push(Number(tier.price)); });
+      tierRows.forEach((tier) => {
+        const price = Number(tier.price);
+        if (tier.price != null && Number.isFinite(price) && price > 0) {
+          (tiersByPackage[tier.package_id] ||= []).push(price);
+        }
+      });
       packageRows.forEach((item) => {
         coveredServices.add(item.service_id);
         if (item.pricing_mode !== "fixed") return;

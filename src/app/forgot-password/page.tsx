@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
 
         {sent ? (
           <div className="space-y-4 text-center" aria-live="polite">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft">
               <CheckCircle2 className="h-8 w-8 text-accent" />
             </div>
             <h1 className="text-3xl font-semibold text-foreground">
@@ -115,7 +115,7 @@ export default function ForgotPasswordPage() {
               <Button
                 type="submit"
                 size="lg"
-                className="h-12 w-full bg-accent text-accent-foreground hover:bg-accent/90"
+                className="h-12 w-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
                 disabled={isLoading}
               >
                 {isLoading ? "Sending..." : "Send Reset Link"}

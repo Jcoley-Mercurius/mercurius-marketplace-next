@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* Mercurius Design System */
 
@@ -14,22 +15,34 @@
 
   --color-primary: hsl(220 20% 20%);
   --color-primary-foreground: hsl(40 20% 98%);
+  --color-primary-hover: hsl(220 18% 28%);
+  --color-primary-active: hsl(220 20% 17%);
 
   --color-secondary: hsl(40 10% 94%);
   --color-secondary-foreground: hsl(220 20% 25%);
+  --color-secondary-hover: hsl(40 12% 90%);
 
   --color-muted: hsl(40 15% 96%);
   --color-muted-foreground: hsl(220 10% 45%);
 
   --color-accent: hsl(150 35% 45%);
   --color-accent-foreground: hsl(0 0% 100%);
+  --color-accent-hover: hsl(150 38% 39%);
+  --color-accent-active: hsl(150 40% 34%);
+  --color-accent-soft: hsl(150 30% 93%);
+  --color-accent-subtle: hsl(150 25% 96%);
+  --color-accent-border: hsl(150 28% 75%);
 
   --color-destructive: hsl(0 72% 51%);
   --color-destructive-foreground: hsl(0 0% 100%);
 
   --color-border: hsl(40 15% 88%);
+  --color-border-strong: hsl(220 9% 72%);
   --color-input: hsl(40 15% 88%);
   --color-ring: hsl(150 35% 45%);
+  --color-focus-ring: hsl(150 35% 45% / 0.38);
+  --color-surface-hover: hsl(40 12% 94%);
+  --color-surface-active: hsl(40 12% 91%);
 
   --radius-lg: 0.75rem;
   --radius-md: 0.5rem;
@@ -44,10 +57,16 @@
   --color-slate-dark: hsl(220 20% 15%);
   --color-slate: hsl(220 15% 35%);
   --color-slate-light: hsl(220 10% 55%);
+  --color-slate-hover: hsl(220 18% 28%);
+  --color-slate-soft: hsl(220 14% 95%);
+  --color-slate-border: hsl(220 12% 80%);
   --color-coral: hsl(15 65% 55%);
   --color-coral-light: hsl(15 60% 93%);
   --color-coral-dark: hsl(15 70% 42%);
   --color-coral-foreground: hsl(0 0% 100%);
+  --color-coral-hover: hsl(15 67% 48%);
+  --color-coral-soft: hsl(15 55% 94%);
+  --color-coral-border: hsl(15 44% 77%);
   --color-success: hsl(150 60% 40%);
   --color-warning: hsl(38 92% 50%);
   --color-info: hsl(210 80% 55%);
@@ -58,6 +77,12 @@
 }
 
 :root {
+  color-scheme: light;
+  --surface-band-white: hsl(0 0% 100%);
+  --surface-band-cream: hsl(40 30% 97%);
+  --surface-band-gray: hsl(40 8% 93%);
+  --surface-band-mint: hsl(150 22% 94%);
+  --surface-band-slate: hsl(220 14% 93%);
   --gradient-hero: linear-gradient(
     180deg,
     hsl(0 0% 100%) 0%,
@@ -89,6 +114,234 @@
   --shadow-xl: 0 25px 50px -12px hsl(220 20% 15% / 0.15);
 }
 
+.dark {
+  color-scheme: dark;
+
+  --color-background: hsl(220 24% 9%);
+  --color-foreground: hsl(40 18% 92%);
+
+  --color-card: hsl(220 20% 13%);
+  --color-card-foreground: hsl(40 18% 92%);
+
+  --color-popover: hsl(220 20% 12%);
+  --color-popover-foreground: hsl(40 18% 92%);
+
+  --color-primary: hsl(220 15% 25%);
+  --color-primary-foreground: hsl(40 20% 96%);
+  --color-primary-hover: hsl(220 14% 32%);
+  --color-primary-active: hsl(220 14% 36%);
+
+  --color-secondary: hsl(220 17% 17%);
+  --color-secondary-foreground: hsl(40 15% 90%);
+  --color-secondary-hover: hsl(220 16% 21%);
+
+  --color-muted: hsl(220 17% 16%);
+  --color-muted-foreground: hsl(220 9% 68%);
+
+  --color-accent: hsl(150 38% 50%);
+  --color-accent-foreground: hsl(220 25% 9%);
+  --color-accent-hover: hsl(150 42% 58%);
+  --color-accent-active: hsl(150 42% 62%);
+  --color-accent-soft: hsl(150 23% 15%);
+  --color-accent-subtle: hsl(150 18% 12%);
+  --color-accent-border: hsl(150 22% 30%);
+
+  --color-destructive: hsl(0 70% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-border: hsl(220 15% 23%);
+  --color-border-strong: hsl(220 12% 31%);
+  --color-input: hsl(220 15% 25%);
+  --color-ring: hsl(150 38% 50%);
+  --color-focus-ring: hsl(150 38% 55% / 0.42);
+  --color-surface-hover: hsl(220 17% 17%);
+  --color-surface-active: hsl(220 16% 20%);
+
+  --color-sage: hsl(150 38% 55%);
+  --color-sage-light: hsl(150 24% 18%);
+  --color-sage-dark: hsl(150 38% 65%);
+  --color-cream: hsl(220 20% 11%);
+  --color-warm-white: hsl(220 20% 12%);
+  --color-slate-dark: hsl(40 18% 92%);
+  --color-slate: hsl(220 9% 74%);
+  --color-slate-light: hsl(220 8% 62%);
+  --color-slate-hover: hsl(220 9% 82%);
+  --color-slate-soft: hsl(220 16% 14%);
+  --color-slate-border: hsl(220 10% 29%);
+  --color-coral: hsl(15 68% 62%);
+  --color-coral-light: hsl(15 32% 18%);
+  --color-coral-dark: hsl(15 70% 68%);
+  --color-coral-hover: hsl(15 72% 68%);
+  --color-coral-soft: hsl(15 30% 15%);
+  --color-coral-border: hsl(15 32% 31%);
+  --color-success: hsl(150 55% 52%);
+  --color-warning: hsl(38 90% 58%);
+  --color-info: hsl(210 82% 65%);
+  --color-cta-section: hsl(220 27% 7%);
+
+  --surface-band-white: hsl(220 22% 10%);
+  --surface-band-cream: hsl(220 21% 11%);
+  --surface-band-gray: hsl(220 18% 13%);
+  --surface-band-mint: hsl(158 18% 12%);
+  --surface-band-slate: hsl(220 17% 14%);
+
+  --gradient-hero: linear-gradient(
+    180deg,
+    hsl(220 22% 11%) 0%,
+    hsl(220 23% 9.5%) 48%,
+    hsl(220 24% 9%) 100%
+  );
+  --gradient-card: linear-gradient(
+    180deg,
+    hsl(220 19% 14%) 0%,
+    hsl(220 20% 12%) 100%
+  );
+  --gradient-accent: linear-gradient(
+    135deg,
+    hsl(150 38% 53%) 0%,
+    hsl(150 42% 43%) 100%
+  );
+  --gradient-dark: linear-gradient(
+    135deg,
+    hsl(220 25% 7%) 0%,
+    hsl(220 22% 12%) 100%
+  );
+  --shadow-sm: 0 1px 2px hsl(220 50% 2% / 0.3);
+  --shadow-base: 0 6px 16px -8px hsl(220 50% 2% / 0.55);
+  --shadow-md: 0 14px 30px -14px hsl(220 50% 2% / 0.65);
+  --shadow-lg: 0 24px 45px -20px hsl(220 50% 2% / 0.75);
+  --shadow-xl: 0 30px 60px -24px hsl(220 50% 2% / 0.85);
+}
+
+/*
+ * Modern browsers derive interaction and soft-surface shades from the core
+ * palette. The static HSL values above remain readable fallbacks.
+ */
+@supports (color: color-mix(in oklch, black, white)) {
+  :root {
+    --color-primary-hover: color-mix(
+      in oklch,
+      var(--color-primary) 88%,
+      var(--color-primary-foreground)
+    );
+    --color-primary-active: color-mix(
+      in oklch,
+      var(--color-primary) 78%,
+      var(--color-primary-foreground)
+    );
+    --color-secondary-hover: color-mix(
+      in oklch,
+      var(--color-secondary) 94%,
+      var(--color-secondary-foreground)
+    );
+
+    --color-accent-hover: color-mix(
+      in oklch,
+      var(--color-accent) 86%,
+      var(--color-foreground)
+    );
+    --color-accent-active: color-mix(
+      in oklch,
+      var(--color-accent) 76%,
+      var(--color-foreground)
+    );
+    --color-accent-soft: color-mix(
+      in oklch,
+      var(--color-accent) 13%,
+      var(--color-background)
+    );
+    --color-accent-subtle: color-mix(
+      in oklch,
+      var(--color-accent) 7%,
+      var(--color-background)
+    );
+    --color-accent-border: color-mix(
+      in oklch,
+      var(--color-accent) 38%,
+      var(--color-border)
+    );
+
+    --color-coral-hover: color-mix(
+      in oklch,
+      var(--color-coral) 84%,
+      var(--color-foreground)
+    );
+    --color-coral-soft: color-mix(
+      in oklch,
+      var(--color-coral) 12%,
+      var(--color-background)
+    );
+    --color-coral-border: color-mix(
+      in oklch,
+      var(--color-coral) 36%,
+      var(--color-border)
+    );
+
+    --color-slate-hover: color-mix(
+      in oklch,
+      var(--color-slate) 84%,
+      var(--color-foreground)
+    );
+    --color-slate-soft: color-mix(
+      in oklch,
+      var(--color-slate) 8%,
+      var(--color-background)
+    );
+    --color-slate-border: color-mix(
+      in oklch,
+      var(--color-slate) 32%,
+      var(--color-border)
+    );
+
+    --color-surface-hover: color-mix(
+      in oklch,
+      var(--color-card) 94%,
+      var(--color-foreground)
+    );
+    --color-surface-active: color-mix(
+      in oklch,
+      var(--color-card) 90%,
+      var(--color-foreground)
+    );
+    --color-border-strong: color-mix(
+      in oklch,
+      var(--color-border) 78%,
+      var(--color-foreground)
+    );
+    --color-focus-ring: color-mix(
+      in oklch,
+      var(--color-accent) 45%,
+      transparent
+    );
+
+    --color-sage-light: color-mix(
+      in oklch,
+      var(--color-sage) 16%,
+      var(--color-background)
+    );
+    --color-sage-dark: color-mix(
+      in oklch,
+      var(--color-sage) 78%,
+      var(--color-foreground)
+    );
+    --color-coral-light: color-mix(
+      in oklch,
+      var(--color-coral) 14%,
+      var(--color-background)
+    );
+    --color-coral-dark: color-mix(
+      in oklch,
+      var(--color-coral) 80%,
+      var(--color-foreground)
+    );
+    --color-slate-light: color-mix(
+      in oklch,
+      var(--color-slate) 72%,
+      var(--color-background)
+    );
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -117,15 +370,15 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-primary text-primary-foreground transition-all duration-200 hover:bg-primary/90;
+    @apply bg-primary text-primary-foreground transition-all duration-200 hover:bg-primary-hover active:bg-primary-active;
   }
 
   .btn-accent {
-    @apply bg-accent text-accent-foreground transition-all duration-200 hover:opacity-90;
+    @apply bg-accent text-accent-foreground transition-all duration-200 hover:bg-accent-hover active:bg-accent-active;
   }
 
   .btn-outline {
-    @apply border-2 border-primary bg-transparent text-primary transition-all duration-200 hover:bg-primary hover:text-primary-foreground;
+    @apply border-2 border-border-strong bg-transparent text-foreground transition-all duration-200 hover:bg-surface-hover active:bg-surface-active;
   }
 
   .card-elevated {
@@ -156,48 +409,74 @@
     background: var(--gradient-hero);
   }
 
+  .theme-glass {
+    border-color: var(--color-border-strong);
+    background: var(--color-card);
+    box-shadow: var(--shadow-md);
+  }
+
+  .theme-sage-panel {
+    border-color: var(--color-accent-border);
+    background: var(--color-sage-light);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .theme-glass-subtle {
+    border-color: var(--color-accent-border);
+    background: var(--color-card);
+  }
+
+  @supports (background: color-mix(in srgb, black, white)) {
+    .theme-glass {
+      border-color: color-mix(in srgb, var(--color-foreground) 12%, transparent);
+      background: color-mix(in srgb, var(--color-card) 76%, transparent);
+      box-shadow:
+        var(--shadow-md),
+        inset 0 1px 0 color-mix(in srgb, var(--color-foreground) 10%, transparent);
+    }
+
+    .theme-sage-panel {
+      background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--color-sage-light) 78%, var(--color-card)) 0%,
+        color-mix(in srgb, var(--color-sage-light) 45%, var(--color-card)) 100%
+      );
+      box-shadow:
+        0 24px 60px -20px color-mix(in srgb, var(--color-accent) 25%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--color-foreground) 9%, transparent);
+    }
+
+    .theme-glass-subtle {
+      background: color-mix(in srgb, var(--color-card) 68%, transparent);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-foreground) 8%, transparent);
+    }
+  }
+
   .badge-accent {
-    @apply rounded-full bg-sage-light px-3 py-1 text-sm font-medium text-sage-dark;
+    @apply rounded-full border border-accent-border bg-accent-soft px-3 py-1 text-sm font-medium text-sage-dark;
   }
 
   .input-focus {
-    @apply transition-all duration-200 focus:border-accent focus:ring-2 focus:ring-accent focus:ring-offset-2;
+    @apply transition-all duration-200 focus:border-accent-border focus:ring-2 focus:ring-focus-ring focus:ring-offset-2;
   }
 
   .hero-gradient-text {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(
-      135deg,
-      hsl(150 40% 38%) 0%,
-      hsl(150 50% 52%) 60%,
-      hsl(150 35% 42%) 100%
-    );
+    background-image: linear-gradient(135deg, var(--color-accent-active), var(--color-sage) 60%, var(--color-accent-hover));
   }
 
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(
-      90deg,
-      hsl(150 40% 35%) 0%,
-      hsl(150 35% 45%) 100%
-    );
+    background-image: linear-gradient(90deg, var(--color-accent-active), var(--color-sage));
   }
 
   .btn-hero-primary {
     @apply bg-accent text-accent-foreground;
-    background-image: linear-gradient(
-      135deg,
-      hsl(150 40% 42%) 0%,
-      hsl(150 35% 38%) 100%
-    );
+    background-image: linear-gradient(135deg, var(--color-accent), var(--color-accent-active));
   }
 
   .btn-hero-primary:hover {
-    background-image: linear-gradient(
-      135deg,
-      hsl(150 40% 38%) 0%,
-      hsl(150 35% 34%) 100%
-    );
+    background-image: linear-gradient(135deg, var(--color-accent-hover), var(--color-accent-active));
   }
 
   .bg-cta-section {
@@ -264,6 +543,20 @@
   .plan-builder-dark > * {
     position: relative;
     z-index: 3;
+  }
+
+  .dark .plan-builder-dark::after {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(220 24% 9% / 0.7) 0%,
+        hsl(220 24% 9% / 0) 90px
+      ),
+      linear-gradient(
+        0deg,
+        hsl(220 24% 9% / 0.65) 0%,
+        hsl(220 24% 9% / 0) 90px
+      );
   }
 }
 
@@ -369,31 +662,42 @@
   }
 
   .band-white {
-    background: hsl(0 0% 100%);
+    background: var(--surface-band-white);
   }
 
   .band-cream {
-    background: hsl(40 30% 97%);
+    background: var(--surface-band-cream);
   }
 
   .band-gray {
-    background: hsl(40 8% 93%);
+    background: var(--surface-band-gray);
   }
 
   .band-mint {
-    background: hsl(150 22% 94%);
+    background: var(--surface-band-mint);
   }
 
   .band-slate {
-    background: hsl(220 14% 93%);
+    background: var(--surface-band-slate);
   }
 
   .band-divider {
-    border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+    border-top: 1px solid var(--color-border);
   }
 
   .glass {
-    @apply bg-white/80 backdrop-blur-md;
+    @apply backdrop-blur-md;
+    background: var(--color-popover);
+  }
+
+  @supports (background: color-mix(in srgb, black, white)) {
+    .band-divider {
+      border-top-color: color-mix(in srgb, var(--color-border) 50%, transparent);
+    }
+
+    .glass {
+      background: color-mix(in srgb, var(--color-popover) 80%, transparent);
+    }
   }
 
   .animate-float {

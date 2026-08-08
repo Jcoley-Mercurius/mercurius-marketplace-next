@@ -121,15 +121,7 @@ export function ProblemSolutionSection() {
             transition={{ duration: 0.5, delay: 0.15 }}
           >
             <div
-              className="rounded-[2rem] border p-7 backdrop-blur-xl md:p-9"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(150 25% 97% / 0.75) 0%, hsl(150 20% 93% / 0.55) 100%)",
-                borderColor:
-                  "color-mix(in srgb, var(--color-accent) 20%, transparent)",
-                boxShadow:
-                  "0 24px 60px -20px color-mix(in srgb, var(--color-accent) 25%, transparent), inset 0 1px 0 hsl(0 0% 100% / 0.6)",
-              }}
+              className="theme-sage-panel rounded-[2rem] border p-7 backdrop-blur-xl md:p-9"
             >
               <span className="text-[0.7rem] font-bold uppercase tracking-[0.22em] text-accent">
                 With Mercurius
@@ -171,14 +163,7 @@ export function ProblemSolutionSection() {
                 {guarantees.map((item) => (
                   <div
                     key={item.label}
-                    className="rounded-xl border p-3 backdrop-blur-sm"
-                    style={{
-                      background: "hsl(0 0% 100% / 0.55)",
-                      borderColor:
-                        "color-mix(in srgb, var(--color-accent) 12%, transparent)",
-                      boxShadow:
-                        "inset 0 1px 0 hsl(0 0% 100% / 0.6)",
-                    }}
+                    className="theme-glass-subtle rounded-xl border p-3 backdrop-blur-sm"
                   >
                     <div className="mb-2 flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-accent" />

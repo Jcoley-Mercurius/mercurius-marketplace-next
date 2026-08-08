@@ -53,7 +53,7 @@ export function FinalCTASection() {
               href="#bundle-builder"
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "h-11 w-full gap-2 rounded-md bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent/90 sm:w-auto",
+                "h-11 w-full gap-2 rounded-md bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent-hover active:bg-accent-active sm:w-auto",
               )}
             >
               Build My Plan <ArrowRight className="ml-2 h-5 w-5" />
@@ -76,7 +76,7 @@ export function FinalCTASection() {
               href="/vendors/apply"
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "h-11 w-full gap-2 rounded-md bg-coral px-8 text-coral-foreground shadow-lg shadow-coral/20 hover:bg-coral-dark sm:w-auto",
+                "h-11 w-full gap-2 rounded-md bg-coral px-8 text-coral-foreground shadow-lg shadow-coral/20 hover:bg-coral-hover active:bg-coral-dark sm:w-auto",
               )}
             >
               Apply as Provider <ArrowRight className="ml-2 h-5 w-5" />

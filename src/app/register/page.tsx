@@ -93,7 +93,7 @@ export default function RegisterPage() {
               <p className="text-xs text-muted-foreground">Must be at least 8 characters</p>
             </div>
 
-            <Button type="submit" size="lg" className="h-12 w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoading}>
+            <Button type="submit" size="lg" className="h-12 w-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active" disabled={isLoading}>
               {isLoading ? "Creating account..." : "Create Homeowner Account"}
             </Button>
 

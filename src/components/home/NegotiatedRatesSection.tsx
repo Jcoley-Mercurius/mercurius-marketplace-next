@@ -294,7 +294,7 @@ const NegotiatedRatesSection = () => {
               Continue with a live-priced service, request a quote, or ask us to source a vetted provider.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent/90")}>Start a Request <ArrowRight className="ml-2 h-5 w-5" /></Link>
+              <Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent-hover active:bg-accent-active")}>Start a Request <ArrowRight className="ml-2 h-5 w-5" /></Link>
               <Link href="/providers" className={cn(buttonVariants({ size: "lg" }), "h-11 border border-primary-foreground/30 bg-primary-foreground/10 px-8 text-primary-foreground hover:bg-primary-foreground/20")}>Browse Providers</Link>
             </div>
           </div>

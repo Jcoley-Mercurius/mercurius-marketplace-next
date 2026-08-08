@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import {
   AlertCircle, Briefcase, Calendar, Camera, CheckCircle2, Clock, DollarSign,
   FileText, Inbox, Loader2, MapPin, MessageSquare, RefreshCw, User, X,
@@ -9,7 +10,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -24,6 +25,9 @@ type Job = {
   service_type: string;
   description: string | null;
   status: string;
+  pricing_mode: string | null;
+  quote_only: boolean | null;
+  payment_status: string | null;
   preferred_date: string | null;
   preferred_time: string | null;
   address: string;
@@ -43,10 +47,10 @@ type Mode = "loading" | "live" | "unlinked" | "error";
 type Action = { id: string; kind: string } | null;
 
 const incoming = new Set(["matched", "pending"]);
-const finished = new Set(["completed", "closed", "reviewed", "resolved", "cancelled"]);
+const finished = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed", "cancelled"]);
 const statusConfig: Record<string, [string, string]> = {
   matched: ["New request", "border-blue-200 bg-blue-50 text-blue-700"],
-  pending: ["New request", "border-blue-200 bg-blue-50 text-blue-700"],
+  pending: ["Preparing match", "border-blue-200 bg-blue-50 text-blue-700"],
   quoted: ["Quote pending", "border-violet-200 bg-violet-50 text-violet-700"],
   scheduled: ["Scheduled", "border-blue-200 bg-blue-50 text-blue-700"],
   in_progress: ["In Progress", "border-accent/20 bg-accent/10 text-accent"],
@@ -96,7 +100,7 @@ export default function VendorJobsPage() {
       }
       const result = await supabase
         .from("service_requests")
-        .select("id, customer_id, service_type, description, status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at")
+        .select("id, customer_id, service_type, description, status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at")
         .eq("contractor_id", contractorResult.data.id)
         .order("created_at", { ascending: false });
       if (result.error) throw result.error;
@@ -140,7 +144,7 @@ export default function VendorJobsPage() {
         const result = await supabase.rpc("vendor_accept_job", { _job_id: job.id });
         if (result.error) throw result.error;
         replaceStatus(job.id, "scheduled");
-        toast.success("Request accepted", { description: "It is now on your active jobs schedule." });
+        toast.success("Request accepted", { description: "The assignment is confirmed and now appears in Active Jobs. Use Messages to coordinate details before starting work." });
       } else if (kind === "decline") {
         const result = await supabase.rpc("vendor_decline_job", { _job_id: job.id, _reason: "Vendor declined" });
         if (result.error) throw result.error;
@@ -227,29 +231,35 @@ function RequestCard({ job, now, action, view, accept, decline }: {
   const deadline = matchDeadline(job);
   const expired = Boolean(now && deadline && deadline <= now);
   const busy = action?.id === job.id;
-  const amount = job.total_amount ?? job.quote_amount;
+  const canAccept = job.status === "matched" && !expired;
+  const price = priceContext(job);
+  const note = customerNote(job);
   return (
-    <Card className="border-l-4 border-l-accent shadow-sm hover:shadow-md">
-      <CardHeader className="border-b">
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-          <div><div className="flex flex-wrap items-center gap-2"><CardTitle className="text-lg">{job.service_type}</CardTitle><Status status={job.status} /></div><p className="mt-1 text-xs text-muted-foreground">Received {relative(job.created_at, now)}</p></div>
-          <Button variant="ghost" size="sm" onClick={view}>View details</Button>
+    <Card className={cn("overflow-hidden border-l-4 border-l-accent shadow-sm transition-shadow hover:shadow-md", expired && "border-l-destructive")}>
+      <CardHeader className="border-b bg-muted/20 pb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Service request</p>
+            <div className="flex flex-wrap items-center gap-2"><CardTitle className="font-heading text-xl">{job.service_type}</CardTitle><Status status={job.status} /></div>
+            <p className="mt-1.5 text-xs text-muted-foreground">Received {relative(job.created_at, now)}<span aria-hidden="true"> · </span>{formatDateTime(job.created_at)}</p>
+          </div>
+          <Button variant="ghost" size="sm" className="w-full shrink-0 sm:w-auto" onClick={view}><FileText />View full details</Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <Info icon={MapPin} label="Address">{job.address}<br />{job.city}, {job.state} {job.zip_code}</Info>
-          <Info icon={Calendar} label="Preferred timing">{job.preferred_date ? formatDate(job.preferred_date) : "Date to be confirmed"}{job.preferred_time && <><br />{job.preferred_time}</>}</Info>
-          <Info icon={DollarSign} label="Estimated value">{amount !== null ? money(amount) : "Quote on acceptance"}</Info>
-          <Info icon={Clock} label="Response window"><span className={expired ? "font-medium text-destructive" : ""}>{deadline && now ? (expired ? "Window closed" : countdown(deadline - now)) : "Respond promptly"}</span></Info>
+      <CardContent className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <DecisionField icon={MapPin} label="Address / area"><span>{job.address}</span><span className="block text-muted-foreground">{job.city}, {job.state} {job.zip_code}</span></DecisionField>
+          <DecisionField icon={Calendar} label="Preferred timing"><span>{job.preferred_date ? formatDate(job.preferred_date) : "Date to be confirmed"}</span>{job.preferred_time && <span className="block text-muted-foreground">{job.preferred_time}</span>}</DecisionField>
+          <DecisionField icon={DollarSign} label={price.label}><span>{price.value}</span><span className="block text-muted-foreground">{price.note}</span></DecisionField>
+          <DecisionField icon={Clock} label="Response window"><span className={cn(expired && "font-medium text-destructive")}>{responseWindow(job, now)}</span>{deadline && <span className="block text-muted-foreground">{formatDeadline(deadline)}</span>}</DecisionField>
         </div>
-        {job.description && <div className="mt-5 rounded-lg border bg-muted/40 p-4"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer note</p><p className="whitespace-pre-wrap text-sm leading-6">{job.description}</p></div>}
+        <div className="rounded-xl border bg-background p-4"><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><FileText className="h-4 w-4 text-accent" />Customer note</p><p className={cn("whitespace-pre-wrap text-sm leading-6", !note && "text-muted-foreground")}>{note || "No customer note was provided."}</p></div>
       </CardContent>
-      <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-        <p className="text-xs text-muted-foreground">Accepting starts the job and opens coordination with the homeowner.</p>
-        <div className="flex w-full gap-2 sm:w-auto">
-          <Button className="flex-1" variant="outline" disabled={busy || expired} onClick={decline}>Decline</Button>
-          <Button className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" disabled={busy || expired} onClick={accept}>{busy && action?.kind === "accept" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Accept request</Button>
+      <CardFooter className="flex flex-col gap-4 border-t bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex max-w-xl items-start gap-2 text-xs leading-5 text-muted-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span>{job.status === "matched" ? "Accept confirms the assignment and moves it to Active Jobs. Coordinate through Messages before using Start Job when work begins." : "Mercurius is still preparing this match. Accept becomes available when the request is actively matched to you."}</span></div>
+        <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+          <Button className="min-h-11 flex-1 sm:min-w-28" variant="outline" disabled={busy || expired} onClick={decline}>{busy && action?.kind === "decline" ? <Loader2 className="animate-spin" /> : null}Decline</Button>
+          <Button className="min-h-11 flex-1 bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active sm:min-w-40" disabled={busy || !canAccept} onClick={accept}>{busy && action?.kind === "accept" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Accept request</Button>
         </div>
       </CardFooter>
     </Card>
@@ -259,9 +269,12 @@ function RequestCard({ job, now, action, view, accept, decline }: {
 function JobCard({ job, busy, view, start, complete }: {
   job: Job; busy: boolean; view: () => void; start?: () => void; complete?: () => void;
 }) {
-  const amount = job.total_amount ?? job.quote_amount;
+  const price = priceContext(job);
+  const canStart = job.status === "scheduled" && Boolean(start);
+  const canComplete = ["in_progress", "pending_review"].includes(job.status) && Boolean(complete);
+  const waitingForHomeowner = job.status === "vendor_completed";
   return (
-    <Card className="shadow-sm hover:shadow-md"><CardContent><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+    <Card className="shadow-sm transition-shadow hover:shadow-md"><CardContent><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0 flex-1">
         <div className="mb-4 flex flex-wrap items-center gap-3"><h3 className="font-heading text-lg font-semibold">{job.service_type}</h3><Status status={job.status} /></div>
         <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
@@ -270,13 +283,15 @@ function JobCard({ job, busy, view, start, complete }: {
           <span className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.homeowner_name ?? "Homeowner"}</span>
         </div>
       </div>
-      <div className="flex flex-col gap-3 border-t pt-4 lg:min-w-52 lg:items-end lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-        {amount !== null && <p className="font-heading text-xl font-semibold">{money(amount)}</p>}
+      <div className="flex flex-col gap-3 border-t pt-4 lg:min-w-56 lg:items-end lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+        <div className="text-left lg:text-right"><p className="font-heading text-xl font-semibold">{price.value}</p><p className="mt-0.5 text-xs text-muted-foreground">{price.label}</p></div>
+        {waitingForHomeowner && <p className="text-xs text-amber-700 dark:text-amber-300">Completion submitted · awaiting homeowner confirmation</p>}
         <div className="flex flex-wrap gap-2 lg:justify-end">
-          <Button variant="outline" size="sm" onClick={view}><MessageSquare />View details</Button>
-          {job.status === "scheduled" && start && <Button size="sm" disabled={busy} onClick={start}>{busy ? <Loader2 className="animate-spin" /> : <Briefcase />}Start job</Button>}
-          {["in_progress", "pending_review"].includes(job.status) && complete && <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={complete}><CheckCircle2 />Mark done</Button>}
-          {job.status === "vendor_completed" && <Badge className="border border-amber-200 bg-amber-50 text-amber-700">Awaiting homeowner</Badge>}
+          {(canStart || canComplete) && <Button variant="outline" size="sm" onClick={view}><FileText />View details</Button>}
+          {!finished.has(job.status) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} className={buttonVariants({ variant: "outline", size: "sm" })}><MessageSquare />Messages</Link>}
+          {canStart && start && <Button size="sm" disabled={busy} onClick={start}>{busy ? <Loader2 className="animate-spin" /> : <Briefcase />}Start job</Button>}
+          {canComplete && complete && <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active" onClick={complete}><CheckCircle2 />Mark done</Button>}
+          {!canStart && !canComplete && <Button size="sm" onClick={view}><FileText />{finished.has(job.status) ? "View record" : "View job"}</Button>}
         </div>
       </div>
     </div></CardContent></Card>
@@ -285,16 +300,18 @@ function JobCard({ job, busy, view, start, complete }: {
 
 function Details({ job, close }: { job: Job | null; close: () => void }) {
   if (!job) return null;
-  const amount = job.total_amount ?? job.quote_amount;
+  const price = priceContext(job);
+  const note = customerNote(job);
   return <Dialog open onOpenChange={(open) => !open && close()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
     <DialogHeader><div className="flex flex-wrap items-center gap-2 pr-8"><DialogTitle>{job.service_type}</DialogTitle><Status status={job.status} /></div><DialogDescription>Job details and homeowner request information.</DialogDescription></DialogHeader>
     <div className="grid gap-4 py-2 sm:grid-cols-2">
       <Block icon={MapPin} title="Service address">{job.address}<br />{job.city}, {job.state} {job.zip_code}</Block>
       <Block icon={Calendar} title="Preferred timing">{job.preferred_date ? formatDate(job.preferred_date) : "Date to be confirmed"}{job.preferred_time && <><br />{job.preferred_time}</>}</Block>
       <Block icon={User} title="Homeowner">{job.homeowner_name ?? "Homeowner"}</Block>
-      <Block icon={DollarSign} title="Job value">{amount !== null ? money(amount) : "Quote required"}</Block>
+      <Block icon={DollarSign} title={price.label}>{price.value}<br /><span className="text-muted-foreground">{price.note}</span></Block>
     </div>
-    <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{job.description || "No additional notes were provided."}</p></div>
+    <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
+    {!incoming.has(job.status) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} onClick={close} className={cn(buttonVariants({ variant: "outline" }), "w-full")}><MessageSquare />Open Messages</Link>}
   </DialogContent></Dialog>;
 }
 
@@ -353,7 +370,7 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
       <input ref={input} type="file" accept="image/*" multiple className="hidden" onChange={(event) => void add(event.target.files)} />
       <Button variant="outline" className="w-full" disabled={uploading || saving} onClick={() => input.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Camera />}{uploading ? "Uploading…" : "Add completion photos"}</Button>
     </div>
-    <DialogFooter><Button variant="outline" disabled={saving || uploading} onClick={reset}>Cancel</Button><Button className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={!photos.length || saving || uploading} onClick={() => void submit()}>{saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Mark complete</Button></DialogFooter>
+    <DialogFooter><Button variant="outline" disabled={saving || uploading} onClick={reset}>Cancel</Button><Button className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active" disabled={!photos.length || saving || uploading} onClick={() => void submit()}>{saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Mark complete</Button></DialogFooter>
   </DialogContent></Dialog>;
 }
 
@@ -363,14 +380,57 @@ function Status({ status }: { status: string }) {
 }
 function Count({ n }: { n: number }) { return <span className="rounded-full bg-background px-1.5 py-0.5 text-[11px] leading-none ring-1 ring-border">{n}</span>; }
 function Heading({ title, copy }: { title: string; copy: string }) { return <div className="mb-4"><h2 className="font-heading text-lg font-semibold">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{copy}</p></div>; }
-function Info({ icon: Icon, label, children }: { icon: typeof MapPin; label: string; children: ReactNode }) { return <div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent"><Icon className="h-4 w-4" /></span><div><p className="text-xs font-medium text-muted-foreground">{label}</p><div className="mt-1 text-sm leading-5">{children}</div></div></div>; }
+function DecisionField({ icon: Icon, label, children }: { icon: typeof MapPin; label: string; children: ReactNode }) { return <div className="rounded-xl border bg-background p-3.5"><span className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-sage-dark"><Icon className="h-4 w-4" /></span><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><div className="mt-1 text-sm font-medium leading-5 text-foreground">{children}</div></div>; }
 function Block({ icon: Icon, title, children }: { icon: typeof MapPin; title: string; children: ReactNode }) { return <div className="rounded-lg border p-4"><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Icon className="h-4 w-4 text-accent" />{title}</p><div className="text-sm leading-6">{children}</div></div>; }
 function Empty({ icon: Icon, title, copy }: { icon: typeof MapPin; title: string; copy: string }) { return <Card className="border-dashed bg-card/70"><CardContent className="py-16 text-center"><span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted"><Icon className="h-7 w-7 text-muted-foreground" /></span><p className="font-heading font-semibold">{title}</p><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted-foreground">{copy}</p></CardContent></Card>; }
 function ErrorState({ message, retry }: { message: string; retry: () => void }) { return <Card className="border-destructive/20 bg-destructive/5"><CardContent className="py-14 text-center"><AlertCircle className="mx-auto mb-4 h-10 w-10 text-destructive" /><p className="font-heading text-lg font-semibold">We could not load your jobs</p><p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">No preview jobs have been substituted. {message}</p><Button className="mt-5" variant="outline" onClick={retry}><RefreshCw />Try again</Button></CardContent></Card>; }
 function Loading() { return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" />Loading jobs...</div>; }
 function sortBySchedule(a: Job, b: Job) { if (!a.preferred_date) return 1; if (!b.preferred_date) return -1; return a.preferred_date.localeCompare(b.preferred_date); }
-function matchDeadline(job: Job) { if (job.match_expires_at) return Date.parse(job.match_expires_at); return job.assigned_at ? Date.parse(job.assigned_at) + 86_400_000 : null; }
+function matchDeadline(job: Job) { return job.match_expires_at ? Date.parse(job.match_expires_at) : null; }
 function countdown(ms: number) { const minutes = Math.max(0, Math.ceil(ms / 60_000)); const hours = Math.floor(minutes / 60); if (hours >= 24) return Math.ceil(hours / 24) + " days remaining"; return hours ? hours + "h " + minutes % 60 + "m remaining" : minutes + "m remaining"; }
-function relative(value: string, now: number) { if (!now) return ""; const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60_000)); if (minutes < 1) return "just now"; if (minutes < 60) return minutes + "m ago"; const hours = Math.floor(minutes / 60); if (hours < 24) return hours + "h ago"; const days = Math.floor(hours / 24); return days === 1 ? "1 day ago" : days + " days ago"; }
+function relative(value: string, now: number) { if (!now) return "recently"; const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60_000)); if (minutes < 1) return "just now"; if (minutes < 60) return minutes + "m ago"; const hours = Math.floor(minutes / 60); if (hours < 24) return hours + "h ago"; const days = Math.floor(hours / 24); return days === 1 ? "1 day ago" : days + " days ago"; }
 function money(value: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value)); }
 function formatDate(value: string) { const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + "T12:00:00") : new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
+
+function customerNote(job: Job) {
+  return job.description?.trim() ?? "";
+}
+
+function responseWindow(job: Job, now: number) {
+  if (job.status !== "matched") return "Not open yet";
+  const deadline = matchDeadline(job);
+  if (!deadline) return "No deadline recorded";
+  if (!now) return "Calculating…";
+  return deadline <= now ? "Window closed" : countdown(deadline - now);
+}
+
+function priceContext(job: Job) {
+  const payment = paymentNote(job.payment_status);
+  if (job.total_amount !== null) {
+    const fixed = job.pricing_mode === "fixed" && !job.quote_only;
+    return { label: fixed ? "Fixed price" : "Estimated value", value: money(job.total_amount), note: payment ?? (fixed ? "Provider-backed rate" : "Recorded request amount") };
+  }
+  if (job.quote_amount !== null) {
+    return { label: "Quoted amount", value: money(job.quote_amount), note: payment ?? "Quote recorded on request" };
+  }
+  if (job.quote_only || job.pricing_mode === "custom_quote" || job.pricing_mode === "deposit_quote") {
+    return { label: "Price context", value: "Quote required", note: "Final amount is not confirmed" };
+  }
+  return { label: "Price context", value: "Price pending", note: "No amount is recorded yet" };
+}
+
+function paymentNote(status: string | null) {
+  if (!status) return null;
+  const labels: Record<string, string> = { captured: "Payment captured", released: "Payment released", refunded: "Payment refunded", pending: "Payment pending", pending_release: "Payment pending release" };
+  return labels[status] ?? `Payment: ${status.replaceAll("_", " ")}`;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function formatDeadline(value: number) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : `Closes ${date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
+}

@@ -78,7 +78,7 @@ type Thread = {
 
 type Mode = "loading" | "ready" | "unlinked" | "error";
 
-export function VendorMessagesExperience() {
+export function VendorMessagesExperience({ requestedRequestId = null }: { requestedRequestId?: string | null }) {
   const { user } = useAuth();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [mode, setMode] = useState<Mode>("loading");
@@ -86,6 +86,8 @@ export function VendorMessagesExperience() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [requestedThreadMissing, setRequestedThreadMissing] = useState(false);
+  const appliedRequestRef = useRef<string | null>(null);
 
   const loadThreads = useCallback(async (showLoading = false) => {
     if (!user) return;
@@ -140,7 +142,19 @@ export function VendorMessagesExperience() {
         } satisfies Thread;
       }).sort((a, b) => Date.parse(b.lastMessageTime ?? b.updatedAt) - Date.parse(a.lastMessageTime ?? a.updatedAt));
       setThreads(nextThreads);
-      setSelectedId((current) => current && nextThreads.some((thread) => thread.id === current) ? current : null);
+      if (!requestedRequestId) {
+        appliedRequestRef.current = null;
+        setRequestedThreadMissing(false);
+      }
+      const hasPendingDeepLink = Boolean(requestedRequestId && appliedRequestRef.current !== requestedRequestId);
+      if (hasPendingDeepLink && requestedRequestId) {
+        appliedRequestRef.current = requestedRequestId;
+        const matchingThread = nextThreads.some((thread) => thread.id === requestedRequestId);
+        setRequestedThreadMissing(!matchingThread);
+        setSelectedId(matchingThread ? requestedRequestId : null);
+      } else {
+        setSelectedId((current) => current && nextThreads.some((thread) => thread.id === current) ? current : null);
+      }
       setMode("ready");
     } catch (reason) {
       console.error("Unable to load vendor messages", reason);
@@ -148,7 +162,7 @@ export function VendorMessagesExperience() {
       setError(reason instanceof Error ? reason.message : "Messages could not be loaded.");
       setMode("error");
     }
-  }, [user]);
+  }, [requestedRequestId, user]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadThreads(true); }, 0);
@@ -182,9 +196,10 @@ export function VendorMessagesExperience() {
         <div className="border-b p-4">
           <h1 className="mb-3 font-heading text-xl font-semibold">Messages</h1>
           <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search conversations" placeholder="Search..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 pl-9" /></div>
+          {requestedThreadMissing && <div role="status" className="mt-3 rounded-lg border border-amber-300/70 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-700/70 dark:bg-amber-950/40 dark:text-amber-100"><p className="font-semibold">Conversation not found</p><p className="mt-0.5">This request is not available in your current message inbox.</p><Link href="/vendor/messages" className="mt-1 inline-flex font-semibold underline underline-offset-2">View all conversations</Link></div>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {mode === "loading" ? <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-accent" /><span className="sr-only">Loading conversations</span></div> : filtered.length === 0 ? <div className="p-8 text-center"><MessageSquare className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><p className="mb-1 font-medium">{searchQuery ? "No matching conversations" : "No conversations yet"}</p><p className="text-sm text-muted-foreground">{searchQuery ? "Try a different service or homeowner name." : "Conversations appear here once you’re assigned to a job."}</p></div> : <div className="divide-y">{filtered.map((thread) => <button key={thread.id} type="button" onClick={() => setSelectedId(thread.id)} className={cn("w-full p-4 text-left transition-colors hover:bg-muted", selectedId === thread.id && "bg-muted")}><div className="mb-1 flex items-start justify-between gap-2"><p className="truncate text-sm font-medium">{thread.serviceType}</p>{thread.lastMessageTime && <span className="shrink-0 text-[11px] text-muted-foreground">{relativeTime(thread.lastMessageTime)}</span>}</div><p className="mb-1.5 text-xs text-muted-foreground">{thread.homeownerName ?? "Homeowner"}</p><div className="flex items-center justify-between gap-2"><p className="flex-1 truncate text-xs text-muted-foreground">{thread.lastMessage ?? "No messages yet"}</p>{thread.unread && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Unread activity" />}</div><StatusBadge status={thread.status} className="mt-2" /></button>)}</div>}
+          {mode === "loading" ? <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-accent" /><span className="sr-only">Loading conversations</span></div> : filtered.length === 0 ? <div className="p-8 text-center"><MessageSquare className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><p className="mb-1 font-medium">{searchQuery ? "No matching conversations" : "No conversations yet"}</p><p className="text-sm text-muted-foreground">{searchQuery ? "Try a different service or homeowner name." : "Conversations appear here once you’re assigned to a job."}</p></div> : <div className="divide-y">{filtered.map((thread) => <button key={thread.id} type="button" onClick={() => { setSelectedId(thread.id); setRequestedThreadMissing(false); }} className={cn("w-full p-4 text-left transition-colors hover:bg-muted", selectedId === thread.id && "bg-muted")}><div className="mb-1 flex items-start justify-between gap-2"><p className="truncate text-sm font-medium">{thread.serviceType}</p>{thread.lastMessageTime && <span className="shrink-0 text-[11px] text-muted-foreground">{relativeTime(thread.lastMessageTime)}</span>}</div><p className="mb-1.5 text-xs text-muted-foreground">{thread.homeownerName ?? "Homeowner"}</p><div className="flex items-center justify-between gap-2"><p className="flex-1 truncate text-xs text-muted-foreground">{thread.lastMessage ?? "No messages yet"}</p>{thread.unread && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Unread activity" />}</div><StatusBadge status={thread.status} className="mt-2" /></button>)}</div>}
         </div>
       </aside>
 
@@ -196,7 +211,7 @@ export function VendorMessagesExperience() {
           <TabsContent value="project" className="min-h-0 flex-1 overflow-y-auto"><ProjectSummary job={selected.job} homeownerName={selected.homeownerName} openDetails={() => setDetailsOpen(true)} /></TabsContent>
         </Tabs>
         <ProjectDetailsDialog job={selected.job} open={detailsOpen} onOpenChange={setDetailsOpen} />
-      </section> : <section className="hidden flex-1 items-center justify-center bg-muted/40 md:flex"><div className="max-w-xs text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-sm"><MessageSquare className="h-8 w-8 text-muted-foreground" /></div><h2 className="mb-2 text-lg font-semibold">Job Messages</h2><p className="text-sm text-muted-foreground">Select a job thread to view messages and project details.</p></div></section>}
+      </section> : <section className="hidden flex-1 items-center justify-center bg-muted/40 md:flex"><div className="max-w-sm px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-sm">{requestedThreadMissing ? <AlertCircle className="h-8 w-8 text-amber-600 dark:text-amber-400" /> : <MessageSquare className="h-8 w-8 text-muted-foreground" />}</div><h2 className="mb-2 text-lg font-semibold">{requestedThreadMissing ? "Conversation not found" : "Job Messages"}</h2><p className="text-sm text-muted-foreground">{requestedThreadMissing ? "This request is not assigned to your vendor account, is no longer available, or the link is outdated." : "Select a job thread to view messages and project details."}</p>{requestedThreadMissing && <div className="mt-5 flex justify-center gap-2"><Link href="/vendor/jobs" className={buttonVariants({ variant: "outline" })}>Back to Jobs</Link><Link href="/vendor/messages" className={buttonVariants()}>View inbox</Link></div>}</div></section>}
     </div>
   );
 }

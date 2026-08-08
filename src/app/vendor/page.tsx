@@ -1,38 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import {
+  Activity,
   AlertCircle,
   ArrowRight,
   BarChart3,
+  BriefcaseBusiness,
   CheckCircle2,
-  Circle,
+  Clock3,
   DollarSign,
   ExternalLink,
   Eye,
   Gauge,
   Loader2,
-  Lock,
-  MousePointerClick,
-  Search,
+  PackageCheck,
+  RefreshCw,
   Sparkles,
   Star,
-  TrendingUp,
-  User,
-  Users,
-  Zap,
+  UserRound,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { calculateVendorProfileStrength } from "@/lib/vendorProfileStrength";
 
 type Contractor = {
   id: string;
   name: string;
+  logo_url: string | null;
   rating: number | null;
   jobs_completed: number | null;
   is_active: boolean | null;
@@ -42,6 +42,8 @@ type Contractor = {
   services: string[] | null;
   special_offer: string | null;
   our_promise: string | null;
+  years_experience: number | null;
+  verified_specialty: string | null;
 };
 
 type ServiceRequest = {
@@ -50,449 +52,423 @@ type ServiceRequest = {
   created_at: string;
 };
 
+type VendorPackage = {
+  id: string;
+  is_active: boolean;
+  pricing_mode: string;
+};
+
+type ContactDetails = {
+  email: string | null;
+  phone: string | null;
+};
+
 type Mode = "loading" | "live" | "unlinked" | "error";
 
-const incomingStatuses = new Set(["matched", "pending", "quoted"]);
-const completedStatuses = new Set(["completed", "closed", "reviewed"]);
+type OverviewData = {
+  openRequests: number;
+  activeJobs: number;
+  completedJobs: number;
+  profileComplete: boolean;
+  profileStrength: number;
+  livePackageCount: number;
+  hasLivePrice: boolean;
+  isActive: boolean;
+  isPublic: boolean;
+  readyForJobs: boolean;
+  requestsLast30Days: number;
+  totalRequests: number;
+};
+
+const incomingStatuses = new Set(["matched", "pending"]);
+const completedStatuses = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed"]);
+const inactiveStatuses = new Set([...completedStatuses, "cancelled"]);
 
 export default function VendorOverviewPage() {
   const { user } = useAuth();
   const [contractor, setContractor] = useState<Contractor | null>(null);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [hasLivePrice, setHasLivePrice] = useState(false);
+  const [packages, setPackages] = useState<VendorPackage[]>([]);
+  const [contact, setContact] = useState<ContactDetails | null>(null);
+  const [galleryCount, setGalleryCount] = useState<number | null>(null);
+  const [loadedAt, setLoadedAt] = useState(0);
   const [mode, setMode] = useState<Mode>("loading");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const loadOverview = useCallback(async () => {
+    if (!user) return;
+    setMode("loading");
+    setErrorMessage("");
+
+    try {
+      const supabase = createClient();
+      const contractorResult = await supabase
+        .from("contractors")
+        .select("id, name, logo_url, rating, jobs_completed, is_active, marketing_enabled, bio, location, services, special_offer, our_promise, years_experience, verified_specialty")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (contractorResult.error) throw contractorResult.error;
+      if (!contractorResult.data) {
+        setContractor(null);
+        setMode("unlinked");
+        return;
+      }
+
+      const contractorData = contractorResult.data as Contractor;
+      const [requestsResult, packagesResult, contactResult, galleryResult] = await Promise.all([
+        supabase
+          .from("service_requests")
+          .select("id, status, created_at")
+          .eq("contractor_id", contractorData.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("vendor_packages")
+          .select("id, is_active, pricing_mode")
+          .eq("contractor_id", contractorData.id),
+        supabase.rpc("get_contractor_contact", { _contractor_id: contractorData.id }),
+        supabase
+          .from("contractor_gallery")
+          .select("id", { count: "exact", head: true })
+          .eq("contractor_id", contractorData.id),
+      ]);
+
+      if (requestsResult.error) throw requestsResult.error;
+      if (packagesResult.error) throw packagesResult.error;
+
+      if (contactResult.error) throw contactResult.error;
+      if (galleryResult.error) throw galleryResult.error;
+      const value = contactResult.data as unknown;
+      setContact((Array.isArray(value) ? value[0] : value) as ContactDetails | null);
+      setGalleryCount(galleryResult.count ?? 0);
+
+      setContractor(contractorData);
+      setRequests((requestsResult.data ?? []) as ServiceRequest[]);
+      setPackages((packagesResult.data ?? []) as VendorPackage[]);
+      setLoadedAt(Date.now());
+      setMode("live");
+    } catch (error) {
+      console.error("Unable to load vendor overview", error);
+      setContractor(null);
+      setRequests([]);
+      setPackages([]);
+      setErrorMessage(error instanceof Error ? error.message : "Your live vendor data could not be loaded.");
+      setMode("error");
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
-    let active = true;
-
-    async function loadOverview() {
-      setMode("loading");
-
-      try {
-        const supabase = createClient();
-        const { data: contractorData, error: contractorError } = await supabase
-          .from("contractors")
-          .select("id, name, rating, jobs_completed, is_active, marketing_enabled, bio, location, services, special_offer, our_promise")
-          .eq("user_id", user!.id)
-          .maybeSingle();
-
-        if (contractorError) throw contractorError;
-        if (!active) return;
-        if (!contractorData) {
-          setMode("unlinked");
-          return;
-        }
-
-        const [requestsResult, packagesResult] = await Promise.all([
-          supabase
-            .from("service_requests")
-            .select("id, status, created_at")
-            .eq("contractor_id", contractorData.id)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("vendor_packages")
-            .select("id")
-            .eq("contractor_id", contractorData.id)
-            .eq("is_active", true)
-            .eq("pricing_mode", "fixed")
-            .limit(1),
-        ]);
-
-        if (requestsResult.error) throw requestsResult.error;
-        if (packagesResult.error) throw packagesResult.error;
-        if (!active) return;
-
-        setContractor(contractorData as Contractor);
-        setRequests((requestsResult.data ?? []) as ServiceRequest[]);
-        setHasLivePrice((packagesResult.data?.length ?? 0) > 0);
-        setMode("live");
-      } catch (error) {
-        console.error("Unable to load vendor overview", error);
-        if (active) setMode("error");
-      }
-    }
-
+    // Refresh all scorecard inputs when the authenticated vendor changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadOverview();
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  }, [loadOverview, user]);
 
-  const overview = useMemo(() => {
+  const overview = useMemo<OverviewData | null>(() => {
     if (!contractor) return null;
 
-    const pendingCount = requests.filter((request) => incomingStatuses.has(request.status)).length;
+    const openRequests = requests.filter((request) => incomingStatuses.has(request.status)).length;
+    const activeJobs = requests.filter((request) => !incomingStatuses.has(request.status) && !inactiveStatuses.has(request.status)).length;
     const completedFromRequests = requests.filter((request) => completedStatuses.has(request.status)).length;
-    const jobsCompleted = Math.max(contractor.jobs_completed ?? 0, completedFromRequests);
-    const profileFields = [
-      contractor.name.trim(),
-      contractor.location?.trim(),
-      contractor.bio?.trim(),
-      (contractor.services?.length ?? 0) > 0,
-    ];
-    const profileComplete = profileFields.every(Boolean);
-    const profileStrength = Math.round((profileFields.filter(Boolean).length / profileFields.length) * 100);
-    const setupComplete = hasLivePrice && profileComplete;
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentRequests = requests.filter((request) => new Date(request.created_at) >= thirtyDaysAgo).length;
+    const completedJobs = Math.max(contractor.jobs_completed ?? 0, completedFromRequests);
+    const strength = calculateVendorProfileStrength({
+      ...contractor,
+      email: contact?.email ?? null,
+      phone: contact?.phone ?? null,
+    }, galleryCount ?? 0);
+    const profileComplete = strength.essentials === 40;
+    const livePackageCount = packages.filter((item) => item.is_active && item.pricing_mode === "fixed").length;
+    const hasLivePrice = livePackageCount > 0;
     const isActive = contractor.is_active !== false;
     const isPublic = isActive && contractor.marketing_enabled !== false;
+    const readyForJobs = isActive && profileComplete && hasLivePrice;
+    const profileStrength = strength.score;
+    const thirtyDaysAgo = loadedAt - 30 * 24 * 60 * 60 * 1000;
+    const requestsLast30Days = requests.filter((request) => Date.parse(request.created_at) >= thirtyDaysAgo).length;
 
     return {
-      pendingCount,
-      jobsCompleted,
+      openRequests,
+      activeJobs,
+      completedJobs,
       profileComplete,
       profileStrength,
-      setupComplete,
-      recentRequests,
+      livePackageCount,
+      hasLivePrice,
       isActive,
       isPublic,
+      readyForJobs,
+      requestsLast30Days,
+      totalRequests: requests.length,
     };
-  }, [contractor, hasLivePrice, requests]);
+  }, [contact, contractor, galleryCount, loadedAt, packages, requests]);
 
   if (mode === "loading") return <PageLoading />;
   if (mode === "unlinked") return <UnlinkedState />;
-  if (mode === "error") return <ErrorState />;
+  if (mode === "error") return <ErrorState message={errorMessage} retry={() => void loadOverview()} />;
   if (!contractor || !overview) return null;
 
   const checklist = [
     {
-      id: "price",
-      done: hasLivePrice,
-      title: "Add a bookable price",
-      description: hasLivePrice
-        ? "You have an active fixed-price package available to customers."
-        : "Publish a fixed price so eligible services can move toward booking online.",
-      href: hasLivePrice ? "/vendor/profile" : "/contact",
-      cta: hasLivePrice ? "Review services" : "Contact pricing support",
-      icon: DollarSign,
-      primary: !hasLivePrice,
-    },
-    {
       id: "profile",
       done: overview.profileComplete,
       title: "Complete your profile",
-      description: "Name, location, bio, and services for your public listing.",
+      description: overview.profileComplete
+        ? `Your essential profile fields are complete. Profile strength is ${overview.profileStrength}%.`
+        : "Add your business name, service area, services, email, and phone.",
       href: "/vendor/profile",
-      cta: overview.profileComplete ? "Edit profile" : "Complete your profile",
-      icon: User,
-      primary: hasLivePrice && !overview.profileComplete,
+      cta: overview.profileComplete ? "Review profile" : "Complete profile",
+      icon: UserRound,
     },
     {
-      id: "listing",
-      done: overview.setupComplete && overview.isPublic,
-      title: "View public listing",
-      description: overview.isPublic
-        ? "See how your business appears in the provider directory."
-        : "Public visibility is enabled by Mercurius after your listing is ready.",
-      href: `/providers/${contractor.id}`,
-      cta: "Open public storefront",
-      icon: ExternalLink,
-      primary: false,
+      id: "pricing",
+      done: overview.hasLivePrice,
+      title: "Add at least one live price",
+      description: overview.hasLivePrice
+        ? `${overview.livePackageCount} fixed-price ${overview.livePackageCount === 1 ? "package is" : "packages are"} currently live.`
+        : "Publish a fixed-price package so eligible homeowners can move directly toward booking.",
+      href: "/vendor/packages",
+      cta: overview.hasLivePrice ? "Manage pricing" : "Add a live price",
+      icon: PackageCheck,
+    },
+    {
+      id: "ready",
+      done: overview.readyForJobs,
+      title: "Be ready for jobs",
+      description: !overview.isActive
+        ? "Your contractor account is not active. Mercurius onboarding can confirm what remains."
+        : overview.readyForJobs
+          ? "Your active account, essential profile, and live pricing are ready for matched work."
+          : "Finish the profile and pricing steps above so your active account is ready for matched work.",
+      href: overview.isActive ? "/vendor/jobs" : "/contact",
+      cta: overview.isActive ? "Open jobs queue" : "Contact onboarding",
+      icon: BriefcaseBusiness,
     },
   ];
 
-  const completedCount = checklist.filter((item) => item.done).length;
-  const progressPct = Math.round((completedCount / checklist.length) * 100);
+  const completedSteps = checklist.filter((item) => item.done).length;
+  const readiness = Math.round((completedSteps / checklist.length) * 100);
 
-  const metrics = [
-    {
-      label: "New Requests",
-      value: String(overview.pendingCount),
-      icon: Users,
-      note: overview.pendingCount > 0 ? "Awaiting your response" : "No open requests",
-      href: "/vendor/jobs",
-      highlight: overview.pendingCount > 0,
-      accent: false,
-    },
-    {
-      label: "Jobs Completed",
-      value: String(overview.jobsCompleted),
-      icon: CheckCircle2,
-      note: overview.jobsCompleted > 0 ? "Completed through Mercurius" : "Your first completed job will appear here",
-      href: null,
-      highlight: false,
-      accent: false,
-    },
-    {
-      label: "Average Rating",
-      value: contractor.rating ? contractor.rating.toFixed(1) : "New",
-      icon: Star,
-      note: contractor.rating ? "Based on recorded job feedback" : "No verified rating yet",
-      href: null,
-      highlight: false,
-      accent: false,
-    },
-    {
-      label: "Status",
-      value: overview.isActive ? "Active" : "Inactive",
-      icon: Gauge,
-      note: overview.isPublic
-        ? "Eligible for the public directory"
-        : overview.isActive
-          ? "Active; public visibility is not enabled"
-          : "Your vendor profile is inactive",
-      href: null,
-      highlight: false,
-      accent: overview.isPublic,
-    },
-  ];
-
-  const funnel = [
-    { label: "Profile Views (30d)", value: "—", icon: Eye, note: "Tracking not connected" },
-    { label: "Search Impressions", value: "—", icon: Search, note: "Tracking not connected" },
-    { label: "Click-to-Book Rate", value: "—", icon: MousePointerClick, note: "Awaiting listing analytics" },
-    { label: "Requests Generated", value: String(overview.recentRequests), icon: Zap, note: "Assigned in the last 30 days" },
-  ];
-
-  const insights = [
-    {
-      title: hasLivePrice ? "Live pricing is active" : "Add live pricing",
-      body: hasLivePrice
-        ? "At least one fixed-price package is active, giving eligible homeowners a shorter path toward booking."
-        : "No active fixed-price package was found. Mercurius can help prepare provider-backed pricing for eligible services.",
-      tag: hasLivePrice ? "Ready" : "Action needed",
-      icon: DollarSign,
-      tone: hasLivePrice ? "accent" : "action",
-      href: hasLivePrice ? null : "/contact",
-      cta: "Contact pricing support",
-    },
-    {
-      title: overview.pendingCount > 0 ? "New requests need a response" : "You’re caught up",
-      body: overview.pendingCount > 0
-        ? `${overview.pendingCount} ${overview.pendingCount === 1 ? "request is" : "requests are"} waiting in your queue. Review the scope and timing before accepting work.`
-        : "There are no open matched requests right now. New opportunities will appear in Jobs & Requests.",
-      tag: "Requests",
-      icon: TrendingUp,
-      tone: "muted",
-      href: "/vendor/jobs",
-      cta: "View requests",
-    },
-    {
-      title: `Profile strength ${overview.profileStrength}%`,
-      body: overview.profileComplete
-        ? "Your essential listing details are complete. Keep services, location, and business information current."
-        : "Complete your business name, location, bio, and services so Mercurius can present a useful listing to homeowners.",
-      tag: overview.profileComplete ? "Complete" : "Action needed",
-      icon: Sparkles,
-      tone: overview.profileComplete ? "accent" : "action",
-      href: "/vendor/profile",
-      cta: "Improve profile",
-    },
-  ];
+  const recommendations = buildRecommendations(contractor, overview);
 
   return (
     <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 md:p-8">
-      <div className="mb-5 sm:mb-6">
-        <h1 className="break-words text-xl font-semibold text-foreground sm:text-2xl">{contractor.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {overview.setupComplete
-            ? "You’re live — customers can find your profile and request eligible services."
-            : !hasLivePrice
-              ? "Start here: add provider-backed pricing so eligible services can move toward booking."
-              : "Finish setup so customers can find your business and request service."}
-        </p>
-      </div>
-
-      {overview.setupComplete ? (
-        <Card className="mb-8 border-accent/40 bg-accent/5 ring-accent/20">
-          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-              <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-accent" />
-              <div>
-                <p className="font-semibold text-foreground">You’re ready for customers</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Your essential profile details and an active fixed price are set. Monitor new requests here.
-                </p>
-              </div>
-            </div>
-            <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
-              <ActionLink href="/providers"><ExternalLink className="h-4 w-4" />View directory</ActionLink>
-              <ActionLink href="/vendor/jobs" outline><Users className="h-4 w-4" />View requests</ActionLink>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="mb-8 border-accent/40 bg-accent/5 ring-accent/20">
-          <CardHeader className="space-y-3 pb-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base">Get ready for customers</CardTitle>
-              <Badge variant="secondary" className="w-fit text-xs font-medium">
-                {completedCount} of {checklist.length} complete
-              </Badge>
-            </div>
-            <p className="text-sm font-medium text-foreground">Complete these steps to make your listing ready for customer requests.</p>
-            <div className="space-y-1.5">
-              <div className="h-2 overflow-hidden rounded-full border border-border/40 bg-background/80">
-                <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progressPct}%` }} />
-              </div>
-              <p className="text-sm font-normal text-muted-foreground">
-                {!hasLivePrice ? "Step 1: work with Mercurius to publish a provider-backed fixed price." : "Almost there — finish the remaining items below."}
-              </p>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {!hasLivePrice && (
-              <Link href="/contact" className={cn(buttonVariants({ size: "lg" }), "h-12 w-full bg-accent text-base text-accent-foreground shadow-sm hover:bg-accent/90 sm:w-auto")}>
-                <DollarSign className="h-5 w-5" />Contact pricing support<ArrowRight className="h-4 w-4" />
-              </Link>
-            )}
-            {checklist.map((item) => (
-              <div key={item.id} className={cn("flex flex-col gap-3 rounded-lg border bg-background p-3.5 sm:flex-row sm:items-center sm:p-4", item.primary ? "border-accent/50 ring-1 ring-accent/20" : "border-border/60")}>
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                  {item.done ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" /> : <Circle className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
-                  </div>
-                </div>
-                <Link href={item.href} className={cn(buttonVariants({ variant: item.primary ? "default" : "outline" }), "min-h-11 w-full shrink-0 sm:w-auto", item.primary && "bg-accent text-accent-foreground hover:bg-accent/90")}>
-                  <item.icon className="h-4 w-4" /><span className="truncate">{item.cta}</span><ArrowRight className="h-3.5 w-3.5 opacity-70" />
-                </Link>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      <SectionHeading compact title="Performance" />
-      <div className="mb-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
-      </div>
-
-      <SectionHeading title="Your Growth Funnel" description="How attention turns into booked work" />
-      <div className="mb-12 grid gap-4 lg:grid-cols-5">
-        <div className="grid content-start gap-4 sm:grid-cols-2 lg:col-span-2">
-          {funnel.map((item) => (
-            <Card key={item.label} className="h-full">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><item.icon className="h-4 w-4" />{item.label}</div>
-                <p className="mt-2 text-2xl font-bold text-foreground">{item.value}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{item.note}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <Card className="lg:col-span-3">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between gap-2 text-base">
-              Profile Views &amp; Impressions (Last 30 Days)
-              <Badge variant="secondary" className="gap-1 text-[10px] font-medium"><Lock className="h-3 w-3" />Analytics</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AnalyticsUnavailable />
-            <p className="mt-3 text-xs text-muted-foreground">Historical listing analytics will appear after profile-view and impression tracking is connected.</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <SectionHeading title="Insights & Recommendations" />
-      <div className="mb-12 grid gap-4 md:grid-cols-3">
-        {insights.map((insight) => (
-          <Card key={insight.title} className={cn("flex h-full flex-col", insight.tone === "action" && "border-accent/40 bg-accent/5 ring-accent/10")}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10"><insight.icon className="h-5 w-5 text-accent" /></div>
-                <Badge variant={insight.tone === "muted" ? "secondary" : "outline"} className={cn("text-xs", insight.tone === "action" && "border-accent/40 text-accent")}>{insight.tag}</Badge>
-              </div>
-              <CardTitle className="pt-2 text-base">{insight.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col">
-              <p className="text-sm leading-relaxed text-muted-foreground">{insight.body}</p>
-              {insight.href && (
-                <Link href={insight.href} className={cn(buttonVariants({ variant: "outline" }), "mt-4 w-full self-start sm:w-auto")}>
-                  {insight.cta}<ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Platform Performance</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid gap-6 sm:grid-cols-2">
-            {[
-              { label: "Profile Views (30d)", value: "—" },
-              { label: "Search Impressions", value: "—" },
-              { label: "Click-to-Book Rate", value: "—" },
-              { label: "Repeat Customer Rate", value: "—" },
-            ].map((stat) => (
-              <div key={stat.label} className="flex items-center justify-between border-b border-border py-2 last:border-0">
-                <span className="text-sm text-muted-foreground">{stat.label}</span><span className="font-semibold text-foreground">{stat.value}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-            No public-profile analytics source is connected yet. These fields remain unavailable rather than showing preview performance as live data.
+      <header className="mb-7 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Vendor overview</p>
+          <h1 className="break-words font-heading text-2xl font-semibold tracking-tight sm:text-3xl">{contractor.name}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {overview.readyForJobs
+              ? "Your launch essentials are in place. Stay responsive and keep your profile and pricing current."
+              : "Finish the essentials below so Mercurius can confidently match homeowners with your business."}
           </p>
+        </div>
+        {overview.isPublic && (
+          <Link href={`/providers/${contractor.id}`} className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full shrink-0 sm:w-auto")}>
+            <ExternalLink />View storefront
+          </Link>
+        )}
+      </header>
+
+      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <DollarSign className="mt-0.5 h-5 w-5 shrink-0 text-sage-dark" />
+          <div>
+            <p className="font-medium text-foreground">Soft-launch vendor terms</p>
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">No vendor subscription fee during soft launch. Mercurius charges 15% commission on completed jobs.</p>
+          </div>
+        </div>
+        <Badge variant="outline" className="w-fit border-accent-border bg-background text-sage-dark">Free access · 15% commission</Badge>
+      </div>
+
+      <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">
+        <CardHeader className="border-b border-accent-border bg-accent-subtle">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg"><Gauge className="h-5 w-5 text-accent" />Launch readiness</CardTitle>
+              <CardDescription className="mt-1">Three practical steps to become ready for homeowner requests.</CardDescription>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">{completedSteps} of {checklist.length}</span>
+              <span className="text-2xl font-semibold tabular-nums text-sage-dark">{readiness}%</span>
+            </div>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-background ring-1 ring-accent-border" role="progressbar" aria-label="Launch readiness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readiness}>
+            <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${readiness}%` }} />
+          </div>
+        </CardHeader>
+        <CardContent className="divide-y divide-border p-0">
+          {checklist.map((item, index) => (
+            <div key={item.id} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
+              <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", item.done ? "border-accent-border bg-accent-soft text-sage-dark" : "border-border bg-muted text-muted-foreground")}>
+                {item.done ? <CheckCircle2 className="h-5 w-5" /> : <item.icon className="h-5 w-5" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-foreground">{index + 1}. {item.title}</p>
+                  <Badge variant={item.done ? "secondary" : "outline"} className={cn("text-[10px]", item.done && "border-accent-border bg-accent-soft text-sage-dark")}>{item.done ? "Complete" : "Next action"}</Badge>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
+              </div>
+              <Link href={item.href} className={cn(buttonVariants({ variant: item.done ? "outline" : "default" }), "min-h-11 w-full shrink-0 sm:w-auto", !item.done && "bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>
+                {item.cta}<ArrowRight />
+              </Link>
+            </div>
+          ))}
         </CardContent>
       </Card>
+
+      <SectionHeading title="Operational scorecard" description="Live records from your Mercurius vendor account and assigned work." />
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <MetricCard icon={Clock3} label="Awaiting response" value={String(overview.openRequests)} note={overview.openRequests ? "Open Jobs & Requests" : "No open requests"} href="/vendor/jobs" emphasize={overview.openRequests > 0} />
+        <MetricCard icon={Activity} label="Active jobs" value={String(overview.activeJobs)} note="Scheduled or in progress" href="/vendor/jobs" />
+        <MetricCard icon={CheckCircle2} label="Completed jobs" value={String(overview.completedJobs)} note="Account and job records" />
+        <MetricCard icon={Star} label="Average rating" value={contractor.rating === null ? "New" : contractor.rating.toFixed(1)} note={contractor.rating === null ? "No verified rating yet" : "Verified job feedback"} />
+        <MetricCard icon={Sparkles} label="Profile strength" value={`${overview.profileStrength}%`} note="Based on saved profile fields" href="/vendor/profile" emphasize={overview.profileStrength < 80} />
+      </div>
+
+      <div className="mb-8 grid gap-6 lg:grid-cols-5">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Workload right now</CardTitle>
+            <CardDescription>Live assignment counts, without forecast or sample activity.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <ScoreRow label="Requests assigned in the last 30 days" value={overview.requestsLast30Days} />
+            <ScoreRow label="All assigned request records" value={overview.totalRequests} />
+            <ScoreRow label="Live fixed-price packages" value={overview.livePackageCount} />
+            <ScoreRow label="Public storefront" value={overview.isPublic ? "Visible" : "Not visible"} />
+            <ScoreRow label="Vendor account" value={overview.isActive ? "Active" : "Inactive"} last />
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-base">Next best actions</CardTitle>
+            <CardDescription>Recommendations tied directly to your current profile, pricing, and job queue.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recommendations.map((recommendation, index) => (
+              <Link key={recommendation.title} href={recommendation.href} className={cn("group flex items-start gap-3 rounded-xl border p-3.5 transition-colors hover:bg-surface-hover", index === 0 ? "border-accent-border bg-accent-subtle" : "border-border bg-background")}>
+                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", index === 0 ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><recommendation.icon className="h-4 w-4" /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-foreground">{recommendation.title}</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{recommendation.description}</span></span>
+                <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-4 rounded-xl border border-dashed border-border bg-muted/30 p-5 sm:flex-row sm:items-center">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-card text-muted-foreground"><BarChart3 className="h-5 w-5" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">Growth analytics are coming soon</p><Badge variant="outline" className="gap-1 text-[10px]"><Eye className="h-3 w-3" />Deferred</Badge></div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Profile views, search impressions, click-through rate, and acceptance rate are hidden until Mercurius has reliable event and response-history tracking.</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-function MetricCard({ icon: Icon, label, value, note, href, highlight, accent }: { icon: ComponentType<{ className?: string }>; label: string; value: string; note: string; href: string | null; highlight: boolean; accent: boolean }) {
-  const card = (
-    <Card className={cn("h-full", (highlight || accent) && "border-accent/50 bg-accent/5 ring-accent/10", href && "cursor-pointer transition-colors hover:border-accent/60 hover:bg-accent/5")}>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Icon className="h-4 w-4" />{label}{href && <ArrowRight className="ml-auto h-3 w-3 opacity-50" />}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center gap-2"><p className={cn("text-3xl font-bold", accent ? "text-accent" : "text-foreground")}>{value}</p>{accent && <span className="ml-auto h-2.5 w-2.5 rounded-full bg-accent ring-4 ring-accent/15" />}</div>
-        <p className="mt-1.5 text-xs text-muted-foreground">{note}</p>
+function buildRecommendations(contractor: Contractor, overview: OverviewData) {
+  const actions: Array<{ title: string; description: string; href: string; icon: typeof Sparkles }> = [];
+
+  if (!overview.profileComplete || overview.profileStrength < 80) {
+    actions.push({
+      title: overview.profileComplete ? `Raise profile strength above ${overview.profileStrength}%` : "Complete your essential profile",
+      description: overview.profileComplete
+        ? "Add useful business details and project proof so homeowners can evaluate your business confidently."
+        : "Business name, location, bio, and services are the foundation of your public storefront.",
+      href: "/vendor/profile",
+      icon: UserRound,
+    });
+  }
+
+  if (!overview.hasLivePrice) {
+    actions.push({
+      title: "Publish your first fixed price",
+      description: "A live provider-backed price gives eligible homeowners a shorter, clearer path to booking.",
+      href: "/vendor/packages",
+      icon: PackageCheck,
+    });
+  } else {
+    actions.push({
+      title: "Keep pricing complete and current",
+      description: `${overview.livePackageCount} live ${overview.livePackageCount === 1 ? "package is" : "packages are"} published across ${contractor.services?.length ?? 0} listed ${contractor.services?.length === 1 ? "service" : "services"}. Review gaps and outdated rates.`,
+      href: "/vendor/packages",
+      icon: DollarSign,
+    });
+  }
+
+  if (overview.openRequests > 0) {
+    actions.push({
+      title: `Respond to ${overview.openRequests} open ${overview.openRequests === 1 ? "request" : "requests"}`,
+      description: "Review scope and timing promptly so Mercurius can keep the homeowner informed.",
+      href: "/vendor/jobs",
+      icon: Clock3,
+    });
+  } else if (!overview.isActive) {
+    actions.push({
+      title: "Confirm your vendor activation",
+      description: "Your contractor record is inactive. Contact Mercurius onboarding before expecting new matches.",
+      href: "/contact",
+      icon: AlertCircle,
+    });
+  } else {
+    actions.push({
+      title: "Stay ready for the next match",
+      description: "There are no requests awaiting a response. New matched work will appear in Jobs & Requests.",
+      href: "/vendor/jobs",
+      icon: BriefcaseBusiness,
+    });
+  }
+
+  return actions.slice(0, 3);
+}
+
+function MetricCard({ icon: Icon, label, value, note, href, emphasize = false }: { icon: ComponentType<{ className?: string }>; label: string; value: string; note: string; href?: string; emphasize?: boolean }) {
+  const content = (
+    <Card className={cn("h-full transition-colors", emphasize && "border-accent-border bg-accent-subtle", href && "group-hover:border-accent-border group-hover:bg-surface-hover")}>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground"><span className="flex items-center gap-2"><Icon className="h-4 w-4 text-accent" />{label}</span>{href && <ArrowRight className="h-3.5 w-3.5 opacity-50" />}</div>
+        <p className="mt-3 text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{note}</p>
       </CardContent>
     </Card>
   );
-
-  return href ? <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{card}</Link> : <div>{card}</div>;
+  return href ? <Link href={href} className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">{content}</Link> : content;
 }
 
-function AnalyticsUnavailable() {
-  return (
-    <div className="relative flex h-[220px] w-full items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-muted/25">
-      <div className="pointer-events-none absolute inset-0 grid grid-rows-4 opacity-60">{Array.from({ length: 4 }).map((_, index) => <span key={index} className="border-b border-border/60 last:border-0" />)}</div>
-      <div className="relative max-w-xs px-5 text-center">
-        <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-card shadow-sm ring-1 ring-border"><BarChart3 className="h-5 w-5 text-muted-foreground" /></span>
-        <p className="mt-3 text-sm font-medium text-foreground">Listing analytics are not connected yet</p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Requests are live; views, impressions, and conversion tracking will appear here when available.</p>
-      </div>
-    </div>
-  );
+function ScoreRow({ label, value, last = false }: { label: string; value: ReactNode; last?: boolean }) {
+  return <div className={cn("flex items-center justify-between gap-4 border-b border-border py-3", last && "border-b-0 pb-0")}><span className="text-sm text-muted-foreground">{label}</span><span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{value}</span></div>;
 }
 
-function SectionHeading({ title, description, compact = false }: { title: string; description?: string; compact?: boolean }) {
-  return <div className="mb-4"><h2 className={compact ? "text-sm font-medium text-muted-foreground" : "text-lg font-semibold text-foreground"}>{title}</h2>{description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}</div>;
-}
-
-function ActionLink({ href, children, outline = false }: { href: string; children: ReactNode; outline?: boolean }) {
-  return <Link href={href} className={cn(buttonVariants({ variant: outline ? "outline" : "default" }), "min-h-11 w-full gap-1.5 sm:w-auto", !outline && "bg-accent text-accent-foreground hover:bg-accent/90")}>{children}</Link>;
+function SectionHeading({ title, description }: { title: string; description: string }) {
+  return <div className="mb-4"><h2 className="font-heading text-lg font-semibold text-foreground">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>;
 }
 
 function PageLoading() {
-  return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" /><span className="text-muted-foreground">Loading your business...</span></div>;
+  return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" /><span className="text-muted-foreground">Loading your live vendor overview...</span></div>;
 }
 
 function UnlinkedState() {
-  return <PortalState icon={User} title="No contractor profile linked" description="Your vendor account is approved, but its contractor record has not been linked yet. Contact Mercurius for onboarding help." />;
+  return <PortalState icon={UserRound} title="No contractor profile linked" description="Your vendor account has access, but no contractor record is linked to it yet. Contact Mercurius onboarding so your approved business can be connected." />;
 }
 
-function ErrorState() {
-  return <PortalState icon={AlertCircle} title="We couldn’t load your overview" description="Live vendor data is temporarily unavailable. Refresh the page or contact Mercurius if the problem continues." />;
+function ErrorState({ message, retry }: { message: string; retry: () => void }) {
+  return (
+    <PortalState icon={AlertCircle} title="We couldn’t load your overview" description={`No preview metrics have been substituted. ${message || "Please try again."}`}>
+      <Button variant="outline" onClick={retry}><RefreshCw />Try again</Button>
+    </PortalState>
+  );
 }
 
-function PortalState({ icon: Icon, title, description }: { icon: ComponentType<{ className?: string }>; title: string; description: string }) {
+function PortalState({ icon: Icon, title, description, children }: { icon: ComponentType<{ className?: string }>; title: string; description: string; children?: ReactNode }) {
   return (
     <div className="mx-auto max-w-lg px-6 py-20 text-center">
-      <Icon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-      <h1 className="text-xl font-semibold">{title}</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
-      <Link href="/contact" className={cn(buttonVariants({ variant: "outline" }), "mt-6")}>Contact Mercurius</Link>
+      <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted"><Icon className="h-7 w-7 text-muted-foreground" /></span>
+      <h1 className="font-heading text-xl font-semibold">{title}</h1>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">{children}<Link href="/contact" className={buttonVariants({ variant: "outline" })}>Contact Mercurius</Link></div>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -10,8 +11,11 @@ import {
   ExternalLink,
   Loader2,
   Package,
+  PackageCheck,
+  PauseCircle,
   Pencil,
   Plus,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -60,7 +64,8 @@ type PackageRow = {
   default_frequency: string;
   deposit_amount: number | null;
   is_active: boolean;
-  template_id?: string | null;
+  needs_review: boolean;
+  template_id: string | null;
   tiers: TierRow[];
   questions: QuestionRow[];
 };
@@ -83,6 +88,7 @@ export function VendorPackagesManager() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [profileServices, setProfileServices] = useState<string[]>([]);
   const [packages, setPackages] = useState<PackageRow[]>([]);
+  const [allPackages, setAllPackages] = useState<PackageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PackageRow | null>(null);
@@ -99,12 +105,12 @@ export function VendorPackagesManager() {
       .from("vendor_packages")
       .select("*")
       .eq("contractor_id", id)
-      .is("template_id", null)
       .order("sort_order");
     if (packageError) throw packageError;
     const rows = (packageData ?? []) as PackageRow[];
     if (!rows.length) {
       setPackages([]);
+      setAllPackages([]);
       return;
     }
     const ids = rows.map((item) => item.id);
@@ -116,11 +122,13 @@ export function VendorPackagesManager() {
     if (tiersResult.error) throw tiersResult.error;
     const questions = (questionsResult.data ?? []) as (QuestionRow & { package_id: string })[];
     const tiers = (tiersResult.data ?? []) as (TierRow & { package_id: string })[];
-    setPackages(rows.map((item) => ({
+    const hydrated = rows.map((item) => ({
       ...item,
       questions: questions.filter((question) => question.package_id === item.id),
       tiers: tiers.filter((tier) => tier.package_id === item.id),
-    })));
+    }));
+    setAllPackages(hydrated);
+    setPackages(hydrated.filter((item) => item.template_id === null));
   }, []);
 
   useEffect(() => {
@@ -144,7 +152,7 @@ export function VendorPackagesManager() {
       const contractor = contractorResult.data as { id: string; services?: string[] | null } | null;
       if (contractor?.id) {
         setContractorId(contractor.id);
-        setProfileServices((contractor.services ?? []).filter(Boolean));
+        setProfileServices([...new Set((contractor.services ?? []).filter(Boolean))]);
         try { await refresh(contractor.id); } catch (error) {
           if (active) setLoadError(error instanceof Error ? error.message : "Pricing could not be loaded.");
         }
@@ -170,15 +178,17 @@ export function VendorPackagesManager() {
     setOpen(true);
   };
 
-  const newPackage = (serviceId?: string) => openEditor({
+  const newPackage = (serviceId?: string, serviceLabel?: string) => openEditor({
     id: "",
-    name: "",
+    name: serviceLabel ? `${serviceLabel} service` : "",
     description: null,
-    service_id: serviceId ?? services[0]?.id ?? "",
+    service_id: serviceId ?? (serviceLabel ? "" : services[0]?.id ?? ""),
     pricing_mode: "fixed",
     default_frequency: "one-time",
     deposit_amount: null,
     is_active: true,
+    needs_review: false,
+    template_id: null,
     tiers: [],
     questions: [],
   });
@@ -241,7 +251,7 @@ export function VendorPackagesManager() {
       default_frequency: editing.default_frequency,
       deposit_amount: null,
       is_active: false,
-      needs_review: false,
+      needs_review: editing.needs_review,
     };
     try {
       if (!packageId) {
@@ -293,6 +303,10 @@ export function VendorPackagesManager() {
 
   const togglePackage = async (item: PackageRow) => {
     if (!contractorId) return;
+    if (!item.is_active && !hasPositivePrice(item)) {
+      toast.error("Add a valid fixed price before publishing", { description: "Edit this package and save a customer price greater than $0." });
+      return;
+    }
     setMutatingId(item.id);
     const supabase = createClient();
     const result = await supabase.from("vendor_packages").update({ is_active: !item.is_active }).eq("id", item.id).eq("contractor_id", contractorId);
@@ -312,82 +326,116 @@ export function VendorPackagesManager() {
   };
 
   const unpricedServices = useMemo(() => {
-    const priced = new Set(packages.flatMap((item) => {
+    const priced = new Set(allPackages.filter(isLiveFixedPackage).flatMap((item) => {
       const service = services.find((candidate) => candidate.id === item.service_id);
       return [normalize(item.service_id), service ? normalize(service.name) : ""].filter(Boolean);
     }));
-    return profileServices.filter((service) => !priced.has(normalize(service)));
-  }, [packages, profileServices, services]);
+    return [...new Set(profileServices)].filter((service) => !priced.has(normalize(service)));
+  }, [allPackages, profileServices, services]);
 
   const serviceForProfileValue = (raw: string) => services.find((service) => normalize(service.id) === normalize(raw) || normalize(service.name) === normalize(raw));
 
+  const packageStats = useMemo(() => ({
+    live: allPackages.filter(isLiveFixedPackage).length,
+    paused: allPackages.filter((item) => !item.is_active).length,
+    review: allPackages.filter((item) => item.needs_review).length,
+    coveredServices: Math.max(0, profileServices.length - unpricedServices.length),
+  }), [allPackages, profileServices.length, unpricedServices.length]);
+
+  const managedPackages = allPackages.filter((item) => item.template_id !== null);
+  const sortedPackages = [...packages].sort((a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name));
+
   if (loading) return <div className="flex min-h-[360px] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading pricing…</div>;
-  if (loadError) return <div className="mx-auto max-w-3xl p-6"><div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center"><h2 className="font-semibold">Pricing couldn’t be loaded</h2><p className="mt-2 text-sm text-muted-foreground">{loadError}</p></div></div>;
+  if (loadError) return <div className="mx-auto max-w-3xl p-6"><div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center"><h2 className="font-semibold">Pricing couldn’t be loaded</h2><p className="mt-2 text-sm text-muted-foreground">No preview packages have been substituted. {loadError}</p><Button variant="outline" className="mt-5" onClick={() => window.location.reload()}><RefreshCw />Try again</Button></div></div>;
   if (!contractorId) return <div className="mx-auto max-w-3xl p-6"><div className="rounded-xl border bg-card p-8 text-center"><h2 className="font-semibold">Vendor profile not linked</h2><p className="mt-2 text-sm text-muted-foreground">Your account does not have a linked contractor record yet. Contact Mercurius support before publishing prices.</p></div></div>;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 md:p-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold"><Package className="h-6 w-6 text-primary" />Your prices</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Set fixed prices customers can book online. Takes about a minute.</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Launch pricing</p>
+          <h1 className="flex items-center gap-2 font-heading text-2xl font-semibold"><Package className="h-6 w-6 text-accent" />Pricing &amp; Packages</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Publish real fixed prices so eligible homeowners can move directly toward booking. Drafts stay private until you turn them live.</p>
         </div>
-        <Button className="min-h-11 w-full sm:w-auto" onClick={() => newPackage()}><Plus />Add a price</Button>
+        <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover sm:w-auto" disabled={!services.length} onClick={() => newPackage()}><Plus />Add fixed price</Button>
       </div>
 
-      {packages.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-card p-8 text-center sm:p-10">
-          <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-          <h2 className="text-lg font-medium">No prices yet</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Add your first bookable price. Customers can only book fixed prices online right now.</p>
-          <p className="mx-auto mt-3 max-w-md rounded-lg border bg-muted/50 px-3 py-2.5 text-sm">Example: <span className="font-medium">Standard lawn mow · $55 · Weekly</span></p>
-          <Button className="mt-5 min-h-11" onClick={() => newPackage()}><Plus />Add a bookable price</Button>
-        </div>
-      ) : (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard icon={PackageCheck} label="Live / Active" value={packageStats.live} note="Fixed prices available publicly" tone="live" />
+        <SummaryCard icon={PauseCircle} label="Draft or Paused" value={packageStats.paused} note="Not currently customer-facing" />
+        <SummaryCard icon={AlertTriangle} label="Needs Review" value={packageStats.review} note="Flagged pricing records" tone={packageStats.review ? "review" : undefined} />
+        <SummaryCard icon={DollarSign} label="Profile Coverage" value={profileServices.length ? `${packageStats.coveredServices}/${profileServices.length}` : "—"} note={profileServices.length ? "Listed services with a live price" : "Add services to your profile"} />
+      </div>
+
+      {!services.length && <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><p className="font-medium">No active service catalog options are available</p><p className="mt-1 text-xs leading-5 opacity-80">New packages cannot be created until Mercurius activates at least one catalog service. Existing pricing remains visible below.</p></div>}
+
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-heading text-lg font-semibold">Your fixed prices</h2><p className="mt-1 text-sm text-muted-foreground">Custom packages you can create, edit, pause, and publish here.</p></div>{sortedPackages.length > 0 && <Badge variant="outline" className="w-fit">{sortedPackages.length} {sortedPackages.length === 1 ? "package" : "packages"}</Badge>}</div>
+        {sortedPackages.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-card p-8 text-center sm:p-10">
+            <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+            <h3 className="text-lg font-medium">No custom fixed prices yet</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted-foreground">Add a customer-facing fixed price, choose whether it starts live, and publish it in about a minute.</p>
+            <p className="mx-auto mt-3 max-w-md rounded-lg border bg-muted/50 px-3 py-2.5 text-sm">Example: <span className="font-medium">Standard lawn mow · $55 · Weekly</span></p>
+            <Button className="mt-5 min-h-11 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!services.length} onClick={() => newPackage()}><Plus />Add your first fixed price</Button>
+          </div>
+        ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {packages.map((item) => {
+          {sortedPackages.map((item) => {
             const advanced = item.tiers.length > 1;
-            const displayPrice = item.tiers.length ? Math.min(...item.tiers.map((tier) => Number(tier.price))) : null;
+            const validPrices = item.tiers.map((tier) => Number(tier.price)).filter((price) => Number.isFinite(price) && price > 0);
+            const displayPrice = validPrices.length ? Math.min(...validPrices) : null;
+            const live = isLiveFixedPackage(item);
             return (
-              <article key={item.id} className="rounded-xl border bg-card p-5 shadow-sm">
+              <article key={item.id} className={cn("rounded-xl border bg-card p-5 shadow-sm", live && "border-accent-border", item.needs_review && "border-amber-300/70")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{item.name}</h2><Badge variant={item.is_active ? "secondary" : "outline"}>{item.is_active ? "Live" : "Hidden"}</Badge><Badge variant="outline">{FREQUENCIES[item.default_frequency] ?? item.default_frequency}</Badge></div>
+                    <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.name}</h3><PackageStatus item={item} /><Badge variant="outline">{FREQUENCIES[item.default_frequency] ?? item.default_frequency}</Badge></div>
                     <p className="mt-1 text-xs text-muted-foreground">{services.find((service) => service.id === item.service_id)?.name ?? "Service"}</p>
                   </div>
-                  <PricingToggle checked={item.is_active} disabled={mutatingId === item.id} onCheckedChange={() => void togglePackage(item)} label={`${item.is_active ? "Hide" : "Publish"} ${item.name}`} />
+                  <div className="flex shrink-0 flex-col items-end gap-1"><PricingToggle checked={item.is_active} disabled={mutatingId === item.id} onCheckedChange={() => void togglePackage(item)} label={`${item.is_active ? "Pause" : "Publish"} ${item.name}`} /><span className="text-[10px] font-medium text-muted-foreground">{mutatingId === item.id ? "Updating…" : item.is_active ? "Live" : "Paused"}</span></div>
                 </div>
                 {item.pricing_mode === "fixed" && displayPrice !== null ? (
                   <div className="mt-4">
-                    {!advanced ? <p className="flex items-center text-2xl font-semibold"><DollarSign className="h-5 w-5" />{displayPrice}</p> : (
+                    {!advanced ? <p className="flex items-center text-2xl font-semibold"><DollarSign className="h-5 w-5" />{formatPrice(displayPrice)}</p> : (
                       <div className="space-y-2"><p className="text-sm text-muted-foreground">From <span className="font-semibold text-foreground">${displayPrice}</span> · {item.tiers.length} price levels</p>{item.tiers.slice(0, 3).map((tier) => <div key={tier.id ?? tier.name} className="flex items-center justify-between rounded-lg border bg-background/50 px-3 py-2"><div><p className="text-sm font-medium">{tier.name}</p>{(tier.rule_min != null || tier.rule_max != null) && <p className="text-xs text-muted-foreground">{tier.rule_min}–{tier.rule_max} {item.questions[0]?.unit ?? ""}</p>}</div><p className="text-sm font-semibold text-primary">${tier.price}</p></div>)}</div>
                     )}
+                    <p className="mt-2 text-xs text-muted-foreground">{live ? "Available to public Pricing and Plan Builder flows." : "Saved privately until this package is published."}</p>
                   </div>
-                ) : <p className="mt-4 text-sm text-muted-foreground">Not bookable online during launch — edit and publish a fixed price.</p>}
-                <div className="mt-4 flex justify-end gap-1">
-                  <Button variant="ghost" className="h-11 w-11" aria-label={`Duplicate ${item.name}`} onClick={() => openEditor({ ...structuredClone(item), id: "", name: `${item.name} (copy)` })}><Copy /></Button>
+                ) : <div className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><p className="font-medium">A valid fixed price is required</p><p className="mt-1 text-xs opacity-80">Edit this package and add a customer price greater than $0 before publishing.</p></div>}
+                {item.needs_review && <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>This package is flagged for pricing review. It remains in its current visibility state until the review workflow changes it.</span></div>}
+                <div className="mt-4 flex items-center justify-between gap-2 border-t pt-3">
+                  <span className="text-xs text-muted-foreground">{item.is_active ? "Pause to remove this price from public booking." : "Publish when the price is ready for customers."}</span>
+                  <div className="flex shrink-0 gap-1">
+                  <Button variant="ghost" className="h-11 w-11" aria-label={`Duplicate ${item.name}`} onClick={() => openEditor({ ...structuredClone(item), id: "", name: `${item.name} (copy)`, is_active: false, needs_review: false })}><Copy /></Button>
                   <Button variant="ghost" className="h-11 w-11" aria-label={`Edit ${item.name}`} onClick={() => openEditor(item)}><Pencil /></Button>
                   <Button variant="ghost" className="h-11 w-11" disabled={mutatingId === item.id} aria-label={`Delete ${item.name}`} onClick={() => void deletePackage(item)}><Trash2 className="text-destructive" /></Button>
+                  </div>
                 </div>
               </article>
             );
           })}
         </div>
-      )}
+        )}
+      </section>
 
-      {unpricedServices.length > 0 && <section className="space-y-3"><div className="flex items-center gap-2"><h2 className="text-sm font-semibold">Not priced yet</h2><Badge variant="outline">{unpricedServices.length}</Badge></div><p className="text-sm text-muted-foreground">These services are on your profile but customers can’t book them online yet.</p><div className="grid gap-4 lg:grid-cols-2">{unpricedServices.map((raw) => { const service = serviceForProfileValue(raw); return <article key={raw} className="flex flex-col rounded-xl border border-dashed bg-muted/20 p-5"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{service?.name ?? raw.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}</h3><Badge variant="outline">Needs pricing</Badge></div><p className="mt-2 flex-1 text-sm text-muted-foreground">Add a fixed price so customers can book this service online.</p><Button variant="outline" className="mt-4 min-h-11 self-start" disabled={!service} onClick={() => newPackage(service?.id)}><Plus />Set pricing</Button></article>; })}</div></section>}
+      {managedPackages.length > 0 && <section className="space-y-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-heading text-lg font-semibold">Managed pricing</h2><p className="mt-1 text-sm text-muted-foreground">Template-backed packages use Mercurius tiers and price guardrails.</p></div><Link href="/vendor/pricing" className={buttonVariants({ variant: "outline" })}>Edit managed pricing</Link></div><div className="grid gap-3 md:grid-cols-2">{managedPackages.map((item) => <Link key={item.id} href="/vendor/pricing" className="group flex items-center gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-accent-border hover:bg-surface-hover"><span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", isLiveFixedPackage(item) ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><PackageCheck className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{item.name}</span><PackageStatus item={item} /></span><span className="mt-1 block text-xs text-muted-foreground">{services.find((service) => service.id === item.service_id)?.name ?? "Managed service pricing"}</span></span><ExternalLink className="h-4 w-4 text-muted-foreground" /></Link>)}</div></section>}
+
+      <section className="space-y-3 rounded-2xl border border-accent-border bg-accent-subtle p-4 sm:p-5"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-heading text-lg font-semibold">Not priced yet</h2><Badge variant="outline" className="border-accent-border bg-background">{unpricedServices.length}</Badge></div><p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Profile services appear here until at least one active fixed-price package with a valid price covers that service.</p></div>{unpricedServices.length === 0 && profileServices.length > 0 && <Badge className="w-fit border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 />Pricing complete</Badge>}</div>
+        {profileServices.length === 0 ? <div className="rounded-xl border border-dashed bg-background/70 p-6 text-center"><p className="text-sm font-medium">No services are listed on your profile</p><p className="mt-1 text-xs text-muted-foreground">Add your services first so pricing completeness can be measured accurately.</p><Link href="/vendor/profile" className={cn(buttonVariants({ variant: "outline" }), "mt-4")}>Update profile</Link></div> : unpricedServices.length === 0 ? <div className="rounded-xl border border-accent-border bg-background/75 p-5"><p className="flex items-center gap-2 text-sm font-medium text-sage-dark"><CheckCircle2 className="h-4 w-4" />Every listed profile service has active fixed-price coverage.</p><p className="mt-1 text-xs text-muted-foreground">Keep prices current and pause a package whenever it should no longer appear publicly.</p></div> : <div className="grid gap-4 lg:grid-cols-2">{unpricedServices.map((raw) => { const service = serviceForProfileValue(raw); const label = service?.name ?? displayService(raw); return <article key={raw} className="flex flex-col rounded-xl border border-dashed border-accent-border bg-background p-5"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{label}</h3><Badge variant="outline">Needs active pricing</Badge></div><p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">No active fixed-price package with a valid tier price currently covers this profile service.</p><Button variant="outline" className="mt-4 min-h-11 self-start border-accent-border" disabled={!services.length} onClick={() => newPackage(service?.id, label)}><DollarSign />Set pricing</Button>{!service && services.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Choose the matching catalog service in the pricing form.</p>}</article>; })}</div>}
+      </section>
 
       <div className="flex flex-col gap-2 border-t pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"><p>Need Mercurius-approved tiers and price guardrails?</p><Link href="/vendor/pricing" className={buttonVariants({ variant: "outline" })}>Open Managed Pricing</Link></div>
 
       <Dialog open={open} onOpenChange={(value) => { if (!value) closeEditor(); }}>
         <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto p-5 sm:max-w-lg">
-          <DialogHeader><DialogTitle>{editing?.id ? "Edit price" : "Add a price"}</DialogTitle><DialogDescription>Publish a real customer-facing price for one of your services.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{editing?.id ? "Edit fixed price" : "Add a fixed price"}</DialogTitle><DialogDescription>Set the real customer price, then publish now or save it privately until you are ready.</DialogDescription></DialogHeader>
           {editing && <div className="space-y-5">
+            <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editing.is_active ? "border-accent-border bg-accent-subtle" : "border-border bg-muted/30")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editing.is_active ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}>{editing.is_active ? <PackageCheck className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{editing.is_active ? "Publish immediately" : "Save as draft / paused"}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{editing.is_active ? "After a successful save, this price can feed public Pricing and Plan Builder experiences." : "The package will be saved but unavailable to homeowners."}</p></div><PricingToggle checked={editing.is_active} onCheckedChange={(checked) => updateField("is_active", checked)} label={editing.is_active ? "Save this package as draft or paused" : "Publish this package when saved"} /></div>
             <div className="space-y-2"><Label htmlFor="package-name">What customers see</Label><Input id="package-name" className="h-11" placeholder="Standard lawn mow" value={editing.name} onChange={(event) => updateField("name", event.target.value)} /></div>
             <div className="space-y-2"><Label htmlFor="package-service">Service</Label><select id="package-service" className={nativeSelect} value={editing.service_id} onChange={(event) => updateField("service_id", event.target.value)}><option value="" disabled>Choose a service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></div>
             {!advancedOpen && <div className="space-y-2"><Label htmlFor="package-price">Price customers pay ($)</Label><Input id="package-price" className="h-12 text-lg" type="number" min="0" step="1" inputMode="decimal" placeholder="e.g. 80" value={customerPrice} onChange={(event) => setCustomerPrice(event.target.value)} /><p className="text-xs text-muted-foreground">This is the amount charged at checkout.</p>{editing.tiers.length > 1 && <p className="text-xs text-amber-700">Publishing here replaces the existing size-based levels with this single price. Expand advanced pricing below to keep and edit the levels.</p>}</div>}
             <div className="space-y-2"><Label htmlFor="package-frequency">How often this price applies</Label><select id="package-frequency" className={nativeSelect} value={editing.default_frequency} onChange={(event) => updateField("default_frequency", event.target.value)}>{Object.entries(FREQUENCIES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-            <div className="flex items-center gap-2"><PricingToggle checked={editing.is_active} onCheckedChange={(checked) => updateField("is_active", checked)} label="Make this price live" /><span className="text-sm">Live — customers can book this</span></div>
             <div className="overflow-hidden rounded-lg border">
               <button type="button" onClick={() => { if (advancedOpen) { setCustomerPrice(String(editing.tiers[0]?.price || "")); setAdvancedOpen(false); } else enterAdvanced(); }} className="flex w-full items-center justify-between bg-muted/30 px-3 py-3 text-left text-sm hover:bg-muted/50" aria-expanded={advancedOpen}><span><span className="font-medium">Price depends on size or home details</span><span className="mt-0.5 block text-xs text-muted-foreground">Optional — for cleaning, lawn size, or similar.</span></span><ChevronDown className={cn("transition-transform", advancedOpen && "rotate-180")} /></button>
               {advancedOpen && <div className="space-y-5 border-t p-3">
@@ -398,7 +446,7 @@ export function VendorPackagesManager() {
               </div>}
             </div>
           </div>}
-          <DialogFooter><Button variant="ghost" className="min-h-11" onClick={closeEditor}>Cancel</Button><Button className="min-h-11" disabled={saving} onClick={() => void savePackage()}>{saving ? <><Loader2 className="animate-spin" />Publishing…</> : "Publish price"}</Button></DialogFooter>
+          <DialogFooter><Button variant="ghost" className="min-h-11" disabled={saving} onClick={closeEditor}>Cancel</Button><Button className={cn("min-h-11", editing?.is_active && "bg-accent text-accent-foreground hover:bg-accent-hover")} disabled={saving} onClick={() => void savePackage()}>{saving ? <><Loader2 className="animate-spin" />Saving…</> : editing?.is_active ? <><PackageCheck />Publish price</> : <><PauseCircle />Save as draft</>}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -409,4 +457,35 @@ export function VendorPackagesManager() {
 
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return <div className={cn("space-y-1.5", className)}><Label className="text-xs text-muted-foreground">{label}</Label>{children}</div>;
+}
+
+function SummaryCard({ icon: Icon, label, value, note, tone }: { icon: typeof Package; label: string; value: React.ReactNode; note: string; tone?: "live" | "review" }) {
+  return <div className={cn("rounded-xl border bg-card p-4", tone === "live" && "border-accent-border bg-accent-subtle", tone === "review" && "border-amber-300/70 bg-amber-50 dark:bg-amber-950/30")}><div className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Icon className={cn("h-4 w-4", tone === "live" && "text-sage-dark", tone === "review" && "text-amber-700 dark:text-amber-300")} />{label}</div><p className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{value}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{note}</p></div>;
+}
+
+function PackageStatus({ item }: { item: PackageRow }) {
+  const status = isLiveFixedPackage(item)
+    ? <Badge className="border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 />Live / Active</Badge>
+    : !item.is_active
+      ? <Badge variant="outline"><PauseCircle />Draft / Paused</Badge>
+      : item.pricing_mode !== "fixed"
+        ? <Badge variant="outline">Quote / Matching</Badge>
+        : <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs valid price</Badge>;
+  return <>{status}{item.needs_review && <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs review</Badge>}</>;
+}
+
+function hasPositivePrice(item: PackageRow) {
+  return item.pricing_mode === "fixed" && item.tiers.some((tier) => Number.isFinite(Number(tier.price)) && Number(tier.price) > 0);
+}
+
+function isLiveFixedPackage(item: PackageRow) {
+  return item.is_active && hasPositivePrice(item);
+}
+
+function displayService(value: string) {
+  return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatPrice(value: number) {
+  return new Intl.NumberFormat("en-US", { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 }).format(value);
 }

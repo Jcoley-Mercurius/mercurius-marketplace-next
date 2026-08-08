@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Briefcase, CreditCard, DollarSign, Home, LayoutDashboard, Loader2, LogOut, Megaphone, MessageSquare, User } from "lucide-react";
+import { BadgePercent, Briefcase, DollarSign, Home, LayoutDashboard, Loader2, LogOut, Megaphone, MessageSquare, User } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,8 +14,8 @@ const navigation = [
   { label: "Jobs & Requests", href: "/vendor/jobs", icon: Briefcase },
   { label: "Messages", href: "/vendor/messages", icon: MessageSquare },
   { label: "Pricing & Packages", href: "/vendor/packages", icon: DollarSign },
-  { label: "Marketing", href: "/vendor/marketing", icon: Megaphone },
-  { label: "Plan", href: "/vendor/plan", icon: CreditCard },
+  { label: "Marketing Tools", href: "/vendor/marketing", icon: Megaphone },
+  { label: "Launch Terms", href: "/vendor/plan", icon: BadgePercent, note: "Free" },
   { label: "Profile", href: "/vendor/profile", icon: User },
 ];
 
@@ -54,7 +54,7 @@ export function VendorSidebar({ onNavigate }: { onNavigate?: () => void }) {
               ? pathname.startsWith("/vendor/packages") || pathname.startsWith("/vendor/pricing")
               : pathname.startsWith(item.href);
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors", active ? "bg-primary-foreground/12 font-medium text-primary-foreground" : "text-primary-foreground/65 hover:bg-primary-foreground/8 hover:text-primary-foreground")}><Icon className="h-5 w-5" />{item.label}</Link>;
+          return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors", active ? "bg-primary-foreground/12 font-medium text-primary-foreground" : "text-primary-foreground/65 hover:bg-primary-foreground/8 hover:text-primary-foreground")}><Icon className="h-5 w-5" /><span className="min-w-0 flex-1">{item.label}</span>{item.note && <span className="rounded-full border border-primary-foreground/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground/55">{item.note}</span>}</Link>;
         })}
       </nav>
 

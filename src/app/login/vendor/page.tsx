@@ -178,7 +178,7 @@ export default function VendorLoginPage() {
                 </button>
               </div>
             </div>
-            <Button type="submit" size="lg" disabled={isLoading} className="h-12 w-full bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button type="submit" size="lg" disabled={isLoading} className="h-12 w-full bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active">
               {isLoading ? <><LoaderLabel /> Signing in...</> : "Sign In to Portal"}
             </Button>
           </form>

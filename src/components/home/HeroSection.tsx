@@ -153,7 +153,7 @@ export function HeroSection() {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="relative lg:h-[560px] lg:rotate-[1.5deg]"
           >
-            <div className="pointer-events-none absolute -inset-3 rounded-[2rem] border border-accent/20 lg:-rotate-[2.5deg]" />
+            <div className="pointer-events-none absolute -inset-3 rounded-[2rem] border border-accent-border lg:-rotate-[2.5deg]" />
             <Image
               src="/hero-home-duotone.jpg"
               alt="Stylized duotone illustration of a managed Southwest Florida home"
@@ -167,13 +167,7 @@ export function HeroSection() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.7 }}
-              className="absolute -bottom-6 -left-6 rounded-2xl border p-4 backdrop-blur-xl"
-              style={{
-                background: "hsl(0 0% 100% / 0.6)",
-                borderColor: "hsl(0 0% 100% / 0.3)",
-                boxShadow:
-                  "0 8px 32px hsl(0 0% 0% / 0.08), inset 0 1px 0 hsl(0 0% 100% / 0.5)",
-              }}
+              className="theme-glass absolute -bottom-6 -left-6 rounded-2xl border p-4 backdrop-blur-xl"
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sage-light">
@@ -192,13 +186,7 @@ export function HeroSection() {
               initial={{ opacity: 0, y: -16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.85 }}
-              className="absolute -right-4 -top-4 rounded-2xl border px-4 py-3 backdrop-blur-xl"
-              style={{
-                background: "hsl(0 0% 100% / 0.6)",
-                borderColor: "hsl(0 0% 100% / 0.3)",
-                boxShadow:
-                  "0 8px 32px hsl(0 0% 0% / 0.08), inset 0 1px 0 hsl(0 0% 100% / 0.5)",
-              }}
+              className="theme-glass absolute -right-4 -top-4 rounded-2xl border px-4 py-3 backdrop-blur-xl"
             >
               <div className="flex items-center gap-2">
                 <div className="flex gap-0.5">

@@ -160,7 +160,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               size="lg"
-              className="h-12 w-full bg-accent text-accent-foreground hover:bg-accent/90"
+              className="h-12 w-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
               disabled={isLoading}
             >
               {isLoading ? "Signing in..." : "Sign In"}

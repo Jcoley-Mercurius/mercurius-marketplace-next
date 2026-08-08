@@ -52,7 +52,7 @@ export function TestimonialsSection() {
                 <div
                   className={`h-full rounded-2xl border border-border/30 bg-card transition-shadow duration-300 ${
                     index === 0
-                      ? "card-priority border-accent/20 p-9 pt-10"
+                      ? "card-priority border-accent-border p-9 pt-10"
                       : "elev-1 hover:elev-2 p-8"
                   }`}
                 >

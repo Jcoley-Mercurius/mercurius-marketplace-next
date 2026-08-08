@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { fetchRoles } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 const accountPortals = [
   {
@@ -122,7 +123,7 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
+    <header className="sticky top-0 z-50 w-full border-b border-border-strong bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container mx-auto flex h-16 items-center px-4 relative">
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-2 flex-shrink-0">
@@ -144,8 +145,8 @@ export function Header() {
               href={item.href}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 isActive(item.href)
-                  ? "text-primary bg-muted"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  ? "bg-slate-soft text-foreground"
+                  : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
               }`}
             >
               {item.name}
@@ -153,7 +154,7 @@ export function Header() {
           ))}
 
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors">
+            <DropdownMenuTrigger className="flex items-center rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground">
               More <ChevronDown className="ml-1 h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -178,6 +179,7 @@ export function Header() {
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center space-x-3 ml-auto">
+          <ThemeToggle />
           {authLoading ? (
             <Button variant="ghost" disabled>
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -211,7 +213,7 @@ export function Header() {
                       portalLinks.map(({ role, roleLabel }) => (
                         <span
                           key={role}
-                          className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent"
+                          className="rounded-full border border-accent-border bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-sage-dark"
                         >
                           {roleLabel}
                         </span>
@@ -261,23 +263,23 @@ export function Header() {
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem>
                   <Link href="/login" className="w-full flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-                      <Home className="h-3.5 w-3.5 text-primary" />
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-soft">
+                      <Home className="h-3.5 w-3.5 text-foreground" />
                     </div>
                     Homeowner Sign In
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Link href="/login/vendor" className="w-full flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-                      <Wrench className="h-3.5 w-3.5 text-primary" />
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-soft">
+                      <Wrench className="h-3.5 w-3.5 text-foreground" />
                     </div>
                     Vendor Sign In
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Link href="/register" className="w-full flex items-center gap-2 font-medium text-accent">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/10">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md border border-accent-border bg-accent-soft">
                       <UserPlus className="h-3.5 w-3.5 text-accent" />
                     </div>
                     Create Homeowner Account
@@ -287,7 +289,7 @@ export function Header() {
             </DropdownMenu>
           )}
 
-          <Link href="/request" className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent/90")}>Get Started</Link>
+          <Link href="/request" className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Get Started</Link>
         </div>
 
         {/* Mobile Menu */}
@@ -308,34 +310,39 @@ export function Header() {
                       onClick={() => setIsOpen(false)}
                       className={`px-4 py-3 text-base font-medium rounded-lg transition-colors ${
                         isActive(item.href)
-                          ? "text-primary bg-muted"
-                          : "text-foreground hover:bg-muted"
+                          ? "bg-slate-soft text-foreground"
+                          : "text-foreground hover:bg-surface-hover"
                       }`}
                     >
                       {item.name}
                     </Link>
                   ))}
-                  <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="px-4 py-3 text-base font-medium hover:bg-muted rounded-lg">
+                  <Link href="/how-it-works" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-3 text-base font-medium hover:bg-surface-hover">
                     How It Works
                   </Link>
-                  <Link href="/services" onClick={() => setIsOpen(false)} className="px-4 py-3 text-base font-medium hover:bg-muted rounded-lg">
+                  <Link href="/services" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-3 text-base font-medium hover:bg-surface-hover">
                     Services
                   </Link>
-                  <Link href="/pricing" onClick={() => setIsOpen(false)} className="px-4 py-3 text-base font-medium hover:bg-muted rounded-lg">
+                  <Link href="/pricing" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-3 text-base font-medium hover:bg-surface-hover">
                     Pricing
                   </Link>
-                  <Link href="/faq" onClick={() => setIsOpen(false)} className="px-4 py-3 text-base font-medium hover:bg-muted rounded-lg">
+                  <Link href="/faq" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-3 text-base font-medium hover:bg-surface-hover">
                     FAQ
                   </Link>
-                  <Link href="/contact" onClick={() => setIsOpen(false)} className="px-4 py-3 text-base font-medium hover:bg-muted rounded-lg">
+                  <Link href="/contact" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-3 text-base font-medium hover:bg-surface-hover">
                     Contact
                   </Link>
                 </nav>
 
+                <ThemeToggle
+                  showLabel
+                  className="h-11 w-full rounded-xl border border-slate-border bg-slate-soft px-4"
+                />
+
                 <div className="flex flex-col space-y-3 pt-4 border-t">
                   {!authLoading && user ? (
                     <>
-                      <div className="rounded-xl border border-border bg-muted/40 p-4">
+                      <div className="rounded-xl border border-slate-border bg-slate-soft p-4">
                         <p className="truncate font-semibold text-foreground">
                           {displayName}
                         </p>
@@ -353,7 +360,7 @@ export function Header() {
                             portalLinks.map(({ role, roleLabel }) => (
                               <span
                                 key={role}
-                                className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent"
+                                className="rounded-full border border-accent-border bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-sage-dark"
                               >
                                 {roleLabel}
                               </span>
@@ -404,7 +411,7 @@ export function Header() {
                       <Link
                         href="/register"
                         onClick={() => setIsOpen(false)}
-                        className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90"
+                        className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover active:bg-accent-active"
                       >
                         <UserPlus className="h-4 w-4" />
                         Create Homeowner Account
@@ -416,7 +423,7 @@ export function Header() {
                       Loading Account...
                     </Button>
                   )}
-                  <Link href="/request" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent/90")}>Request Service</Link>
+                  <Link href="/request" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Request Service</Link>
                 </div>
               </div>
             </SheetContent>
