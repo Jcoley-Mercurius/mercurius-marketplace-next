@@ -101,12 +101,13 @@ function getRecurringPrice(service: { weeklyPrice?: number; avgMonthlyPrice: num
   return null;
 }
 
-type RequestFrequency = "weekly" | "monthly" | "quarterly" | "one-time";
+type RequestFrequency = "weekly" | "bi-monthly" | "monthly" | "quarterly" | "one-time";
 
 function getRequestFrequencies(service: Service): RequestFrequency[] {
   if (service.availability !== "fixed") return ["one-time"];
   return [
     service.weeklyPrice ? "weekly" as const : null,
+    service.biMonthlyPrice ? "bi-monthly" as const : null,
     service.avgMonthlyPrice ? "monthly" as const : null,
     service.quarterlyPrice ? "quarterly" as const : null,
     service.oneTimePrice ? "one-time" as const : null,

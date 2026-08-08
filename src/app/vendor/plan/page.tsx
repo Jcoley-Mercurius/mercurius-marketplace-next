@@ -90,16 +90,16 @@ export default function VendorPlanPage() {
   }, [load]);
 
   if (mode === "loading") return <State loading />;
-  if (mode === "unlinked") return <State title="No contractor profile linked" copy="Launch terms will appear after Mercurius links your approved vendor profile." />;
-  if (mode === "error") return <State title="Launch terms couldn’t be loaded" copy={`No plan or billing status has been assumed. ${error}`} action={<Button variant="outline" onClick={() => { setMode("loading"); void load(); }}><RefreshCw />Try again</Button>} />;
+  if (mode === "unlinked") return <State title="No contractor profile linked" copy="Plan information will appear after Mercurius links your approved vendor profile." />;
+  if (mode === "error") return <State title="Plan information couldn’t be loaded" copy={`No plan or billing status has been assumed. ${error}`} action={<Button variant="outline" onClick={() => { setMode("loading"); void load(); }}><RefreshCw />Try again</Button>} />;
   if (!contractor) return null;
 
   return (
     <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 md:p-8">
       <header className="mb-7">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Soft-launch terms</p>
-        <h1 className="font-heading text-2xl font-semibold sm:text-3xl">Simple access while we launch</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">There is no paid vendor subscription during the Mercurius soft launch. Focus on your profile, live pricing, and serving matched homeowners.</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Vendor plans</p>
+        <h1 className="font-heading text-2xl font-semibold sm:text-3xl">Plans</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">No paid plans are offered during the Mercurius soft launch. Every approved vendor receives core platform access with no subscription; Mercurius charges a flat 15% commission on completed jobs.</p>
       </header>
 
       <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">
@@ -154,6 +154,6 @@ function DeferredCard({ offering }: { offering: DeferredOffering }) {
 }
 
 function State({ loading, title, copy, action }: { loading?: boolean; title?: string; copy?: string; action?: React.ReactNode }) {
-  if (loading) return <div className="flex min-h-[520px] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-6 w-6 animate-spin text-accent" />Loading launch terms…</div>;
+  if (loading) return <div className="flex min-h-[520px] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-6 w-6 animate-spin text-accent" />Loading plans…</div>;
   return <div className="flex min-h-[520px] items-center justify-center p-8 text-center"><div><AlertCircle className="mx-auto mb-4 h-12 w-12 text-muted-foreground" /><h1 className="text-xl font-semibold">{title}</h1><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{copy}</p>{action && <div className="mt-5">{action}</div>}</div></div>;
 }

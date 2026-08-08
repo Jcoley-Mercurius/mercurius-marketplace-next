@@ -38,9 +38,15 @@ import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { paymentFunctionError } from "@/lib/payments";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  isPricingFrequency,
+  isPubliclyEligibleFixedPackage,
+  isPubliclyEligibleQuotePackage,
+  type PricingFrequency,
+} from "@/lib/vendorPricing";
 
 type Step = "services" | "details" | "contact";
-type Frequency = "weekly" | "monthly" | "quarterly" | "one-time";
+type Frequency = PricingFrequency;
 
 type ServiceOption = {
   id: string;
@@ -345,7 +351,7 @@ export default function RequestServicePage() {
           quote_only: !isVerifiedFixed,
           total_amount: isVerifiedFixed ? livePackage.price : null,
           service_catalog_id: service.id,
-          package_id: livePackage?.packageId ?? packageSelections[service.id]?.packageId ?? null,
+          package_id: livePackage?.packageId ?? null,
           package_tier_id: isVerifiedFixed ? livePackage.tierId : null,
         };
       });
@@ -517,6 +523,7 @@ function servicePriceLabel(service: ServiceOption, frequency: Frequency) {
   if (!price) return "Quote";
   if (frequency === "one-time") return `$${price}`;
   if (frequency === "weekly") return `$${price}/wk`;
+  if (frequency === "bi-monthly") return `$${price}/2 wks`;
   if (frequency === "quarterly") return `$${price}/qtr`;
   return `$${price}/mo`;
 }
@@ -530,7 +537,7 @@ function formatServiceName(id: string) {
 }
 
 function isFrequency(value: unknown): value is Frequency {
-  return value === "weekly" || value === "monthly" || value === "quarterly" || value === "one-time";
+  return isPricingFrequency(value);
 }
 
 async function resolveLivePackages(
@@ -541,24 +548,29 @@ async function resolveLivePackages(
   explicitSelections: Record<string, PackageSelection>,
 ) {
   if (services.length === 0) return {};
-  type PackageCandidate = { id: string; contractor_id: string; service_id: string; default_frequency: string; pricing_mode: string };
+  type PackageCandidate = { id: string; contractor_id: string; service_id: string; default_frequency: string; pricing_mode: string; is_active: boolean; needs_review: boolean | null };
   type TierCandidate = { id: string; package_id: string; price: number | null };
 
   const { data: packageData, error: packageError } = await supabase
     .from("vendor_packages")
-    .select("id, contractor_id, service_id, default_frequency, pricing_mode, is_active, contractors!inner(is_active)")
+    .select("id, contractor_id, service_id, default_frequency, pricing_mode, is_active, needs_review, contractors!inner(is_active)")
     .in("service_id", services.map((service) => service.id))
     .eq("is_active", true)
+    .eq("needs_review", false)
     .eq("contractors.is_active", true);
   if (packageError) throw packageError;
 
-  const packages = (packageData ?? []) as unknown as PackageCandidate[];
-  const fixedPackageIds = packages.filter((item) => item.pricing_mode === "fixed").map((item) => item.id);
+  const packageRows = (packageData ?? []) as unknown as PackageCandidate[];
+  const fixedPackageIds = packageRows.filter((item) => item.pricing_mode === "fixed").map((item) => item.id);
   const tierResult = fixedPackageIds.length
     ? await supabase.from("package_tiers").select("id, package_id, price").in("package_id", fixedPackageIds)
     : { data: [] as TierCandidate[], error: null };
   if (tierResult.error) throw tierResult.error;
   const tiers = (tierResult.data ?? []) as TierCandidate[];
+  const packages = packageRows.filter((item) => item.pricing_mode === "fixed"
+    ? isPubliclyEligibleFixedPackage({ ...item, tiers: tiers.filter((tier) => tier.package_id === item.id) })
+    : isPubliclyEligibleQuotePackage(item),
+  );
 
   const resolved: Record<string, ResolvedPackage> = {};
   services.forEach((service) => {

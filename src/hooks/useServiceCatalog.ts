@@ -9,10 +9,14 @@ import {
   type ServiceCategory,
   type ServiceFrequency,
 } from "@/lib/serviceData";
+import {
+  isPubliclyEligibleFixedPackage,
+  isPubliclyEligibleQuotePackage,
+} from "@/lib/vendorPricing";
 
 type CategoryRow = { id: string; name: string; icon: string; description: string };
 type ServiceRow = { id: string; name: string; category_id: string; tags: string[] | null; icon: string; descriptor: string; is_popular: boolean | null; weekly_price: number | null; monthly_price: number; one_time_price: number; default_frequency: ServiceFrequency; available_frequencies: ServiceFrequency[] | null };
-type PackageRow = { id: string; service_id: string; default_frequency: ServiceFrequency; pricing_mode: string };
+type PackageRow = { id: string; service_id: string; default_frequency: ServiceFrequency; pricing_mode: string; is_active: boolean; needs_review: boolean | null };
 type TierRow = { package_id: string; price: number | null };
 type PriceBucket = { weekly?: number; monthly?: number; biMonthly?: number; quarterly?: number; oneTime?: number; anyMin?: number };
 
@@ -28,7 +32,7 @@ export function useServiceCatalog() {
     Promise.all([
       supabase.from("service_categories").select("*").eq("is_active", true).order("sort_order"),
       supabase.from("services_catalog").select("*").eq("is_active", true).order("sort_order"),
-      supabase.from("vendor_packages").select("id, service_id, default_frequency, pricing_mode, is_active, contractor_id, contractors!inner(is_active)").eq("is_active", true).eq("contractors.is_active", true),
+      supabase.from("vendor_packages").select("id, service_id, default_frequency, pricing_mode, is_active, needs_review, contractor_id, contractors!inner(is_active)").eq("is_active", true).eq("needs_review", false).eq("contractors.is_active", true),
       supabase.from("package_tiers").select("package_id, price"),
     ]).then(([categoryResult, serviceResult, packageResult, tierResult]) => {
       if (!active) return;
@@ -49,8 +53,12 @@ export function useServiceCatalog() {
         }
       });
       packageRows.forEach((item) => {
+        const packageTiers = tierRows.filter((tier) => tier.package_id === item.id);
+        const eligibleFixed = isPubliclyEligibleFixedPackage({ ...item, tiers: packageTiers });
+        const eligibleQuote = isPubliclyEligibleQuotePackage(item);
+        if (!eligibleFixed && !eligibleQuote) return;
         coveredServices.add(item.service_id);
-        if (item.pricing_mode !== "fixed") return;
+        if (!eligibleFixed) return;
         const tierPrices = tiersByPackage[item.id];
         if (!tierPrices?.length) return;
         const minimum = Math.min(...tierPrices);

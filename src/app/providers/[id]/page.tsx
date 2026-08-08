@@ -25,9 +25,15 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  isPricingFrequency,
+  isPubliclyEligibleFixedPackage,
+  isPubliclyEligibleQuotePackage,
+  type PricingFrequency,
+} from "@/lib/vendorPricing";
 
 type PricingMode = "fixed" | "deposit_quote" | "custom_quote";
-type Frequency = "weekly" | "monthly" | "quarterly" | "one-time";
+type Frequency = PricingFrequency;
 
 type Contractor = {
   id: string;
@@ -69,6 +75,7 @@ type PackageRow = {
   default_frequency: string;
   deposit_amount: number | null;
   is_active: boolean;
+  needs_review: boolean | null;
   sort_order: number;
 };
 
@@ -173,9 +180,10 @@ export default function ProviderStorefrontPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("vendor_packages")
-          .select("id, contractor_id, service_id, name, description, pricing_mode, default_frequency, deposit_amount, is_active, sort_order")
+          .select("id, contractor_id, service_id, name, description, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, sort_order")
           .eq("contractor_id", contractorId)
           .eq("is_active", true)
+          .eq("needs_review", false)
           .order("sort_order"),
         supabase.from("services_catalog").select("id, name").eq("is_active", true),
         supabase
@@ -213,7 +221,7 @@ export default function ProviderStorefrontPage() {
       setReviews((reviewsResult.data ?? []) as Review[]);
       setServiceNames(Object.fromEntries((catalogResult.data ?? []).map((service) => [service.id, service.name])));
       setGallery((galleryResult.data ?? []) as GalleryItem[]);
-      setPackages(packageRows.map((item) => ({
+      const hydratedPackages = packageRows.map((item) => ({
         ...item,
         pricing_mode: isPricingMode(item.pricing_mode) ? item.pricing_mode : "custom_quote",
         default_frequency: isFrequency(item.default_frequency) ? item.default_frequency : "one-time",
@@ -221,7 +229,11 @@ export default function ProviderStorefrontPage() {
         tiers: ((tiersResult.data ?? []) as PackageTier[])
           .filter((tier) => tier.package_id === item.id)
           .map((tier) => ({ ...tier, price: Number(tier.price) })),
-      })));
+      }));
+      setPackages(hydratedPackages.filter((item) => item.pricing_mode === "fixed"
+        ? isPubliclyEligibleFixedPackage(item)
+        : isPubliclyEligibleQuotePackage(item),
+      ));
       setMode("ready");
     } catch (reason) {
       console.error("Unable to load public provider storefront", reason);
@@ -462,7 +474,7 @@ function isPricingMode(value: string): value is PricingMode {
 }
 
 function isFrequency(value: string): value is Frequency {
-  return value === "weekly" || value === "monthly" || value === "quarterly" || value === "one-time";
+  return isPricingFrequency(value);
 }
 
 function lowestTier(item: VendorPackage) {
@@ -479,6 +491,7 @@ function frequencyLabel(value: Frequency) {
 
 function frequencySuffix(value: Frequency) {
   if (value === "weekly") return "/wk";
+  if (value === "bi-monthly") return "/2 wks";
   if (value === "monthly") return "/mo";
   if (value === "quarterly") return "/qtr";
   return "";

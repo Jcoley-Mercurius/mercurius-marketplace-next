@@ -274,10 +274,10 @@ export default function VendorOverviewPage() {
           <DollarSign className="mt-0.5 h-5 w-5 shrink-0 text-sage-dark" />
           <div>
             <p className="font-medium text-foreground">Soft-launch vendor terms</p>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">No vendor subscription fee during soft launch. Mercurius charges 15% commission on completed jobs.</p>
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">No vendor subscriptions during soft launch. Mercurius charges 15% commission on completed jobs.</p>
           </div>
         </div>
-        <Badge variant="outline" className="w-fit border-accent-border bg-background text-sage-dark">Free access · 15% commission</Badge>
+        <Badge variant="outline" className="w-fit border-accent-border bg-background text-sage-dark">No subscriptions · 15% commission</Badge>
       </div>
 
       <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">

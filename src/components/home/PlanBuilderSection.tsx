@@ -24,9 +24,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { cn } from "@/lib/utils";
+import type { PricingFrequency } from "@/lib/vendorPricing";
 
 type Category = "outdoor" | "indoor" | "maintenance" | "repairs" | "specialty";
-type Frequency = "weekly" | "monthly" | "quarterly" | "one-time";
+type Frequency = PricingFrequency;
 
 type Service = {
   id: string;
@@ -36,6 +37,7 @@ type Service = {
   icon: typeof Leaf;
   monthlyPrice: number;
   weeklyPrice?: number;
+  biMonthlyPrice?: number;
   quarterlyPrice?: number;
   oneTimePrice: number;
   defaultFrequency: Frequency;
@@ -53,6 +55,7 @@ const categoryLabels: Record<Category, string> = {
 
 const frequencyLabels: Record<Frequency, string> = {
   weekly: "Weekly",
+  "bi-monthly": "Every two weeks",
   monthly: "Monthly",
   quarterly: "Quarterly",
   "one-time": "One-time",
@@ -178,6 +181,7 @@ export function PlanBuilderSection() {
     const availability = catalogService.availability ?? "sourcing";
     const liveFrequencies: Frequency[] = availability === "fixed" ? [
       catalogService.weeklyPrice ? "weekly" : null,
+      catalogService.biMonthlyPrice ? "bi-monthly" : null,
       catalogService.avgMonthlyPrice ? "monthly" : null,
       catalogService.quarterlyPrice ? "quarterly" : null,
       catalogService.oneTimePrice ? "one-time" : null,
@@ -188,6 +192,7 @@ export function PlanBuilderSection() {
       name: catalogService.name,
       descriptor: catalogService.descriptor,
       weeklyPrice: catalogService.weeklyPrice,
+      biMonthlyPrice: catalogService.biMonthlyPrice,
       monthlyPrice: catalogService.avgMonthlyPrice,
       quarterlyPrice: catalogService.quarterlyPrice,
       oneTimePrice: catalogService.oneTimePrice,
@@ -221,7 +226,7 @@ export function PlanBuilderSection() {
     const frequency = getFrequency(service);
     totals[frequency] += getServicePrice(service, frequency);
     return totals;
-  }, { weekly: 0, monthly: 0, quarterly: 0, "one-time": 0 });
+  }, { weekly: 0, "bi-monthly": 0, monthly: 0, quarterly: 0, "one-time": 0 });
   const hasLiveTotal = Object.values(pricedTotals).some((total) => total > 0);
 
   const recommendedServices = useMemo(
@@ -556,7 +561,7 @@ export function PlanBuilderSection() {
                               descriptor: service.descriptor,
                               defaultFrequency: service.defaultFrequency,
                               frequencies: service.frequencies,
-                              prices: { weekly: service.weeklyPrice ?? 0, monthly: service.monthlyPrice, quarterly: service.quarterlyPrice ?? 0, "one-time": service.oneTimePrice },
+                              prices: { weekly: service.weeklyPrice ?? 0, "bi-monthly": service.biMonthlyPrice ?? 0, monthly: service.monthlyPrice, quarterly: service.quarterlyPrice ?? 0, "one-time": service.oneTimePrice },
                             })),
                           }));
                         }}
@@ -659,13 +664,14 @@ function ServicePrice({ service, frequency, compact = false }: { service: Servic
   if (service.availability === "quote") return <div className={cn("font-semibold text-info", compact ? "text-xs" : "text-sm")}><span className="block">Quote required</span><span className="text-[10px] font-normal text-white/40">Matched after details</span></div>;
   if (service.availability === "sourcing") return <div className={cn("font-semibold text-white/65", compact ? "text-xs" : "text-sm")}><span className="block">Request this service</span><span className="text-[10px] font-normal text-white/40">We&apos;ll source a vetted pro</span></div>;
   const price = getServicePrice(service, frequency);
-  const suffix = frequency === "weekly" ? "/visit" : frequency === "monthly" ? "/mo" : frequency === "quarterly" ? "/quarter" : "";
+  const suffix = frequency === "weekly" ? "/visit" : frequency === "bi-monthly" ? "/2 wks" : frequency === "monthly" ? "/mo" : frequency === "quarterly" ? "/quarter" : "";
   return <div className={cn("whitespace-nowrap font-bold text-foreground", compact ? "text-sm" : "text-xl")}>${price}<span className="text-[10px] font-normal text-white/40">{suffix}</span></div>;
 }
 
 function getServicePrice(service: Service, frequency: Frequency) {
   if (service.availability !== "fixed") return 0;
   if (frequency === "weekly") return service.weeklyPrice ?? 0;
+  if (frequency === "bi-monthly") return service.biMonthlyPrice ?? 0;
   if (frequency === "quarterly") return service.quarterlyPrice ?? 0;
   if (frequency === "one-time") return service.oneTimePrice;
   return service.monthlyPrice;
