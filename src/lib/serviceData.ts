@@ -33,6 +33,11 @@ export interface Service {
   availableFrequencies?: ServiceFrequency[];
   /** Live launch availability. Fallback catalog prices never imply coverage. */
   availability?: "fixed" | "quote" | "sourcing";
+  /** Base provider price paired with the currently displayed effective price. */
+  basePrices?: Partial<Record<ServiceFrequency, number>>;
+  /** Active database-timed promotion metadata by cadence. */
+  promotionLabels?: Partial<Record<ServiceFrequency, string>>;
+  promotionIds?: Partial<Record<ServiceFrequency, string>>;
 }
 
 // ─────────────────────────────────────────────

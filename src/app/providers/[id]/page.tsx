@@ -29,6 +29,9 @@ import {
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
   isPubliclyEligibleQuotePackage,
+  promotionForPackage,
+  resolveEffectiveTierPrice,
+  type PackagePromotion,
   type PricingFrequency,
 } from "@/lib/vendorPricing";
 
@@ -92,6 +95,7 @@ type VendorPackage = Omit<PackageRow, "pricing_mode" | "default_frequency"> & {
   pricing_mode: PricingMode;
   default_frequency: Frequency;
   tiers: PackageTier[];
+  promotions: PackagePromotion[];
 };
 
 type GalleryItem = {
@@ -157,6 +161,7 @@ export default function ProviderStorefrontPage() {
   const [packages, setPackages] = useState<VendorPackage[]>([]);
   const [serviceNames, setServiceNames] = useState<Record<string, string>>({});
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [serverNow, setServerNow] = useState<string | null>(null);
   const [mode, setMode] = useState<PageMode>("loading");
   const [error, setError] = useState("");
 
@@ -208,14 +213,25 @@ export default function ProviderStorefrontPage() {
 
       const packageRows = (packagesResult.data ?? []) as PackageRow[];
       const packageIds = packageRows.map((item) => item.id);
-      const tiersResult = packageIds.length
-        ? await supabase
+      const [tiersResult, promotionsResult, clockResult] = await Promise.all([
+        packageIds.length ? supabase
             .from("package_tiers")
             .select("id, package_id, name, price, includes, sort_order")
             .in("package_id", packageIds)
             .order("sort_order")
-        : { data: [] as PackageTier[], error: null };
+          : Promise.resolve({ data: [] as PackageTier[], error: null }),
+        packageIds.length ? supabase
+          .from("package_promotions")
+          .select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at")
+          .in("package_id", packageIds)
+          .eq("is_enabled", true)
+          : Promise.resolve({ data: [] as PackagePromotion[], error: null }),
+        supabase.rpc("pricing_server_now"),
+      ]);
       if (tiersResult.error) throw tiersResult.error;
+      const promotionReady = !promotionsResult.error && !clockResult.error && typeof clockResult.data === "string";
+      const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
+      setServerNow(promotionReady ? clockResult.data as string : null);
 
       setContractor(contractorResult.data as unknown as Contractor);
       setReviews((reviewsResult.data ?? []) as Review[]);
@@ -229,6 +245,7 @@ export default function ProviderStorefrontPage() {
         tiers: ((tiersResult.data ?? []) as PackageTier[])
           .filter((tier) => tier.package_id === item.id)
           .map((tier) => ({ ...tier, price: Number(tier.price) })),
+        promotions: promotions.filter((promotion) => promotion.package_id === item.id),
       }));
       setPackages(hydratedPackages.filter((item) => item.pricing_mode === "fixed"
         ? isPubliclyEligibleFixedPackage(item)
@@ -244,7 +261,8 @@ export default function ProviderStorefrontPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(true); }, 0);
-    return () => window.clearTimeout(timer);
+    const clockRefresh = window.setInterval(() => { void load(false); }, 60_000);
+    return () => { window.clearTimeout(timer); window.clearInterval(clockRefresh); };
   }, [load]);
 
   useEffect(() => {
@@ -255,6 +273,7 @@ export default function ProviderStorefrontPage() {
       .channel(`public-provider-${contractorId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "contractors", filter: `id=eq.${contractorId}` }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "vendor_packages", filter: `contractor_id=eq.${contractorId}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "package_promotions" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "contractor_gallery", filter: `contractor_id=eq.${contractorId}` }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "reviews", filter: `contractor_id=eq.${contractorId}` }, refresh)
       .subscribe();
@@ -274,11 +293,12 @@ export default function ProviderStorefrontPage() {
     if (!contractor) return;
     const serviceId = selectedPackage?.service_id ?? contractor.services?.[0];
     const serviceName = serviceId ? displayService(serviceId, serviceNames) : contractor.verified_specialty ?? "Home service";
-    const tier = selectedPackage?.pricing_mode === "fixed" ? lowestTier(selectedPackage) : null;
+    const tierPrice = selectedPackage?.pricing_mode === "fixed" ? lowestEffectiveTier(selectedPackage, serverNow) : null;
+    const tier = tierPrice?.tier ?? null;
     const frequency = selectedPackage?.default_frequency ?? "one-time";
 
     if (serviceId) {
-      const prices = tier ? { [frequency]: Number(tier.price) } : undefined;
+      const prices = tierPrice ? { [frequency]: tierPrice.price.effectivePrice } : undefined;
       window.sessionStorage.setItem("homePlanSelection", JSON.stringify({
         selectedServiceIds: [serviceId],
         frequencies: { [serviceId]: frequency },
@@ -290,6 +310,9 @@ export default function ProviderStorefrontPage() {
           defaultFrequency: frequency,
           frequencies: [frequency],
           prices,
+          basePrices: tierPrice?.price.isPromotionEffective ? { [frequency]: tierPrice.price.basePrice } : undefined,
+          promotionLabels: tierPrice?.price.promotionLabel ? { [frequency]: tierPrice.price.promotionLabel } : undefined,
+          promotionIds: tierPrice?.price.promotionId ? { [frequency]: tierPrice.price.promotionId } : undefined,
           packageId: selectedPackage?.id,
           tierId: tier?.id,
           pricingMode: selectedPackage?.pricing_mode,
@@ -383,12 +406,13 @@ export default function ProviderStorefrontPage() {
                 {fixedPackages.length > 0 && <SectionCard title="Fixed-Price Services">
                   <div className="grid gap-3">
                     {fixedPackages.map((item) => {
-                      const tier = lowestTier(item);
-                      if (!tier) return null;
+                      const tierPrice = lowestEffectiveTier(item, serverNow);
+                      if (!tierPrice) return null;
+                      const { tier, price } = tierPrice;
                       return <button key={item.id} type="button" onClick={() => startRequest(item)} className="rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-accent/50 hover:bg-accent/5">
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0"><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{displayService(item.service_id, serviceNames)} · {frequencyLabel(item.default_frequency)}</p>{item.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>}{tier.includes && tier.includes.length > 0 && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">{tier.includes.slice(0, 4).map((included) => <span key={included} className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="h-3 w-3 text-accent" />{included}</span>)}</div>}</div>
-                          <div className="shrink-0 text-right"><p className="text-xl font-bold tabular-nums">{money(tier.price)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(item.default_frequency)}</span></p><p className="mt-1 text-xs font-medium text-accent">Continue to request</p></div>
+                          <div className="shrink-0 text-right">{price.isPromotionEffective && <p className="text-xs text-muted-foreground line-through">{money(price.basePrice)}</p>}<p className="text-xl font-bold tabular-nums">{money(price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(item.default_frequency)}</span></p>{price.isPromotionEffective && <p className="text-[10px] font-medium text-coral">{price.promotionLabel || "Limited-time price"}</p>}<p className="mt-1 text-xs font-medium text-accent">Continue to request</p></div>
                         </div>
                       </button>;
                     })}
@@ -417,7 +441,7 @@ export default function ProviderStorefrontPage() {
 
               <aside className="space-y-6 md:sticky md:top-24 md:self-start">
                 <Card className="border-accent/20 shadow-sm"><CardHeader><CardTitle className="text-lg">Pricing Overview</CardTitle></CardHeader><CardContent>
-                  {fixedPackages.length > 0 ? <div className="mb-5"><p className="text-sm text-muted-foreground">Published provider-backed pricing</p><p className="mt-2 text-2xl font-bold tabular-nums">From {money(lowestTier(fixedPackages[0])?.price ?? 0)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(fixedPackages[0].default_frequency)}</span></p></div> : <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Pricing depends on the scope. Mercurius will confirm availability and price before work begins.</p>}
+                  {fixedPackages.length > 0 ? <StorefrontPriceOverview item={fixedPackages[0]} serverNow={serverNow} /> : <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Pricing depends on the scope. Mercurius will confirm availability and price before work begins.</p>}
                   <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={!isPublished} onClick={() => startRequest(primaryPackage)}>{fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
                 </CardContent></Card>
 
@@ -477,8 +501,17 @@ function isFrequency(value: string): value is Frequency {
   return isPricingFrequency(value);
 }
 
-function lowestTier(item: VendorPackage) {
-  return [...item.tiers].sort((left, right) => Number(left.price) - Number(right.price))[0] ?? null;
+function lowestEffectiveTier(item: VendorPackage, serverNow: string | null) {
+  const promotion = promotionForPackage(item.promotions, item.id);
+  return item.tiers
+    .map((tier) => ({ tier, price: resolveEffectiveTierPrice(tier.price, promotion, serverNow, item.tiers.length) }))
+    .sort((left, right) => left.price.effectivePrice - right.price.effectivePrice)[0] ?? null;
+}
+
+function StorefrontPriceOverview({ item, serverNow }: { item: VendorPackage; serverNow: string | null }) {
+  const tierPrice = lowestEffectiveTier(item, serverNow);
+  if (!tierPrice) return null;
+  return <div className="mb-5"><p className="text-sm text-muted-foreground">Published provider-backed pricing</p>{tierPrice.price.isPromotionEffective && <p className="mt-2 text-sm text-muted-foreground line-through">From {money(tierPrice.price.basePrice)}</p>}<p className={cn("text-2xl font-bold tabular-nums", !tierPrice.price.isPromotionEffective && "mt-2")}>From {money(tierPrice.price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(item.default_frequency)}</span></p>{tierPrice.price.isPromotionEffective && <p className="mt-1 text-xs font-medium text-coral">{tierPrice.price.promotionLabel || "Limited-time price"}</p>}</div>;
 }
 
 function displayService(id: string, names: Record<string, string>) {

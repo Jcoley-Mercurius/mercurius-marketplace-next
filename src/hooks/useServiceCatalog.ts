@@ -12,13 +12,17 @@ import {
 import {
   isPubliclyEligibleFixedPackage,
   isPubliclyEligibleQuotePackage,
+  promotionForPackage,
+  resolveEffectiveTierPrice,
+  type PackagePromotion,
 } from "@/lib/vendorPricing";
 
 type CategoryRow = { id: string; name: string; icon: string; description: string };
 type ServiceRow = { id: string; name: string; category_id: string; tags: string[] | null; icon: string; descriptor: string; is_popular: boolean | null; weekly_price: number | null; monthly_price: number; one_time_price: number; default_frequency: ServiceFrequency; available_frequencies: ServiceFrequency[] | null };
 type PackageRow = { id: string; service_id: string; default_frequency: ServiceFrequency; pricing_mode: string; is_active: boolean; needs_review: boolean | null };
 type TierRow = { package_id: string; price: number | null };
-type PriceBucket = { weekly?: number; monthly?: number; biMonthly?: number; quarterly?: number; oneTime?: number; anyMin?: number };
+type PricePoint = { base: number; effective: number; promotionId?: string; promotionLabel?: string };
+type PriceBucket = { weekly?: PricePoint; monthly?: PricePoint; biMonthly?: PricePoint; quarterly?: PricePoint; oneTime?: PricePoint; anyMin?: number };
 
 export function useServiceCatalog() {
   const [services, setServices] = useState<Service[]>(() => fallbackServices.map((service) => ({ ...service, availability: "sourcing" })));
@@ -29,17 +33,23 @@ export function useServiceCatalog() {
     let active = true;
     const supabase = createClient();
 
-    Promise.all([
+    const load = () => { void Promise.all([
       supabase.from("service_categories").select("*").eq("is_active", true).order("sort_order"),
       supabase.from("services_catalog").select("*").eq("is_active", true).order("sort_order"),
       supabase.from("vendor_packages").select("id, service_id, default_frequency, pricing_mode, is_active, needs_review, contractor_id, contractors!inner(is_active)").eq("is_active", true).eq("needs_review", false).eq("contractors.is_active", true),
       supabase.from("package_tiers").select("package_id, price"),
-    ]).then(([categoryResult, serviceResult, packageResult, tierResult]) => {
+      supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").eq("is_enabled", true),
+      supabase.rpc("pricing_server_now"),
+    ]).then(([categoryResult, serviceResult, packageResult, tierResult, promotionResult, clockResult]) => {
       if (!active) return;
       const categoryRows = (categoryResult.data ?? []) as CategoryRow[];
       const serviceRows = (serviceResult.data ?? []) as ServiceRow[];
       const packageRows = (packageResult.data ?? []) as unknown as PackageRow[];
       const tierRows = (tierResult.data ?? []) as TierRow[];
+      const promotions = !promotionResult.error && !clockResult.error && typeof clockResult.data === "string"
+        ? (promotionResult.data ?? []) as PackagePromotion[]
+        : [];
+      const serverNow = !promotionResult.error && !clockResult.error && typeof clockResult.data === "string" ? clockResult.data : null;
 
       if (categoryRows.length > 0) setCategories(categoryRows.map((category) => ({ id: category.id, name: category.name, icon: category.icon, description: category.description })));
 
@@ -61,14 +71,17 @@ export function useServiceCatalog() {
         if (!eligibleFixed) return;
         const tierPrices = tiersByPackage[item.id];
         if (!tierPrices?.length) return;
-        const minimum = Math.min(...tierPrices);
+        const promotion = promotionForPackage(promotions, item.id);
+        const resolved = tierPrices.map((price) => resolveEffectiveTierPrice(price, promotion, serverNow, tierPrices.length));
+        const minimum = [...resolved].sort((left, right) => left.effectivePrice - right.effectivePrice)[0];
         const bucket = (priceIndex[item.service_id] ||= {});
-        bucket.anyMin = bucket.anyMin == null ? minimum : Math.min(bucket.anyMin, minimum);
-        if (item.default_frequency === "weekly") bucket.weekly = bucket.weekly == null ? minimum : Math.min(bucket.weekly, minimum);
-        else if (item.default_frequency === "monthly") bucket.monthly = bucket.monthly == null ? minimum : Math.min(bucket.monthly, minimum);
-        else if (item.default_frequency === "bi-monthly") bucket.biMonthly = bucket.biMonthly == null ? minimum : Math.min(bucket.biMonthly, minimum);
-        else if (item.default_frequency === "quarterly") bucket.quarterly = bucket.quarterly == null ? minimum : Math.min(bucket.quarterly, minimum);
-        else bucket.oneTime = bucket.oneTime == null ? minimum : Math.min(bucket.oneTime, minimum);
+        const point: PricePoint = { base: minimum.basePrice, effective: minimum.effectivePrice, promotionId: minimum.promotionId ?? undefined, promotionLabel: minimum.promotionLabel ?? undefined };
+        bucket.anyMin = bucket.anyMin == null ? point.effective : Math.min(bucket.anyMin, point.effective);
+        if (item.default_frequency === "weekly") bucket.weekly = lowerPrice(bucket.weekly, point);
+        else if (item.default_frequency === "monthly") bucket.monthly = lowerPrice(bucket.monthly, point);
+        else if (item.default_frequency === "bi-monthly") bucket.biMonthly = lowerPrice(bucket.biMonthly, point);
+        else if (item.default_frequency === "quarterly") bucket.quarterly = lowerPrice(bucket.quarterly, point);
+        else bucket.oneTime = lowerPrice(bucket.oneTime, point);
       });
 
       if (serviceRows.length > 0) {
@@ -77,11 +90,14 @@ export function useServiceCatalog() {
           const hasLivePrice = dynamic.anyMin != null;
           return {
             id: service.id, name: service.name, categoryId: service.category_id, category: mapCategoryToLegacy(service.category_id), tags: service.tags ?? [], icon: service.icon,
-            descriptor: service.descriptor, popular: Boolean(service.is_popular), weeklyPrice: dynamic.weekly,
-            avgMonthlyPrice: dynamic.monthly ?? 0, biMonthlyPrice: dynamic.biMonthly, quarterlyPrice: dynamic.quarterly,
-            oneTimePrice: dynamic.oneTime ?? 0, defaultFrequency: service.default_frequency,
+            descriptor: service.descriptor, popular: Boolean(service.is_popular), weeklyPrice: dynamic.weekly?.effective,
+            avgMonthlyPrice: dynamic.monthly?.effective ?? 0, biMonthlyPrice: dynamic.biMonthly?.effective, quarterlyPrice: dynamic.quarterly?.effective,
+            oneTimePrice: dynamic.oneTime?.effective ?? 0, defaultFrequency: service.default_frequency,
             availableFrequencies: service.available_frequencies ?? undefined,
             availability: hasLivePrice ? "fixed" : coveredServices.has(service.id) ? "quote" : "sourcing",
+            basePrices: pricePoints(dynamic, "base"),
+            promotionLabels: promotionStrings(dynamic, "promotionLabel"),
+            promotionIds: promotionStrings(dynamic, "promotionId"),
           };
         }));
       } else {
@@ -90,22 +106,52 @@ export function useServiceCatalog() {
           const hasLivePrice = dynamic.anyMin != null;
           return {
             ...service,
-            weeklyPrice: dynamic.weekly,
-            avgMonthlyPrice: dynamic.monthly ?? 0,
-            biMonthlyPrice: dynamic.biMonthly,
-            quarterlyPrice: dynamic.quarterly,
-            oneTimePrice: dynamic.oneTime ?? 0,
+            weeklyPrice: dynamic.weekly?.effective,
+            avgMonthlyPrice: dynamic.monthly?.effective ?? 0,
+            biMonthlyPrice: dynamic.biMonthly?.effective,
+            quarterlyPrice: dynamic.quarterly?.effective,
+            oneTimePrice: dynamic.oneTime?.effective ?? 0,
             availability: hasLivePrice ? "fixed" : coveredServices.has(service.id) ? "quote" : "sourcing",
+            basePrices: pricePoints(dynamic, "base"),
+            promotionLabels: promotionStrings(dynamic, "promotionLabel"),
+            promotionIds: promotionStrings(dynamic, "promotionId"),
           };
         }));
       }
       setLoading(false);
-    }).catch(() => { if (active) setLoading(false); });
+    }).catch(() => { if (active) setLoading(false); }); };
 
-    return () => { active = false; };
+    load();
+    const clockRefresh = window.setInterval(load, 60_000);
+
+    return () => { active = false; window.clearInterval(clockRefresh); };
   }, []);
 
   return { services, categories, loading };
+}
+
+function lowerPrice(current: PricePoint | undefined, candidate: PricePoint) {
+  return !current || candidate.effective < current.effective ? candidate : current;
+}
+
+function pricePoints(bucket: PriceBucket, field: "base") {
+  return Object.fromEntries([
+    ["weekly", bucket.weekly?.[field]],
+    ["bi-monthly", bucket.biMonthly?.[field]],
+    ["monthly", bucket.monthly?.[field]],
+    ["quarterly", bucket.quarterly?.[field]],
+    ["one-time", bucket.oneTime?.[field]],
+  ].filter((entry): entry is [string, number] => typeof entry[1] === "number"));
+}
+
+function promotionStrings(bucket: PriceBucket, field: "promotionId" | "promotionLabel") {
+  return Object.fromEntries([
+    ["weekly", bucket.weekly?.[field]],
+    ["bi-monthly", bucket.biMonthly?.[field]],
+    ["monthly", bucket.monthly?.[field]],
+    ["quarterly", bucket.quarterly?.[field]],
+    ["one-time", bucket.oneTime?.[field]],
+  ].filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
 function mapCategoryToLegacy(categoryId: string) {

@@ -42,6 +42,9 @@ import {
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
   isPubliclyEligibleQuotePackage,
+  promotionForPackage,
+  resolveEffectiveTierPrice,
+  type PackagePromotion,
   type PricingFrequency,
 } from "@/lib/vendorPricing";
 
@@ -58,12 +61,15 @@ type ServiceOption = {
   defaultFrequency: Frequency;
   frequencies: Frequency[];
   livePrices?: Partial<Record<Frequency, number>>;
+  basePrices?: Partial<Record<Frequency, number>>;
+  promotionLabels?: Partial<Record<Frequency, string>>;
+  promotionIds?: Partial<Record<Frequency, string>>;
   availability?: "fixed" | "quote" | "sourcing";
 };
 
-type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote" };
+type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote" };
 type PackageSelection = { packageId: string; tierId?: string; pricingMode: "fixed" | "deposit_quote" | "custom_quote" };
-type ResolvedPackage = PackageSelection & { contractorId: string; price: number | null };
+type ResolvedPackage = PackageSelection & { contractorId: string; price: number | null; basePrice?: number; promotionId?: string; promotionLabel?: string };
 type CompletionKind = "quote" | "payment_pending" | "multi_service";
 
 const serviceOptions: ServiceOption[] = [
@@ -148,6 +154,9 @@ export default function RequestServicePage() {
             defaultFrequency: item.defaultFrequency,
             frequencies: item.frequencies,
             livePrices: item.prices,
+            basePrices: item.basePrices,
+            promotionLabels: item.promotionLabels,
+            promotionIds: item.promotionIds,
             availability: item.availability,
           }])));
           setPackageSelections(Object.fromEntries(requestedServices
@@ -229,10 +238,14 @@ export default function RequestServicePage() {
         availability: service.availability ?? "sourcing",
         livePrices: service.availability === "fixed" ? {
           weekly: service.weeklyPrice ?? 0,
+          "bi-monthly": service.biMonthlyPrice ?? 0,
           monthly: service.avgMonthlyPrice,
           quarterly: service.quarterlyPrice ?? 0,
           "one-time": service.oneTimePrice,
         } : undefined,
+        basePrices: service.basePrices,
+        promotionLabels: service.promotionLabels,
+        promotionIds: service.promotionIds,
       } satisfies Partial<ServiceOption>];
     }));
     const known = serviceOptions.map((service) => ({ ...service, ...catalogOverrides[service.id], ...serviceOverrides[service.id] }));
@@ -353,6 +366,7 @@ export default function RequestServicePage() {
           service_catalog_id: service.id,
           package_id: livePackage?.packageId ?? null,
           package_tier_id: isVerifiedFixed ? livePackage.tierId : null,
+          ...(isVerifiedFixed && livePackage.promotionId ? { base_amount: livePackage.basePrice, promotion_id: livePackage.promotionId } : {}),
         };
       });
       const { data: insertedRequests, error } = await supabase
@@ -521,6 +535,8 @@ function isBuilderRequestedService(item: unknown): item is BuilderRequestedServi
 function servicePriceLabel(service: ServiceOption, frequency: Frequency) {
   const price = servicePrice(service, frequency);
   if (!price) return "Quote";
+  const base = service.basePrices?.[frequency];
+  if (service.promotionIds?.[frequency] && base && base > price) return `$${price} promo (was $${base})`;
   if (frequency === "one-time") return `$${price}`;
   if (frequency === "weekly") return `$${price}/wk`;
   if (frequency === "bi-monthly") return `$${price}/2 wks`;
@@ -562,22 +578,32 @@ async function resolveLivePackages(
 
   const packageRows = (packageData ?? []) as unknown as PackageCandidate[];
   const fixedPackageIds = packageRows.filter((item) => item.pricing_mode === "fixed").map((item) => item.id);
-  const tierResult = fixedPackageIds.length
-    ? await supabase.from("package_tiers").select("id, package_id, price").in("package_id", fixedPackageIds)
-    : { data: [] as TierCandidate[], error: null };
+  const [tierResult, promotionResult, clockResult] = await Promise.all([
+    fixedPackageIds.length
+      ? supabase.from("package_tiers").select("id, package_id, price").in("package_id", fixedPackageIds)
+      : Promise.resolve({ data: [] as TierCandidate[], error: null }),
+    fixedPackageIds.length
+      ? supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").in("package_id", fixedPackageIds).eq("is_enabled", true)
+      : Promise.resolve({ data: [] as PackagePromotion[], error: null }),
+    supabase.rpc("pricing_server_now"),
+  ]);
   if (tierResult.error) throw tierResult.error;
+  if (promotionResult.error) throw promotionResult.error;
+  if (clockResult.error || typeof clockResult.data !== "string") throw clockResult.error ?? new Error("The pricing clock is unavailable.");
   const tiers = (tierResult.data ?? []) as TierCandidate[];
+  const promotions = (promotionResult.data ?? []) as PackagePromotion[];
+  const serverNow = clockResult.data;
   const packages = packageRows.filter((item) => item.pricing_mode === "fixed"
     ? isPubliclyEligibleFixedPackage({ ...item, tiers: tiers.filter((tier) => tier.package_id === item.id) })
     : isPubliclyEligibleQuotePackage(item),
   );
 
   const resolved: Record<string, ResolvedPackage> = {};
-  services.forEach((service) => {
+  for (const service of services) {
     const frequency = frequencies[service.id] ?? service.defaultFrequency;
     const preferredProvider = preferredProviders[service.id];
     const explicit = explicitSelections[service.id];
-    if (!explicit && service.availability !== "fixed") return;
+    if (!explicit && service.availability !== "fixed") continue;
     const candidates = packages.filter((item) =>
       item.service_id === service.id
       && (!preferredProvider || item.contractor_id === preferredProvider)
@@ -588,8 +614,8 @@ async function resolveLivePackages(
       .filter((item) => item.pricing_mode === "fixed" && item.default_frequency === frequency)
       .flatMap((item) => tiers
         .filter((tier) => tier.package_id === item.id && Number(tier.price) > 0)
-        .map((tier) => ({ package: item, tier })))
-      .sort((left, right) => Number(left.tier.price) - Number(right.tier.price));
+        .map((tier) => ({ package: item, tier, price: resolveEffectiveTierPrice(tier.price, promotionForPackage(promotions, item.id), serverNow, tiers.filter((candidate) => candidate.package_id === item.id).length) })))
+      .sort((left, right) => left.price.effectivePrice - right.price.effectivePrice);
     const explicitPackage = explicit ? candidates.find((item) => item.id === explicit.packageId) : undefined;
     const selectedPair = explicit?.tierId
       ? livePairs.find((pair) => pair.package.id === explicit.packageId && pair.tier.id === explicit.tierId)
@@ -597,7 +623,7 @@ async function resolveLivePackages(
         ? livePairs.find((pair) => pair.package.id === explicit.packageId)
         : livePairs[0];
     const selectedPackage = explicitPackage ?? selectedPair?.package;
-    if (!selectedPackage) return;
+    if (!selectedPackage) continue;
 
     if (selectedPackage.pricing_mode !== "fixed") {
       resolved[service.id] = {
@@ -606,20 +632,28 @@ async function resolveLivePackages(
         contractorId: selectedPackage.contractor_id,
         price: null,
       };
-      return;
+      continue;
     }
 
     const tier = selectedPair?.tier;
-    if (!tier || selectedPackage.default_frequency !== frequency) return;
+    if (!tier || selectedPackage.default_frequency !== frequency) continue;
+
+    const verifiedResult = await supabase.rpc("resolve_package_tier_price", { p_package_id: selectedPackage.id, p_tier_id: tier.id });
+    if (verifiedResult.error) throw verifiedResult.error;
+    const verified = Array.isArray(verifiedResult.data) ? verifiedResult.data[0] : verifiedResult.data;
+    if (!verified || Number(verified.effective_price) <= 0 || Number(verified.base_price) <= 0) continue;
 
     resolved[service.id] = {
       packageId: selectedPackage.id,
       tierId: tier.id,
       pricingMode: "fixed",
       contractorId: selectedPackage.contractor_id,
-      price: Number(tier.price),
+      price: Number(verified.effective_price),
+      basePrice: Number(verified.base_price),
+      promotionId: typeof verified.promotion_id === "string" ? verified.promotion_id : undefined,
+      promotionLabel: typeof verified.promotion_label === "string" ? verified.promotion_label : undefined,
     };
-  });
+  }
   return resolved;
 }
 

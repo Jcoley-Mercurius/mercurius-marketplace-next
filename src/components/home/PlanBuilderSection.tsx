@@ -43,6 +43,9 @@ type Service = {
   defaultFrequency: Frequency;
   frequencies: Frequency[];
   availability: "fixed" | "quote" | "sourcing";
+  basePrices?: Partial<Record<Frequency, number>>;
+  promotionLabels?: Partial<Record<Frequency, string>>;
+  promotionIds?: Partial<Record<Frequency, string>>;
 };
 
 const categoryLabels: Record<Category, string> = {
@@ -199,6 +202,9 @@ export function PlanBuilderSection() {
       defaultFrequency,
       frequencies: liveFrequencies,
       availability,
+      basePrices: catalogService.basePrices,
+      promotionLabels: catalogService.promotionLabels,
+      promotionIds: catalogService.promotionIds,
     };
   }), [catalogServices]);
 
@@ -503,7 +509,7 @@ export function PlanBuilderSection() {
                               <span className="truncate text-sm font-semibold text-foreground">
                                 {service.name}
                               </span>
-                              <span className="flex-shrink-0 text-sm text-white/70">{service.availability === "fixed" ? `$${price}` : service.availability === "quote" ? "Quote" : "Sourcing"}</span>
+                              <span className="flex-shrink-0 text-right text-sm text-white/70">{service.availability === "fixed" ? <>{service.promotionIds?.[frequency] && service.basePrices?.[frequency] && service.basePrices[frequency]! > price && <span className="mr-1 text-xs text-white/35 line-through">${service.basePrices[frequency]}</span>}${price}</> : service.availability === "quote" ? "Quote" : "Sourcing"}</span>
                             </div>
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[10px] uppercase tracking-wider text-white/30">
@@ -562,6 +568,9 @@ export function PlanBuilderSection() {
                               defaultFrequency: service.defaultFrequency,
                               frequencies: service.frequencies,
                               prices: { weekly: service.weeklyPrice ?? 0, "bi-monthly": service.biMonthlyPrice ?? 0, monthly: service.monthlyPrice, quarterly: service.quarterlyPrice ?? 0, "one-time": service.oneTimePrice },
+                              basePrices: service.basePrices,
+                              promotionLabels: service.promotionLabels,
+                              promotionIds: service.promotionIds,
                             })),
                           }));
                         }}
@@ -664,8 +673,10 @@ function ServicePrice({ service, frequency, compact = false }: { service: Servic
   if (service.availability === "quote") return <div className={cn("font-semibold text-info", compact ? "text-xs" : "text-sm")}><span className="block">Quote required</span><span className="text-[10px] font-normal text-white/40">Matched after details</span></div>;
   if (service.availability === "sourcing") return <div className={cn("font-semibold text-white/65", compact ? "text-xs" : "text-sm")}><span className="block">Request this service</span><span className="text-[10px] font-normal text-white/40">We&apos;ll source a vetted pro</span></div>;
   const price = getServicePrice(service, frequency);
+  const base = service.basePrices?.[frequency];
+  const promoted = Boolean(service.promotionIds?.[frequency] && base && base > price);
   const suffix = frequency === "weekly" ? "/visit" : frequency === "bi-monthly" ? "/2 wks" : frequency === "monthly" ? "/mo" : frequency === "quarterly" ? "/quarter" : "";
-  return <div className={cn("whitespace-nowrap font-bold text-foreground", compact ? "text-sm" : "text-xl")}>${price}<span className="text-[10px] font-normal text-white/40">{suffix}</span></div>;
+  return <div className="text-right">{promoted && <div className="text-[10px] font-medium text-coral">{service.promotionLabels?.[frequency] || "Limited-time price"}</div>}<div className={cn("whitespace-nowrap font-bold text-foreground", compact ? "text-sm" : "text-xl")}>{promoted && <span className="mr-1.5 text-xs font-normal text-white/35 line-through">${base}</span>}${price}<span className="text-[10px] font-normal text-white/40">{suffix}</span></div></div>;
 }
 
 function getServicePrice(service: Service, frequency: Frequency) {
