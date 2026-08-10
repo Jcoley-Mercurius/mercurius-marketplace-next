@@ -82,6 +82,15 @@ type TierRow = {
   includes: string[];
   sort_order: number;
 };
+type AddonRow = {
+  id?: string;
+  template_addon_id?: string | null;
+  name: string;
+  description: string | null;
+  price: number;
+  is_offered: boolean;
+  sort_order: number;
+};
 type PackageRow = {
   id: string;
   name: string;
@@ -95,6 +104,7 @@ type PackageRow = {
   template_id: string | null;
   tiers: TierRow[];
   questions: QuestionRow[];
+  addons: AddonRow[];
   promotions: PackagePromotion[];
 };
 
@@ -180,6 +190,9 @@ export function VendorPackagesManager() {
   const [promotionDraft, setPromotionDraft] = useState<PromotionDraft | null>(null);
   const [promotionOpen, setPromotionOpen] = useState(false);
   const [promotionSaving, setPromotionSaving] = useState(false);
+  const [copySource, setCopySource] = useState<PackageRow | null>(null);
+  const [copyTargetServiceId, setCopyTargetServiceId] = useState("");
+  const [copyOpen, setCopyOpen] = useState(false);
 
   const refresh = useCallback(async (id: string) => {
     const supabase = createClient();
@@ -196,24 +209,37 @@ export function VendorPackagesManager() {
       return;
     }
     const ids = rows.map((item) => item.id);
-    const [questionsResult, tiersResult, promotionsResult, clockResult] = await Promise.all([
+    const [questionsResult, tiersResult, addonsResult, promotionsResult, clockResult] = await Promise.all([
       supabase.from("package_qualifying_questions").select("*").in("package_id", ids).order("sort_order"),
       supabase.from("package_tiers").select("*").in("package_id", ids).order("sort_order"),
+      supabase.from("package_addons").select("*").in("package_id", ids).order("created_at"),
       supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").in("package_id", ids).order("updated_at", { ascending: false }),
       supabase.rpc("pricing_server_now"),
     ]);
     if (questionsResult.error) throw questionsResult.error;
     if (tiersResult.error) throw tiersResult.error;
+    if (addonsResult.error) throw addonsResult.error;
     const promotionReady = !promotionsResult.error && !clockResult.error && typeof clockResult.data === "string";
     setPromotionBackendReady(promotionReady);
     setServerNow(promotionReady ? clockResult.data as string : null);
     const questions = (questionsResult.data ?? []) as (QuestionRow & { package_id: string })[];
     const tiers = (tiersResult.data ?? []) as (TierRow & { package_id: string })[];
+    const addons = (addonsResult.data ?? []) as (AddonRow & { package_id: string })[];
     const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
     const hydrated = rows.map((item) => ({
       ...item,
       questions: questions.filter((question) => question.package_id === item.id),
       tiers: tiers.filter((tier) => tier.package_id === item.id),
+      addons: addons
+        .filter((addon) => addon.package_id === item.id && addon.template_addon_id == null && addon.name?.trim())
+        .map((addon, index) => ({
+          ...addon,
+          description: addon.description?.trim() || null,
+          price: Number(addon.price),
+          is_offered: addon.is_offered !== false,
+          sort_order: Number.isFinite(Number(addon.sort_order)) ? Number(addon.sort_order) : index,
+        }))
+        .sort((left, right) => left.sort_order - right.sort_order),
       promotions: promotions.filter((promotion) => promotion.package_id === item.id),
     }));
     setAllPackages(hydrated);
@@ -355,7 +381,89 @@ export function VendorPackagesManager() {
       template_id: null,
       tiers: [],
       questions: [],
+      addons: [],
       promotions: [],
+    });
+  };
+
+  const openCopyDialog = (item: PackageRow) => {
+    setCopySource(structuredClone(item));
+    setCopyTargetServiceId("");
+    setCopyOpen(true);
+  };
+
+  const closeCopyDialog = () => {
+    setCopyOpen(false);
+    setCopySource(null);
+    setCopyTargetServiceId("");
+  };
+
+  const continuePackageCopy = () => {
+    if (!copySource) return;
+    const targetService = services.find((service) => service.id === copyTargetServiceId);
+    if (!targetService) {
+      toast.error("Choose the service that should receive this package setup.");
+      return;
+    }
+
+    const supportedFrequencies = frequenciesForService(targetService);
+    const frequency = supportedFrequencies.includes(copySource.default_frequency)
+      ? copySource.default_frequency
+      : defaultFrequencyForService(targetService);
+    const isFixed = copySource.pricing_mode === "fixed";
+
+    const draft: PackageRow = {
+      id: "",
+      name: packageName(targetService.name, frequency),
+      description: copySource.description,
+      service_id: targetService.id,
+      pricing_mode: copySource.pricing_mode,
+      default_frequency: frequency,
+      deposit_amount: copySource.pricing_mode === "deposit_quote"
+        ? copySource.deposit_amount
+        : null,
+      // A copied package always starts private. Publishing remains an explicit
+      // choice in the editor and re-runs the target service price guardrail.
+      is_active: false,
+      needs_review: false,
+      template_id: null,
+      questions: isFixed
+        ? copySource.questions.map((question, index) => ({
+            question_key: question.question_key,
+            question_label: question.question_label,
+            input_type: question.input_type,
+            unit: question.unit ?? null,
+            options: question.options,
+            sort_order: index,
+          }))
+        : [],
+      tiers: isFixed
+        ? copySource.tiers.map((tier, index) => ({
+            name: tier.name,
+            price: Number(tier.price),
+            rule_question_key: tier.rule_question_key ?? null,
+            rule_min: tier.rule_min ?? null,
+            rule_max: tier.rule_max ?? null,
+            includes: [...(tier.includes ?? [])],
+            sort_order: index,
+          }))
+        : [],
+      addons: copySource.addons.map((addon, index) => ({
+        template_addon_id: null,
+        name: addon.name,
+        description: addon.description,
+        price: Number(addon.price),
+        is_offered: addon.is_offered,
+        sort_order: index,
+      })),
+      // Promotions are scheduled package-specific overlays and are never copied.
+      promotions: [],
+    };
+
+    closeCopyDialog();
+    openEditor(draft);
+    toast.info("Package settings copied into a private draft", {
+      description: "Review the target service and pricing before you save or publish. Existing packages were not changed.",
     });
   };
 
@@ -477,7 +585,44 @@ export function VendorPackagesManager() {
         toast.error("Enter a customer price greater than $0.");
         return;
       }
-      tiers = [{ name: "Standard", price, rule_question_key: null, rule_min: null, rule_max: null, includes: [], sort_order: 0 }];
+      const existingSimpleTier = editing.questions.length === 0 && editing.tiers.length === 1
+        ? editing.tiers[0]
+        : null;
+      tiers = [{
+        name: existingSimpleTier?.name.trim() || "Standard",
+        price,
+        rule_question_key: null,
+        rule_min: null,
+        rule_max: null,
+        includes: [...(existingSimpleTier?.includes ?? [])],
+        sort_order: 0,
+      }];
+    }
+
+    if (editing.addons.length > 10) {
+      toast.error("Keep this package to 10 add-ons or fewer.");
+      return;
+    }
+    const addons = editing.addons.map((addon, index) => ({
+      ...addon,
+      name: addon.name.trim(),
+      description: addon.description?.trim() || null,
+      price: Number(addon.price),
+      is_offered: true,
+      sort_order: index,
+    }));
+    const invalidAddon = addons.find((addon) =>
+      !addon.name
+      || addon.name.length > 80
+      || !Number.isFinite(addon.price)
+      || addon.price <= 0
+      || (addon.description?.length ?? 0) > 160,
+    );
+    if (invalidAddon) {
+      toast.error("Check the optional add-ons", {
+        description: "Each add-on needs a name of 80 characters or fewer and a price greater than $0. Descriptions can be up to 160 characters.",
+      });
+      return;
     }
 
     const selectedService = services.find((service) => service.id === editing.service_id);
@@ -528,6 +673,7 @@ export function VendorPackagesManager() {
         if (result.error) throw result.error;
       }
       if (isFixedMode) await replacePackageChildren(supabase, packageId, questions, tiers);
+      await replaceCustomPackageAddons(supabase, packageId, addons);
       const publishResult = await supabase.from("vendor_packages").update({ is_active: editing.is_active, needs_review: needsReview }).eq("id", packageId).eq("contractor_id", contractorId);
       if (publishResult.error) throw publishResult.error;
       const live = editing.is_active && !needsReview;
@@ -771,6 +917,15 @@ export function VendorPackagesManager() {
 
   const managedPackages = allPackages.filter((item) => item.template_id !== null);
   const sortedPackages = [...packages].sort((a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name));
+  const copyTargetService = services.find((service) => service.id === copyTargetServiceId);
+  const copyTargetPackages = copyTargetService
+    ? allPackages.filter((item) => item.service_id === copyTargetService.id)
+    : [];
+  const copyTargetHasLivePackage = copyTargetPackages.some((item) =>
+    item.pricing_mode === "fixed"
+      ? isPubliclyEligibleFixedPackage(item)
+      : isPubliclyEligibleQuotePackage(item),
+  );
   const editorService = editing
     ? services.find((service) => service.id === editing.service_id)
     : undefined;
@@ -902,12 +1057,13 @@ export function VendorPackagesManager() {
                     <p className="mt-2 text-xs text-muted-foreground">{live ? "Available to public Pricing and Plan Builder flows." : item.needs_review ? "Hidden from public pricing and booking until the review flag is resolved." : "Saved privately until this package is published."}</p>
                   </div>
                 ) : item.pricing_mode !== "fixed" ? <div className="mt-4 rounded-lg border border-info/30 bg-info/5 p-3 text-sm"><p className="font-medium text-foreground">{item.pricing_mode === "deposit_quote" ? "Quote required + deposit" : "Custom quote required"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{item.pricing_mode === "deposit_quote" && item.deposit_amount ? `${money(item.deposit_amount)} deposit saved. ` : ""}Homeowners submit details first; scope and final pricing are confirmed before booking.</p></div> : <div className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><p className="font-medium">A valid fixed price is required</p><p className="mt-1 text-xs opacity-80">Edit this package and add a customer price greater than $0 before publishing.</p></div>}
+                {item.addons.length > 0 && <div className="mt-4 rounded-lg border bg-muted/20 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Optional add-ons</p><div className="mt-2 space-y-2">{item.addons.map((addon, index) => <div key={addon.id ?? `${addon.name}-${index}`} className="flex items-start justify-between gap-3 text-sm"><div><p className="font-medium text-foreground">{addon.name}</p>{addon.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{addon.description}</p>}</div><span className="shrink-0 font-semibold tabular-nums text-foreground">+{money(addon.price)}</span></div>)}</div></div>}
                 {item.pricing_mode === "fixed" && <PackagePromotionPanel item={item} serverNow={serverNow} backendReady={promotionBackendReady} mutating={mutatingId === item.id} onEdit={() => openPromotionEditor(item)} onDisable={() => void disablePromotion(item)} />}
                 {item.needs_review && <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>This package is hidden from public pricing and booking while its customer price is reviewed. Adjust the price into the expected range or contact Mercurius to resolve the flag.</span></div>}
                 <div className="mt-4 flex items-center justify-between gap-2 border-t pt-3">
                   <span className="text-xs text-muted-foreground">{live ? "Pause to remove this price from public booking." : liveQuote ? "Pause to remove this quote option from public matching." : item.needs_review ? "This package cannot become public until review is resolved." : item.is_active ? "This active record is excluded publicly until its required details are valid." : item.pricing_mode === "fixed" ? "Publish when the price is ready for customers." : "Publish when you are ready to receive quote requests."}</span>
                   <div className="flex shrink-0 gap-1">
-                  <Button variant="ghost" className="h-11 w-11" aria-label={`Duplicate ${item.name}`} onClick={() => openEditor({ ...structuredClone(item), id: "", name: `${item.name} (copy)`, is_active: false, needs_review: false })}><Copy /></Button>
+                  <Button variant="ghost" className="h-11 px-3" aria-label={`Copy ${item.name} to another service`} onClick={() => openCopyDialog(item)}><Copy />Copy</Button>
                   <Button variant="ghost" className="h-11 w-11" aria-label={`Edit ${item.name}`} onClick={() => openEditor(item)}><Pencil /></Button>
                   <Button variant="ghost" className="h-11 w-11" disabled={mutatingId === item.id} aria-label={`Delete ${item.name}`} onClick={() => void deletePackage(item)}><Trash2 className="text-destructive" /></Button>
                   </div>
@@ -923,6 +1079,54 @@ export function VendorPackagesManager() {
 
       <div className="flex flex-col gap-2 border-t pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"><p>Need Mercurius-approved tiers and price guardrails?</p><Link href="/vendor/pricing" className={buttonVariants({ variant: "outline" })}>Open Managed Pricing</Link></div>
 
+      <Dialog open={copyOpen} onOpenChange={(value) => { if (!value) closeCopyDialog(); }}>
+        <DialogContent className="max-w-lg sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Use this package as a starting point</DialogTitle>
+            <DialogDescription>Choose a service, then review the copied settings before saving. Nothing is published automatically.</DialogDescription>
+          </DialogHeader>
+          {copySource && <div className="space-y-4">
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Copying from</p>
+              <p className="mt-1 font-medium text-foreground">{copySource.name}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant="outline">{PRICING_MODES[copySource.pricing_mode].label}</Badge>
+                <Badge variant="outline">{FREQUENCIES[copySource.default_frequency] ?? copySource.default_frequency}</Badge>
+                {copySource.pricing_mode === "fixed" && <Badge variant="outline">{copySource.tiers.length} {copySource.tiers.length === 1 ? "price" : "price levels"}</Badge>}
+                {copySource.pricing_mode === "deposit_quote" && copySource.deposit_amount && <Badge variant="outline">{money(copySource.deposit_amount)} deposit</Badge>}
+                {copySource.addons.length > 0 && <Badge variant="outline">{copySource.addons.length} {copySource.addons.length === 1 ? "add-on" : "add-ons"}</Badge>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="copy-target-service">Use this setup for</Label>
+              <select id="copy-target-service" className={nativeSelect} value={copyTargetServiceId} onChange={(event) => setCopyTargetServiceId(event.target.value)}>
+                <option value="" disabled>Choose a target service</option>
+                {services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+              </select>
+              <p className="text-xs leading-5 text-muted-foreground">The pricing mode, relevant prices or deposit, cadence when supported, and optional add-ons will carry over. Scheduled promotions will not.</p>
+            </div>
+
+            {copyTargetService && copyTargetPackages.length > 0 && <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", copyTargetHasLivePackage ? "border-amber-300/70 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" : "bg-muted/30")}>
+              {copyTargetHasLivePackage ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <Copy className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+              <div>
+                <p className="text-sm font-medium">{copyTargetHasLivePackage ? "This service already has live pricing" : "This service already has a saved package"}</p>
+                <p className="mt-0.5 text-xs leading-5 opacity-80">A separate private draft will be created for review. The {copyTargetPackages.length === 1 ? "existing package" : `${copyTargetPackages.length} existing packages`} will not be overwritten, paused, or changed.</p>
+              </div>
+            </div>}
+
+            <div className="rounded-xl border border-accent-border bg-accent-subtle p-3.5 text-sm">
+              <p className="font-medium text-foreground">Safe by default</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">The copied setup opens as an unsaved private draft. If you choose to publish a fixed price, Mercurius checks it against the target service’s expected pricing range first.</p>
+            </div>
+          </div>}
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeCopyDialog}>Cancel</Button>
+            <Button className="bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!copyTargetServiceId} onClick={continuePackageCopy}><Copy />Continue to draft</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={open} onOpenChange={(value) => { if (!value) closeEditor(); }}>
         <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto p-5 sm:max-w-lg">
           <DialogHeader><DialogTitle>{editing?.id ? "Edit custom package" : "Add a custom package"}</DialogTitle><DialogDescription>Choose whether customers see a live price or request a confirmed quote before booking.</DialogDescription></DialogHeader>
@@ -936,6 +1140,13 @@ export function VendorPackagesManager() {
             <div className="rounded-lg border bg-muted/20">
               <button type="button" className="flex w-full items-center justify-between px-3 py-3 text-left text-sm hover:bg-muted/40" aria-expanded={nameEditorOpen} onClick={() => setNameEditorOpen((current) => !current)}><span><span className="font-medium">Customer-facing name</span><span className="mt-0.5 block text-xs text-muted-foreground">Optional — generated automatically from service and cadence.</span></span><ChevronDown className={cn("h-4 w-4 transition-transform", nameEditorOpen && "rotate-180")} /></button>
               {nameEditorOpen && <div className="space-y-2 border-t p-3"><Input id="package-name" className="h-11" placeholder="Standard lawn mow" value={editing.name} onChange={(event) => { setNameCustomized(true); updateField("name", event.target.value); }} />{nameCustomized && <Button type="button" variant="ghost" size="sm" onClick={() => { const service = services.find((candidate) => candidate.id === editing.service_id); setNameCustomized(false); updateField("name", packageName(service?.name ?? displayService(editing.service_id), editing.default_frequency)); }}>Use automatic name</Button>}</div>}
+            </div>
+            <div className="overflow-hidden rounded-lg border">
+              <div className="flex flex-col gap-3 bg-muted/20 px-3 py-3 sm:flex-row sm:items-start sm:justify-between">
+                <div><p className="text-sm font-medium">Optional add-ons</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">Offer simple extras alongside this package. Add-ons are confirmed during the request process and are not separate Stripe checkout items yet.</p></div>
+                <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={editing.addons.length >= 10} onClick={() => updateField("addons", [...editing.addons, { name: "", description: null, price: 0, is_offered: true, sort_order: editing.addons.length }])}><Plus />Add add-on</Button>
+              </div>
+              {editing.addons.length === 0 ? <p className="border-t px-3 py-4 text-center text-xs text-muted-foreground">No optional extras on this package.</p> : <div className="space-y-3 border-t p-3">{editing.addons.map((addon, index) => <div key={addon.id ?? index} className="space-y-3 rounded-lg border bg-background p-3"><div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]"><Field label="Add-on name"><Input maxLength={80} placeholder="Screen enclosure cleaning" value={addon.name} onChange={(event) => { const next = [...editing.addons]; next[index] = { ...addon, name: event.target.value }; updateField("addons", next); }} /></Field><Field label="Price $"><Input type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="25" value={addon.price || ""} onChange={(event) => { const next = [...editing.addons]; next[index] = { ...addon, price: Number(event.target.value) }; updateField("addons", next); }} /></Field><Button type="button" variant="ghost" className="h-10 w-10 self-end" aria-label={`Remove ${addon.name || "add-on"}`} onClick={() => updateField("addons", editing.addons.filter((_, addonIndex) => addonIndex !== index))}><Trash2 className="text-destructive" /></Button></div><Field label="Short description (optional)"><Input maxLength={160} placeholder="Includes frames and exterior screens" value={addon.description ?? ""} onChange={(event) => { const next = [...editing.addons]; next[index] = { ...addon, description: event.target.value || null }; updateField("addons", next); }} /></Field></div>)}</div>}
             </div>
             {editing.pricing_mode === "fixed" && <div className="overflow-hidden rounded-lg border">
               <button type="button" onClick={() => advancedOpen ? switchToSimplePricing() : enterAdvanced()} className="flex w-full items-center justify-between bg-muted/30 px-3 py-3 text-left text-sm hover:bg-muted/50" aria-expanded={advancedOpen}><span><span className="font-medium">Price varies by home details</span><span className="mt-0.5 block text-xs text-muted-foreground">{advancedOpen ? "Advanced pricing is active. Switching back to one price requires confirmation." : "Optional — add a customer question and size-based levels."}</span></span><ChevronDown className={cn("transition-transform", advancedOpen && "rotate-180")} /></button>
@@ -1030,6 +1241,7 @@ async function restorePackageSnapshot(
     const paused = await supabase.from("vendor_packages").update({ is_active: false }).eq("id", snapshot.id).eq("contractor_id", contractorId);
     if (paused.error) throw paused.error;
     await replacePackageChildren(supabase, snapshot.id, snapshot.questions, snapshot.tiers);
+    await replaceCustomPackageAddons(supabase, snapshot.id, snapshot.addons);
     const restored = await supabase.from("vendor_packages").update({
       name: snapshot.name,
       description: snapshot.description,
@@ -1046,6 +1258,31 @@ async function restorePackageSnapshot(
     await supabase.from("vendor_packages").update({ is_active: false }).eq("id", snapshot.id).eq("contractor_id", contractorId);
     return false;
   }
+}
+
+async function replaceCustomPackageAddons(
+  supabase: ReturnType<typeof createClient>,
+  packageId: string,
+  addons: AddonRow[],
+) {
+  const cleared = await supabase
+    .from("package_addons")
+    .delete()
+    .eq("package_id", packageId)
+    .is("template_addon_id", null);
+  if (cleared.error) throw cleared.error;
+  if (!addons.length) return;
+
+  const inserted = await supabase.from("package_addons").insert(addons.map((addon, index) => ({
+    package_id: packageId,
+    template_addon_id: null,
+    name: addon.name.trim(),
+    description: addon.description?.trim() || null,
+    price: Number(addon.price),
+    is_offered: true,
+    sort_order: index,
+  })));
+  if (inserted.error) throw inserted.error;
 }
 
 function validateTierRanges(tiers: TierRow[]) {

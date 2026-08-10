@@ -90,10 +90,20 @@ type PackageTier = {
   sort_order: number;
 };
 
+type PackageAddon = {
+  id: string;
+  package_id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  sort_order: number;
+};
+
 type VendorPackage = Omit<PackageRow, "pricing_mode" | "default_frequency"> & {
   pricing_mode: PricingMode;
   default_frequency: Frequency;
   tiers: PackageTier[];
+  addons: PackageAddon[];
   promotions: PackagePromotion[];
 };
 
@@ -218,13 +228,21 @@ export default function ProviderStorefrontPage() {
 
       const packageRows = (packagesResult.data ?? []) as PackageRow[];
       const packageIds = packageRows.map((item) => item.id);
-      const [tiersResult, promotionsResult, clockResult] = await Promise.all([
+      const [tiersResult, addonsResult, promotionsResult, clockResult] = await Promise.all([
         packageIds.length ? supabase
             .from("package_tiers")
             .select("id, package_id, name, price, includes, sort_order")
             .in("package_id", packageIds)
             .order("sort_order")
           : Promise.resolve({ data: [] as PackageTier[], error: null }),
+        packageIds.length ? supabase
+          .from("package_addons")
+          .select("id, package_id, name, description, price, sort_order")
+          .in("package_id", packageIds)
+          .is("template_addon_id", null)
+          .eq("is_offered", true)
+          .order("sort_order")
+          : Promise.resolve({ data: [] as PackageAddon[], error: null }),
         packageIds.length ? supabase
           .from("package_promotions")
           .select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at")
@@ -234,8 +252,10 @@ export default function ProviderStorefrontPage() {
         supabase.rpc("pricing_server_now"),
       ]);
       if (tiersResult.error) throw tiersResult.error;
+      if (addonsResult.error) console.warn("Public custom package add-ons are unavailable", addonsResult.error);
       const promotionReady = !promotionsResult.error && !clockResult.error && typeof clockResult.data === "string";
       const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
+      const addons = addonsResult.error ? [] : (addonsResult.data ?? []) as PackageAddon[];
       setServerNow(promotionReady ? clockResult.data as string : null);
 
       setContractor(contractorResult.data as unknown as Contractor);
@@ -251,6 +271,9 @@ export default function ProviderStorefrontPage() {
         tiers: ((tiersResult.data ?? []) as PackageTier[])
           .filter((tier) => tier.package_id === item.id)
           .map((tier) => ({ ...tier, price: Number(tier.price) })),
+        addons: addons
+          .filter((addon) => addon.package_id === item.id)
+          .map((addon) => ({ ...addon, price: Number(addon.price) })),
         promotions: promotions.filter((promotion) => promotion.package_id === item.id),
       }));
       setPackages(hydratedPackages.filter((item) => item.pricing_mode === "fixed"
@@ -418,7 +441,7 @@ export default function ProviderStorefrontPage() {
                       const { tier, price } = tierPrice;
                       return <button key={item.id} type="button" onClick={() => startRequest(item)} className="rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-accent/50 hover:bg-accent/5">
                         <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0"><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{displayService(item.service_id, serviceNames)} · {frequencyLabel(item.default_frequency)}</p>{item.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>}{tier.includes && tier.includes.length > 0 && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">{tier.includes.slice(0, 4).map((included) => <span key={included} className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="h-3 w-3 text-accent" />{included}</span>)}</div>}</div>
+                          <div className="min-w-0"><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{displayService(item.service_id, serviceNames)} · {frequencyLabel(item.default_frequency)}</p>{item.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>}{tier.includes && tier.includes.length > 0 && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">{tier.includes.slice(0, 4).map((included) => <span key={included} className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="h-3 w-3 text-accent" />{included}</span>)}</div>}<PublicPackageAddons addons={item.addons} /></div>
                           <div className="shrink-0 text-right">{price.isPromotionEffective && <p className="text-xs text-muted-foreground line-through">{money(price.basePrice)}</p>}<p className="text-xl font-bold tabular-nums">{money(price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(item.default_frequency)}</span></p>{price.isPromotionEffective && <p className="text-[10px] font-medium text-coral">{price.promotionLabel || "Limited-time price"}</p>}<p className="mt-1 text-xs font-medium text-accent">Continue to request</p></div>
                         </div>
                       </button>;
@@ -427,7 +450,7 @@ export default function ProviderStorefrontPage() {
                 </SectionCard>}
 
                 {quotePackages.length > 0 && <SectionCard title="Services Requiring a Quote">
-                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p><Badge variant="outline" className="border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p>{item.pricing_mode === "deposit_quote" && item.deposit_amount && <p className="mt-2 text-xs text-muted-foreground">A {money(item.deposit_amount)} deposit may apply after scope, final pricing, and booking details are confirmed. Nothing is charged with the initial request.</p>}</div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>Request &amp; Match<ArrowRight /></Button></div>)}</div>
+                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p><Badge variant="outline" className="border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p>{item.pricing_mode === "deposit_quote" && item.deposit_amount && <p className="mt-2 text-xs text-muted-foreground">A {money(item.deposit_amount)} deposit may apply after scope, final pricing, and booking details are confirmed. Nothing is charged with the initial request.</p>}<PublicPackageAddons addons={item.addons} /></div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>Request &amp; Match<ArrowRight /></Button></div>)}</div>
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Mercurius will coordinate the details with you and the provider before the work is confirmed. No unpublished price is presented as bookable.</p>
                 </SectionCard>}
 
@@ -519,6 +542,11 @@ function StorefrontPriceOverview({ item, serverNow }: { item: VendorPackage; ser
   const tierPrice = lowestEffectiveTier(item, serverNow);
   if (!tierPrice) return null;
   return <div className="mb-5"><p className="text-sm text-muted-foreground">Published provider-backed pricing</p>{tierPrice.price.isPromotionEffective && <p className="mt-2 text-sm text-muted-foreground line-through">From {money(tierPrice.price.basePrice)}</p>}<p className={cn("text-2xl font-bold tabular-nums", !tierPrice.price.isPromotionEffective && "mt-2")}>From {money(tierPrice.price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(item.default_frequency)}</span></p>{tierPrice.price.isPromotionEffective && <p className="mt-1 text-xs font-medium text-coral">{tierPrice.price.promotionLabel || "Limited-time price"}</p>}</div>;
+}
+
+function PublicPackageAddons({ addons }: { addons: PackageAddon[] }) {
+  if (!addons.length) return null;
+  return <div className="mt-3 rounded-lg border bg-muted/30 p-2.5"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Optional extras · confirmed before booking</p><div className="mt-1.5 space-y-1">{addons.map((addon) => <div key={addon.id} className="flex items-start justify-between gap-3 text-xs"><span><span className="font-medium text-foreground">{addon.name}</span>{addon.description && <span className="ml-1 text-muted-foreground">— {addon.description}</span>}</span><span className="shrink-0 font-semibold text-foreground">+{money(addon.price)}</span></div>)}</div></div>;
 }
 
 function displayService(id: string, names: Record<string, string>) {
