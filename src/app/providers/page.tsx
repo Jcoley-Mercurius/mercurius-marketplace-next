@@ -47,11 +47,9 @@ type Contractor = {
   logo_url: string | null;
   bio: string | null;
   location: string | null;
-  rating: number | null;
   badges: string[] | null;
   services: string[] | null;
   years_experience: number | null;
-  jobs_completed: number | null;
   is_active: boolean | null;
   marketing_enabled: boolean | null;
   special_offer: string | null;
@@ -85,7 +83,7 @@ const iconMap: Record<string, ComponentType<{ className?: string }>> = {
 };
 
 const contractorSafeSelect =
-  "id, name, logo_url, bio, location, rating, badges, services, years_experience, jobs_completed, is_active, marketing_enabled, special_offer, our_promise, verified_specialty";
+  "id, name, logo_url, bio, location, badges, services, years_experience, is_active, marketing_enabled, special_offer, our_promise, verified_specialty";
 
 function formatServiceName(slug: string) {
   return slug.replace(/-/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
@@ -109,7 +107,7 @@ export default function ProvidersPage() {
         const [categoriesResult, servicesResult, contractorsResult] = await Promise.all([
           supabase.from("service_categories").select("id, name, description, icon").eq("is_active", true).order("sort_order"),
           supabase.from("services_catalog").select("id, name, category_id").eq("is_active", true),
-          supabase.from("contractors").select(contractorSafeSelect).eq("is_active", true).order("rating", { ascending: false }),
+          supabase.from("contractors").select(contractorSafeSelect).eq("is_active", true).order("name"),
         ]);
 
         if (categoriesResult.error) throw categoriesResult.error;
@@ -353,10 +351,6 @@ function ProviderCard({
               {contractor.name}
             </Link>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                {contractor.rating ?? "New"}
-              </span>
               {contractor.location && (
                 <span className="flex min-w-0 items-center gap-1 truncate">
                   <MapPin className="h-3.5 w-3.5 shrink-0" />

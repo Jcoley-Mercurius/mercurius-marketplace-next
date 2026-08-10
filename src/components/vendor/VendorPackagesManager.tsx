@@ -37,9 +37,11 @@ import { PricingToggle } from "@/components/vendor/PricingToggle";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import {
+  evaluateCustomPackagePriceReview,
   hasValidFixedTiers,
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
+  isPubliclyEligibleQuotePackage,
   MAX_PROMOTION_PERCENT,
   promotionForPackage,
   promotionStatus,
@@ -55,7 +57,12 @@ type ServiceOption = {
   name: string;
   default_frequency: PricingFrequency;
   available_frequencies: PricingFrequency[] | null;
+  weekly_price: number | null;
+  monthly_price: number | null;
+  one_time_price: number | null;
 };
+type TemplatePriceGuidance = { minPrice: number; maxPrice: number };
+type PricingMode = "fixed" | "deposit_quote" | "custom_quote";
 type QuestionRow = {
   id?: string;
   question_key: string;
@@ -80,7 +87,7 @@ type PackageRow = {
   name: string;
   description: string | null;
   service_id: string;
-  pricing_mode: "fixed" | "deposit_quote" | "custom_quote";
+  pricing_mode: PricingMode;
   default_frequency: PricingFrequency;
   deposit_amount: number | null;
   is_active: boolean;
@@ -126,6 +133,21 @@ const FREQUENCIES: Record<PricingFrequency, string> = {
   quarterly: "Quarterly",
 };
 
+const PRICING_MODES: Record<PricingMode, { label: string; description: string }> = {
+  fixed: {
+    label: "Fixed price",
+    description: "Customers see a live price and can move directly toward booking after confirming their details.",
+  },
+  deposit_quote: {
+    label: "Quote required + deposit",
+    description: "Mercurius confirms the scope and final price first. A saved deposit may apply only after booking details are approved.",
+  },
+  custom_quote: {
+    label: "Custom quote required",
+    description: "Customers submit the job details, then you and Mercurius coordinate the scope and price before booking is confirmed.",
+  },
+};
+
 const nativeSelect = "h-11 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 const slugKey = (label: string) => label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "size";
 const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -135,6 +157,9 @@ export function VendorPackagesManager() {
   const [contractorId, setContractorId] = useState<string | null>(null);
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [profileServices, setProfileServices] = useState<string[]>([]);
+  const [templateGuidance, setTemplateGuidance] = useState<
+    Record<string, TemplatePriceGuidance>
+  >({});
   const [packages, setPackages] = useState<PackageRow[]>([]);
   const [allPackages, setAllPackages] = useState<PackageRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -202,9 +227,10 @@ export function VendorPackagesManager() {
     void (async () => {
       setLoading(true);
       setLoadError(null);
-      const [contractorResult, serviceResult] = await Promise.all([
+      const [contractorResult, serviceResult, templateResult] = await Promise.all([
         supabase.from("contractors").select("id, services").eq("user_id", user.id).maybeSingle(),
-        supabase.from("services_catalog").select("id, name, default_frequency, available_frequencies").eq("is_active", true).order("name"),
+        supabase.from("services_catalog").select("id, name, default_frequency, available_frequencies, weekly_price, monthly_price, one_time_price").eq("is_active", true).order("name"),
+        supabase.from("pricing_templates").select("id, service_id").eq("is_active", true),
       ]);
       if (!active) return;
       if (contractorResult.error || serviceResult.error) {
@@ -219,6 +245,56 @@ export function VendorPackagesManager() {
           : null;
         return { ...service, default_frequency: frequency, available_frequencies: available } as ServiceOption;
       }));
+      if (!templateResult.error) {
+        const templates = (templateResult.data ?? []) as {
+          id: string;
+          service_id: string;
+        }[];
+        const templateIds = templates.map((template) => template.id);
+        const tierResult = templateIds.length
+          ? await supabase
+              .from("pricing_template_tiers")
+              .select("template_id, min_price, max_price")
+              .in("template_id", templateIds)
+          : { data: [], error: null };
+        if (!active) return;
+        if (!tierResult.error) {
+          const serviceByTemplate = new Map(
+            templates.map((template) => [template.id, template.service_id]),
+          );
+          const guidance: Record<string, TemplatePriceGuidance> = {};
+          (
+            (tierResult.data ?? []) as {
+              template_id: string;
+              min_price: number;
+              max_price: number;
+            }[]
+          ).forEach((tier) => {
+            const serviceId = serviceByTemplate.get(tier.template_id);
+            const minPrice = Number(tier.min_price);
+            const maxPrice = Number(tier.max_price);
+            if (
+              !serviceId ||
+              !Number.isFinite(minPrice) ||
+              !Number.isFinite(maxPrice) ||
+              minPrice <= 0 ||
+              maxPrice < minPrice
+            ) {
+              return;
+            }
+            const current = guidance[serviceId];
+            guidance[serviceId] = {
+              minPrice: current
+                ? Math.min(current.minPrice, minPrice)
+                : minPrice,
+              maxPrice: current
+                ? Math.max(current.maxPrice, maxPrice)
+                : maxPrice,
+            };
+          });
+          setTemplateGuidance(guidance);
+        }
+      }
       const contractor = contractorResult.data as { id: string; services?: string[] | null } | null;
       if (contractor?.id) {
         setContractorId(contractor.id);
@@ -291,7 +367,7 @@ export function VendorPackagesManager() {
     const service = services.find((candidate) => candidate.id === serviceId);
     if (!service) return;
     const changingExistingService = Boolean(editing?.service_id && editing.service_id !== serviceId);
-    const hasEnteredPricing = Boolean(customerPrice || editing?.tiers.length || editing?.questions.length);
+    const hasEnteredPricing = Boolean(customerPrice || editing?.deposit_amount || editing?.tiers.length || editing?.questions.length);
     if (changingExistingService && hasEnteredPricing && !window.confirm("Change this package’s service? Existing prices and advanced questions will be cleared so they are not carried to a different service.")) return;
     const frequency = frequenciesForService(service).includes(editing?.default_frequency ?? "one-time")
       ? editing?.default_frequency ?? defaultFrequencyForService(service)
@@ -301,6 +377,7 @@ export function VendorPackagesManager() {
       service_id: service.id,
       default_frequency: frequency,
       name: nameCustomized ? current.name : packageName(service.name, frequency),
+      deposit_amount: changingExistingService ? null : current.deposit_amount,
       tiers: changingExistingService ? [] : current.tiers,
       questions: changingExistingService ? [] : current.questions,
     } : current);
@@ -315,6 +392,22 @@ export function VendorPackagesManager() {
       default_frequency: frequency,
       name: nameCustomized ? current.name : packageName(service?.name ?? displayService(current.service_id), frequency),
     } : current);
+  };
+
+  const changePricingMode = (pricingMode: PricingMode) => {
+    setEditing((current) => current ? {
+      ...current,
+      pricing_mode: pricingMode,
+      deposit_amount: pricingMode === "deposit_quote" ? current.deposit_amount : null,
+      needs_review: pricingMode === "fixed" ? current.needs_review : false,
+    } : current);
+    if (pricingMode === "fixed") {
+      const hasAdvancedStructure = Boolean(editing?.questions.length || (editing?.tiers.length ?? 0) > 1);
+      setAdvancedOpen(hasAdvancedStructure);
+      if (!hasAdvancedStructure && editing?.tiers[0]?.price) setCustomerPrice(String(editing.tiers[0].price));
+    } else {
+      setAdvancedOpen(false);
+    }
   };
 
   const enterAdvanced = () => {
@@ -346,9 +439,22 @@ export function VendorPackagesManager() {
       toast.error("Name and service are required.");
       return;
     }
+    const isFixedMode = editing.pricing_mode === "fixed";
     let questions: QuestionRow[] = [];
     let tiers: TierRow[] = [];
-    if (advancedOpen) {
+    if (!isFixedMode) {
+      questions = editing.questions;
+      tiers = editing.tiers;
+      if (editing.pricing_mode === "deposit_quote") {
+        const deposit = Number(editing.deposit_amount);
+        if (!Number.isFinite(deposit) || deposit <= 0) {
+          toast.error("Enter a deposit greater than $0.", {
+            description: "This amount is saved with the quote package but is not charged when a homeowner submits a request.",
+          });
+          return;
+        }
+      }
+    } else if (advancedOpen) {
       if (!editing.tiers.length || editing.tiers.some((tier) => !tier.name.trim() || tier.price <= 0)) {
         toast.error("Every price level needs a name and a price greater than $0.");
         return;
@@ -374,11 +480,25 @@ export function VendorPackagesManager() {
       tiers = [{ name: "Standard", price, rule_question_key: null, rule_min: null, rule_max: null, includes: [], sort_order: 0 }];
     }
 
-    if (editing.is_active && !isPubliclyEligibleFixedPackage({ ...editing, pricing_mode: "fixed", tiers })) {
-      toast.error(editing.needs_review ? "Review is required before publishing" : "This package is not ready to publish", {
-        description: editing.needs_review
-          ? "Keep the package private until its pricing review is resolved."
-          : "Every saved price level must have a price greater than $0.",
+    const selectedService = services.find((service) => service.id === editing.service_id);
+    const priceReview = isFixedMode
+      ? evaluateCustomPackagePriceReview({
+          tiers,
+          frequency: editing.default_frequency,
+          catalog: selectedService,
+          templateRange: templateGuidance[editing.service_id] ?? null,
+        })
+      : null;
+    const needsReview = priceReview?.needsReview ?? false;
+
+    if (isFixedMode && editing.is_active && !needsReview && !isPubliclyEligibleFixedPackage({
+      ...editing,
+      needs_review: false,
+      pricing_mode: "fixed",
+      tiers,
+    })) {
+      toast.error("This package is not ready to publish", {
+        description: "Every saved price level must have a price greater than $0.",
       });
       return;
     }
@@ -392,11 +512,11 @@ export function VendorPackagesManager() {
       name,
       description: editing.description || null,
       service_id: editing.service_id,
-      pricing_mode: "fixed",
+      pricing_mode: editing.pricing_mode,
       default_frequency: editing.default_frequency,
-      deposit_amount: null,
+      deposit_amount: editing.pricing_mode === "deposit_quote" ? Number(editing.deposit_amount) : null,
       is_active: false,
-      needs_review: editing.needs_review,
+      needs_review: needsReview,
     };
     try {
       if (!packageId) {
@@ -407,21 +527,28 @@ export function VendorPackagesManager() {
         const result = await supabase.from("vendor_packages").update(payload).eq("id", packageId).eq("contractor_id", contractorId);
         if (result.error) throw result.error;
       }
-      await replacePackageChildren(supabase, packageId, questions, tiers);
-      const publishResult = await supabase.from("vendor_packages").update({ is_active: editing.is_active }).eq("id", packageId).eq("contractor_id", contractorId);
+      if (isFixedMode) await replacePackageChildren(supabase, packageId, questions, tiers);
+      const publishResult = await supabase.from("vendor_packages").update({ is_active: editing.is_active, needs_review: needsReview }).eq("id", packageId).eq("contractor_id", contractorId);
       if (publishResult.error) throw publishResult.error;
-      const live = editing.is_active;
+      const live = editing.is_active && !needsReview;
       closeEditor();
       await refresh(contractorId);
-      if (continueAdding && nextCoverage) {
-        toast.success(live ? "Price published" : "Draft saved", { description: "The next unpriced service is ready." });
+      if (needsReview && priceReview) {
+        toast.warning("Saved for pricing review", {
+          description: `This package is hidden from public pricing because one or more tiers fall outside the expected ${money(priceReview.minPrice)}–${money(priceReview.maxPrice)} range. Adjust the price or contact Mercurius for review.`,
+        });
+        if (continueAdding && nextCoverage) openCoverageEditor(nextCoverage);
+      } else if (continueAdding && nextCoverage) {
+        toast.success(live ? isFixedMode ? "Price published" : "Quote package published" : "Draft saved", { description: "The next unpriced service is ready." });
         openCoverageEditor(nextCoverage);
       } else if (continueAdding) {
-        toast.success(live ? "Price published" : "Draft saved", { description: "There are no other unpriced profile services in this session." });
-      } else if (live) {
+        toast.success(live ? isFixedMode ? "Price published" : "Quote package published" : "Draft saved", { description: "There are no other unpriced profile services in this session." });
+      } else if (live && isFixedMode) {
         setLiveSuccessOpen(true);
+      } else if (live) {
+        toast.success("Quote package published", { description: "Homeowners will see that matching and a confirmed quote are required before booking." });
       } else {
-        toast.success("Saved as draft", { description: "Publish it when the customer price is ready." });
+        toast.success("Saved as draft", { description: isFixedMode ? "Publish it when the customer price is ready." : "Publish it when you are ready to receive quote requests." });
       }
     } catch (error) {
       let restored = false;
@@ -447,9 +574,11 @@ export function VendorPackagesManager() {
 
   const togglePackage = async (item: PackageRow) => {
     if (!contractorId) return;
-    if (!item.is_active && (!hasValidFixedTiers(item.tiers) || item.needs_review)) {
-      toast.error(item.needs_review ? "Review is required before publishing" : "Add a valid fixed price before publishing", {
-        description: item.needs_review ? "Keep this package private until Mercurius resolves the review flag." : "Every price level must have a customer price greater than $0.",
+    const invalidFixed = item.pricing_mode === "fixed" && !hasValidFixedTiers(item.tiers);
+    const invalidDeposit = item.pricing_mode === "deposit_quote" && (!Number.isFinite(Number(item.deposit_amount)) || Number(item.deposit_amount) <= 0);
+    if (!item.is_active && (item.needs_review || invalidFixed || invalidDeposit)) {
+      toast.error(item.needs_review ? "Review is required before publishing" : invalidDeposit ? "Add a valid deposit before publishing" : "Add a valid fixed price before publishing", {
+        description: item.needs_review ? "Keep this package private until Mercurius resolves the review flag." : invalidDeposit ? "Quote + deposit packages need a deposit greater than $0." : "Every fixed price level must have a customer price greater than $0.",
       });
       return;
     }
@@ -616,6 +745,10 @@ export function VendorPackagesManager() {
   };
 
   const openCoverageEditor = (row: ServiceCoverage) => {
+    if (row.state === "needs_review" && row.package?.template_id === null) {
+      openEditor(row.package);
+      return;
+    }
     if ((row.state === "paused_valid" || row.state === "draft") && row.package?.template_id === null) {
       openEditor({ ...row.package, is_active: true });
       return;
@@ -638,6 +771,24 @@ export function VendorPackagesManager() {
 
   const managedPackages = allPackages.filter((item) => item.template_id !== null);
   const sortedPackages = [...packages].sort((a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name));
+  const editorService = editing
+    ? services.find((service) => service.id === editing.service_id)
+    : undefined;
+  const editorPreviewTiers: TierRow[] = editing
+    ? advancedOpen
+      ? editing.tiers
+      : Number.isFinite(Number(customerPrice)) && Number(customerPrice) > 0
+        ? [{ name: "Standard", price: Number(customerPrice), includes: [], sort_order: 0 }]
+        : []
+    : [];
+  const editorPriceReview = editing?.pricing_mode === "fixed" && editorPreviewTiers.length
+    ? evaluateCustomPackagePriceReview({
+        tiers: editorPreviewTiers,
+        frequency: editing.default_frequency,
+        catalog: editorService,
+        templateRange: templateGuidance[editing.service_id] ?? null,
+      })
+    : null;
 
   if (loading) return <div className="flex min-h-[360px] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading pricing…</div>;
   if (loadError) return <div className="mx-auto max-w-3xl p-6"><div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center"><h2 className="font-semibold">Pricing couldn’t be loaded</h2><p className="mt-2 text-sm text-muted-foreground">No preview packages have been substituted. {loadError}</p><Button variant="outline" className="mt-5" onClick={() => window.location.reload()}><RefreshCw />Try again</Button></div></div>;
@@ -649,13 +800,13 @@ export function VendorPackagesManager() {
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Launch pricing</p>
           <h1 className="flex items-center gap-2 font-heading text-2xl font-semibold"><Package className="h-6 w-6 text-accent" />Pricing &amp; Packages</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Publish real fixed prices so eligible homeowners can move directly toward booking. Drafts stay private until you turn them live.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Publish a live fixed price when the scope is predictable, or mark the service as quote-required when details must be confirmed first. Drafts stay private.</p>
         </div>
-        <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover sm:w-auto" disabled={!services.length} onClick={() => newPackage()}><Plus />Add fixed price</Button>
+        <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover sm:w-auto" disabled={!services.length} onClick={() => newPackage()}><Plus />Add package</Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard icon={PackageCheck} label="Live / Active" value={packageStats.live} note="Fixed prices available publicly" tone="live" />
+        <SummaryCard icon={PackageCheck} label="Live Fixed Prices" value={packageStats.live} note="Instant-price packages available publicly" tone="live" />
         <SummaryCard icon={PauseCircle} label="Draft or Paused" value={packageStats.paused} note="Not currently customer-facing" />
         <SummaryCard icon={AlertTriangle} label="Needs Review" value={packageStats.review} note="Flagged pricing records" tone={packageStats.review ? "review" : undefined} />
         <SummaryCard icon={DollarSign} label="Profile Coverage" value={profileCoverage.length ? `${packageStats.coveredServices}/${profileCoverage.length}` : "—"} note={profileCoverage.length ? "Listed services with a live price" : "Add services to your profile"} />
@@ -691,7 +842,7 @@ export function VendorPackagesManager() {
             {orderedCoverage.map((row) => {
               const details = coverageDetails(row);
               const managed = row.package?.template_id !== null && row.package !== undefined;
-              const canOpenEditor = row.state !== "needs_review" && (row.state === "no_package" || row.state === "quote_only" || row.package?.template_id === null);
+              const canOpenEditor = row.state === "no_package" || row.state === "quote_only" || row.package?.template_id === null;
               return (
                 <article key={row.key} className={cn("flex flex-col rounded-xl border bg-background p-4", row.state === "live_fixed" ? "border-accent-border/70" : "border-border shadow-sm")}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -704,7 +855,7 @@ export function VendorPackagesManager() {
                     {managed ? (
                       <Link href="/vendor/pricing" className={buttonVariants({ variant: "outline", className: "min-h-11 border-accent-border" })}>{details.action}<ExternalLink /></Link>
                     ) : row.state === "needs_review" ? (
-                      <Link href="/contact" className={buttonVariants({ variant: "outline", className: "min-h-11 border-amber-300" })}>Resolve review<ExternalLink /></Link>
+                      <Button variant="outline" className="min-h-11 border-amber-300" disabled={!canOpenEditor} onClick={() => openCoverageEditor(row)}><Pencil />Review pricing</Button>
                     ) : (
                       <Button variant={row.state === "no_package" ? "default" : "outline"} className={cn("min-h-11", row.state === "no_package" && "bg-accent text-accent-foreground hover:bg-accent-hover", row.state !== "no_package" && "border-accent-border")} disabled={!services.length || !canOpenEditor} onClick={() => openCoverageEditor(row)}>{row.state === "live_fixed" ? <Pencil /> : <DollarSign />}{details.action}</Button>
                     )}
@@ -717,14 +868,14 @@ export function VendorPackagesManager() {
       </section>
 
       <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-heading text-lg font-semibold">Your fixed prices</h2><p className="mt-1 text-sm text-muted-foreground">Custom packages you can create, edit, pause, and publish here.</p></div>{sortedPackages.length > 0 && <Badge variant="outline" className="w-fit">{sortedPackages.length} {sortedPackages.length === 1 ? "package" : "packages"}</Badge>}</div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-heading text-lg font-semibold">Your custom packages</h2><p className="mt-1 text-sm text-muted-foreground">Create, edit, pause, and publish fixed-price or quote-required services here.</p></div>{sortedPackages.length > 0 && <Badge variant="outline" className="w-fit">{sortedPackages.length} {sortedPackages.length === 1 ? "package" : "packages"}</Badge>}</div>
         {sortedPackages.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-card p-8 text-center sm:p-10">
             <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-            <h3 className="text-lg font-medium">No custom fixed prices yet</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted-foreground">Add a customer-facing fixed price, choose whether it starts live, and publish it in about a minute.</p>
+            <h3 className="text-lg font-medium">No custom packages yet</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted-foreground">Add a live fixed price or a quote-required service, choose whether it starts active, and publish it in about a minute.</p>
             <p className="mx-auto mt-3 max-w-md rounded-lg border bg-muted/50 px-3 py-2.5 text-sm">Example: <span className="font-medium">Standard lawn mow · $55 · Weekly</span></p>
-            <Button className="mt-5 min-h-11 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!services.length} onClick={() => newPackage()}><Plus />Add your first fixed price</Button>
+            <Button className="mt-5 min-h-11 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!services.length} onClick={() => newPackage()}><Plus />Add your first package</Button>
           </div>
         ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -733,27 +884,28 @@ export function VendorPackagesManager() {
             const validPrices = item.tiers.map((tier) => Number(tier.price)).filter((price) => Number.isFinite(price) && price > 0);
             const displayPrice = validPrices.length ? Math.min(...validPrices) : null;
             const live = isLiveFixedPackage(item);
+            const liveQuote = isPubliclyEligibleQuotePackage(item);
             return (
-              <article key={item.id} className={cn("rounded-xl border bg-card p-5 shadow-sm", live && "border-accent-border", item.needs_review && "border-amber-300/70")}>
+              <article key={item.id} className={cn("rounded-xl border bg-card p-5 shadow-sm", live && "border-accent-border", liveQuote && "border-info/40", item.needs_review && "border-amber-300/70")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.name}</h3><PackageStatus item={item} /><Badge variant="outline">{FREQUENCIES[item.default_frequency] ?? item.default_frequency}</Badge></div>
                     <p className="mt-1 text-xs text-muted-foreground">{services.find((service) => service.id === item.service_id)?.name ?? "Service"}</p>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1"><PricingToggle checked={item.is_active} disabled={mutatingId === item.id} onCheckedChange={() => void togglePackage(item)} label={`${item.is_active ? "Pause" : "Publish"} ${item.name}`} /><span className="text-[10px] font-medium text-muted-foreground">{mutatingId === item.id ? "Updating…" : live ? "Live" : item.needs_review ? "Review blocked" : item.is_active ? "Invalid" : "Paused"}</span></div>
+                  <div className="flex shrink-0 flex-col items-end gap-1"><PricingToggle checked={item.is_active} disabled={mutatingId === item.id} onCheckedChange={() => void togglePackage(item)} label={`${item.is_active ? "Pause" : "Publish"} ${item.name}`} /><span className="text-[10px] font-medium text-muted-foreground">{mutatingId === item.id ? "Updating…" : live ? "Live price" : liveQuote ? "Quote live" : item.needs_review ? "Review blocked" : item.is_active ? "Invalid" : "Paused"}</span></div>
                 </div>
                 {item.pricing_mode === "fixed" && displayPrice !== null ? (
                   <div className="mt-4">
                     {!advanced ? <p className="flex items-center text-2xl font-semibold"><DollarSign className="h-5 w-5" />{formatPrice(displayPrice)}</p> : (
                       <div className="space-y-2"><p className="text-sm text-muted-foreground">From <span className="font-semibold text-foreground">${displayPrice}</span> · {item.tiers.length} price levels</p>{item.tiers.slice(0, 3).map((tier) => <div key={tier.id ?? tier.name} className="flex items-center justify-between rounded-lg border bg-background/50 px-3 py-2"><div><p className="text-sm font-medium">{tier.name}</p>{(tier.rule_min != null || tier.rule_max != null) && <p className="text-xs text-muted-foreground">{tier.rule_min}–{tier.rule_max} {item.questions[0]?.unit ?? ""}</p>}</div><p className="text-sm font-semibold text-primary">${tier.price}</p></div>)}</div>
                     )}
-                    <p className="mt-2 text-xs text-muted-foreground">{live ? "Available to public Pricing and Plan Builder flows." : "Saved privately until this package is published."}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">{live ? "Available to public Pricing and Plan Builder flows." : item.needs_review ? "Hidden from public pricing and booking until the review flag is resolved." : "Saved privately until this package is published."}</p>
                   </div>
-                ) : <div className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><p className="font-medium">A valid fixed price is required</p><p className="mt-1 text-xs opacity-80">Edit this package and add a customer price greater than $0 before publishing.</p></div>}
-                <PackagePromotionPanel item={item} serverNow={serverNow} backendReady={promotionBackendReady} mutating={mutatingId === item.id} onEdit={() => openPromotionEditor(item)} onDisable={() => void disablePromotion(item)} />
-                {item.needs_review && <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>This package is flagged for pricing review. It remains in its current visibility state until the review workflow changes it.</span></div>}
+                ) : item.pricing_mode !== "fixed" ? <div className="mt-4 rounded-lg border border-info/30 bg-info/5 p-3 text-sm"><p className="font-medium text-foreground">{item.pricing_mode === "deposit_quote" ? "Quote required + deposit" : "Custom quote required"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{item.pricing_mode === "deposit_quote" && item.deposit_amount ? `${money(item.deposit_amount)} deposit saved. ` : ""}Homeowners submit details first; scope and final pricing are confirmed before booking.</p></div> : <div className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><p className="font-medium">A valid fixed price is required</p><p className="mt-1 text-xs opacity-80">Edit this package and add a customer price greater than $0 before publishing.</p></div>}
+                {item.pricing_mode === "fixed" && <PackagePromotionPanel item={item} serverNow={serverNow} backendReady={promotionBackendReady} mutating={mutatingId === item.id} onEdit={() => openPromotionEditor(item)} onDisable={() => void disablePromotion(item)} />}
+                {item.needs_review && <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>This package is hidden from public pricing and booking while its customer price is reviewed. Adjust the price into the expected range or contact Mercurius to resolve the flag.</span></div>}
                 <div className="mt-4 flex items-center justify-between gap-2 border-t pt-3">
-                  <span className="text-xs text-muted-foreground">{live ? "Pause to remove this price from public booking." : item.needs_review ? "This package cannot become public until review is resolved." : item.is_active ? "This active record is excluded publicly until every tier is valid." : "Publish when the price is ready for customers."}</span>
+                  <span className="text-xs text-muted-foreground">{live ? "Pause to remove this price from public booking." : liveQuote ? "Pause to remove this quote option from public matching." : item.needs_review ? "This package cannot become public until review is resolved." : item.is_active ? "This active record is excluded publicly until its required details are valid." : item.pricing_mode === "fixed" ? "Publish when the price is ready for customers." : "Publish when you are ready to receive quote requests."}</span>
                   <div className="flex shrink-0 gap-1">
                   <Button variant="ghost" className="h-11 w-11" aria-label={`Duplicate ${item.name}`} onClick={() => openEditor({ ...structuredClone(item), id: "", name: `${item.name} (copy)`, is_active: false, needs_review: false })}><Copy /></Button>
                   <Button variant="ghost" className="h-11 w-11" aria-label={`Edit ${item.name}`} onClick={() => openEditor(item)}><Pencil /></Button>
@@ -773,16 +925,19 @@ export function VendorPackagesManager() {
 
       <Dialog open={open} onOpenChange={(value) => { if (!value) closeEditor(); }}>
         <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto p-5 sm:max-w-lg">
-          <DialogHeader><DialogTitle>{editing?.id ? "Edit fixed price" : "Add a fixed price"}</DialogTitle><DialogDescription>Set the real customer price, then publish now or save it privately until you are ready.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{editing?.id ? "Edit custom package" : "Add a custom package"}</DialogTitle><DialogDescription>Choose whether customers see a live price or request a confirmed quote before booking.</DialogDescription></DialogHeader>
           {editing && <div className="space-y-5">
             <div className="space-y-2"><Label htmlFor="package-service">Service</Label><select id="package-service" className={nativeSelect} value={editing.service_id} onChange={(event) => changeService(event.target.value)}><option value="" disabled>Choose a service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></div>
-            {!advancedOpen && <div className="space-y-2"><Label htmlFor="package-price">Price customers pay ($)</Label><Input id="package-price" className="h-12 text-lg" type="number" min="0" step="1" inputMode="decimal" placeholder="e.g. 80" value={customerPrice} onChange={(event) => setCustomerPrice(event.target.value)} /><p className="text-xs text-muted-foreground">This provider-backed price is shown publicly and revalidated when a homeowner submits a request.</p>{editing.tiers.length > 1 && <p className="text-xs text-amber-700">You explicitly selected simple pricing. Saving will replace the existing size-based levels with this single price.</p>}</div>}
+            <div className="space-y-2"><Label htmlFor="package-pricing-mode">How should homeowners get a price?</Label><select id="package-pricing-mode" className={nativeSelect} value={editing.pricing_mode} onChange={(event) => changePricingMode(event.target.value as PricingMode)}><option value="fixed">Fixed price — show a live customer price</option><option value="deposit_quote">Quote required — deposit after confirmation</option><option value="custom_quote">Custom quote — confirm the full price first</option></select><div className="rounded-lg border bg-muted/25 px-3 py-2.5"><p className="text-sm font-medium text-foreground">{PRICING_MODES[editing.pricing_mode].label}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{PRICING_MODES[editing.pricing_mode].description}</p></div></div>
+            {editing.pricing_mode === "fixed" && !advancedOpen && <div className="space-y-2"><Label htmlFor="package-price">Price customers pay ($)</Label><Input id="package-price" className="h-12 text-lg" type="number" min="0" step="1" inputMode="decimal" placeholder="e.g. 80" value={customerPrice} onChange={(event) => setCustomerPrice(event.target.value)} /><p className="text-xs text-muted-foreground">This provider-backed price is shown publicly and revalidated when a homeowner submits a request.</p>{editing.tiers.length > 1 && <p className="text-xs text-amber-700">You explicitly selected simple pricing. Saving will replace the existing size-based levels with this single price.</p>}</div>}
+            {editing.pricing_mode === "deposit_quote" && <div className="space-y-2"><Label htmlFor="package-deposit">Deposit after quote confirmation ($)</Label><Input id="package-deposit" className="h-12 text-lg" type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="e.g. 100" value={editing.deposit_amount ?? ""} onChange={(event) => updateField("deposit_amount", event.target.value ? Number(event.target.value) : null)} /><p className="text-xs leading-5 text-muted-foreground">This records your intended deposit. It is not charged when a homeowner sends the initial request; Mercurius confirms scope, final price, and payment timing first.</p></div>}
+            {editing.pricing_mode === "custom_quote" && <div className="rounded-xl border border-info/30 bg-info/5 p-3.5"><p className="text-sm font-medium text-foreground">No public price required</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Homeowners can request this service, but Mercurius will coordinate the details and confirm your quote before booking. No instant checkout is offered.</p></div>}
             <div className="space-y-2"><Label htmlFor="package-frequency">Cadence / frequency</Label><select id="package-frequency" className={nativeSelect} value={editing.default_frequency} onChange={(event) => isPricingFrequency(event.target.value) && changeFrequency(event.target.value)}>{frequenciesForService(services.find((service) => service.id === editing.service_id)).map((value) => <option key={value} value={value}>{FREQUENCIES[value]}</option>)}</select><p className="text-xs text-muted-foreground">Only cadences supported by this catalog service are shown.</p></div>
             <div className="rounded-lg border bg-muted/20">
               <button type="button" className="flex w-full items-center justify-between px-3 py-3 text-left text-sm hover:bg-muted/40" aria-expanded={nameEditorOpen} onClick={() => setNameEditorOpen((current) => !current)}><span><span className="font-medium">Customer-facing name</span><span className="mt-0.5 block text-xs text-muted-foreground">Optional — generated automatically from service and cadence.</span></span><ChevronDown className={cn("h-4 w-4 transition-transform", nameEditorOpen && "rotate-180")} /></button>
               {nameEditorOpen && <div className="space-y-2 border-t p-3"><Input id="package-name" className="h-11" placeholder="Standard lawn mow" value={editing.name} onChange={(event) => { setNameCustomized(true); updateField("name", event.target.value); }} />{nameCustomized && <Button type="button" variant="ghost" size="sm" onClick={() => { const service = services.find((candidate) => candidate.id === editing.service_id); setNameCustomized(false); updateField("name", packageName(service?.name ?? displayService(editing.service_id), editing.default_frequency)); }}>Use automatic name</Button>}</div>}
             </div>
-            <div className="overflow-hidden rounded-lg border">
+            {editing.pricing_mode === "fixed" && <div className="overflow-hidden rounded-lg border">
               <button type="button" onClick={() => advancedOpen ? switchToSimplePricing() : enterAdvanced()} className="flex w-full items-center justify-between bg-muted/30 px-3 py-3 text-left text-sm hover:bg-muted/50" aria-expanded={advancedOpen}><span><span className="font-medium">Price varies by home details</span><span className="mt-0.5 block text-xs text-muted-foreground">{advancedOpen ? "Advanced pricing is active. Switching back to one price requires confirmation." : "Optional — add a customer question and size-based levels."}</span></span><ChevronDown className={cn("transition-transform", advancedOpen && "rotate-180")} /></button>
               {advancedOpen && <div className="space-y-5 border-t p-3">
                 <div className="space-y-3"><Label className="text-base">Ask the customer</Label>{editing.questions.slice(0, 1).map((question, index) => <div key={index} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2"><div className="space-y-1.5 sm:col-span-2"><Label className="text-xs text-muted-foreground">Question</Label><Input placeholder="How many bedrooms?" value={question.question_label} onChange={(event) => { const next = [...editing.questions]; const key = slugKey(event.target.value); next[index] = { ...next[index], question_label: event.target.value, question_key: key }; updateField("questions", next); updateField("tiers", editing.tiers.map((tier) => ({ ...tier, rule_question_key: key }))); }} /></div><div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Unit (optional)</Label><Input placeholder="bedrooms, sq ft…" value={question.unit ?? ""} onChange={(event) => { const next = [...editing.questions]; next[index] = { ...next[index], unit: event.target.value }; updateField("questions", next); }} /></div></div>)}</div>
@@ -790,10 +945,11 @@ export function VendorPackagesManager() {
                   {editing.tiers.map((tier, index) => <div key={index} className="space-y-3 rounded-lg border p-3"><div className="grid gap-3 sm:grid-cols-2"><Field label="Level name"><Input className="h-11" placeholder="e.g. 3–4 bedrooms" value={tier.name} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], name: event.target.value }; updateField("tiers", next); }} /></Field><Field label="Price $"><Input className="h-11" type="number" min="0" value={tier.price || ""} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], price: Number(event.target.value) }; updateField("tiers", next); }} /></Field><Field label="From"><Input className="h-11" type="number" value={tier.rule_min ?? ""} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], rule_min: event.target.value ? Number(event.target.value) : null }; updateField("tiers", next); }} /></Field><Field label="To"><Input className="h-11" type="number" value={tier.rule_max ?? ""} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], rule_max: event.target.value ? Number(event.target.value) : null }; updateField("tiers", next); }} /></Field></div><div className="flex items-end gap-2"><Field label="What’s included (optional)" className="flex-1"><Input className="h-11" placeholder="Mow, edge, blow" value={tier.includes.join(", ")} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], includes: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) }; updateField("tiers", next); }} /></Field><Button type="button" variant="ghost" className="h-11 w-11" aria-label={`Remove ${tier.name || "level"}`} onClick={() => updateField("tiers", editing.tiers.filter((_, tierIndex) => tierIndex !== index))}><Trash2 className="text-destructive" /></Button></div></div>)}
                 </div>
               </div>}
-            </div>
-            <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editing.is_active ? "border-accent-border bg-accent-subtle" : "border-border bg-muted/30")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editing.is_active ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}>{editing.is_active ? <PackageCheck className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{editing.is_active ? "Publish now" : "Save as draft"}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{editing.is_active ? "After a successful save, this validated price can appear in public pricing and request flows." : "The package remains private until you publish it."}</p></div><PricingToggle checked={editing.is_active} onCheckedChange={(checked) => updateField("is_active", checked)} label={editing.is_active ? "Save this package as a private draft" : "Publish this package when saved"} /></div>
+            </div>}
+            {editorPriceReview && <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editorPriceReview.needsReview ? "border-amber-300/70 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" : "border-accent-border bg-accent-subtle")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editorPriceReview.needsReview ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "bg-accent-soft text-sage-dark")}>{editorPriceReview.needsReview ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}</span><div><p className="text-sm font-medium">{editorPriceReview.needsReview ? "Pricing review required" : "Within the soft-launch pricing range"}</p><p className="mt-0.5 text-xs leading-5 opacity-80">Expected {money(editorPriceReview.minPrice)}–{money(editorPriceReview.maxPrice)} {priceReviewSourceLabel(editorPriceReview.source)}. {editorPriceReview.needsReview ? "Saving will flag this package and keep it hidden from public pricing and booking until the price is adjusted or reviewed." : "This package can be publicly eligible when it is published and all other checks pass."}</p></div></div>}
+            <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editing.is_active ? "border-accent-border bg-accent-subtle" : "border-border bg-muted/30")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editing.is_active ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}>{editing.is_active ? <PackageCheck className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{editing.is_active ? editorPriceReview?.needsReview ? "Save for pricing review" : editing.pricing_mode === "fixed" ? "Publish live price" : "Publish quote package" : "Save as draft"}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{editing.is_active ? editorPriceReview?.needsReview ? "The active setting is preserved, but this package stays hidden until its pricing review is resolved." : editing.pricing_mode === "fixed" ? "After a successful save, this validated price can appear in public pricing and request flows." : "Homeowners will see quote / matching required. No instant price or checkout is presented." : "The package remains private until you publish it."}</p></div><PricingToggle checked={editing.is_active} onCheckedChange={(checked) => updateField("is_active", checked)} label={editing.is_active ? "Save this package as a private draft" : "Publish this package when saved"} /></div>
           </div>}
-          <DialogFooter className="sm:grid sm:grid-cols-[auto_1fr_1fr]"><Button variant="ghost" className="min-h-11" disabled={saving} onClick={closeEditor}>Cancel</Button><Button variant="outline" className="min-h-11" disabled={saving} onClick={() => void savePackage(true)}>{saving ? <Loader2 className="animate-spin" /> : <Plus />}{editing?.is_active ? "Publish & add next" : "Save draft & add next"}</Button><Button className={cn("min-h-11", editing?.is_active && "bg-accent text-accent-foreground hover:bg-accent-hover")} disabled={saving} onClick={() => void savePackage(false)}>{saving ? <><Loader2 className="animate-spin" />Saving…</> : editing?.is_active ? <><PackageCheck />Publish & finish</> : <><PauseCircle />Save draft & finish</>}</Button></DialogFooter>
+          <DialogFooter className="sm:grid sm:grid-cols-[auto_1fr_1fr]"><Button variant="ghost" className="min-h-11" disabled={saving} onClick={closeEditor}>Cancel</Button><Button variant="outline" className="min-h-11" disabled={saving} onClick={() => void savePackage(true)}>{saving ? <Loader2 className="animate-spin" /> : <Plus />}{editing?.is_active ? editorPriceReview?.needsReview ? "Save review & add next" : editing.pricing_mode === "fixed" ? "Publish & add next" : "Publish quote & add next" : "Save draft & add next"}</Button><Button className={cn("min-h-11", editing?.is_active && "bg-accent text-accent-foreground hover:bg-accent-hover")} disabled={saving} onClick={() => void savePackage(false)}>{saving ? <><Loader2 className="animate-spin" />Saving…</> : editing?.is_active ? editorPriceReview?.needsReview ? <><AlertTriangle />Save for review</> : editing.pricing_mode === "fixed" ? <><PackageCheck />Publish & finish</> : <><PackageCheck />Publish quote</> : <><PauseCircle />Save draft & finish</>}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1021,12 +1177,12 @@ function PromotionDraftPreview({ item, draft }: { item: PackageRow; draft: Promo
 function PackageStatus({ item }: { item: PackageRow }) {
   const status = isLiveFixedPackage(item)
     ? <Badge className="border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 />Live / Active</Badge>
-    : !item.is_active
-      ? <Badge variant="outline"><PauseCircle />Draft / Paused</Badge>
-      : item.needs_review
-        ? <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Review blocked</Badge>
+    : item.needs_review
+      ? <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Review blocked</Badge>
+      : !item.is_active
+        ? <Badge variant="outline"><PauseCircle />Draft / Paused</Badge>
       : item.pricing_mode !== "fixed"
-        ? <Badge variant="outline">Quote / Matching</Badge>
+        ? <Badge className="border border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge>
         : <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs valid price</Badge>;
   return <>{status}</>;
 }
@@ -1045,6 +1201,12 @@ function formatPrice(value: number) {
 
 function money(value: number) {
   return `$${formatPrice(value)}`;
+}
+
+function priceReviewSourceLabel(source: "managed_template" | "service_catalog" | "absolute_fallback") {
+  if (source === "managed_template") return "based on Mercurius managed-template bands";
+  if (source === "service_catalog") return "based on this service’s catalog guidance";
+  return "using the soft-launch fallback range";
 }
 
 function toDateTimeLocal(value: string) {

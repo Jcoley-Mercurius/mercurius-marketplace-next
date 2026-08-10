@@ -23,6 +23,7 @@ import { PublicReviewAuthor } from "@/components/reviews/PublicReviewAuthor";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchCompletedJobCounts } from "@/lib/completedJobs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
@@ -44,11 +45,9 @@ type Contractor = {
   logo_url: string | null;
   bio: string | null;
   location: string | null;
-  rating: number | null;
   badges: string[] | null;
   services: string[] | null;
   years_experience: number | null;
-  jobs_completed: number | null;
   is_active: boolean | null;
   marketing_enabled: boolean | null;
   special_offer: string | null;
@@ -113,11 +112,9 @@ const contractorSafeSelect = [
   "logo_url",
   "bio",
   "location",
-  "rating",
   "badges",
   "services",
   "years_experience",
-  "jobs_completed",
   "is_active",
   "marketing_enabled",
   "special_offer",
@@ -161,6 +158,7 @@ export default function ProviderStorefrontPage() {
   const [packages, setPackages] = useState<VendorPackage[]>([]);
   const [serviceNames, setServiceNames] = useState<Record<string, string>>({});
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [completedJobCount, setCompletedJobCount] = useState<number | null>(null);
   const [serverNow, setServerNow] = useState<string | null>(null);
   const [mode, setMode] = useState<PageMode>("loading");
   const [error, setError] = useState("");
@@ -175,6 +173,12 @@ export default function ProviderStorefrontPage() {
 
     try {
       const supabase = createClient();
+      const completedJobsPromise = fetchCompletedJobCounts([contractorId])
+        .then((counts) => counts.get(contractorId) ?? null)
+        .catch((reason) => {
+          console.warn("Public completed-job count is unavailable", reason);
+          return null;
+        });
       const [contractorResult, reviewsResult, packagesResult, catalogResult, galleryResult] = await Promise.all([
         supabase.from("contractors").select(contractorSafeSelect).eq("id", contractorId).maybeSingle(),
         supabase
@@ -204,6 +208,7 @@ export default function ProviderStorefrontPage() {
         setReviews([]);
         setPackages([]);
         setGallery([]);
+        setCompletedJobCount(null);
         setMode("missing");
         return;
       }
@@ -237,6 +242,7 @@ export default function ProviderStorefrontPage() {
       setReviews((reviewsResult.data ?? []) as Review[]);
       setServiceNames(Object.fromEntries((catalogResult.data ?? []).map((service) => [service.id, service.name])));
       setGallery((galleryResult.data ?? []) as GalleryItem[]);
+      setCompletedJobCount(await completedJobsPromise);
       const hydratedPackages = packageRows.map((item) => ({
         ...item,
         pricing_mode: isPricingMode(item.pricing_mode) ? item.pricing_mode : "custom_quote",
@@ -254,6 +260,7 @@ export default function ProviderStorefrontPage() {
       setMode("ready");
     } catch (reason) {
       console.error("Unable to load public provider storefront", reason);
+      setCompletedJobCount(null);
       setError(reason instanceof Error ? reason.message : "The live provider profile could not be loaded.");
       setMode("error");
     }
@@ -342,11 +349,14 @@ export default function ProviderStorefrontPage() {
 
   const averageRating = reviews.length
     ? reviews.reduce((total, review) => total + Number(review.rating), 0) / reviews.length
-    : contractor.rating;
-  const trustScore = Math.min(100, Math.round(Number(contractor.rating ?? 0) * 15 + Number(contractor.jobs_completed ?? 0) * 0.3));
+    : null;
   const primaryPackage = fixedPackages[0];
   const isPublished = Boolean(contractor.is_active);
   const heroCta = fixedPackages.length ? "Book This Provider" : "Request This Provider";
+  const hasQuickStats = averageRating !== null
+    || completedJobCount !== null
+    || contractor.years_experience !== null
+    || Boolean(contractor.verified_specialty);
 
   return (
     <div className="min-h-screen bg-background">
@@ -367,11 +377,8 @@ export default function ProviderStorefrontPage() {
                 {contractor.tagline && <p className="mb-3 max-w-2xl text-base text-foreground/75">{contractor.tagline}</p>}
                 <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                   {contractor.location && <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{contractor.location}</span>}
-                  <span className="flex items-center gap-1.5"><Star className="h-4 w-4 fill-amber-400 text-amber-400" />{averageRating === null ? "New provider" : `${Number(averageRating).toFixed(1)} (${reviews.length} public review${reviews.length === 1 ? "" : "s"})`}</span>
-                  {Number(contractor.jobs_completed ?? 0) > 0 && <span className="flex items-center gap-1.5"><Briefcase className="h-4 w-4" />{contractor.jobs_completed}+ jobs completed</span>}
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-sage-light px-3 py-1.5 text-sm font-semibold text-sage-dark ring-1 ring-sage/20">
-                  <Award className="h-4 w-4" />Trust Score: {trustScore}/100
+                  <span className="flex items-center gap-1.5"><Star className={cn("h-4 w-4", averageRating === null ? "text-muted-foreground/60" : "fill-amber-400 text-amber-400")} />{averageRating === null ? "No public reviews yet" : `${Number(averageRating).toFixed(1)} (${reviews.length} public review${reviews.length === 1 ? "" : "s"})`}</span>
+                  {completedJobCount !== null && completedJobCount > 0 && <span className="flex items-center gap-1.5"><Briefcase className="h-4 w-4" />{completedJobCount} completed through Mercurius</span>}
                 </div>
               </div>
               <div className="w-full shrink-0 sm:w-auto">
@@ -420,7 +427,7 @@ export default function ProviderStorefrontPage() {
                 </SectionCard>}
 
                 {quotePackages.length > 0 && <SectionCard title="Services Requiring a Quote">
-                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p></div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>Request &amp; Match<ArrowRight /></Button></div>)}</div>
+                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p><Badge variant="outline" className="border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p>{item.pricing_mode === "deposit_quote" && item.deposit_amount && <p className="mt-2 text-xs text-muted-foreground">A {money(item.deposit_amount)} deposit may apply after scope, final pricing, and booking details are confirmed. Nothing is charged with the initial request.</p>}</div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>Request &amp; Match<ArrowRight /></Button></div>)}</div>
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Mercurius will coordinate the details with you and the provider before the work is confirmed. No unpublished price is presented as bookable.</p>
                 </SectionCard>}
 
@@ -447,7 +454,7 @@ export default function ProviderStorefrontPage() {
 
                 <Card><CardHeader><CardTitle className="text-lg">Service Area</CardTitle></CardHeader><CardContent><div className="flex min-h-40 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">Southwest Florida</p><p className="mt-1 text-xs">Coverage is confirmed for your service address.</p></div></div>{contractor.location && <p className="mt-3 text-center text-sm text-muted-foreground">Based in {contractor.location}</p>}</CardContent></Card>
 
-                <Card><CardHeader><CardTitle className="text-lg">Quick Stats</CardTitle></CardHeader><CardContent className="space-y-3"><QuickStat label="Trust Score" value={`${trustScore}/100`} /><QuickStat label="Rating" value={contractor.rating === null ? "New" : Number(contractor.rating).toFixed(1)} /><QuickStat label="Jobs" value={`${contractor.jobs_completed ?? 0}+`} />{contractor.years_experience !== null && <QuickStat label="Experience" value={`${contractor.years_experience} years`} />}{contractor.verified_specialty && <div className="border-t pt-3"><p className="text-xs text-muted-foreground">Verified Specialty</p><p className="mt-1 text-sm font-semibold">{contractor.verified_specialty}</p></div>}</CardContent></Card>
+                {hasQuickStats && <Card><CardHeader><CardTitle className="text-lg">Quick Stats</CardTitle></CardHeader><CardContent className="space-y-3">{averageRating !== null && <QuickStat label="Public review rating" value={Number(averageRating).toFixed(1)} />}{completedJobCount !== null && <QuickStat label="Completed through Mercurius" value={String(completedJobCount)} />}{contractor.years_experience !== null && <QuickStat label="Experience" value={`${contractor.years_experience} years`} />}{contractor.verified_specialty && <div className="border-t pt-3"><p className="text-xs text-muted-foreground">Verified Specialty</p><p className="mt-1 text-sm font-semibold">{contractor.verified_specialty}</p></div>}</CardContent></Card>}
               </aside>
             </div>
           </div>

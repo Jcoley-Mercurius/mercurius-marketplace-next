@@ -38,6 +38,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  vendorDocumentDisplayName,
+  vendorDocumentKindFromPath,
+} from "@/lib/vendorApplicationDocuments";
 
 type Application = {
   id: string;
@@ -787,8 +791,8 @@ function ApplicationDialog({
           </div>
         </DetailSection>
 
-        {application.document_urls && application.document_urls.length > 0 && (
-          <DetailSection title="Uploaded documents">
+        <DetailSection title="Credential documents">
+          {application.document_urls && application.document_urls.length > 0 ? (
             <div className="space-y-2">
               {application.document_urls.map((path) => (
                 <Button
@@ -804,12 +808,40 @@ function ApplicationDialog({
                   ) : (
                     <Paperclip />
                   )}
-                  <span className="truncate">{fileName(path)}</span>
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {vendorDocumentDisplayName(path)}
+                  </span>
+                  {vendorDocumentKindFromPath(path) && (
+                    <Badge
+                      variant="secondary"
+                      className="ml-auto shrink-0 capitalize"
+                    >
+                      {vendorDocumentKindFromPath(path)}
+                    </Badge>
+                  )}
                 </Button>
               ))}
+              <p className="pt-1 text-xs text-muted-foreground">
+                Files open through an admin-only signed link that expires after
+                10 minutes.
+              </p>
             </div>
-          </DetailSection>
-        )}
+          ) : (
+            <div className="flex items-start gap-3 rounded-lg border border-dashed border-border bg-background/60 p-4">
+              <FileText className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">
+                  No credential documents uploaded
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  This application was submitted without optional license,
+                  insurance, or certification files. Review the supplied
+                  credential numbers and follow up if documentation is needed.
+                </p>
+              </div>
+            </div>
+          )}
+        </DetailSection>
 
         {application.additional_notes && (
           <DetailSection title="Additional notes">
@@ -1065,10 +1097,6 @@ function summarizeServices(services: string[]) {
 
 function normalizeWebsite(website: string) {
   return /^https?:\/\//i.test(website) ? website : "https://" + website;
-}
-
-function fileName(path: string) {
-  return path.split("/").pop() || path;
 }
 
 function formatDate(value: string) {

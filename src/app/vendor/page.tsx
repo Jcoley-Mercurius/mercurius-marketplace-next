@@ -18,13 +18,13 @@ import {
   PackageCheck,
   RefreshCw,
   Sparkles,
-  Star,
   UserRound,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { COMPLETED_JOB_STATUSES, isCompletedJobStatus } from "@/lib/completedJobs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { calculateVendorProfileStrength } from "@/lib/vendorProfileStrength";
@@ -33,8 +33,6 @@ type Contractor = {
   id: string;
   name: string;
   logo_url: string | null;
-  rating: number | null;
-  jobs_completed: number | null;
   is_active: boolean | null;
   marketing_enabled: boolean | null;
   bio: string | null;
@@ -81,7 +79,7 @@ type OverviewData = {
 };
 
 const incomingStatuses = new Set(["matched", "pending"]);
-const completedStatuses = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed"]);
+const completedStatuses = new Set<string>(COMPLETED_JOB_STATUSES);
 const inactiveStatuses = new Set([...completedStatuses, "cancelled"]);
 
 export default function VendorOverviewPage() {
@@ -104,7 +102,7 @@ export default function VendorOverviewPage() {
       const supabase = createClient();
       const contractorResult = await supabase
         .from("contractors")
-        .select("id, name, logo_url, rating, jobs_completed, is_active, marketing_enabled, bio, location, services, special_offer, our_promise, years_experience, verified_specialty")
+        .select("id, name, logo_url, is_active, marketing_enabled, bio, location, services, special_offer, our_promise, years_experience, verified_specialty")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -169,8 +167,7 @@ export default function VendorOverviewPage() {
 
     const openRequests = requests.filter((request) => incomingStatuses.has(request.status)).length;
     const activeJobs = requests.filter((request) => !incomingStatuses.has(request.status) && !inactiveStatuses.has(request.status)).length;
-    const completedFromRequests = requests.filter((request) => completedStatuses.has(request.status)).length;
-    const completedJobs = Math.max(contractor.jobs_completed ?? 0, completedFromRequests);
+    const completedJobs = requests.filter((request) => isCompletedJobStatus(request.status)).length;
     const strength = calculateVendorProfileStrength({
       ...contractor,
       email: contact?.email ?? null,
@@ -318,11 +315,10 @@ export default function VendorOverviewPage() {
       </Card>
 
       <SectionHeading title="Operational scorecard" description="Live records from your Mercurius vendor account and assigned work." />
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard icon={Clock3} label="Awaiting response" value={String(overview.openRequests)} note={overview.openRequests ? "Open Jobs & Requests" : "No open requests"} href="/vendor/jobs" emphasize={overview.openRequests > 0} />
         <MetricCard icon={Activity} label="Active jobs" value={String(overview.activeJobs)} note="Scheduled or in progress" href="/vendor/jobs" />
-        <MetricCard icon={CheckCircle2} label="Completed jobs" value={String(overview.completedJobs)} note="Account and job records" />
-        <MetricCard icon={Star} label="Average rating" value={contractor.rating === null ? "New" : contractor.rating.toFixed(1)} note={contractor.rating === null ? "No verified rating yet" : "Verified job feedback"} />
+        <MetricCard icon={CheckCircle2} label="Completed jobs" value={String(overview.completedJobs)} note="Completed through Mercurius" />
         <MetricCard icon={Sparkles} label="Profile strength" value={`${overview.profileStrength}%`} note="Based on saved profile fields" href="/vendor/profile" emphasize={overview.profileStrength < 80} />
       </div>
 

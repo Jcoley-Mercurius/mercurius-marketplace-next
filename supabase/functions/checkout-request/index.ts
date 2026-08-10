@@ -8,10 +8,74 @@ import { findCatalogEntry, catalogPriceFor } from "../_shared/catalogPricing.ts"
 import { platformFeeFromAmount, vendorPayoutFromAmount } from "../_shared/platformFee.ts";
 import { SOFT_LAUNCH_FIXED_PACKAGES_ONLY, SOFT_LAUNCH_MESSAGE } from "../_shared/softLaunch.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const PRODUCTION_ORIGIN = "https://mercurius.com";
+const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+const baseCorsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
 };
+
+type CheckoutOrigin = {
+  allowed: boolean;
+  checkoutOrigin: string;
+  responseOrigin: string;
+};
+
+function normalizedOrigin(value: string | undefined | null) {
+  const raw = value?.trim();
+  if (!raw) return null;
+
+  try {
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const url = new URL(withProtocol);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function configuredOrigins() {
+  const siteUrl = normalizedOrigin(Deno.env.get("SITE_URL"));
+  const publicSiteUrl = normalizedOrigin(Deno.env.get("NEXT_PUBLIC_SITE_URL"));
+  const vercelUrl = normalizedOrigin(Deno.env.get("VERCEL_URL"));
+  const primary = siteUrl ?? publicSiteUrl ?? vercelUrl ?? PRODUCTION_ORIGIN;
+
+  return {
+    primary,
+    allowed: new Set(
+      [siteUrl, publicSiteUrl, vercelUrl, PRODUCTION_ORIGIN].filter(
+        (origin): origin is string => Boolean(origin),
+      ),
+    ),
+  };
+}
+
+function resolveCheckoutOrigin(req: Request): CheckoutOrigin {
+  const configured = configuredOrigins();
+  const requestOrigin = normalizedOrigin(req.headers.get("origin"));
+  const requestIsAllowed =
+    !requestOrigin ||
+    configured.allowed.has(requestOrigin) ||
+    LOCAL_ORIGIN.test(requestOrigin);
+
+  return {
+    allowed: requestIsAllowed,
+    checkoutOrigin:
+      requestOrigin && requestIsAllowed ? requestOrigin : configured.primary,
+    responseOrigin:
+      requestOrigin && requestIsAllowed ? requestOrigin : configured.primary,
+  };
+}
+
+function corsHeaders(origin: string) {
+  return {
+    ...baseCorsHeaders,
+    "Access-Control-Allow-Origin": origin,
+  };
+}
 
 type PackagePriceSnapshot = {
   baseAmount: number;
@@ -76,8 +140,25 @@ function currencyAmount(value: unknown) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const checkoutOrigin = resolveCheckoutOrigin(req);
+  const responseCorsHeaders = corsHeaders(checkoutOrigin.responseOrigin);
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: checkoutOrigin.allowed ? 204 : 403,
+      headers: responseCorsHeaders,
+    });
+  }
+
   try {
+    if (!checkoutOrigin.allowed) {
+      throw new CheckoutError(
+        "ORIGIN_NOT_ALLOWED",
+        "Checkout is not available from this website origin.",
+        403,
+      );
+    }
+
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");
 
@@ -122,7 +203,7 @@ Deno.serve(async (req) => {
       });
       return new Response(
         JSON.stringify({ error: "SOFT_LAUNCH_FIXED_ONLY", message: SOFT_LAUNCH_MESSAGE }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 403, headers: { ...responseCorsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -131,7 +212,7 @@ Deno.serve(async (req) => {
     //    admin-only by RLS) via the `create-checkout` function.
     if (sr.pricing_mode === "custom_quote" || sr.quote_only) {
       return new Response(JSON.stringify({ skip: true, reason: "custom_quote" }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...responseCorsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -281,7 +362,7 @@ Deno.serve(async (req) => {
           message: "Pricing for this service has changed. Please refresh and review the updated total before paying.",
           current_amount: amount,
         }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 409, headers: { ...responseCorsHeaders, "Content-Type": "application/json" } },
       );
     }
     if (clientAmount == null && !packageSelection) {
@@ -305,7 +386,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const origin = req.headers.get("origin") ?? "https://brandinghousepreview.com";
+    const origin = checkoutOrigin.checkoutOrigin;
 
     // ── Recurring plan → Stripe subscription. Invoices are created per renewal
     //    by the `invoice.paid` webhook handler.
@@ -344,7 +425,7 @@ Deno.serve(async (req) => {
       });
 
       return new Response(JSON.stringify({ url: session.url, subscription: true }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...responseCorsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -408,13 +489,13 @@ Deno.serve(async (req) => {
     await admin.from("invoices").update({ stripe_session_id: session.id }).eq("id", invoice.id);
 
     return new Response(JSON.stringify({ url: session.url, invoice_id: invoice.id }), {
-      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200, headers: { ...responseCorsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("checkout-request error:", msg);
     return new Response(JSON.stringify(err instanceof CheckoutError ? { error: err.code, message: err.message } : { error: msg }), {
-      status: err instanceof CheckoutError ? err.status : 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: err instanceof CheckoutError ? err.status : 400, headers: { ...responseCorsHeaders, "Content-Type": "application/json" },
     });
   }
 });

@@ -1,9 +1,11 @@
+/* eslint-disable @next/next/no-img-element -- Vendor media uses signed Supabase Storage URLs. */
 "use client";
 
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -27,7 +29,9 @@ import {
   ShieldCheck,
   Sparkles,
   Tag,
+  Trash2,
   TrendingUp,
+  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -45,6 +49,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  removeUploadedVendorMedia,
+  uploadVendorMedia,
+  validateVendorMediaFile,
+  vendorMediaPathFromUrl,
+} from "@/lib/vendorMedia";
 import { calculateVendorProfileStrength, vendorBioPoints } from "@/lib/vendorProfileStrength";
 
 type Profile = {
@@ -69,6 +79,13 @@ type PageMode = "loading" | "live" | "unlinked" | "error";
 type ContactRow = {
   email: string | null;
   phone: string | null;
+};
+
+type GalleryItem = {
+  id: string;
+  image_url: string;
+  caption: string | null;
+  sort_order: number;
 };
 
 type StrengthAction = {
@@ -104,9 +121,15 @@ export default function VendorProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mode, setMode] = useState<PageMode>("loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const [galleryCount, setGalleryCount] = useState<number | null>(null);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [newService, setNewService] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [removingLogo, setRemovingLogo] = useState(false);
+  const [galleryUploadProgress, setGalleryUploadProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [removingGalleryId, setRemovingGalleryId] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -136,8 +159,9 @@ export default function VendorProfilePage() {
         }),
         supabase
           .from("contractor_gallery")
-          .select("id", { count: "exact", head: true })
-          .eq("contractor_id", data.id),
+          .select("id, image_url, caption, sort_order")
+          .eq("contractor_id", data.id)
+          .order("sort_order"),
       ]);
 
       if (contactResult.error) throw contactResult.error;
@@ -147,7 +171,7 @@ export default function VendorProfilePage() {
       ) as ContactRow | null;
 
       if (galleryResult.error) throw galleryResult.error;
-      setGalleryCount(galleryResult.count ?? 0);
+      setGallery((galleryResult.data ?? []) as GalleryItem[]);
 
       setProfile({
         ...data,
@@ -159,7 +183,7 @@ export default function VendorProfilePage() {
     } catch (error) {
       console.error("Unable to load vendor profile", error);
       setProfile(null);
-      setGalleryCount(null);
+      setGallery([]);
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -177,8 +201,8 @@ export default function VendorProfilePage() {
   }, [loadProfile, user]);
 
   const strength = useMemo<StrengthModel>(
-    () => buildStrength(profile, galleryCount),
-    [galleryCount, profile],
+    () => buildStrength(profile, gallery.length),
+    [gallery.length, profile],
   );
 
   function update<K extends keyof Profile>(key: K, value: Profile[K]) {
@@ -218,6 +242,200 @@ export default function VendorProfilePage() {
       "services",
       profile.services.filter((item) => item !== service),
     );
+  }
+
+  async function replaceLogo(file: File) {
+    if (!profile || !user || mode !== "live") return;
+
+    try {
+      validateVendorMediaFile(file, "logo");
+    } catch (error) {
+      toast.error("Choose a different logo", {
+        description: error instanceof Error ? error.message : "The selected file is not supported.",
+      });
+      return;
+    }
+
+    setUploadingLogo(true);
+    let uploadedPath: string | null = null;
+    try {
+      const previousUrl = profile.logo_url;
+      const uploaded = await uploadVendorMedia(profile.id, file, "logo");
+      uploadedPath = uploaded.path;
+
+      const result = await createClient()
+        .from("contractors")
+        .update({ logo_url: uploaded.signedUrl })
+        .eq("id", profile.id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error("Your linked contractor profile could not be verified.");
+
+      update("logo_url", uploaded.signedUrl);
+      uploadedPath = null;
+
+      const previousPath = previousUrl ? vendorMediaPathFromUrl(previousUrl, profile.id) : null;
+      if (previousPath && previousPath !== uploaded.path) {
+        try {
+          await removeUploadedVendorMedia(previousPath);
+        } catch (cleanupError) {
+          console.warn("Previous vendor logo could not be removed from Storage", cleanupError);
+        }
+      }
+
+      toast.success(previousUrl ? "Logo replaced" : "Logo uploaded", {
+        description: "Your public vendor profile has been updated.",
+      });
+    } catch (error) {
+      if (uploadedPath) {
+        try {
+          await removeUploadedVendorMedia(uploadedPath);
+        } catch (cleanupError) {
+          console.warn("Incomplete vendor logo upload could not be cleaned up", cleanupError);
+        }
+      }
+      toast.error("Logo could not be uploaded", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  async function removeLogo() {
+    if (!profile?.logo_url || !user || mode !== "live") return;
+    if (!window.confirm("Remove your business logo from the public profile?")) return;
+
+    setRemovingLogo(true);
+    try {
+      const previousUrl = profile.logo_url;
+      const result = await createClient()
+        .from("contractors")
+        .update({ logo_url: null })
+        .eq("id", profile.id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error("Your linked contractor profile could not be verified.");
+
+      update("logo_url", null);
+      const path = vendorMediaPathFromUrl(previousUrl, profile.id);
+      if (path) {
+        try {
+          await removeUploadedVendorMedia(path);
+        } catch (cleanupError) {
+          console.warn("Removed vendor logo could not be deleted from Storage", cleanupError);
+        }
+      }
+      toast.success("Logo removed");
+    } catch (error) {
+      toast.error("Logo could not be removed", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setRemovingLogo(false);
+    }
+  }
+
+  async function addGalleryImages(files: FileList) {
+    if (!profile || !user || mode !== "live") return;
+    const selected = Array.from(files);
+    if (!selected.length) return;
+    if (selected.length > 10) {
+      toast.error("Choose up to 10 images at a time.");
+      return;
+    }
+
+    try {
+      selected.forEach((file) => validateVendorMediaFile(file, "gallery"));
+    } catch (error) {
+      toast.error("Check the selected gallery images", {
+        description: error instanceof Error ? error.message : "One or more files are not supported.",
+      });
+      return;
+    }
+
+    const created: GalleryItem[] = [];
+    setGalleryUploadProgress({ completed: 0, total: selected.length });
+    try {
+      for (const [index, file] of selected.entries()) {
+        const uploaded = await uploadVendorMedia(profile.id, file, "gallery");
+        const insert = await createClient()
+          .from("contractor_gallery")
+          .insert({
+            contractor_id: profile.id,
+            image_url: uploaded.signedUrl,
+            sort_order: gallery.length + index,
+          })
+          .select("id, image_url, caption, sort_order")
+          .single();
+
+        if (insert.error) {
+          try {
+            await removeUploadedVendorMedia(uploaded.path);
+          } catch (cleanupError) {
+            console.warn("Unlinked vendor gallery upload could not be cleaned up", cleanupError);
+          }
+          throw insert.error;
+        }
+
+        created.push(insert.data as GalleryItem);
+        setGalleryUploadProgress({ completed: created.length, total: selected.length });
+      }
+
+      setGallery((current) => [...current, ...created]);
+      toast.success(`${created.length} ${created.length === 1 ? "photo" : "photos"} added`, {
+        description: "Your public project gallery has been updated.",
+      });
+    } catch (error) {
+      if (created.length) setGallery((current) => [...current, ...created]);
+      toast.error("Gallery upload stopped", {
+        description: `${created.length ? `${created.length} ${created.length === 1 ? "photo was" : "photos were"} saved. ` : ""}${error instanceof Error ? error.message : "Please try again."}`,
+      });
+    } finally {
+      setGalleryUploadProgress(null);
+    }
+  }
+
+  async function removeGalleryImage(item: GalleryItem) {
+    if (!profile || !user || mode !== "live") return;
+    if (!window.confirm("Remove this image from your public project gallery?")) return;
+
+    setRemovingGalleryId(item.id);
+    try {
+      const result = await createClient()
+        .from("contractor_gallery")
+        .delete()
+        .eq("id", item.id)
+        .eq("contractor_id", profile.id)
+        .select("id")
+        .maybeSingle();
+
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error("That gallery image is no longer available to remove.");
+
+      setGallery((current) => current.filter((image) => image.id !== item.id));
+      const path = vendorMediaPathFromUrl(item.image_url, profile.id);
+      if (path) {
+        try {
+          await removeUploadedVendorMedia(path);
+        } catch (cleanupError) {
+          console.warn("Removed vendor gallery image could not be deleted from Storage", cleanupError);
+        }
+      }
+      toast.success("Gallery image removed");
+    } catch (error) {
+      toast.error("Gallery image could not be removed", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setRemovingGalleryId(null);
+    }
   }
 
   async function saveProfile() {
@@ -451,40 +669,147 @@ export default function VendorProfilePage() {
           </CardContent>
         </Card>
 
-        <Card id="visual-proof">
+        <Card id="profile-media" className="scroll-mt-24">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Camera className="h-4 w-4 text-accent" />
               Visual Proof
-              <ScorePill earned={(profile.logo_url ? 8 : 0) + Math.min(galleryCount ?? 0, 3) * 4} total={20} />
+              <ScorePill earned={(profile.logo_url ? 8 : 0) + Math.min(gallery.length, 3) * 4} total={20} />
             </CardTitle>
             <CardDescription>
               A real business logo and completed-project photos help homeowners recognize and evaluate your work.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <ProofRow
-              icon={Building2}
-              title="Business logo"
-              description={profile.logo_url ? "A logo is saved on your live contractor profile." : "No logo is currently saved."}
-              earned={profile.logo_url ? 8 : 0}
-              total={8}
-              complete={Boolean(profile.logo_url)}
-            />
-            <ProofRow
-              icon={Camera}
-              title="Project gallery"
-              description={`${galleryCount ?? 0} ${galleryCount === 1 ? "photo" : "photos"} saved. Up to three photos count toward strength.`}
-              earned={Math.min(galleryCount ?? 0, 3) * 4}
-              total={12}
-              complete={(galleryCount ?? 0) >= 3}
-            />
-            {(!profile.logo_url || (galleryCount ?? 0) < 3) && (
-              <div className="flex flex-col gap-3 rounded-xl border border-dashed bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs leading-5 text-muted-foreground">Vendor self-service media uploads are not available on this page yet. Mercurius onboarding can add approved logo and gallery assets.</p>
-                <Link href="/contact" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "min-h-10 shrink-0")}>Contact onboarding<ArrowRight /></Link>
+          <CardContent className="space-y-6">
+            <section className="rounded-2xl border bg-muted/20 p-4 sm:p-5" aria-labelledby="logo-heading">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border bg-background shadow-sm">
+                  {profile.logo_url ? (
+                    <img src={profile.logo_url} alt={`${profile.name} business logo`} className="h-full w-full object-contain p-1" />
+                  ) : (
+                    <Building2 className="h-9 w-9 text-muted-foreground/70" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 id="logo-heading" className="text-sm font-semibold">Business logo</h3>
+                    <ScorePill earned={profile.logo_url ? 8 : 0} total={8} />
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {profile.logo_url ? "This logo appears on your directory card and public storefront." : "Upload the logo homeowners should recognize. JPG, PNG, or WebP; 5 MB maximum."}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploadingLogo || removingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      {uploadingLogo ? <Loader2 className="animate-spin" /> : <Upload />}
+                      {uploadingLogo ? "Uploading..." : profile.logo_url ? "Replace logo" : "Upload logo"}
+                    </Button>
+                    {profile.logo_url && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        disabled={uploadingLogo || removingLogo}
+                        onClick={() => void removeLogo()}
+                      >
+                        {removingLogo ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                        {removingLogo ? "Removing..." : "Remove"}
+                      </Button>
+                    )}
+                  </div>
+                  <input
+                    ref={logoInputRef}
+                    hidden
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void replaceLogo(file);
+                      event.target.value = "";
+                    }}
+                  />
+                </div>
               </div>
-            )}
+            </section>
+
+            <section aria-labelledby="gallery-heading">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 id="gallery-heading" className="text-sm font-semibold">Project gallery</h3>
+                    <ScorePill earned={Math.min(gallery.length, 3) * 4} total={12} />
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {gallery.length} {gallery.length === 1 ? "photo" : "photos"} saved. Up to three completed-project photos count toward profile strength.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={Boolean(galleryUploadProgress)}
+                  onClick={() => galleryInputRef.current?.click()}
+                >
+                  {galleryUploadProgress ? <Loader2 className="animate-spin" /> : <Plus />}
+                  {galleryUploadProgress ? `${galleryUploadProgress.completed} of ${galleryUploadProgress.total}` : "Add photos"}
+                </Button>
+                <input
+                  ref={galleryInputRef}
+                  hidden
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  onChange={(event) => {
+                    if (event.target.files?.length) void addGalleryImages(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+              </div>
+
+              {gallery.length === 0 ? (
+                <button
+                  type="button"
+                  className="mt-4 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-4 py-10 text-center transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  disabled={Boolean(galleryUploadProgress)}
+                  onClick={() => galleryInputRef.current?.click()}
+                >
+                  <Camera className="h-7 w-7 text-accent" aria-hidden="true" />
+                  <span className="mt-3 text-sm font-medium">Add completed-project photos</span>
+                  <span className="mt-1 text-xs text-muted-foreground">JPG, PNG, or WebP; 10 MB maximum per image.</span>
+                </button>
+              ) : (
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {gallery.map((item) => (
+                    <figure key={item.id} className="group relative overflow-hidden rounded-xl border bg-muted shadow-sm">
+                      <div className="aspect-square overflow-hidden">
+                        <img src={item.image_url} alt={item.caption || `${profile.name} completed project`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                      </div>
+                      {item.caption && <figcaption className="truncate border-t bg-background/95 px-3 py-2 text-xs text-muted-foreground">{item.caption}</figcaption>}
+                      <button
+                        type="button"
+                        className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-background/95 text-muted-foreground shadow-md transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
+                        disabled={removingGalleryId === item.id}
+                        onClick={() => void removeGalleryImage(item)}
+                        aria-label="Remove gallery image"
+                      >
+                        {removingGalleryId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <p className="rounded-lg bg-accent/8 px-3 py-2 text-xs leading-5 text-muted-foreground">
+              Media changes are saved immediately and reflected on your public profile. Only upload images you own or have permission to use.
+            </p>
           </CardContent>
         </Card>
 
@@ -836,10 +1161,6 @@ function ScorePill({ earned, total }: { earned: number; total: number }) {
   return <span className={cn("ml-auto inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums", complete ? "border-accent-border bg-accent-soft text-sage-dark" : "border-border bg-muted text-muted-foreground")}>{earned}/{total} pts</span>;
 }
 
-function ProofRow({ icon: Icon, title, description, earned, total, complete }: { icon: typeof Camera; title: string; description: string; earned: number; total: number; complete: boolean }) {
-  return <div className="flex items-start gap-3 rounded-xl border bg-background p-4"><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", complete ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium text-foreground">{title}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</p></div><ScorePill earned={earned} total={total} /></div>;
-}
-
 function PointsPill({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex items-center rounded-full bg-sage/15 px-2 py-0.5 text-[10px] font-medium text-sage-dark">
@@ -906,8 +1227,8 @@ function buildStrength(profile: Profile | null, galleryCount: number | null): St
 
   const currentBioPoints = vendorBioPoints(profile.bio);
   if (currentBioPoints < 10) actions.push({ key: "bio", icon: PenLine, label: currentBioPoints ? "Strengthen your business bio" : "Add a business bio", description: "Aim for at least 80 useful characters to earn the full score.", points: 10 - currentBioPoints, targetId: "bio" });
-  if (!profile.logo_url) actions.push({ key: "logo", icon: Building2, label: "Add an approved business logo", description: "Self-service upload is not available yet; onboarding can add it.", points: 8, href: "/contact" });
-  if (galleryPhotos < 3) actions.push({ key: "gallery", icon: Camera, label: galleryPhotos ? `Add ${3 - galleryPhotos} more project ${3 - galleryPhotos === 1 ? "photo" : "photos"}` : "Add project gallery photos", description: "Up to three real completed-project photos count toward profile strength.", points: (3 - galleryPhotos) * 4, href: "/contact" });
+  if (!profile.logo_url) actions.push({ key: "logo", icon: Building2, label: "Add your business logo", description: "Upload the logo homeowners should recognize on your listing.", points: 8, targetId: "profile-media" });
+  if (galleryPhotos < 3) actions.push({ key: "gallery", icon: Camera, label: galleryPhotos ? `Add ${3 - galleryPhotos} more project ${3 - galleryPhotos === 1 ? "photo" : "photos"}` : "Add project gallery photos", description: "Up to three real completed-project photos count toward profile strength.", points: (3 - galleryPhotos) * 4, targetId: "profile-media" });
   if (!profile.verified_specialty?.trim()) actions.push({ key: "specialty", icon: ShieldCheck, label: "Request specialty verification", description: "Mercurius controls this field after reviewing the vendor’s specialty.", points: 10, href: "/contact" });
   if (!profile.special_offer?.trim()) actions.push({ key: "offer", icon: Tag, label: "Add a special offer", description: "Use a truthful, supportable offer that differentiates your listing.", points: 5, targetId: "special_offer" });
   if (!profile.our_promise?.trim()) actions.push({ key: "promise", icon: HandHeart, label: "Add your customer promise", description: "State a practical commitment your business can consistently honor.", points: 5, targetId: "our_promise" });

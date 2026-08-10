@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
@@ -21,6 +22,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  MAX_VENDOR_DOCUMENT_COUNT,
+  VENDOR_DOCUMENT_ACCEPT,
+  VENDOR_DOCUMENT_BUCKET,
+  validateVendorDocument,
+  type VendorDocumentKind,
+} from "@/lib/vendorApplicationDocuments";
 
 const steps = ["Business", "Contact", "Service Area", "Credentials", "Review"];
 const teamSizes = ["Just me", "2–5", "6–10", "11–25", "25+"];
@@ -76,7 +84,21 @@ type FormState = {
   insurancePolicyNumber: string;
 };
 
-type SelectedDocument = { file: File; kind: "license" | "insurance" | "other" };
+type SelectedDocument = {
+  id: string;
+  file: File;
+  kind: VendorDocumentKind;
+};
+type SubmissionStage = "idle" | "saving" | "uploading" | "finalizing";
+type DocumentUploadStatus = "waiting" | "uploading" | "uploaded" | "failed";
+
+type ApplicationCreationResponse = {
+  applicationId?: string;
+  uploads?: Array<{ clientId: string; path: string; token: string }>;
+  finalizeToken?: string | null;
+  uploadWarning?: string | null;
+  error?: string;
+};
 
 const initialForm: FormState = {
   businessName: "", primaryCategory: "", teamSize: "", yearsExperience: "",
@@ -96,7 +118,14 @@ export default function VendorApplyPage() {
   const [documents, setDocuments] = useState<SelectedDocument[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [applicationRef] = useState(() => globalThis.crypto?.randomUUID?.() ?? `application-${Date.now()}`);
+  const [submissionStage, setSubmissionStage] =
+    useState<SubmissionStage>("idle");
+  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
+  const [documentUploadStates, setDocumentUploadStates] = useState<
+    Record<string, DocumentUploadStatus>
+  >({});
+  const [submissionWarning, setSubmissionWarning] = useState<string | null>(null);
+  const [attachedDocumentCount, setAttachedDocumentCount] = useState(0);
 
   const suggestions = suggestedServices[form.primaryCategory] ?? [];
   const allServices = useMemo(() => {
@@ -135,14 +164,39 @@ export default function VendorApplyPage() {
 
   function addDocuments(files: FileList | null, kind: SelectedDocument["kind"]) {
     if (!files) return;
-    const valid = Array.from(files).filter((file) => {
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error(`${file.name} is too large`, { description: "Documents must be 10 MB or smaller." });
-        return false;
+    const remainingSlots = MAX_VENDOR_DOCUMENT_COUNT - documents.length;
+    if (remainingSlots <= 0) {
+      toast.error("Document limit reached", {
+        description: `You can attach up to ${MAX_VENDOR_DOCUMENT_COUNT} documents.`,
+      });
+      return;
+    }
+
+    const incoming = Array.from(files);
+    const valid: SelectedDocument[] = [];
+    incoming.slice(0, remainingSlots).forEach((file, index) => {
+      const validationError = validateVendorDocument(file);
+      if (validationError) {
+        toast.error(`${file.name} was not added`, {
+          description: validationError,
+        });
+        return;
       }
-      return file.type.startsWith("image/") || file.type === "application/pdf";
+      valid.push({
+        id:
+          globalThis.crypto?.randomUUID?.() ??
+          `document-${Date.now()}-${index}`,
+        file,
+        kind,
+      });
     });
-    setDocuments((current) => [...current, ...valid.map((file) => ({ file, kind }))]);
+
+    if (incoming.length > remainingSlots) {
+      toast.error("Some files were not added", {
+        description: `Applications can include up to ${MAX_VENDOR_DOCUMENT_COUNT} documents.`,
+      });
+    }
+    setDocuments((current) => [...current, ...valid]);
   }
 
   async function submitApplication() {
@@ -151,8 +205,14 @@ export default function VendorApplyPage() {
       return;
     }
     setIsSubmitting(true);
+    setSubmissionStage("saving");
+    setSubmissionWarning(null);
+    setAttachedDocumentCount(0);
+    setUploadProgress({ completed: 0, total: documents.length });
+    setDocumentUploadStates(
+      Object.fromEntries(documents.map((document) => [document.id, "waiting"])),
+    );
     const payload = {
-      id: applicationRef,
       business_name: form.businessName.trim(),
       first_name: form.firstName.trim(),
       last_name: form.lastName.trim(),
@@ -173,17 +233,129 @@ export default function VendorApplyPage() {
       additional_notes: form.additionalNotes.trim() || null,
       license_number: form.licenseNumber.trim() || null,
       insurance_policy_number: form.insurancePolicyNumber.trim() || null,
-      document_urls: [],
     };
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase.from("vendor_applications").insert(payload);
-      if (error) throw error;
-      try {
-        await supabase.functions.invoke("vendor-application-notify", { body: { application_id: applicationRef, ...payload } });
-      } catch {
-        // Notification is best effort and should never block the applicant.
+      const creationResponse = await fetch("/api/vendor-applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          application: payload,
+          documents: documents.map((document) => ({
+            clientId: document.id,
+            kind: document.kind,
+            name: document.file.name,
+            size: document.file.size,
+            type: document.file.type,
+          })),
+        }),
+      });
+      const creation =
+        (await creationResponse.json()) as ApplicationCreationResponse;
+      if (!creationResponse.ok || !creation.applicationId) {
+        throw new Error(
+          creation.error || "Your application could not be submitted.",
+        );
+      }
+
+      const warnings = creation.uploadWarning ? [creation.uploadWarning] : [];
+      const instructions = new Map(
+        (creation.uploads ?? []).map((upload) => [upload.clientId, upload]),
+      );
+      const successfulPaths: string[] = [];
+
+      if (documents.length > 0) {
+        setSubmissionStage("uploading");
+        const supabase = createClient();
+        let completed = 0;
+
+        for (const document of documents) {
+          const instruction = instructions.get(document.id);
+          if (!instruction) {
+            setDocumentUploadStates((current) => ({
+              ...current,
+              [document.id]: "failed",
+            }));
+            warnings.push(`${document.file.name} could not be prepared for upload.`);
+            completed += 1;
+            setUploadProgress({ completed, total: documents.length });
+            continue;
+          }
+
+          setDocumentUploadStates((current) => ({
+            ...current,
+            [document.id]: "uploading",
+          }));
+          const { error } = await supabase.storage
+            .from(VENDOR_DOCUMENT_BUCKET)
+            .uploadToSignedUrl(
+              instruction.path,
+              instruction.token,
+              document.file,
+              {
+                cacheControl: "3600",
+                contentType: document.file.type,
+                upsert: false,
+              },
+            );
+
+          if (error) {
+            console.error("Credential document upload failed", error);
+            setDocumentUploadStates((current) => ({
+              ...current,
+              [document.id]: "failed",
+            }));
+            warnings.push(`${document.file.name} could not be uploaded.`);
+          } else {
+            successfulPaths.push(instruction.path);
+            setDocumentUploadStates((current) => ({
+              ...current,
+              [document.id]: "uploaded",
+            }));
+          }
+          completed += 1;
+          setUploadProgress({ completed, total: documents.length });
+        }
+      }
+
+      if (successfulPaths.length > 0 && creation.finalizeToken) {
+        setSubmissionStage("finalizing");
+        const finalizeResponse = await fetch(
+          "/api/vendor-applications/documents",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              applicationId: creation.applicationId,
+              finalizeToken: creation.finalizeToken,
+              paths: successfulPaths,
+            }),
+          },
+        );
+        const finalization = (await finalizeResponse.json()) as {
+          attachedCount?: number;
+          error?: string;
+        };
+        if (!finalizeResponse.ok) {
+          warnings.push(
+            finalization.error ||
+              "Uploaded documents could not be attached to your application.",
+          );
+        } else {
+          setAttachedDocumentCount(finalization.attachedCount ?? 0);
+        }
+      } else if (documents.length > 0 && successfulPaths.length === 0) {
+        warnings.push(
+          "Your application was submitted without credential documents.",
+        );
+      }
+
+      const warning = [...new Set(warnings)].join(" ");
+      setSubmissionWarning(warning || null);
+      if (warning) {
+        toast.warning("Application submitted with a document note", {
+          description: warning,
+        });
       }
       setIsComplete(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -191,11 +363,12 @@ export default function VendorApplyPage() {
       toast.error("Submission failed", { description: error instanceof Error ? error.message : "Please try again." });
     } finally {
       setIsSubmitting(false);
+      setSubmissionStage("idle");
     }
   }
 
   if (isComplete) {
-    return <ApplicationSuccess firstName={form.firstName} businessName={form.businessName} email={form.email} />;
+    return <ApplicationSuccess firstName={form.firstName} businessName={form.businessName} email={form.email} selectedDocumentCount={documents.length} attachedDocumentCount={attachedDocumentCount} warning={submissionWarning} />;
   }
 
   return (
@@ -228,7 +401,7 @@ export default function VendorApplyPage() {
             {step === 2 && <ContactStep form={form} setField={setField} />}
             {step === 3 && <ServiceAreaStep form={form} setField={setField} areas={areas} services={services} suggestions={suggestions} toggleArea={(value) => toggle(value, areas, setAreas)} toggleService={(value) => toggle(value, services, setServices)} />}
             {step === 4 && <CredentialsStep form={form} setField={setField} credentials={credentials} documents={documents} toggleCredential={(value) => toggle(value, credentials, setCredentials)} addDocuments={addDocuments} removeDocument={(index) => setDocuments((current) => current.filter((_, itemIndex) => itemIndex !== index))} />}
-            {step === 5 && <ReviewStep form={form} areas={areas} services={allServices} credentials={credentials} documents={documents} isSubmitting={isSubmitting} onSubmit={submitApplication} />}
+            {step === 5 && <ReviewStep form={form} areas={areas} services={allServices} credentials={credentials} documents={documents} isSubmitting={isSubmitting} submissionStage={submissionStage} uploadProgress={uploadProgress} documentUploadStates={documentUploadStates} onSubmit={submitApplication} />}
 
             <div className="mt-10 flex justify-between gap-3">
               <Button type="button" variant="outline" size="lg" onClick={previousStep} disabled={step === 1}><ArrowLeft className="h-4 w-4" /> Back</Button>
@@ -259,17 +432,360 @@ function ServiceAreaStep({ form, setField, areas, services, suggestions, toggleA
 
 type CredentialsStepProps = StepProps & { credentials: string[]; documents: SelectedDocument[]; toggleCredential: (value: string) => void; addDocuments: (files: FileList | null, kind: SelectedDocument["kind"]) => void; removeDocument: (index: number) => void };
 function CredentialsStep({ form, setField, credentials, documents, toggleCredential, addDocuments, removeDocument }: CredentialsStepProps) {
-  return <div className="space-y-6"><StepHeading title="Credentials" description="Everything here is optional. We’ll verify documentation during onboarding." /><Card><CardContent className="divide-y divide-border p-0">{credentialOptions.map((credential) => <label key={credential.id} className="flex cursor-pointer items-center justify-between gap-4 p-4"><span>{credential.label}</span><input type="checkbox" checked={credentials.includes(credential.id)} onChange={() => toggleCredential(credential.id)} className="h-5 w-5 accent-primary" /></label>)}</CardContent></Card>{credentials.includes("other") && <Field label="Other certification" id="otherCertification"><Input id="otherCertification" className="h-12" value={form.otherCertification} onChange={(event) => setField("otherCertification", event.target.value)} placeholder="EPA 608, CPO, NATE certified…" /></Field>}<div className="grid gap-4 sm:grid-cols-2"><Field label="License / contractor number" id="licenseNumber"><Input id="licenseNumber" className="h-12" value={form.licenseNumber} onChange={(event) => setField("licenseNumber", event.target.value)} /></Field><Field label="Insurance policy number" id="insuranceNumber"><Input id="insuranceNumber" className="h-12" value={form.insurancePolicyNumber} onChange={(event) => setField("insurancePolicyNumber", event.target.value)} /></Field></div><div className="space-y-3"><Label>Documents for onboarding (optional)</Label><div className="grid gap-3 sm:grid-cols-3">{(["license", "insurance", "other"] as const).map((kind) => <label key={kind} className="flex h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card px-3 text-center capitalize transition-colors hover:border-primary/50"><Upload className="h-5 w-5 text-primary" /><span className="text-sm">{kind}</span><span className="text-[11px] text-muted-foreground">PDF or image, up to 10 MB</span><input type="file" multiple accept="image/*,application/pdf" className="sr-only" onChange={(event) => { addDocuments(event.target.files, kind); event.target.value = ""; }} /></label>)}</div>{documents.length > 0 && <ul className="divide-y divide-border rounded-xl border border-border bg-card">{documents.map((document, index) => <li key={`${document.file.name}-${index}`} className="flex items-center gap-3 p-3 text-sm"><FileText className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{document.file.name}</span><span className="text-xs capitalize text-muted-foreground">{document.kind}</span><button type="button" aria-label={`Remove ${document.file.name}`} onClick={() => removeDocument(index)}><X className="h-4 w-4 text-muted-foreground hover:text-destructive" /></button></li>)}</ul>}</div><div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 p-5"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><p className="text-sm text-muted-foreground">Files are selected for your convenience but are not uploaded in this first version. Our team will provide a secure document link during onboarding.</p></div></div>;
+  return (
+    <div className="space-y-6">
+      <StepHeading
+        title="Credentials"
+        description="Everything here is optional. We’ll verify documentation during onboarding."
+      />
+      <Card>
+        <CardContent className="divide-y divide-border p-0">
+          {credentialOptions.map((credential) => (
+            <label
+              key={credential.id}
+              className="flex cursor-pointer items-center justify-between gap-4 p-4"
+            >
+              <span>{credential.label}</span>
+              <input
+                type="checkbox"
+                checked={credentials.includes(credential.id)}
+                onChange={() => toggleCredential(credential.id)}
+                className="h-5 w-5 accent-primary"
+              />
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+      {credentials.includes("other") && (
+        <Field label="Other certification" id="otherCertification">
+          <Input
+            id="otherCertification"
+            className="h-12"
+            value={form.otherCertification}
+            onChange={(event) =>
+              setField("otherCertification", event.target.value)
+            }
+            placeholder="EPA 608, CPO, NATE certified…"
+          />
+        </Field>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="License / contractor number" id="licenseNumber">
+          <Input
+            id="licenseNumber"
+            className="h-12"
+            value={form.licenseNumber}
+            onChange={(event) => setField("licenseNumber", event.target.value)}
+          />
+        </Field>
+        <Field label="Insurance policy number" id="insuranceNumber">
+          <Input
+            id="insuranceNumber"
+            className="h-12"
+            value={form.insurancePolicyNumber}
+            onChange={(event) =>
+              setField("insurancePolicyNumber", event.target.value)
+            }
+          />
+        </Field>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <Label>Documents for onboarding (optional)</Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            PDF, JPG, PNG, WebP, HEIC, or HEIF · 10 MB each · up to{" "}
+            {MAX_VENDOR_DOCUMENT_COUNT} files
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(["license", "insurance", "other"] as const).map((kind) => (
+            <label
+              key={kind}
+              className="flex h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card px-3 text-center capitalize transition-colors hover:border-primary/50"
+            >
+              <Upload className="h-5 w-5 text-primary" />
+              <span className="text-sm">{kind}</span>
+              <span className="text-[11px] text-muted-foreground">
+                Choose secure files
+              </span>
+              <input
+                type="file"
+                multiple
+                accept={VENDOR_DOCUMENT_ACCEPT}
+                className="sr-only"
+                onChange={(event) => {
+                  addDocuments(event.target.files, kind);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          ))}
+        </div>
+        {documents.length > 0 && (
+          <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+            {documents.map((document, index) => (
+              <li
+                key={document.id}
+                className="flex items-center gap-3 p-3 text-sm"
+              >
+                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">
+                  {document.file.name}
+                </span>
+                <span className="text-xs capitalize text-muted-foreground">
+                  {document.kind}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${document.file.name}`}
+                  onClick={() => removeDocument(index)}
+                >
+                  <X className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 p-5">
+        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+        <p className="text-sm text-muted-foreground">
+          Selected documents are uploaded to private storage when you submit.
+          Only authorized Mercurius administrators can open them during review.
+        </p>
+      </div>
+    </div>
+  );
 }
 
-type ReviewStepProps = { form: FormState; areas: string[]; services: string[]; credentials: string[]; documents: SelectedDocument[]; isSubmitting: boolean; onSubmit: () => void };
-function ReviewStep({ form, areas, services, credentials, documents, isSubmitting, onSubmit }: ReviewStepProps) {
-  const rows = [["Business", form.businessName], ["Primary category", form.primaryCategory], ["Team size", form.teamSize], ["Years in business", form.yearsExperience], ["Description", form.businessDescription], ["Contact", `${form.firstName} ${form.lastName}`.trim()], ["Email", form.email], ["Phone", form.phone], ["Website", form.website], ["Preferred contact", form.preferredContact], ["Service areas", areas.join(", ")], ["Services offered", services.join(", ")], ["Credentials", credentials.map((id) => credentialOptions.find((item) => item.id === id)?.label).filter(Boolean).join(", ")], ["Other certification", form.otherCertification], ["License / contractor #", form.licenseNumber], ["Insurance policy #", form.insurancePolicyNumber], ["Documents selected", documents.map((item) => item.file.name).join(", ")], ["Notes", form.additionalNotes]].filter(([, value]) => value.trim());
-  return <div className="space-y-6"><StepHeading title="Review & Submit" description="Double-check your details before sending." /><Card><CardContent className="divide-y divide-border p-0">{rows.map(([label, value]) => <div key={label} className="grid gap-1 p-4 sm:grid-cols-3 sm:gap-4"><p className="text-sm text-muted-foreground">{label}</p><p className="break-words text-sm sm:col-span-2">{value}</p></div>)}</CardContent></Card><p className="text-sm text-muted-foreground">Free to join, no setup fee. Mercurius takes a 15% commission on completed jobs—you keep the rest.</p><Button type="button" size="lg" className="h-14 w-full text-base" onClick={onSubmit} disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</> : "Submit Application"}</Button></div>;
+type ReviewStepProps = {
+  form: FormState;
+  areas: string[];
+  services: string[];
+  credentials: string[];
+  documents: SelectedDocument[];
+  isSubmitting: boolean;
+  submissionStage: SubmissionStage;
+  uploadProgress: { completed: number; total: number };
+  documentUploadStates: Record<string, DocumentUploadStatus>;
+  onSubmit: () => void;
+};
+function ReviewStep({
+  form,
+  areas,
+  services,
+  credentials,
+  documents,
+  isSubmitting,
+  submissionStage,
+  uploadProgress,
+  documentUploadStates,
+  onSubmit,
+}: ReviewStepProps) {
+  const rows = [
+    ["Business", form.businessName],
+    ["Primary category", form.primaryCategory],
+    ["Team size", form.teamSize],
+    ["Years in business", form.yearsExperience],
+    ["Description", form.businessDescription],
+    ["Contact", `${form.firstName} ${form.lastName}`.trim()],
+    ["Email", form.email],
+    ["Phone", form.phone],
+    ["Website", form.website],
+    ["Preferred contact", form.preferredContact],
+    ["Service areas", areas.join(", ")],
+    ["Services offered", services.join(", ")],
+    [
+      "Credentials",
+      credentials
+        .map((id) => credentialOptions.find((item) => item.id === id)?.label)
+        .filter(Boolean)
+        .join(", "),
+    ],
+    ["Other certification", form.otherCertification],
+    ["License / contractor #", form.licenseNumber],
+    ["Insurance policy #", form.insurancePolicyNumber],
+    ["Notes", form.additionalNotes],
+  ].filter(([, value]) => value?.trim());
+  const progressPercent =
+    uploadProgress.total > 0
+      ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
+      : 0;
+  const submitLabel =
+    submissionStage === "saving"
+      ? "Saving application…"
+      : submissionStage === "uploading"
+        ? `Uploading documents ${uploadProgress.completed}/${uploadProgress.total}…`
+        : submissionStage === "finalizing"
+          ? "Securing documents…"
+          : "Submit Application";
+
+  return (
+    <div className="space-y-6">
+      <StepHeading
+        title="Review & Submit"
+        description="Double-check your details before sending."
+      />
+      <Card>
+        <CardContent className="divide-y divide-border p-0">
+          {rows.map(([label, value]) => (
+            <div
+              key={label}
+              className="grid gap-1 p-4 sm:grid-cols-3 sm:gap-4"
+            >
+              <p className="text-sm text-muted-foreground">{label}</p>
+              <p className="break-words text-sm sm:col-span-2">{value}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {documents.length > 0 && (
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium">Credential documents</p>
+              <span className="text-xs text-muted-foreground">
+                {documents.length} selected
+              </span>
+            </div>
+            <ul className="space-y-2">
+              {documents.map((document) => {
+                const status = documentUploadStates[document.id] ?? "waiting";
+                return (
+                  <li
+                    key={document.id}
+                    className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm"
+                  >
+                    {status === "uploading" ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                    ) : status === "uploaded" ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    ) : status === "failed" ? (
+                      <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                    ) : (
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">
+                      {document.file.name}
+                    </span>
+                    <span className="text-xs capitalize text-muted-foreground">
+                      {status}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            {isSubmitting && uploadProgress.total > 0 && (
+              <div
+                className="h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="Credential document upload progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progressPercent}
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-[width]"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <p className="text-sm text-muted-foreground">
+        Free to join, no setup fee. Mercurius takes a 15% commission on
+        completed jobs—you keep the rest.
+      </p>
+      <Button
+        type="button"
+        size="lg"
+        className="h-14 w-full text-base"
+        onClick={onSubmit}
+        disabled={isSubmitting}
+      >
+        {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+        {submitLabel}
+      </Button>
+    </div>
+  );
 }
 
-function ApplicationSuccess({ firstName, businessName, email }: { firstName: string; businessName: string; email: string }) {
-  return <div className="min-h-screen bg-background"><Header /><main className="py-16 md:py-24"><div className="container-narrow mx-auto max-w-xl text-center"><span className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10"><CheckCircle2 className="h-10 w-10 text-primary" /></span><h1 className="mb-4 text-3xl font-semibold">Application Received</h1><p className="mb-6 text-lg text-muted-foreground">Thanks, {firstName || "there"}—we have your application for <strong className="text-foreground">{businessName}</strong>. Our team reviews every Southwest Florida provider by hand.</p><div className="mb-8 rounded-2xl border border-border bg-card p-6 text-left"><p className="text-sm text-muted-foreground"><strong className="text-foreground">What happens next:</strong> We review your details, follow up if we need anything, and send a login invitation to <span className="text-foreground">{email}</span> once you&apos;re approved.</p></div><Link href="/" className={buttonVariants({ variant: "outline", size: "lg" })}>Return Home</Link></div></main><Footer /></div>;
+function ApplicationSuccess({
+  firstName,
+  businessName,
+  email,
+  selectedDocumentCount,
+  attachedDocumentCount,
+  warning,
+}: {
+  firstName: string;
+  businessName: string;
+  email: string;
+  selectedDocumentCount: number;
+  attachedDocumentCount: number;
+  warning: string | null;
+}) {
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="py-16 md:py-24">
+        <div className="container-narrow mx-auto max-w-xl text-center">
+          <span className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+            <CheckCircle2 className="h-10 w-10 text-primary" />
+          </span>
+          <h1 className="mb-4 text-3xl font-semibold">Application Received</h1>
+          <p className="mb-6 text-lg text-muted-foreground">
+            Thanks, {firstName || "there"}—we have your application for{" "}
+            <strong className="text-foreground">{businessName}</strong>. Our
+            team reviews every Southwest Florida provider by hand.
+          </p>
+          {attachedDocumentCount > 0 && (
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left text-emerald-900">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+              <p className="text-sm">
+                {attachedDocumentCount} credential document
+                {attachedDocumentCount === 1 ? "" : "s"} uploaded securely for
+                admin review.
+              </p>
+            </div>
+          )}
+          {warning && (
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-amber-900">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium">Document upload note</p>
+                <p className="mt-1">{warning}</p>
+                {selectedDocumentCount > attachedDocumentCount && (
+                  <p className="mt-1">
+                    Your application is still in the review queue. Our team can
+                    request any missing document during onboarding.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="mb-8 rounded-2xl border border-border bg-card p-6 text-left">
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-foreground">What happens next:</strong>{" "}
+              We review your details, follow up if we need anything, and send a
+              login invitation to <span className="text-foreground">{email}</span>{" "}
+              once you&apos;re approved.
+            </p>
+          </div>
+          <Link
+            href="/"
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
+            Return Home
+          </Link>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
 }
 
 function StepHeading({ title, description }: { title: string; description: string }) {

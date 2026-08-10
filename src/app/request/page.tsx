@@ -348,6 +348,11 @@ export default function RequestServicePage() {
         const frequency = frequencies[service.id] ?? service.defaultFrequency;
         const livePackage = resolvedPackages[service.id];
         const isVerifiedFixed = livePackage?.pricingMode === "fixed" && Boolean(livePackage.tierId) && Number(livePackage.price) > 0;
+        const requestPricingMode = isVerifiedFixed
+          ? "fixed"
+          : livePackage?.pricingMode === "deposit_quote"
+            ? "deposit_quote"
+            : "custom_quote";
         return {
           customer_id: user.id,
           service_type: service.name,
@@ -360,7 +365,7 @@ export default function RequestServicePage() {
           description: description.trim() || null,
           status: "pending",
           frequency,
-          pricing_mode: isVerifiedFixed ? "fixed" : "custom_quote",
+          pricing_mode: requestPricingMode,
           quote_only: !isVerifiedFixed,
           total_amount: isVerifiedFixed ? livePackage.price : null,
           service_catalog_id: service.id,
@@ -564,12 +569,12 @@ async function resolveLivePackages(
   explicitSelections: Record<string, PackageSelection>,
 ) {
   if (services.length === 0) return {};
-  type PackageCandidate = { id: string; contractor_id: string; service_id: string; default_frequency: string; pricing_mode: string; is_active: boolean; needs_review: boolean | null };
+  type PackageCandidate = { id: string; contractor_id: string; service_id: string; default_frequency: string; pricing_mode: string; deposit_amount: number | null; is_active: boolean; needs_review: boolean | null };
   type TierCandidate = { id: string; package_id: string; price: number | null };
 
   const { data: packageData, error: packageError } = await supabase
     .from("vendor_packages")
-    .select("id, contractor_id, service_id, default_frequency, pricing_mode, is_active, needs_review, contractors!inner(is_active)")
+    .select("id, contractor_id, service_id, default_frequency, pricing_mode, deposit_amount, is_active, needs_review, contractors!inner(is_active)")
     .in("service_id", services.map((service) => service.id))
     .eq("is_active", true)
     .eq("needs_review", false)

@@ -4,8 +4,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Award, BadgeCheck, Briefcase, MapPin, ShieldCheck, Star } from "lucide-react";
+import { ArrowRight, Award, BadgeCheck, Briefcase, MapPin, ShieldCheck } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { fetchCompletedJobCounts } from "@/lib/completedJobs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -23,8 +24,6 @@ type Contractor = {
   logo_url: string | null;
   bio: string | null;
   location: string | null;
-  rating: number | null;
-  jobs_completed: number | null;
   years_experience: number | null;
   services: string[] | null;
   badges: string[] | null;
@@ -34,11 +33,12 @@ type Spotlight = Contractor & {
   featureId: string;
   tier: string;
   headline: string | null;
+  completed_jobs: number | null;
 };
 
 type Mode = "loading" | "ready" | "error";
 
-const contractorSafeSelect = "id, name, logo_url, bio, location, rating, jobs_completed, years_experience, services, badges";
+const contractorSafeSelect = "id, name, logo_url, bio, location, years_experience, services, badges";
 
 export function SpotlightProviders() {
   const [providers, setProviders] = useState<Spotlight[]>([]);
@@ -67,10 +67,16 @@ export function SpotlightProviders() {
           .in("id", featured.map((item) => item.contractor_id))
           .eq("is_active", true);
         if (contractorResult.error) throw contractorResult.error;
+        let completedJobs = new Map<string, number>();
+        try {
+          completedJobs = await fetchCompletedJobCounts(featured.map((item) => item.contractor_id));
+        } catch (reason) {
+          console.warn("Spotlight completed-job counts are unavailable", reason);
+        }
         const byId = Object.fromEntries(((contractorResult.data ?? []) as Contractor[]).map((item) => [item.id, item]));
         const live = featured.flatMap((item) => {
           const contractor = byId[item.contractor_id];
-          return contractor ? [{ ...contractor, featureId: item.id, tier: item.tier, headline: item.headline }] : [];
+          return contractor ? [{ ...contractor, featureId: item.id, tier: item.tier, headline: item.headline, completed_jobs: completedJobs.get(contractor.id) ?? null }] : [];
         });
         if (active) { setProviders(live); setMode("ready"); }
       } catch (error) {
@@ -107,7 +113,7 @@ export function SpotlightProviders() {
                 <div className="p-6 md:p-8">
                   <div className="mb-5 flex items-start gap-4">
                     {provider.logo_url ? <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border bg-white p-1.5 shadow-sm"><img src={provider.logo_url} alt={`${provider.name} logo`} className="h-full w-full object-contain" /></div> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-sage-light text-xl font-bold text-sage-dark">{initials(provider.name)}</div>}
-                    <div className="min-w-0 flex-1"><div className="mb-1 flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold transition-colors group-hover:text-accent">{provider.name}</h3><span className="inline-flex items-center gap-1 rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral ring-1 ring-coral-border"><Award className="h-3 w-3" />{provider.tier}</span></div>{provider.location && <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{provider.location}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm"><span className="flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-coral text-coral" /><strong>{provider.rating === null ? "New" : Number(provider.rating).toFixed(1)}</strong></span><span className="flex items-center gap-1 text-muted-foreground"><Briefcase className="h-3.5 w-3.5" />{provider.jobs_completed ?? 0} jobs</span>{provider.years_experience !== null && <span className="text-muted-foreground">{provider.years_experience}+ yrs</span>}</div></div>
+                    <div className="min-w-0 flex-1"><div className="mb-1 flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold transition-colors group-hover:text-accent">{provider.name}</h3><span className="inline-flex items-center gap-1 rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral ring-1 ring-coral-border"><Award className="h-3 w-3" />{provider.tier}</span></div>{provider.location && <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{provider.location}</p>}<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">{provider.completed_jobs !== null && provider.completed_jobs > 0 && <span className="flex items-center gap-1 text-muted-foreground"><Briefcase className="h-3.5 w-3.5" />{provider.completed_jobs} completed through Mercurius</span>}{provider.years_experience !== null && <span className="text-muted-foreground">{provider.years_experience}+ yrs</span>}</div></div>
                   </div>
                   {provider.headline && <p className="mb-3 text-sm font-medium leading-relaxed text-foreground/85">“{provider.headline}”</p>}
                   {provider.bio && <p className="mb-5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{provider.bio}</p>}

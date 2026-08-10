@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, BarChart3, BookOpen, ChevronLeft, ClipboardList, FileText, House, LayoutDashboard, Loader2, LogOut, MapPin, MessageSquare, Receipt, Shield, ShieldCheck, Sparkles, Star, Ticket, TrendingUp, UserCheck, Zap } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, MapPin, MessageSquare, Receipt, Shield, ShieldCheck, Sparkles, Star, Ticket, TrendingUp, UserCheck, Zap } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ const navigation = [
   { label: "Service Catalog", href: "/admin/catalog", icon: BookOpen },
   { label: "Coverage Areas", href: "/admin/coverage", icon: MapPin },
   { label: "Pricing Templates", href: "/admin/pricing-templates", icon: TrendingUp },
+  { label: "Package Reviews", href: "/admin/pricing-reviews", icon: DollarSign },
   { label: "Pricing Analytics", href: "/admin/pricing-analytics", icon: BarChart3 },
   { label: "Smart Picks", href: "/admin/smart-picks", icon: Zap },
   { label: "Featured Providers", href: "/admin/featured", icon: Sparkles },

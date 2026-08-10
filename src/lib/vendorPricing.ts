@@ -6,6 +6,26 @@ export type PriceTierLike = {
   price: unknown;
 };
 
+export type CatalogPriceGuidanceLike = {
+  weekly_price?: unknown;
+  monthly_price?: unknown;
+  one_time_price?: unknown;
+};
+
+export type CustomPackagePriceReview = {
+  needsReview: boolean;
+  minPrice: number;
+  maxPrice: number;
+  referencePrice: number | null;
+  source: "managed_template" | "service_catalog" | "absolute_fallback";
+  outOfBandTierIndexes: number[];
+};
+
+export const CUSTOM_PRICE_MIN_MULTIPLIER = 0.25;
+export const CUSTOM_PRICE_MAX_MULTIPLIER = 4;
+export const CUSTOM_PRICE_FALLBACK_MIN = 20;
+export const CUSTOM_PRICE_FALLBACK_MAX = 5_000;
+
 export const MAX_PROMOTION_PERCENT = 80;
 
 export type PromotionType = "percent_off" | "fixed_price";
@@ -57,6 +77,78 @@ export function hasValidFixedTiers(tiers: readonly PriceTierLike[]): boolean {
   return tiers.length > 0 && tiers.every((tier) => isPositiveTierPrice(tier.price));
 }
 
+/**
+ * Soft-launch review guardrail for self-serve custom packages.
+ *
+ * One-time services reuse the broadest active managed-template range when one
+ * exists. Other cadences use a deliberately broad 25%–400% band around the
+ * service catalog guidance price. The absolute fallback catches only obvious
+ * outliers when Mercurius has not configured either guidance source.
+ */
+export function evaluateCustomPackagePriceReview({
+  tiers,
+  frequency,
+  catalog,
+  templateRange,
+}: {
+  tiers: readonly PriceTierLike[];
+  frequency: PricingFrequency;
+  catalog?: CatalogPriceGuidanceLike | null;
+  templateRange?: { minPrice: number; maxPrice: number } | null;
+}): CustomPackagePriceReview {
+  const validTemplateRange =
+    frequency === "one-time" &&
+    Number.isFinite(templateRange?.minPrice) &&
+    Number.isFinite(templateRange?.maxPrice) &&
+    Number(templateRange?.minPrice) > 0 &&
+    Number(templateRange?.maxPrice) >= Number(templateRange?.minPrice)
+      ? {
+          minPrice: roundCurrency(Number(templateRange?.minPrice)),
+          maxPrice: roundCurrency(Number(templateRange?.maxPrice)),
+        }
+      : null;
+  const referencePrice = catalogGuidancePrice(catalog, frequency);
+
+  const range = validTemplateRange
+    ? {
+        ...validTemplateRange,
+        referencePrice: null,
+        source: "managed_template" as const,
+      }
+    : referencePrice
+      ? {
+          minPrice: roundCurrency(
+            Math.max(1, referencePrice * CUSTOM_PRICE_MIN_MULTIPLIER),
+          ),
+          maxPrice: roundCurrency(
+            referencePrice * CUSTOM_PRICE_MAX_MULTIPLIER,
+          ),
+          referencePrice,
+          source: "service_catalog" as const,
+        }
+      : {
+          minPrice: CUSTOM_PRICE_FALLBACK_MIN,
+          maxPrice: CUSTOM_PRICE_FALLBACK_MAX,
+          referencePrice: null,
+          source: "absolute_fallback" as const,
+        };
+
+  const outOfBandTierIndexes = tiers.flatMap((tier, index) => {
+    const price = Number(tier.price);
+    return !Number.isFinite(price) ||
+      price < range.minPrice ||
+      price > range.maxPrice
+      ? [index]
+      : [];
+  });
+
+  return {
+    ...range,
+    needsReview: tiers.length > 0 && outOfBandTierIndexes.length > 0,
+    outOfBandTierIndexes,
+  };
+}
+
 export function isPubliclyEligibleFixedPackage<TTier extends PriceTierLike>(
   item: PublicPackageLike<TTier>,
 ): boolean {
@@ -67,11 +159,12 @@ export function isPubliclyEligibleFixedPackage<TTier extends PriceTierLike>(
 }
 
 export function isPubliclyEligibleQuotePackage(
-  item: Omit<PublicPackageLike, "tiers">,
+  item: Omit<PublicPackageLike, "tiers"> & { deposit_amount?: unknown },
 ): boolean {
   return item.is_active
     && item.needs_review !== true
-    && (item.pricing_mode === "custom_quote" || item.pricing_mode === "deposit_quote");
+    && (item.pricing_mode === "custom_quote"
+      || (item.pricing_mode === "deposit_quote" && isPositiveTierPrice(item.deposit_amount)));
 }
 
 export function isPromotionType(value: unknown): value is PromotionType {
@@ -160,4 +253,28 @@ export function promotionForPackage(promotions: readonly PackagePromotion[], pac
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function catalogGuidancePrice(
+  catalog: CatalogPriceGuidanceLike | null | undefined,
+  frequency: PricingFrequency,
+) {
+  if (!catalog) return null;
+  const weekly = positiveNumber(catalog.weekly_price);
+  const monthly = positiveNumber(catalog.monthly_price);
+  const oneTime = positiveNumber(catalog.one_time_price);
+  const candidate =
+    frequency === "weekly"
+      ? weekly ?? monthly ?? oneTime
+      : frequency === "monthly" || frequency === "bi-monthly"
+        ? monthly ?? oneTime
+        : frequency === "quarterly"
+          ? oneTime ?? monthly
+          : oneTime ?? monthly;
+  return candidate == null ? null : roundCurrency(candidate);
+}
+
+function positiveNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
