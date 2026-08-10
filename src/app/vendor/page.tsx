@@ -24,10 +24,11 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { COMPLETED_JOB_STATUSES, isCompletedJobStatus } from "@/lib/completedJobs";
+import { COMPLETED_JOB_STATUSES, completionRateFromStatuses } from "@/lib/completedJobs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { calculateVendorProfileStrength } from "@/lib/vendorProfileStrength";
+import { isPubliclyEligibleFixedPackage, isPubliclyEligibleQuotePackage } from "@/lib/vendorPricing";
 
 type Contractor = {
   id: string;
@@ -52,8 +53,22 @@ type ServiceRequest = {
 
 type VendorPackage = {
   id: string;
+  service_id: string;
   is_active: boolean;
   pricing_mode: string;
+  needs_review: boolean | null;
+  deposit_amount: number | null;
+  tiers: Array<{ price: number }>;
+};
+
+type CatalogService = {
+  id: string;
+  name: string;
+};
+
+type PricingGap = {
+  key: string;
+  label: string;
 };
 
 type ContactDetails = {
@@ -67,6 +82,8 @@ type OverviewData = {
   openRequests: number;
   activeJobs: number;
   completedJobs: number;
+  actionableJobs: number;
+  completionRate: number | null;
   profileComplete: boolean;
   profileStrength: number;
   livePackageCount: number;
@@ -76,17 +93,21 @@ type OverviewData = {
   readyForJobs: boolean;
   requestsLast30Days: number;
   totalRequests: number;
+  profileServiceCount: number;
+  pricedServiceCount: number;
+  servicesNeedingPricing: PricingGap[];
 };
 
 const incomingStatuses = new Set(["matched", "pending"]);
 const completedStatuses = new Set<string>(COMPLETED_JOB_STATUSES);
-const inactiveStatuses = new Set([...completedStatuses, "cancelled"]);
+const inactiveStatuses = new Set([...completedStatuses, "resolved", "cancelled"]);
 
 export default function VendorOverviewPage() {
   const { user } = useAuth();
   const [contractor, setContractor] = useState<Contractor | null>(null);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [packages, setPackages] = useState<VendorPackage[]>([]);
+  const [catalogServices, setCatalogServices] = useState<CatalogService[]>([]);
   const [contact, setContact] = useState<ContactDetails | null>(null);
   const [galleryCount, setGalleryCount] = useState<number | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);
@@ -114,7 +135,7 @@ export default function VendorOverviewPage() {
       }
 
       const contractorData = contractorResult.data as Contractor;
-      const [requestsResult, packagesResult, contactResult, galleryResult] = await Promise.all([
+      const [requestsResult, packagesResult, catalogResult, contactResult, galleryResult] = await Promise.all([
         supabase
           .from("service_requests")
           .select("id, status, created_at")
@@ -122,8 +143,13 @@ export default function VendorOverviewPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("vendor_packages")
-          .select("id, is_active, pricing_mode")
+          .select("id, service_id, is_active, pricing_mode, needs_review, deposit_amount")
           .eq("contractor_id", contractorData.id),
+        supabase
+          .from("services_catalog")
+          .select("id, name")
+          .eq("is_active", true)
+          .order("name"),
         supabase.rpc("get_contractor_contact", { _contractor_id: contractorData.id }),
         supabase
           .from("contractor_gallery")
@@ -133,16 +159,34 @@ export default function VendorOverviewPage() {
 
       if (requestsResult.error) throw requestsResult.error;
       if (packagesResult.error) throw packagesResult.error;
+      if (catalogResult.error) throw catalogResult.error;
 
       if (contactResult.error) throw contactResult.error;
       if (galleryResult.error) throw galleryResult.error;
+      const packageRows = (packagesResult.data ?? []) as Omit<VendorPackage, "tiers">[];
+      const packageIds = packageRows.map((item) => item.id);
+      const tiersResult = packageIds.length
+        ? await supabase
+            .from("package_tiers")
+            .select("package_id, price")
+            .in("package_id", packageIds)
+        : { data: [] as Array<{ package_id: string; price: number }>, error: null };
+      if (tiersResult.error) throw tiersResult.error;
+      const tiers = (tiersResult.data ?? []) as Array<{ package_id: string; price: number }>;
       const value = contactResult.data as unknown;
       setContact((Array.isArray(value) ? value[0] : value) as ContactDetails | null);
       setGalleryCount(galleryResult.count ?? 0);
 
       setContractor(contractorData);
       setRequests((requestsResult.data ?? []) as ServiceRequest[]);
-      setPackages((packagesResult.data ?? []) as VendorPackage[]);
+      setPackages(packageRows.map((item) => ({
+        ...item,
+        deposit_amount: item.deposit_amount === null ? null : Number(item.deposit_amount),
+        tiers: tiers
+          .filter((tier) => tier.package_id === item.id)
+          .map((tier) => ({ price: Number(tier.price) })),
+      })));
+      setCatalogServices((catalogResult.data ?? []) as CatalogService[]);
       setLoadedAt(Date.now());
       setMode("live");
     } catch (error) {
@@ -150,6 +194,7 @@ export default function VendorOverviewPage() {
       setContractor(null);
       setRequests([]);
       setPackages([]);
+      setCatalogServices([]);
       setErrorMessage(error instanceof Error ? error.message : "Your live vendor data could not be loaded.");
       setMode("error");
     }
@@ -167,14 +212,15 @@ export default function VendorOverviewPage() {
 
     const openRequests = requests.filter((request) => incomingStatuses.has(request.status)).length;
     const activeJobs = requests.filter((request) => !incomingStatuses.has(request.status) && !inactiveStatuses.has(request.status)).length;
-    const completedJobs = requests.filter((request) => isCompletedJobStatus(request.status)).length;
+    const completion = completionRateFromStatuses(requests.map((request) => request.status));
+    const serviceCoverage = profileServicePricingCoverage(contractor.services ?? [], catalogServices, packages);
     const strength = calculateVendorProfileStrength({
       ...contractor,
       email: contact?.email ?? null,
       phone: contact?.phone ?? null,
     }, galleryCount ?? 0);
     const profileComplete = strength.essentials === 40;
-    const livePackageCount = packages.filter((item) => item.is_active && item.pricing_mode === "fixed").length;
+    const livePackageCount = packages.filter(isPubliclyEligibleFixedPackage).length;
     const hasLivePrice = livePackageCount > 0;
     const isActive = contractor.is_active !== false;
     const isPublic = isActive && contractor.marketing_enabled !== false;
@@ -186,7 +232,9 @@ export default function VendorOverviewPage() {
     return {
       openRequests,
       activeJobs,
-      completedJobs,
+      completedJobs: completion.completedJobs,
+      actionableJobs: completion.actionableJobs,
+      completionRate: completion.completionRate,
       profileComplete,
       profileStrength,
       livePackageCount,
@@ -196,8 +244,13 @@ export default function VendorOverviewPage() {
       readyForJobs,
       requestsLast30Days,
       totalRequests: requests.length,
+      profileServiceCount: serviceCoverage.length,
+      pricedServiceCount: serviceCoverage.filter((service) => service.isCovered).length,
+      servicesNeedingPricing: serviceCoverage
+        .filter((service) => !service.isCovered)
+        .map(({ key, label }) => ({ key, label })),
     };
-  }, [contact, contractor, galleryCount, loadedAt, packages, requests]);
+  }, [catalogServices, contact, contractor, galleryCount, loadedAt, packages, requests]);
 
   if (mode === "loading") return <PageLoading />;
   if (mode === "unlinked") return <UnlinkedState />;
@@ -315,12 +368,44 @@ export default function VendorOverviewPage() {
       </Card>
 
       <SectionHeading title="Operational scorecard" description="Live records from your Mercurius vendor account and assigned work." />
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <MetricCard icon={Clock3} label="Awaiting response" value={String(overview.openRequests)} note={overview.openRequests ? "Open Jobs & Requests" : "No open requests"} href="/vendor/jobs" emphasize={overview.openRequests > 0} />
         <MetricCard icon={Activity} label="Active jobs" value={String(overview.activeJobs)} note="Scheduled or in progress" href="/vendor/jobs" />
         <MetricCard icon={CheckCircle2} label="Completed jobs" value={String(overview.completedJobs)} note="Completed through Mercurius" />
+        <MetricCard icon={Gauge} label="Completion rate" value={overview.completionRate === null ? "—" : `${overview.completionRate}%`} note={overview.completionRate === null ? "No actionable job history yet" : `${overview.completedJobs} of ${overview.actionableJobs} actionable ${overview.actionableJobs === 1 ? "request" : "requests"} completed`} />
         <MetricCard icon={Sparkles} label="Profile strength" value={`${overview.profileStrength}%`} note="Based on saved profile fields" href="/vendor/profile" emphasize={overview.profileStrength < 80} />
       </div>
+
+      <Card className="mb-8 overflow-hidden">
+        <CardHeader className="border-b bg-muted/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base"><DollarSign className="h-4 w-4 text-accent" />Services that still need pricing</CardTitle>
+              <CardDescription className="mt-1">A service is covered when it has an active, review-cleared fixed price or valid public quote option.</CardDescription>
+            </div>
+            {overview.profileServiceCount > 0 && <Badge variant="outline" className="w-fit bg-background">{overview.pricedServiceCount} of {overview.profileServiceCount} covered</Badge>}
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {overview.profileServiceCount === 0 ? (
+            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground"><PackageCheck className="h-5 w-5" /></span><div><p className="text-sm font-medium">Add services to your profile first</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Once your services are listed, Mercurius can show which ones still need a public pricing or quote path.</p></div></div>
+              <Link href="/vendor/profile" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full shrink-0 sm:w-auto")}>Edit profile<ArrowRight /></Link>
+            </div>
+          ) : overview.servicesNeedingPricing.length === 0 ? (
+            <div className="flex items-start gap-3 bg-accent-subtle p-5"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 className="h-5 w-5" /></span><div><p className="text-sm font-medium">Every listed service is covered</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Each profile service currently has an eligible live fixed price or public quote option. Keep rates and availability current as your services change.</p></div><Link href="/vendor/packages" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto hidden shrink-0 sm:inline-flex")}>Review pricing</Link></div>
+          ) : (
+            <div className="divide-y">
+              {overview.servicesNeedingPricing.map((service) => (
+                <Link key={service.key} href="/vendor/packages" className="group flex flex-col gap-3 p-4 transition-colors hover:bg-surface-hover sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <span className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground"><DollarSign className="h-4 w-4" /></span><span><span className="block text-sm font-medium text-foreground">{service.label}</span><span className="mt-0.5 block text-xs text-muted-foreground">No active public-eligible package covers this service yet.</span></span></span>
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-accent">Set or review pricing<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="mb-8 grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-2">
@@ -363,6 +448,52 @@ export default function VendorOverviewPage() {
       </div>
     </div>
   );
+}
+
+function profileServicePricingCoverage(
+  profileServices: string[],
+  catalogServices: CatalogService[],
+  packages: VendorPackage[],
+) {
+  const normalize = (value: string) => value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const displayService = (value: string) => value
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const catalogById = new Map(catalogServices.map((service) => [service.id, service]));
+  const uniqueServices = [...new Map(
+    profileServices
+      .filter(Boolean)
+      .map((raw) => [normalize(raw), raw] as const),
+  ).values()];
+
+  return uniqueServices.map((raw) => {
+    const normalized = normalize(raw);
+    const catalogService = catalogServices.find((service) =>
+      normalize(service.id) === normalized || normalize(service.name) === normalized,
+    );
+    const matchingKeys = new Set([
+      normalized,
+      catalogService ? normalize(catalogService.id) : "",
+      catalogService ? normalize(catalogService.name) : "",
+    ].filter(Boolean));
+    const matchingPackages = packages.filter((item) => {
+      const packageService = catalogById.get(item.service_id);
+      return matchingKeys.has(normalize(item.service_id))
+        || Boolean(packageService && matchingKeys.has(normalize(packageService.name)));
+    });
+    const isCovered = matchingPackages.some((item) => item.pricing_mode === "fixed"
+      ? isPubliclyEligibleFixedPackage(item)
+      : isPubliclyEligibleQuotePackage(item));
+
+    return {
+      key: normalized,
+      label: catalogService?.name ?? displayService(raw),
+      isCovered,
+    };
+  });
 }
 
 function buildRecommendations(contractor: Contractor, overview: OverviewData) {
