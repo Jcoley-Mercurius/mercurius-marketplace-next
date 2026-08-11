@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   Ban,
@@ -8,15 +9,18 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
+  ExternalLink,
+  LifeBuoy,
   Loader2,
   MapPin,
+  MessageSquare,
   Star,
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +29,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { fetchCompletedJobCounts } from "@/lib/completedJobs";
+import { contactHrefForRequest } from "@/lib/requestContext";
 import {
   serviceRequestStatusLabel,
   serviceRequestStatusStyle,
@@ -67,6 +73,15 @@ type Props = {
   onRefresh: () => Promise<void>;
 };
 
+type ProviderSummary = {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  location: string | null;
+};
+
+type ProviderMode = "idle" | "loading" | "ready" | "missing" | "error";
+
 const ratingLabels = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
 
 export function HomeownerJobDetailDialog({
@@ -85,6 +100,13 @@ export function HomeownerJobDetailDialog({
   const [comment, setComment] = useState("");
   const [signedPhotos, setSignedPhotos] = useState<string[]>([]);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [provider, setProvider] = useState<ProviderSummary | null>(null);
+  const [providerMode, setProviderMode] = useState<ProviderMode>(
+    job?.contractor_id ? "loading" : "idle",
+  );
+  const [publicRating, setPublicRating] = useState<number | null>(null);
+  const [publicReviewCount, setPublicReviewCount] = useState(0);
+  const [completedJobCount, setCompletedJobCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open || !job || !job.photo_proof_urls?.length) return;
@@ -114,6 +136,80 @@ export function HomeownerJobDetailDialog({
       active = false;
     };
   }, [job, open]);
+
+  useEffect(() => {
+    const contractorId = job?.contractor_id;
+    if (!open || !contractorId) return;
+    let active = true;
+
+    const timer = window.setTimeout(async () => {
+      setProviderMode("loading");
+      setProvider(null);
+      setPublicRating(null);
+      setPublicReviewCount(0);
+      setCompletedJobCount(null);
+
+      try {
+        const supabase = createClient();
+        const completedJobsPromise = fetchCompletedJobCounts([contractorId])
+          .then((counts) => counts.get(contractorId) ?? null)
+          .catch((reason) => {
+            console.warn("Assigned provider completed-job count is unavailable", reason);
+            return null;
+          });
+        const [contractorResult, reviewsResult] = await Promise.all([
+          supabase
+            .from("contractors")
+            .select("id, name, logo_url, location")
+            .eq("id", contractorId)
+            .maybeSingle(),
+          supabase
+            .from("reviews")
+            .select("rating")
+            .eq("contractor_id", contractorId)
+            .eq("visibility", "eligible_for_google"),
+        ]);
+
+        if (!active) return;
+        if (contractorResult.error) throw contractorResult.error;
+        if (!contractorResult.data) {
+          setProviderMode("missing");
+          return;
+        }
+
+        const ratings = reviewsResult.error
+          ? []
+          : (reviewsResult.data ?? [])
+              .map((review) => Number(review.rating))
+              .filter((rating) => Number.isFinite(rating) && rating >= 1 && rating <= 5);
+        if (reviewsResult.error) {
+          console.warn("Assigned provider public reviews are unavailable", reviewsResult.error);
+        }
+
+        const completedJobs = await completedJobsPromise;
+        if (!active) return;
+
+        setProvider(contractorResult.data as ProviderSummary);
+        setPublicReviewCount(ratings.length);
+        setPublicRating(
+          ratings.length
+            ? ratings.reduce((total, rating) => total + rating, 0) /
+                ratings.length
+            : null,
+        );
+        setCompletedJobCount(completedJobs);
+        setProviderMode("ready");
+      } catch (reason) {
+        console.error("Unable to load assigned provider basics", reason);
+        if (active) setProviderMode("error");
+      }
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [job?.contractor_id, open]);
 
   if (!job) return null;
   const currentJob = job;
@@ -333,6 +429,18 @@ export function HomeownerJobDetailDialog({
               {job.description}
             </p>
           </div>
+        )}
+
+        {job.contractor_id && (
+          <AssignedProviderCard
+            contractorId={job.contractor_id}
+            jobId={job.id}
+            provider={provider}
+            mode={providerMode}
+            publicRating={publicRating}
+            publicReviewCount={publicReviewCount}
+            completedJobCount={completedJobCount}
+          />
         )}
 
         {isPending && (
@@ -580,6 +688,22 @@ export function HomeownerJobDetailDialog({
             Actions are unavailable until live dashboard data is available.
           </p>
         )}
+
+        <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Need help with this request?</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Contact support with this request already attached for context.
+            </p>
+          </div>
+          <Link
+            href={contactHrefForRequest(currentJob.id)}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <LifeBuoy className="h-4 w-4" />
+            Report an issue
+          </Link>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -602,6 +726,139 @@ function Detail({
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="mt-0.5 break-words text-sm font-medium">{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function AssignedProviderCard({
+  contractorId,
+  jobId,
+  provider,
+  mode,
+  publicRating,
+  publicReviewCount,
+  completedJobCount,
+}: {
+  contractorId: string;
+  jobId: string;
+  provider: ProviderSummary | null;
+  mode: ProviderMode;
+  publicRating: number | null;
+  publicReviewCount: number;
+  completedJobCount: number | null;
+}) {
+  if (mode === "loading" || mode === "idle") {
+    return (
+      <div className="rounded-xl border border-border bg-muted/30 p-4">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 animate-pulse rounded-xl bg-muted" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-48 animate-pulse rounded bg-muted" />
+          </div>
+        </div>
+        <span className="sr-only">Loading assigned provider</span>
+      </div>
+    );
+  }
+
+  if (mode === "missing" || mode === "error" || !provider) {
+    return (
+      <div className="rounded-xl border border-border bg-muted/30 p-4">
+        <p className="font-medium">Provider assigned</p>
+        <p className="mt-1 text-sm leading-5 text-muted-foreground">
+          The provider’s public profile details are unavailable right now. Your
+          assignment is still attached to this service.
+        </p>
+        <Link
+          href={`/messages?request=${encodeURIComponent(jobId)}`}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "mt-4",
+          )}
+        >
+          <MessageSquare className="h-4 w-4" />
+          Message provider
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-accent-border bg-accent-subtle/40 p-4">
+      <div className="flex items-start gap-3">
+        {provider.logo_url ? (
+          // Public storefront logos intentionally bypass Next Image optimization.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={provider.logo_url}
+            alt={`${provider.name} logo`}
+            className="h-12 w-12 shrink-0 rounded-xl border border-border bg-card object-contain p-1"
+          />
+        ) : (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-lg font-semibold text-accent-foreground">
+            {provider.name.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Assigned provider
+          </p>
+          <p className="mt-1 truncate font-semibold">{provider.name}</p>
+          {provider.location && (
+            <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" />
+              {provider.location}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {(publicRating !== null || completedJobCount !== null) && (
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-accent-border/70 pt-3 text-xs text-muted-foreground">
+          {publicRating !== null && (
+            <span className="flex items-center gap-1.5">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <strong className="font-semibold text-foreground">
+                {publicRating.toFixed(1)}
+              </strong>
+              {publicReviewCount} public review{publicReviewCount === 1 ? "" : "s"}
+            </span>
+          )}
+          {completedJobCount !== null && (
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-sage-dark" />
+              <strong className="font-semibold text-foreground">
+                {completedJobCount}
+              </strong>
+              completed through Mercurius
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <Link
+          href={`/providers/${encodeURIComponent(contractorId)}`}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "flex-1",
+          )}
+        >
+          View provider profile
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+        <Link
+          href={`/messages?request=${encodeURIComponent(jobId)}`}
+          className={cn(
+            buttonVariants({ size: "sm" }),
+            "flex-1 bg-accent text-accent-foreground hover:bg-accent-hover",
+          )}
+        >
+          <MessageSquare className="h-4 w-4" />
+          Message provider
+        </Link>
       </div>
     </div>
   );

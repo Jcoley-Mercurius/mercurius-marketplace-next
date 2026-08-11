@@ -1,17 +1,29 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Clock, Loader2, Mail, MapPin, MessageCircle, Phone, Send, Wrench } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, CheckCircle2, Clock, FileText, Loader2, Mail, MapPin, MessageCircle, Phone, Send, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { normalizeRequestId } from "@/lib/requestContext";
 import { cn } from "@/lib/utils";
 
 export default function ContactPage() {
+  return (
+    <Suspense fallback={<ContactPageLoading />}>
+      <ContactPageContent />
+    </Suspense>
+  );
+}
+
+function ContactPageContent() {
+  const searchParams = useSearchParams();
+  const requestId = normalizeRequestId(searchParams.get("request"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -33,6 +45,7 @@ export default function ContactPage() {
           phone: String(formData.get("phone") ?? "").trim() || null,
           subject: String(formData.get("subject") ?? "").trim(),
           message: String(formData.get("message") ?? "").trim(),
+          request_id: requestId,
         }),
       });
       const result = (await response.json()) as { error?: string };
@@ -118,6 +131,20 @@ export default function ContactPage() {
                         </p>
                       </div>
                     </div>
+                    {requestId && (
+                      <div className="mb-6 flex items-start gap-3 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3 text-sm">
+                        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                        <div className="min-w-0">
+                          <p className="break-all font-medium text-foreground">
+                            Regarding request {requestId}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            This request ID will be included with your message so
+                            our team can find the correct service history.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <form onSubmit={handleSubmit} className="space-y-6">
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
@@ -243,6 +270,19 @@ export default function ContactPage() {
             </div>
           </div>
         </section>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+function ContactPageLoading() {
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <Header />
+      <main className="flex flex-1 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-accent" />
+        <span className="sr-only">Loading contact form</span>
       </main>
       <Footer />
     </div>

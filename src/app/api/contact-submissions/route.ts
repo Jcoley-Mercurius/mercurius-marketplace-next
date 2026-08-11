@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { after, NextResponse } from "next/server";
 import { sendOwnerNotification } from "@/lib/ownerNotifications";
+import {
+  appendRequestContext,
+  normalizeRequestId,
+} from "@/lib/requestContext";
 
 export const runtime = "nodejs";
 
@@ -40,13 +44,19 @@ function parseSubmission(value: unknown): ContactSubmission {
     throw new ContactValidationError("Enter a valid email address.");
   }
 
+  const requestId = normalizeRequestId(input.request_id);
+  const message = text(input.message, "Message", {
+    required: true,
+    max: 5_000,
+  });
+
   return {
     first_name: text(input.first_name, "First name", { required: true, max: 100 }),
     last_name: text(input.last_name, "Last name", { required: true, max: 100 }),
     email,
     phone: text(input.phone, "Phone", { max: 50 }) || null,
     subject: text(input.subject, "Subject", { required: true, max: 200 }),
-    message: text(input.message, "Message", { required: true, max: 5_000 }),
+    message: appendRequestContext(message, requestId),
   };
 }
 
@@ -109,4 +119,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

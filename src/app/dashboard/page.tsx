@@ -80,6 +80,7 @@ export default function DashboardPage() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedJob, setSelectedJob] = useState<ServiceRequest | null>(null);
+  const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
   const [dataMode, setDataMode] = useState<DataMode>("loading");
   const [dashboardError, setDashboardError] = useState("");
   const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
@@ -98,6 +99,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const query = new URLSearchParams(window.location.search);
+      setRequestedJobId(query.get("job"));
       const requestedTab = query.get("tab");
       if (["overview", "upcoming", "past", "invoices", "payment-methods"].includes(requestedTab ?? "")) setActiveTab(requestedTab!);
       if (query.has("paid")) {
@@ -257,6 +259,33 @@ export default function DashboardPage() {
     [requests],
   );
 
+  useEffect(() => {
+    if (!requestedJobId || dataMode !== "live") return;
+    const timer = window.setTimeout(() => {
+      const requestedJob = requests.find(
+        (request) => request.id === requestedJobId,
+      );
+      if (requestedJob) {
+        setSelectedJob(requestedJob);
+      } else {
+        toast.error("This service update is no longer available", {
+          description:
+            "The request may have been removed, or it may no longer be available to this account.",
+        });
+      }
+
+      setRequestedJobId(null);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("job");
+      window.history.replaceState(
+        {},
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [dataMode, requestedJobId, requests]);
+
   if (authLoading || !user) {
     return <FullPageLoading label={authLoading ? "Loading your dashboard..." : "Taking you to sign in..."} />;
   }
@@ -335,7 +364,7 @@ export default function DashboardPage() {
                   <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Quick actions</h2>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <QuickAction href="/request" icon={Plus} label="Request a Service" />
-                    <QuickAction href="/contact" icon={MessageSquare} label="Contact Support" />
+                    <QuickAction href="/messages" icon={MessageSquare} label="Messages" />
                     <QuickAction href="/contact" icon={AlertTriangle} label="Report an Issue" />
                   </div>
                 </div>

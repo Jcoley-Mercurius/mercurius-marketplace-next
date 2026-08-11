@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -20,6 +21,8 @@ import {
   Loader2,
   LogOut,
   Menu,
+  MessageSquare,
+  Settings,
   Shield,
   UserPlus,
   Wrench,
@@ -27,6 +30,7 @@ import {
 import { fetchRoles } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const accountPortals = [
   {
@@ -95,6 +99,13 @@ export function Header() {
   const portalLinks = accountPortals.filter(({ role }) =>
     currentRoleState?.roles.includes(role),
   );
+  const isHomeowner = Boolean(currentRoleState?.roles.includes("homeowner"));
+  const {
+    unreadCount,
+    loading: notificationsLoading,
+    error: notificationsError,
+    realtimeError: notificationsRealtimeError,
+  } = useNotifications(20, isHomeowner, "header");
   const metadataName =
     typeof user?.user_metadata?.full_name === "string"
       ? user.user_metadata.full_name.trim()
@@ -179,6 +190,13 @@ export function Header() {
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center space-x-3 ml-auto">
+          {isHomeowner && (
+            <NotificationBell
+              unreadCount={unreadCount}
+              loading={notificationsLoading}
+              unavailable={Boolean(notificationsError || notificationsRealtimeError)}
+            />
+          )}
           <ThemeToggle />
           {authLoading ? (
             <Button variant="ghost" disabled>
@@ -237,6 +255,24 @@ export function Header() {
                     {linkLabel}
                   </DropdownMenuItem>
                 ))}
+                {isHomeowner && (
+                  <>
+                    <DropdownMenuItem
+                      render={<Link href="/messages" />}
+                      className="cursor-pointer px-2 py-2"
+                    >
+                      <MessageSquare />
+                      Messages
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      render={<Link href="/account" />}
+                      className="cursor-pointer px-2 py-2"
+                    >
+                      <Settings />
+                      Account Settings
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuItem
                   variant="destructive"
                   disabled={isSigningOut}
@@ -293,7 +329,14 @@ export function Header() {
         </div>
 
         {/* Mobile Menu */}
-        <div className="md:hidden ml-auto">
+        <div className="ml-auto flex items-center gap-1 md:hidden">
+          {isHomeowner && (
+            <NotificationBell
+              unreadCount={unreadCount}
+              loading={notificationsLoading}
+              unavailable={Boolean(notificationsError || notificationsRealtimeError)}
+            />
+          )}
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger>
               <Button variant="ghost" size="icon">
@@ -389,6 +432,32 @@ export function Header() {
                             {linkLabel}
                           </Link>
                         ),
+                      )}
+                      {isHomeowner && (
+                        <>
+                          <Link
+                            href="/messages"
+                            onClick={() => setIsOpen(false)}
+                            className={cn(
+                              buttonVariants({ variant: "outline" }),
+                              "w-full justify-start gap-2",
+                            )}
+                          >
+                            <MessageSquare />
+                            Messages
+                          </Link>
+                          <Link
+                            href="/account"
+                            onClick={() => setIsOpen(false)}
+                            className={cn(
+                              buttonVariants({ variant: "outline" }),
+                              "w-full justify-start gap-2",
+                            )}
+                          >
+                            <Settings />
+                            Account Settings
+                          </Link>
+                        </>
                       )}
                       <Button
                         variant="outline"
