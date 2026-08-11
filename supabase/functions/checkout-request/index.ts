@@ -229,13 +229,38 @@ Deno.serve(async (req) => {
       // Vendor package tier → price comes from the vendor's live price table.
       const { data: tier } = await admin
         .from("package_tiers")
-        .select("name, package_id")
+        .select("name, package_id, frequency, rule_question_key, rule_min, rule_max")
         .eq("id", sr.package_tier_id)
         .maybeSingle();
       if (!tier) throw new Error("Tier not found");
       if (!sr.package_id || tier.package_id !== sr.package_id) {
         console.error("PRICE_TAMPER: tier does not belong to package", { requestId, tier: sr.package_tier_id, package: sr.package_id });
         throw new Error("Selected package tier is invalid for this package");
+      }
+      if (!sr.frequency || tier.frequency !== sr.frequency) {
+        console.error("PRICE_TAMPER: tier cadence does not match request", {
+          requestId,
+          requestFrequency: sr.frequency,
+          tierFrequency: tier.frequency,
+        });
+        throw new Error("Selected package price is invalid for this service cadence");
+      }
+      if (tier.rule_question_key) {
+        const storedAnswer = sr.package_question_answers?.[tier.rule_question_key];
+        const answer = Number(storedAnswer && typeof storedAnswer === "object" ? storedAnswer.answer : storedAnswer);
+        const belowRange = tier.rule_min != null && answer < Number(tier.rule_min);
+        const aboveRange = tier.rule_max != null && answer > Number(tier.rule_max);
+        if (!Number.isFinite(answer) || belowRange || aboveRange) {
+          console.error("PRICE_TAMPER: qualifying answer does not match tier", {
+            requestId,
+            tierId: sr.package_tier_id,
+            questionKey: tier.rule_question_key,
+          });
+          throw new CheckoutError(
+            "PACKAGE_ANSWER_MISMATCH",
+            "Your service details no longer match this price level. No checkout was created. Please review the request or ask Mercurius to confirm a quote.",
+          );
+        }
       }
       const { data: pkg } = await admin
         .from("vendor_packages")

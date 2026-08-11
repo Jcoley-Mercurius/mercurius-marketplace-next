@@ -30,9 +30,13 @@ import {
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
   isPubliclyEligibleQuotePackage,
+  pricingFrequencies,
   promotionForPackage,
+  publiclyEligibleFixedFrequencies,
   resolveEffectiveTierPrice,
+  tierPricingFrequency,
   type PackagePromotion,
+  type PackageQualifyingQuestion,
   type PricingFrequency,
 } from "@/lib/vendorPricing";
 
@@ -86,6 +90,10 @@ type PackageTier = {
   package_id: string;
   name: string;
   price: number;
+  frequency: Frequency;
+  rule_question_key?: string | null;
+  rule_min?: number | null;
+  rule_max?: number | null;
   includes: string[] | null;
   sort_order: number;
 };
@@ -105,6 +113,7 @@ type VendorPackage = Omit<PackageRow, "pricing_mode" | "default_frequency"> & {
   tiers: PackageTier[];
   addons: PackageAddon[];
   promotions: PackagePromotion[];
+  questions: PackageQualifyingQuestion[];
 };
 
 type GalleryItem = {
@@ -231,7 +240,7 @@ export default function ProviderStorefrontPage() {
       const [tiersResult, addonsResult, promotionsResult, clockResult] = await Promise.all([
         packageIds.length ? supabase
             .from("package_tiers")
-            .select("id, package_id, name, price, includes, sort_order")
+            .select("id, package_id, name, price, frequency, rule_question_key, rule_min, rule_max, includes, sort_order")
             .in("package_id", packageIds)
             .order("sort_order")
           : Promise.resolve({ data: [] as PackageTier[], error: null }),
@@ -253,6 +262,18 @@ export default function ProviderStorefrontPage() {
       ]);
       if (tiersResult.error) throw tiersResult.error;
       if (addonsResult.error) console.warn("Public custom package add-ons are unavailable", addonsResult.error);
+      const publicPackageIds = packageRows.filter((item) => item.pricing_mode === "fixed"
+        ? isPubliclyEligibleFixedPackage({ ...item, tiers: ((tiersResult.data ?? []) as PackageTier[]).filter((tier) => tier.package_id === item.id) })
+        : isPubliclyEligibleQuotePackage(item as PackageRow & { pricing_mode: PricingMode }),
+      ).map((item) => item.id);
+      const questionsResult = publicPackageIds.length
+        ? await supabase
+          .from("package_qualifying_questions")
+          .select("id, package_id, question_key, question_label, input_type, unit, options, is_required, sort_order")
+          .in("package_id", publicPackageIds)
+          .order("sort_order")
+        : { data: [] as PackageQualifyingQuestion[], error: null };
+      if (questionsResult.error) console.warn("Public package questions are unavailable", questionsResult.error);
       const promotionReady = !promotionsResult.error && !clockResult.error && typeof clockResult.data === "string";
       const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
       const addons = addonsResult.error ? [] : (addonsResult.data ?? []) as PackageAddon[];
@@ -270,11 +291,18 @@ export default function ProviderStorefrontPage() {
         deposit_amount: item.deposit_amount === null ? null : Number(item.deposit_amount),
         tiers: ((tiersResult.data ?? []) as PackageTier[])
           .filter((tier) => tier.package_id === item.id)
-          .map((tier) => ({ ...tier, price: Number(tier.price) })),
+          .map((tier) => ({
+            ...tier,
+            price: Number(tier.price),
+            frequency: tierPricingFrequency(tier, isFrequency(item.default_frequency) ? item.default_frequency : "one-time"),
+          })),
         addons: addons
           .filter((addon) => addon.package_id === item.id)
           .map((addon) => ({ ...addon, price: Number(addon.price) })),
         promotions: promotions.filter((promotion) => promotion.package_id === item.id),
+        questions: questionsResult.error
+          ? []
+          : ((questionsResult.data ?? []) as PackageQualifyingQuestion[]).filter((question) => question.package_id === item.id),
       }));
       setPackages(hydratedPackages.filter((item) => item.pricing_mode === "fixed"
         ? isPubliclyEligibleFixedPackage(item)
@@ -319,16 +347,36 @@ export default function ProviderStorefrontPage() {
     [packages],
   );
 
-  function startRequest(selectedPackage?: VendorPackage) {
+  function startRequest(
+    selectedPackage?: VendorPackage,
+    selectedCadence?: ReturnType<typeof effectiveFrequencyOptions>[number],
+  ) {
     if (!contractor) return;
     const serviceId = selectedPackage?.service_id ?? contractor.services?.[0];
     const serviceName = serviceId ? displayService(serviceId, serviceNames) : contractor.verified_specialty ?? "Home service";
-    const tierPrice = selectedPackage?.pricing_mode === "fixed" ? lowestEffectiveTier(selectedPackage, serverNow) : null;
+    const cadenceOptions = selectedPackage?.pricing_mode === "fixed"
+      ? effectiveFrequencyOptions(selectedPackage, serverNow)
+      : [];
+    const tierPrice = selectedCadence
+      ?? cadenceOptions.find((option) => option.frequency === selectedPackage?.default_frequency)
+      ?? cadenceOptions[0]
+      ?? null;
     const tier = tierPrice?.tier ?? null;
-    const frequency = selectedPackage?.default_frequency ?? "one-time";
+    const frequency = tierPrice?.frequency ?? selectedPackage?.default_frequency ?? "one-time";
 
     if (serviceId) {
-      const prices = tierPrice ? { [frequency]: tierPrice.price.effectivePrice } : undefined;
+      const prices = cadenceOptions.length
+        ? Object.fromEntries(cadenceOptions.map((option) => [option.frequency, option.price.effectivePrice]))
+        : undefined;
+      const basePrices = Object.fromEntries(cadenceOptions
+        .filter((option) => option.price.isPromotionEffective)
+        .map((option) => [option.frequency, option.price.basePrice]));
+      const promotionLabels = Object.fromEntries(cadenceOptions
+        .filter((option) => option.price.promotionLabel)
+        .map((option) => [option.frequency, option.price.promotionLabel!]));
+      const promotionIds = Object.fromEntries(cadenceOptions
+        .filter((option) => option.price.promotionId)
+        .map((option) => [option.frequency, option.price.promotionId!]));
       window.sessionStorage.setItem("homePlanSelection", JSON.stringify({
         selectedServiceIds: [serviceId],
         frequencies: { [serviceId]: frequency },
@@ -338,14 +386,15 @@ export default function ProviderStorefrontPage() {
           availability: tier ? "fixed" : "quote",
           descriptor: selectedPackage?.description ?? `Requested from ${contractor.name}`,
           defaultFrequency: frequency,
-          frequencies: [frequency],
+          frequencies: cadenceOptions.length ? cadenceOptions.map((option) => option.frequency) : [frequency],
           prices,
-          basePrices: tierPrice?.price.isPromotionEffective ? { [frequency]: tierPrice.price.basePrice } : undefined,
-          promotionLabels: tierPrice?.price.promotionLabel ? { [frequency]: tierPrice.price.promotionLabel } : undefined,
-          promotionIds: tierPrice?.price.promotionId ? { [frequency]: tierPrice.price.promotionId } : undefined,
+          basePrices: Object.keys(basePrices).length ? basePrices : undefined,
+          promotionLabels: Object.keys(promotionLabels).length ? promotionLabels : undefined,
+          promotionIds: Object.keys(promotionIds).length ? promotionIds : undefined,
           packageId: selectedPackage?.id,
           tierId: tier?.id,
           pricingMode: selectedPackage?.pricing_mode,
+          questions: selectedPackage?.questions,
         }],
       }));
     }
@@ -436,15 +485,13 @@ export default function ProviderStorefrontPage() {
                 {fixedPackages.length > 0 && <SectionCard title="Fixed-Price Services">
                   <div className="grid gap-3">
                     {fixedPackages.map((item) => {
-                      const tierPrice = lowestEffectiveTier(item, serverNow);
-                      if (!tierPrice) return null;
-                      const { tier, price } = tierPrice;
-                      return <button key={item.id} type="button" onClick={() => startRequest(item)} className="rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-accent/50 hover:bg-accent/5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0"><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{displayService(item.service_id, serviceNames)} · {frequencyLabel(item.default_frequency)}</p>{item.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>}{tier.includes && tier.includes.length > 0 && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">{tier.includes.slice(0, 4).map((included) => <span key={included} className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="h-3 w-3 text-accent" />{included}</span>)}</div>}<PublicPackageAddons addons={item.addons} /></div>
-                          <div className="shrink-0 text-right">{price.isPromotionEffective && <p className="text-xs text-muted-foreground line-through">{money(price.basePrice)}</p>}<p className="text-xl font-bold tabular-nums">{money(price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(item.default_frequency)}</span></p>{price.isPromotionEffective && <p className="text-[10px] font-medium text-coral">{price.promotionLabel || "Limited-time price"}</p>}<p className="mt-1 text-xs font-medium text-accent">Continue to request</p></div>
-                        </div>
-                      </button>;
+                      const cadenceOptions = effectiveFrequencyOptions(item, serverNow);
+                      if (!cadenceOptions.length) return null;
+                      const defaultOption = cadenceOptions.find((option) => option.frequency === item.default_frequency) ?? cadenceOptions[0];
+                      return <article key={item.id} className="rounded-xl border border-border bg-background p-4">
+                        <div className="min-w-0"><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{displayService(item.service_id, serviceNames)} · {cadenceOptions.length} live {cadenceOptions.length === 1 ? "cadence" : "cadences"}</p>{item.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>}{defaultOption.tier.includes && defaultOption.tier.includes.length > 0 && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">{defaultOption.tier.includes.slice(0, 4).map((included) => <span key={included} className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="h-3 w-3 text-accent" />{included}</span>)}</div>}<PublicPackageAddons addons={item.addons} /></div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2">{cadenceOptions.map((option) => <button key={option.frequency} type="button" onClick={() => startRequest(item, option)} className="flex items-center justify-between rounded-lg border bg-muted/15 px-3 py-2.5 text-left transition-colors hover:border-accent/50 hover:bg-accent/5"><span><span className="block text-sm font-medium">{frequencyLabel(option.frequency)}</span>{option.frequency === item.default_frequency && <span className="text-[10px] text-muted-foreground">Default</span>}</span><span className="text-right">{option.price.isPromotionEffective && <span className="block text-[10px] text-muted-foreground line-through">{money(option.price.basePrice)}</span>}<span className="font-bold tabular-nums">{money(option.price.effectivePrice)}<span className="text-xs font-normal text-muted-foreground">{frequencySuffix(option.frequency)}</span></span>{option.price.isPromotionEffective && <span className="block text-[10px] font-medium text-coral">{option.price.promotionLabel || "Limited-time price"}</span>}</span></button>)}</div>
+                      </article>;
                     })}
                   </div>
                 </SectionCard>}
@@ -531,17 +578,29 @@ function isFrequency(value: string): value is Frequency {
   return isPricingFrequency(value);
 }
 
-function lowestEffectiveTier(item: VendorPackage, serverNow: string | null) {
+function effectiveFrequencyOptions(item: VendorPackage, serverNow: string | null) {
   const promotion = promotionForPackage(item.promotions, item.id);
-  return item.tiers
-    .map((tier) => ({ tier, price: resolveEffectiveTierPrice(tier.price, promotion, serverNow, item.tiers.length) }))
-    .sort((left, right) => left.price.effectivePrice - right.price.effectivePrice)[0] ?? null;
+  const frequencies = publiclyEligibleFixedFrequencies(item, item.default_frequency);
+  return frequencies
+    .flatMap((frequency) => {
+      const tierPrice = item.tiers
+        .filter((tier) => tierPricingFrequency(tier, item.default_frequency) === frequency)
+        .map((tier) => ({ frequency, tier, price: resolveEffectiveTierPrice(tier.price, promotion, serverNow, item.tiers.length) }))
+        .sort((left, right) => left.price.effectivePrice - right.price.effectivePrice)[0];
+      return tierPrice ? [tierPrice] : [];
+    })
+    .sort((left, right) => {
+      if (left.frequency === item.default_frequency) return -1;
+      if (right.frequency === item.default_frequency) return 1;
+      return pricingFrequencies.indexOf(left.frequency) - pricingFrequencies.indexOf(right.frequency);
+    });
 }
 
 function StorefrontPriceOverview({ item, serverNow }: { item: VendorPackage; serverNow: string | null }) {
-  const tierPrice = lowestEffectiveTier(item, serverNow);
+  const options = effectiveFrequencyOptions(item, serverNow);
+  const tierPrice = [...options].sort((left, right) => left.price.effectivePrice - right.price.effectivePrice)[0];
   if (!tierPrice) return null;
-  return <div className="mb-5"><p className="text-sm text-muted-foreground">Published provider-backed pricing</p>{tierPrice.price.isPromotionEffective && <p className="mt-2 text-sm text-muted-foreground line-through">From {money(tierPrice.price.basePrice)}</p>}<p className={cn("text-2xl font-bold tabular-nums", !tierPrice.price.isPromotionEffective && "mt-2")}>From {money(tierPrice.price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(item.default_frequency)}</span></p>{tierPrice.price.isPromotionEffective && <p className="mt-1 text-xs font-medium text-coral">{tierPrice.price.promotionLabel || "Limited-time price"}</p>}</div>;
+  return <div className="mb-5"><p className="text-sm text-muted-foreground">Published provider-backed pricing{options.length > 1 ? ` · ${options.length} live cadences` : ""}</p>{tierPrice.price.isPromotionEffective && <p className="mt-2 text-sm text-muted-foreground line-through">From {money(tierPrice.price.basePrice)}</p>}<p className={cn("text-2xl font-bold tabular-nums", !tierPrice.price.isPromotionEffective && "mt-2")}>From {money(tierPrice.price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(tierPrice.frequency)}</span></p>{tierPrice.price.isPromotionEffective && <p className="mt-1 text-xs font-medium text-coral">{tierPrice.price.promotionLabel || "Limited-time price"}</p>}</div>;
 }
 
 function PublicPackageAddons({ addons }: { addons: PackageAddon[] }) {

@@ -43,9 +43,13 @@ import {
   isPubliclyEligibleFixedPackage,
   isPubliclyEligibleQuotePackage,
   promotionForPackage,
+  publiclyEligibleFixedFrequencies,
   resolveEffectiveTierPrice,
+  tierPricingFrequency,
   type PackagePromotion,
+  type PackageQualifyingQuestion,
   type PricingFrequency,
+  type PublicPackageSelection,
 } from "@/lib/vendorPricing";
 
 type Step = "services" | "details" | "contact";
@@ -64,11 +68,12 @@ type ServiceOption = {
   basePrices?: Partial<Record<Frequency, number>>;
   promotionLabels?: Partial<Record<Frequency, string>>;
   promotionIds?: Partial<Record<Frequency, string>>;
+  packageSelections?: Partial<Record<Frequency, PublicPackageSelection>>;
   availability?: "fixed" | "quote" | "sourcing";
 };
 
-type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote" };
-type PackageSelection = { packageId: string; tierId?: string; pricingMode: "fixed" | "deposit_quote" | "custom_quote" };
+type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[] };
+type PackageSelection = PublicPackageSelection;
 type ResolvedPackage = PackageSelection & { contractorId: string; price: number | null; basePrice?: number; promotionId?: string; promotionLabel?: string };
 type CompletionKind = "quote" | "payment_pending" | "multi_service";
 
@@ -110,6 +115,7 @@ export default function RequestServicePage() {
   const [preferredProviders, setPreferredProviders] = useState<Record<string, string>>({});
   const [preferredProviderNames, setPreferredProviderNames] = useState<Record<string, string>>({});
   const [packageSelections, setPackageSelections] = useState<Record<string, PackageSelection>>({});
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, Record<string, string>>>({});
   const [completionKind, setCompletionKind] = useState<CompletionKind>("quote");
   const { user } = useAuth();
   const router = useRouter();
@@ -142,6 +148,7 @@ export default function RequestServicePage() {
         if (value.preferredProviders && typeof value.preferredProviders === "object") setPreferredProviders(value.preferredProviders as Record<string, string>);
         if (value.preferredProviderNames && typeof value.preferredProviderNames === "object") setPreferredProviderNames(value.preferredProviderNames as Record<string, string>);
         if (value.packageSelections && typeof value.packageSelections === "object") setPackageSelections(value.packageSelections as Record<string, PackageSelection>);
+        if (value.questionAnswers && typeof value.questionAnswers === "object") setQuestionAnswers(value.questionAnswers as Record<string, Record<string, string>>);
       }
       if (builder) {
         const value = JSON.parse(builder) as { selectedServiceIds?: unknown; frequencies?: unknown; requestedServices?: unknown };
@@ -158,10 +165,13 @@ export default function RequestServicePage() {
             promotionLabels: item.promotionLabels,
             promotionIds: item.promotionIds,
             availability: item.availability,
+            packageSelections: item.packageId && item.pricingMode
+              ? Object.fromEntries((item.frequencies ?? [item.defaultFrequency ?? "one-time"]).map((frequency) => [frequency, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions }]))
+              : undefined,
           }])));
           setPackageSelections(Object.fromEntries(requestedServices
             .filter((item) => item.packageId && item.pricingMode)
-            .map((item) => [item.id, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode! }])));
+            .map((item) => [item.id, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions }])));
           const needsMatching = requestedServices.filter((item) => item.availability !== "fixed");
           if (needsMatching.length > 0) setDescription((current) => current || `Please help me with: ${needsMatching.map((item) => item.name).join(", ")}. I understand provider coverage and pricing still need to be confirmed.`);
         } else if (Array.isArray(value.selectedServiceIds)) {
@@ -219,8 +229,9 @@ export default function RequestServicePage() {
       preferredDate, description, firstName, lastName, email, phone, smsUpdates,
       serviceOverrides, preferredProviders, preferredProviderNames,
       packageSelections,
+      questionAnswers,
     }));
-  }, [city, description, email, firstName, frequencies, hydrated, isComplete, lastName, packageSelections, phone, preferredDate, preferredProviderNames, preferredProviders, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, zipCode]);
+  }, [city, description, email, firstName, frequencies, hydrated, isComplete, lastName, packageSelections, phone, preferredDate, preferredProviderNames, preferredProviders, questionAnswers, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, zipCode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -246,6 +257,7 @@ export default function RequestServicePage() {
         basePrices: service.basePrices,
         promotionLabels: service.promotionLabels,
         promotionIds: service.promotionIds,
+        packageSelections: service.packageSelections,
       } satisfies Partial<ServiceOption>];
     }));
     const known = serviceOptions.map((service) => ({ ...service, ...catalogOverrides[service.id], ...serviceOverrides[service.id] }));
@@ -278,7 +290,20 @@ export default function RequestServicePage() {
       setPreferredProviders((providers) => withoutKey(providers, id));
       setPreferredProviderNames((names) => withoutKey(names, id));
       setPackageSelections((selections) => withoutKey(selections, id));
+      setQuestionAnswers((answers) => withoutKey(answers, id));
+    } else {
+      const service = requestServiceOptions.find((item) => item.id === id);
+      const frequency = frequencies[id] ?? service?.defaultFrequency;
+      const selection = frequency ? service?.packageSelections?.[frequency] : undefined;
+      if (selection) setPackageSelections((current) => ({ ...current, [id]: selection }));
     }
+  }
+
+  function changeServiceFrequency(id: string, frequency: Frequency) {
+    setFrequencies((current) => ({ ...current, [id]: frequency }));
+    const selection = requestServiceOptions.find((service) => service.id === id)?.packageSelections?.[frequency];
+    setPackageSelections((current) => selection ? { ...current, [id]: selection } : withoutKey(current, id));
+    setQuestionAnswers((current) => withoutKey(current, id));
   }
 
   function continueFromServices() {
@@ -300,6 +325,15 @@ export default function RequestServicePage() {
     }
     if (!/^\d{5}(-\d{4})?$/.test(zipCode.trim())) {
       toast.error("Invalid ZIP code", { description: "Enter a valid five-digit ZIP code." });
+      return;
+    }
+    const unanswered = selectedServices.flatMap((service) =>
+      (packageSelections[service.id]?.questions ?? [])
+        .filter((question) => question.is_required !== false && !questionAnswers[service.id]?.[question.question_key]?.trim())
+        .map((question) => question.question_label),
+    );
+    if (unanswered.length) {
+      toast.error("Answer the required service questions", { description: unanswered[0] });
       return;
     }
     setStep("contact");
@@ -338,6 +372,7 @@ export default function RequestServicePage() {
           frequencies,
           preferredProviders,
           packageSelections,
+          questionAnswers,
         );
       } catch (reason) {
         console.error("Unable to verify live package pricing; submitting as quote requests", reason);
@@ -371,6 +406,7 @@ export default function RequestServicePage() {
           service_catalog_id: service.id,
           package_id: livePackage?.packageId ?? null,
           package_tier_id: isVerifiedFixed ? livePackage.tierId : null,
+          package_question_answers: answerSnapshot(packageSelections[service.id]?.questions ?? [], questionAnswers[service.id] ?? {}),
           ...(isVerifiedFixed && livePackage.promotionId ? { base_amount: livePackage.basePrice, promotion_id: livePackage.promotionId } : {}),
         };
       });
@@ -461,8 +497,8 @@ export default function RequestServicePage() {
         <section className="py-12 md:py-16">
           <div className="container-narrow">
             <form onSubmit={handleSubmit}>
-              {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} onToggle={toggleService} onFrequencyChange={(id, frequency) => setFrequencies((current) => ({ ...current, [id]: frequency }))} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} photos={photos} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onPhotos={addPhotos} onDrop={handleDrop} onRemovePhoto={(index) => setPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index))} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
+              {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} photos={photos} selectedServices={selectedServices} packageSelections={packageSelections} questionAnswers={questionAnswers} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onPhotos={addPhotos} onDrop={handleDrop} onRemovePhoto={(index) => setPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index))} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
               {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
             </form>
           </div>
@@ -497,11 +533,18 @@ function ServicesStep({ services, selectedIds, frequencies, preferredProviderNam
   </div>;
 }
 
-type DetailsStepProps = { streetAddress: string; city: string; stateCode: string; zipCode: string; preferredDate: string; description: string; photos: File[]; onStreetAddress: (value: string) => void; onCity: (value: string) => void; onStateCode: (value: string) => void; onZipCode: (value: string) => void; onPreferredDate: (value: string) => void; onDescription: (value: string) => void; onPhotos: (files: File[]) => void; onDrop: (event: DragEvent<HTMLLabelElement>) => void; onRemovePhoto: (index: number) => void; onBack: () => void; onContinue: () => void };
+type DetailsStepProps = { streetAddress: string; city: string; stateCode: string; zipCode: string; preferredDate: string; description: string; photos: File[]; selectedServices: ServiceOption[]; packageSelections: Record<string, PackageSelection>; questionAnswers: Record<string, Record<string, string>>; onQuestionAnswer: (serviceId: string, questionKey: string, answer: string) => void; onStreetAddress: (value: string) => void; onCity: (value: string) => void; onStateCode: (value: string) => void; onZipCode: (value: string) => void; onPreferredDate: (value: string) => void; onDescription: (value: string) => void; onPhotos: (files: File[]) => void; onDrop: (event: DragEvent<HTMLLabelElement>) => void; onRemovePhoto: (index: number) => void; onBack: () => void; onContinue: () => void };
 
 function DetailsStep(props: DetailsStepProps) {
   const minDate = new Date().toISOString().slice(0, 10);
-  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">Tell us about your home</h2><p className="mt-2 text-muted-foreground">Add the service location, timing, and anything our team should know.</p></div><Card><CardHeader><CardTitle>Service Details</CardTitle></CardHeader><CardContent className="space-y-6"><div className="space-y-2"><Label htmlFor="streetAddress">Street address</Label><Input id="streetAddress" autoComplete="address-line1" placeholder="123 Main St" className="h-12" value={props.streetAddress} onChange={(event) => props.onStreetAddress(event.target.value)} /></div><div className="grid gap-4 sm:grid-cols-6"><div className="space-y-2 sm:col-span-3"><Label htmlFor="city">City</Label><Input id="city" autoComplete="address-level2" className="h-12" value={props.city} onChange={(event) => props.onCity(event.target.value)} /></div><div className="space-y-2 sm:col-span-1"><Label htmlFor="state">State</Label><Input id="state" autoComplete="address-level1" maxLength={2} className="h-12 uppercase" value={props.stateCode} onChange={(event) => props.onStateCode(event.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="zip">ZIP code</Label><Input id="zip" autoComplete="postal-code" inputMode="numeric" maxLength={10} className="h-12" value={props.zipCode} onChange={(event) => props.onZipCode(event.target.value.replace(/[^\d-]/g, ""))} /></div></div><div className="space-y-2"><Label htmlFor="preferredDate">Preferred date</Label><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} /></div><p className="text-xs text-muted-foreground">This is a preference. We&apos;ll confirm the actual appointment with you.</p></div><div className="space-y-2"><Label htmlFor="description">Description</Label><textarea id="description" rows={5} placeholder="Describe the work, access instructions, or anything else we should know..." value={props.description} onChange={(event) => props.onDescription(event.target.value)} className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" /></div><div className="space-y-2"><Label>Photos (optional)</Label><label htmlFor="photo-upload" onDragOver={(event) => event.preventDefault()} onDrop={props.onDrop} className="block cursor-pointer rounded-xl border-2 border-dashed border-border p-7 text-center transition-colors hover:border-accent/50"><Upload className="mx-auto mb-2 h-7 w-7 text-muted-foreground" /><p className="text-sm text-muted-foreground">Drag and drop images, or click to browse</p><p className="mt-1 text-xs text-muted-foreground">Up to 6 photos; upload connection coming in a later version.</p><input id="photo-upload" type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { props.onPhotos(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></label>{props.photos.length > 0 && <div className="flex flex-wrap gap-2">{props.photos.map((file, index) => <button key={`${file.name}-${index}`} type="button" onClick={() => props.onRemovePhoto(index)} className="rounded-lg border border-border bg-muted px-3 py-2 text-xs hover:border-destructive" title="Remove photo">{file.name} ×</button>)}</div>}</div></CardContent></Card><div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row"><Button type="button" variant="outline" size="lg" onClick={props.onBack}><ArrowLeft className="h-4 w-4" /> Back</Button><Button type="button" size="lg" onClick={props.onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Review <ArrowRight className="h-4 w-4" /></Button></div></div>;
+  const questionGroups = props.selectedServices.map((service) => ({ service, questions: props.packageSelections[service.id]?.questions ?? [] })).filter((group) => group.questions.length);
+  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">Tell us about your home</h2><p className="mt-2 text-muted-foreground">Add the service location, timing, and anything our team should know.</p></div>{questionGroups.length > 0 && <Card className="mb-6 border-accent/25"><CardHeader><CardTitle>Questions from your provider</CardTitle><p className="text-sm text-muted-foreground">These details help confirm the right price level and prepare for the visit.</p></CardHeader><CardContent className="space-y-6">{questionGroups.map(({ service, questions }) => <section key={service.id} className="space-y-4"><div><p className="font-semibold">{service.name}</p><p className="text-xs text-muted-foreground">Flat service questions only—your answers do not submit anything until you confirm the request.</p></div>{questions.map((question) => <PackageQuestionInput key={question.question_key} serviceId={service.id} question={question} value={props.questionAnswers[service.id]?.[question.question_key] ?? ""} onChange={props.onQuestionAnswer} />)}</section>)}</CardContent></Card>}<Card><CardHeader><CardTitle>Service Details</CardTitle></CardHeader><CardContent className="space-y-6"><div className="space-y-2"><Label htmlFor="streetAddress">Street address</Label><Input id="streetAddress" autoComplete="address-line1" placeholder="123 Main St" className="h-12" value={props.streetAddress} onChange={(event) => props.onStreetAddress(event.target.value)} /></div><div className="grid gap-4 sm:grid-cols-6"><div className="space-y-2 sm:col-span-3"><Label htmlFor="city">City</Label><Input id="city" autoComplete="address-level2" className="h-12" value={props.city} onChange={(event) => props.onCity(event.target.value)} /></div><div className="space-y-2 sm:col-span-1"><Label htmlFor="state">State</Label><Input id="state" autoComplete="address-level1" maxLength={2} className="h-12 uppercase" value={props.stateCode} onChange={(event) => props.onStateCode(event.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="zip">ZIP code</Label><Input id="zip" autoComplete="postal-code" inputMode="numeric" maxLength={10} className="h-12" value={props.zipCode} onChange={(event) => props.onZipCode(event.target.value.replace(/[^\d-]/g, ""))} /></div></div><div className="space-y-2"><Label htmlFor="preferredDate">Preferred date</Label><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} /></div><p className="text-xs text-muted-foreground">This is a preference. We&apos;ll confirm the actual appointment with you.</p></div><div className="space-y-2"><Label htmlFor="description">Description</Label><textarea id="description" rows={5} placeholder="Describe the work, access instructions, or anything else we should know..." value={props.description} onChange={(event) => props.onDescription(event.target.value)} className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" /></div><div className="space-y-2"><Label>Photos (optional)</Label><label htmlFor="photo-upload" onDragOver={(event) => event.preventDefault()} onDrop={props.onDrop} className="block cursor-pointer rounded-xl border-2 border-dashed border-border p-7 text-center transition-colors hover:border-accent/50"><Upload className="mx-auto mb-2 h-7 w-7 text-muted-foreground" /><p className="text-sm text-muted-foreground">Drag and drop images, or click to browse</p><p className="mt-1 text-xs text-muted-foreground">Up to 6 photos; upload connection coming in a later version.</p><input id="photo-upload" type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { props.onPhotos(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></label>{props.photos.length > 0 && <div className="flex flex-wrap gap-2">{props.photos.map((file, index) => <button key={`${file.name}-${index}`} type="button" onClick={() => props.onRemovePhoto(index)} className="rounded-lg border border-border bg-muted px-3 py-2 text-xs hover:border-destructive" title="Remove photo">{file.name} ×</button>)}</div>}</div></CardContent></Card><div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row"><Button type="button" variant="outline" size="lg" onClick={props.onBack}><ArrowLeft className="h-4 w-4" /> Back</Button><Button type="button" size="lg" onClick={props.onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Review <ArrowRight className="h-4 w-4" /></Button></div></div>;
+}
+
+function PackageQuestionInput({ serviceId, question, value, onChange }: { serviceId: string; question: PackageQualifyingQuestion; value: string; onChange: (serviceId: string, questionKey: string, answer: string) => void }) {
+  const id = `question-${serviceId}-${question.question_key}`;
+  const options = questionOptions(question.options);
+  return <div className="space-y-2"><Label htmlFor={id}>{question.question_label}{question.is_required !== false ? <span className="text-destructive"> *</span> : <span className="font-normal text-muted-foreground"> (optional)</span>}</Label>{question.input_type === "select" && options.length ? <select id={id} value={value} onChange={(event) => onChange(serviceId, question.question_key, event.target.value)} className="h-12 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"><option value="">Choose an answer</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <Input id={id} type={question.input_type === "number" ? "number" : "text"} inputMode={question.input_type === "number" ? "decimal" : undefined} className="h-12" placeholder={question.input_type === "number" ? `Enter a number${question.unit ? ` (${question.unit})` : ""}` : "Your answer"} value={value} onChange={(event) => onChange(serviceId, question.question_key, event.target.value)} />}{question.unit && question.input_type !== "number" && <p className="text-xs text-muted-foreground">Unit: {question.unit}</p>}</div>;
 }
 
 type ContactStepProps = { selectedServices: ServiceOption[]; frequencies: Record<string, Frequency>; preferredProviderNames: Record<string, string>; estimate: number; directCheckoutExpected: boolean; hasQuoteServices: boolean; firstName: string; lastName: string; email: string; phone: string; smsUpdates: boolean; isSubmitting: boolean; isSignedIn: boolean; onFirstName: (value: string) => void; onLastName: (value: string) => void; onEmail: (value: string) => void; onPhone: (value: string) => void; onSmsUpdates: (value: boolean) => void; onBack: () => void };
@@ -537,6 +580,25 @@ function isBuilderRequestedService(item: unknown): item is BuilderRequestedServi
   return typeof value.id === "string" && typeof value.name === "string" && ["fixed", "quote", "sourcing"].includes(String(value.availability));
 }
 
+function questionOptions(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((option): option is string => typeof option === "string" && Boolean(option.trim()));
+  if (value && typeof value === "object" && "choices" in value && Array.isArray(value.choices)) {
+    return value.choices.filter((option): option is string => typeof option === "string" && Boolean(option.trim()));
+  }
+  return [];
+}
+
+function answerSnapshot(questions: PackageQualifyingQuestion[], answers: Record<string, string>) {
+  return Object.fromEntries(questions.flatMap((question) => {
+    const answer = answers[question.question_key]?.trim();
+    return answer ? [[question.question_key, {
+      question: question.question_label,
+      answer,
+      unit: question.unit || null,
+    }]] : [];
+  }));
+}
+
 function servicePriceLabel(service: ServiceOption, frequency: Frequency) {
   const price = servicePrice(service, frequency);
   if (!price) return "Quote";
@@ -567,10 +629,11 @@ async function resolveLivePackages(
   frequencies: Record<string, Frequency>,
   preferredProviders: Record<string, string>,
   explicitSelections: Record<string, PackageSelection>,
+  questionAnswers: Record<string, Record<string, string>>,
 ) {
   if (services.length === 0) return {};
   type PackageCandidate = { id: string; contractor_id: string; service_id: string; default_frequency: string; pricing_mode: string; deposit_amount: number | null; is_active: boolean; needs_review: boolean | null };
-  type TierCandidate = { id: string; package_id: string; price: number | null };
+  type TierCandidate = { id: string; package_id: string; price: number | null; frequency: string | null; rule_question_key: string | null; rule_min: number | null; rule_max: number | null };
 
   const { data: packageData, error: packageError } = await supabase
     .from("vendor_packages")
@@ -585,7 +648,7 @@ async function resolveLivePackages(
   const fixedPackageIds = packageRows.filter((item) => item.pricing_mode === "fixed").map((item) => item.id);
   const [tierResult, promotionResult, clockResult] = await Promise.all([
     fixedPackageIds.length
-      ? supabase.from("package_tiers").select("id, package_id, price").in("package_id", fixedPackageIds)
+      ? supabase.from("package_tiers").select("id, package_id, price, frequency, rule_question_key, rule_min, rule_max").in("package_id", fixedPackageIds)
       : Promise.resolve({ data: [] as TierCandidate[], error: null }),
     fixedPackageIds.length
       ? supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").in("package_id", fixedPackageIds).eq("is_enabled", true)
@@ -616,14 +679,18 @@ async function resolveLivePackages(
     );
 
     const livePairs = candidates
-      .filter((item) => item.pricing_mode === "fixed" && item.default_frequency === frequency)
+      .filter((item) => item.pricing_mode === "fixed" && publiclyEligibleFixedFrequencies({ ...item, tiers: tiers.filter((tier) => tier.package_id === item.id) }, isFrequency(item.default_frequency) ? item.default_frequency : "one-time").includes(frequency))
       .flatMap((item) => tiers
-        .filter((tier) => tier.package_id === item.id && Number(tier.price) > 0)
+        .filter((tier) => tier.package_id === item.id && Number(tier.price) > 0 && tierPricingFrequency(tier, isFrequency(item.default_frequency) ? item.default_frequency : "one-time") === frequency && tierMatchesAnswers(tier, questionAnswers[service.id] ?? {}))
         .map((tier) => ({ package: item, tier, price: resolveEffectiveTierPrice(tier.price, promotionForPackage(promotions, item.id), serverNow, tiers.filter((candidate) => candidate.package_id === item.id).length) })))
       .sort((left, right) => left.price.effectivePrice - right.price.effectivePrice);
     const explicitPackage = explicit ? candidates.find((item) => item.id === explicit.packageId) : undefined;
-    const selectedPair = explicit?.tierId
+    const explicitHasRuleTiers = explicit ? tiers.some((tier) => tier.package_id === explicit.packageId && Boolean(tier.rule_question_key)) : false;
+    const selectedPair = explicitHasRuleTiers
+      ? livePairs.find((pair) => pair.package.id === explicit?.packageId)
+      : explicit?.tierId
       ? livePairs.find((pair) => pair.package.id === explicit.packageId && pair.tier.id === explicit.tierId)
+        ?? livePairs.find((pair) => pair.package.id === explicit.packageId)
       : explicit
         ? livePairs.find((pair) => pair.package.id === explicit.packageId)
         : livePairs[0];
@@ -641,7 +708,8 @@ async function resolveLivePackages(
     }
 
     const tier = selectedPair?.tier;
-    if (!tier || selectedPackage.default_frequency !== frequency) continue;
+    const selectedDefaultFrequency = isFrequency(selectedPackage.default_frequency) ? selectedPackage.default_frequency : "one-time";
+    if (!tier || tierPricingFrequency(tier, selectedDefaultFrequency) !== frequency) continue;
 
     const verifiedResult = await supabase.rpc("resolve_package_tier_price", { p_package_id: selectedPackage.id, p_tier_id: tier.id });
     if (verifiedResult.error) throw verifiedResult.error;
@@ -660,6 +728,18 @@ async function resolveLivePackages(
     };
   }
   return resolved;
+}
+
+function tierMatchesAnswers(
+  tier: { rule_question_key: string | null; rule_min: number | null; rule_max: number | null },
+  answers: Record<string, string>,
+) {
+  if (!tier.rule_question_key) return true;
+  const answer = Number(answers[tier.rule_question_key]);
+  if (!Number.isFinite(answer)) return false;
+  if (tier.rule_min != null && answer < Number(tier.rule_min)) return false;
+  if (tier.rule_max != null && answer > Number(tier.rule_max)) return false;
+  return true;
 }
 
 function isPricingMode(value: string): value is PackageSelection["pricingMode"] {

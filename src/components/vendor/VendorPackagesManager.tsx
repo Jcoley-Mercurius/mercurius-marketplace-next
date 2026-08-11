@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -37,7 +39,7 @@ import { PricingToggle } from "@/components/vendor/PricingToggle";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import {
-  evaluateCustomPackagePriceReview,
+  evaluateCustomPackageFrequencyPriceReviews,
   hasValidFixedTiers,
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
@@ -46,8 +48,10 @@ import {
   promotionForPackage,
   promotionStatus,
   resolveEffectiveTierPrice,
+  tierPricingFrequency,
   validatePromotion,
   type PackagePromotion,
+  type PackageQualifyingQuestion,
   type PricingFrequency,
   type PromotionType,
 } from "@/lib/vendorPricing";
@@ -63,19 +67,12 @@ type ServiceOption = {
 };
 type TemplatePriceGuidance = { minPrice: number; maxPrice: number };
 type PricingMode = "fixed" | "deposit_quote" | "custom_quote";
-type QuestionRow = {
-  id?: string;
-  question_key: string;
-  question_label: string;
-  input_type: "number" | "select" | "text";
-  unit?: string | null;
-  options?: unknown;
-  sort_order: number;
-};
+type QuestionRow = PackageQualifyingQuestion;
 type TierRow = {
   id?: string;
   name: string;
   price: number;
+  frequency: PricingFrequency;
   rule_question_key?: string | null;
   rule_min?: number | null;
   rule_max?: number | null;
@@ -181,6 +178,7 @@ export function VendorPackagesManager() {
   const [nameEditorOpen, setNameEditorOpen] = useState(false);
   const [nameCustomized, setNameCustomized] = useState(false);
   const [customerPrice, setCustomerPrice] = useState("");
+  const [frequencyPrices, setFrequencyPrices] = useState<Partial<Record<PricingFrequency, string>>>({});
   const [saving, setSaving] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [liveSuccessOpen, setLiveSuccessOpen] = useState(false);
@@ -229,7 +227,12 @@ export function VendorPackagesManager() {
     const hydrated = rows.map((item) => ({
       ...item,
       questions: questions.filter((question) => question.package_id === item.id),
-      tiers: tiers.filter((tier) => tier.package_id === item.id),
+      tiers: tiers
+        .filter((tier) => tier.package_id === item.id)
+        .map((tier) => ({
+          ...tier,
+          frequency: tierPricingFrequency(tier, item.default_frequency),
+        })),
       addons: addons
         .filter((addon) => addon.package_id === item.id && addon.template_addon_id == null && addon.name?.trim())
         .map((addon, index) => ({
@@ -348,16 +351,29 @@ export function VendorPackagesManager() {
     setNameEditorOpen(false);
     setNameCustomized(false);
     setCustomerPrice("");
+    setFrequencyPrices({});
     setSaving(false);
   };
 
   const openEditor = (item: PackageRow) => {
-    const minimum = item.tiers.length ? Math.min(...item.tiers.map((tier) => Number(tier.price) || 0)) : 0;
-    const isAdvanced = item.questions.length > 0 || item.tiers.length > 1;
+    const normalizedTiers = item.tiers.map((tier) => ({
+      ...tier,
+      frequency: tierPricingFrequency(tier, item.default_frequency),
+    }));
+    const defaultTiers = normalizedTiers.filter((tier) => tier.frequency === item.default_frequency);
+    const minimum = defaultTiers.length
+      ? Math.min(...defaultTiers.map((tier) => Number(tier.price) || 0))
+      : normalizedTiers.length
+        ? Math.min(...normalizedTiers.map((tier) => Number(tier.price) || 0))
+        : 0;
+    const isAdvanced = isAdvancedTierStructure(normalizedTiers, item.questions);
     const automaticName = packageName(services.find((service) => service.id === item.service_id)?.name ?? displayService(item.service_id), item.default_frequency);
-    setEditing(structuredClone(item));
+    setEditing(structuredClone({ ...item, tiers: normalizedTiers }));
     setOriginalPackage(item.id ? structuredClone(item) : null);
     setCustomerPrice(minimum > 0 ? String(minimum) : "");
+    setFrequencyPrices(isAdvanced
+      ? { [item.default_frequency]: minimum > 0 ? String(minimum) : "" }
+      : simpleFrequencyPriceDraft(normalizedTiers, item.default_frequency));
     setAdvancedOpen(isAdvanced);
     setNameCustomized(Boolean(item.name && item.name !== automaticName));
     setNameEditorOpen(Boolean(item.name && item.name !== automaticName));
@@ -412,13 +428,28 @@ export function VendorPackagesManager() {
       : defaultFrequencyForService(targetService);
     const isFixed = copySource.pricing_mode === "fixed";
 
+    const sourceTiers = copySource.tiers.map((tier) => ({
+      ...tier,
+      frequency: tierPricingFrequency(tier, copySource.default_frequency),
+    }));
+    const sourceAdvanced = isAdvancedTierStructure(sourceTiers, copySource.questions);
+    const supportedSourceTiers = sourceTiers.filter((tier) => supportedFrequencies.includes(tier.frequency));
+    const copiedTiers = supportedSourceTiers.length
+      ? supportedSourceTiers
+      : sourceTiers.map((tier) => ({ ...tier, frequency }));
+    const draftFrequency = sourceAdvanced
+      ? frequency
+      : copiedTiers.some((tier) => tier.frequency === frequency)
+        ? frequency
+        : copiedTiers[0]?.frequency ?? frequency;
+
     const draft: PackageRow = {
       id: "",
-      name: packageName(targetService.name, frequency),
+      name: packageName(targetService.name, draftFrequency),
       description: copySource.description,
       service_id: targetService.id,
       pricing_mode: copySource.pricing_mode,
-      default_frequency: frequency,
+      default_frequency: draftFrequency,
       deposit_amount: copySource.pricing_mode === "deposit_quote"
         ? copySource.deposit_amount
         : null,
@@ -427,20 +458,20 @@ export function VendorPackagesManager() {
       is_active: false,
       needs_review: false,
       template_id: null,
-      questions: isFixed
-        ? copySource.questions.map((question, index) => ({
+      questions: copySource.questions.map((question, index) => ({
             question_key: question.question_key,
             question_label: question.question_label,
             input_type: question.input_type,
             unit: question.unit ?? null,
             options: question.options,
+            is_required: question.is_required !== false,
             sort_order: index,
-          }))
-        : [],
+          })),
       tiers: isFixed
-        ? copySource.tiers.map((tier, index) => ({
+        ? copiedTiers.map((tier, index) => ({
             name: tier.name,
             price: Number(tier.price),
+            frequency: sourceAdvanced ? draftFrequency : tier.frequency,
             rule_question_key: tier.rule_question_key ?? null,
             rule_min: tier.rule_min ?? null,
             rule_max: tier.rule_max ?? null,
@@ -490,6 +521,7 @@ export function VendorPackagesManager() {
       questions: changingExistingService ? [] : current.questions,
     } : current);
     setCustomerPrice("");
+    if (changingExistingService) setFrequencyPrices({ [frequency]: "" });
     if (changingExistingService) setAdvancedOpen(false);
   };
 
@@ -500,6 +532,32 @@ export function VendorPackagesManager() {
       default_frequency: frequency,
       name: nameCustomized ? current.name : packageName(service?.name ?? displayService(current.service_id), frequency),
     } : current);
+    setCustomerPrice(frequencyPrices[frequency] ?? "");
+  };
+
+  const updateFrequencyPrice = (frequency: PricingFrequency, value: string) => {
+    setFrequencyPrices((current) => ({ ...current, [frequency]: value }));
+    if (editing?.default_frequency === frequency) setCustomerPrice(value);
+  };
+
+  const toggleFrequency = (frequency: PricingFrequency, enabled: boolean) => {
+    if (!editing) return;
+    if (enabled) {
+      setFrequencyPrices((current) => ({ ...current, [frequency]: current[frequency] ?? "" }));
+      return;
+    }
+    const enabledFrequencies = Object.keys(frequencyPrices).filter(isPricingFrequency);
+    if (enabledFrequencies.length <= 1) {
+      toast.error("Keep at least one cadence enabled.");
+      return;
+    }
+    const next = { ...frequencyPrices };
+    delete next[frequency];
+    setFrequencyPrices(next);
+    if (editing.default_frequency === frequency) {
+      const nextDefault = Object.keys(next).find(isPricingFrequency) ?? "one-time";
+      changeFrequency(nextDefault);
+    }
   };
 
   const changePricingMode = (pricingMode: PricingMode) => {
@@ -510,7 +568,9 @@ export function VendorPackagesManager() {
       needs_review: pricingMode === "fixed" ? current.needs_review : false,
     } : current);
     if (pricingMode === "fixed") {
-      const hasAdvancedStructure = Boolean(editing?.questions.length || (editing?.tiers.length ?? 0) > 1);
+      const hasAdvancedStructure = editing
+        ? isAdvancedTierStructure(editing.tiers, editing.questions)
+        : false;
       setAdvancedOpen(hasAdvancedStructure);
       if (!hasAdvancedStructure && editing?.tiers[0]?.price) setCustomerPrice(String(editing.tiers[0].price));
     } else {
@@ -519,24 +579,34 @@ export function VendorPackagesManager() {
   };
 
   const enterAdvanced = () => {
+    const enabledFrequencies = Object.keys(frequencyPrices).filter(isPricingFrequency);
+    if (enabledFrequencies.length > 1) {
+      if (!window.confirm("Home-detail pricing currently supports one cadence per package. Continue with the primary cadence and remove the other cadence prices from this draft?")) return;
+      const primary = editing?.default_frequency ?? enabledFrequencies[0];
+      setFrequencyPrices({ [primary]: frequencyPrices[primary] ?? "" });
+    }
     setAdvancedOpen(true);
     setEditing((current) => {
-      if (!current || current.tiers.length > 1 || current.questions.length) return current;
+      if (!current || isAdvancedTierStructure(current.tiers, current.questions)) return current;
       const price = Number(customerPrice) || current.tiers[0]?.price || 0;
+      const questionKey = uniqueQuestionKey("size", current.questions);
       return {
         ...current,
-        questions: [{ question_key: "size", question_label: "", input_type: "number", unit: "", sort_order: 0 }],
-        tiers: [{ name: "Standard", price, rule_question_key: "size", rule_min: 0, rule_max: 100, includes: [], sort_order: 0 }],
+        questions: [{ question_key: questionKey, question_label: "", input_type: "number", unit: "", is_required: true, sort_order: 0 }, ...current.questions.map((question, index) => ({ ...question, sort_order: index + 1 }))],
+        tiers: [{ name: "Standard", price, frequency: current.default_frequency, rule_question_key: questionKey, rule_min: 0, rule_max: 100, includes: [], sort_order: 0 }],
       };
     });
   };
 
   const switchToSimplePricing = () => {
     if (!editing) return;
-    const hasAdvancedStructure = editing.questions.length > 0 || editing.tiers.length > 1;
-    if (hasAdvancedStructure && !window.confirm("Switch to one simple price? Publishing this change will replace the existing questions and price levels with a single Standard price.")) return;
+    const priceKey = pricingQuestionKey(editing.tiers);
+    const hasAdvancedStructure = isAdvancedTierStructure(editing.tiers, editing.questions);
+    if (hasAdvancedStructure && !window.confirm("Switch to simple pricing? Publishing this change will replace the price levels with cadence prices. Additional service questions will be kept.")) return;
     const minimum = editing.tiers.map((tier) => Number(tier.price)).filter((price) => Number.isFinite(price) && price > 0).sort((a, b) => a - b)[0];
     setCustomerPrice(minimum ? String(minimum) : "");
+    setFrequencyPrices({ [editing.default_frequency]: minimum ? String(minimum) : "" });
+    updateField("questions", editing.questions.filter((question) => question.question_key !== priceKey).map((question, index) => ({ ...question, sort_order: index })));
     setAdvancedOpen(false);
   };
 
@@ -547,12 +617,22 @@ export function VendorPackagesManager() {
       toast.error("Name and service are required.");
       return;
     }
+    if (editing.questions.length > 10) {
+      toast.error("Keep this package to 10 service questions or fewer.");
+      return;
+    }
+    if (editing.questions.some((question) => !question.question_label.trim() || question.question_label.trim().length > 180)) {
+      toast.error("Check the service questions", { description: "Each question needs clear text of 180 characters or fewer." });
+      return;
+    }
+    const normalizedQuestionResult = normalizeQuestionRows(editing.questions);
     const isFixedMode = editing.pricing_mode === "fixed";
     let questions: QuestionRow[] = [];
     let tiers: TierRow[] = [];
+    let savedDefaultFrequency = editing.default_frequency;
     if (!isFixedMode) {
-      questions = editing.questions;
-      tiers = editing.tiers;
+      questions = normalizedQuestionResult.questions;
+      tiers = [];
       if (editing.pricing_mode === "deposit_quote") {
         const deposit = Number(editing.deposit_amount);
         if (!Number.isFinite(deposit) || deposit <= 0) {
@@ -567,36 +647,67 @@ export function VendorPackagesManager() {
         toast.error("Every price level needs a name and a price greater than $0.");
         return;
       }
-      const question = editing.questions[0];
+      const currentPriceQuestionKey = pricingQuestionKey(editing.tiers);
+      const question = editing.questions.find((candidate) => candidate.question_key === currentPriceQuestionKey);
       if (!question?.question_label.trim()) {
         toast.error("Add the customer question used to choose a price level.");
         return;
       }
-      questions = [{ ...question, question_key: slugKey(question.question_label), sort_order: 0 }];
-      tiers = editing.tiers.map((tier, index) => ({ ...tier, rule_question_key: questions[0].question_key, sort_order: index }));
+      const normalizedPriceKey = normalizedQuestionResult.keyMap.get(question.question_key);
+      if (!normalizedPriceKey) {
+        toast.error("The price-level question could not be saved.");
+        return;
+      }
+      questions = normalizedQuestionResult.questions.map((candidate) => candidate.question_key === normalizedPriceKey
+        ? { ...candidate, input_type: "number", is_required: true }
+        : candidate,
+      );
+      tiers = editing.tiers.map((tier, index) => ({
+        ...tier,
+        frequency: editing.default_frequency,
+        rule_question_key: normalizedPriceKey,
+        sort_order: index,
+      }));
       const rangeError = validateTierRanges(tiers);
       if (rangeError) {
         toast.error("Check the price-level ranges", { description: rangeError });
         return;
       }
     } else {
-      const price = Number(customerPrice);
-      if (!Number.isFinite(price) || price <= 0) {
-        toast.error("Enter a customer price greater than $0.");
+      const oldPriceKey = pricingQuestionKey(editing.tiers);
+      questions = normalizeQuestionRows(editing.questions.filter((question) => question.question_key !== oldPriceKey)).questions;
+      const supported = frequenciesForService(services.find((service) => service.id === editing.service_id));
+      const enabled = supported.filter((frequency) => Object.hasOwn(frequencyPrices, frequency));
+      if (!enabled.length) {
+        toast.error("Enable at least one cadence.");
         return;
       }
-      const existingSimpleTier = editing.questions.length === 0 && editing.tiers.length === 1
-        ? editing.tiers[0]
-        : null;
-      tiers = [{
-        name: existingSimpleTier?.name.trim() || "Standard",
-        price,
-        rule_question_key: null,
-        rule_min: null,
-        rule_max: null,
-        includes: [...(existingSimpleTier?.includes ?? [])],
-        sort_order: 0,
-      }];
+      const invalidFrequency = enabled.find((frequency) => {
+        const price = Number(frequencyPrices[frequency]);
+        return !Number.isFinite(price) || price <= 0;
+      });
+      if (invalidFrequency) {
+        toast.error(`Enter a ${FREQUENCIES[invalidFrequency].toLowerCase()} price greater than $0.`);
+        return;
+      }
+      savedDefaultFrequency = enabled.includes(editing.default_frequency)
+        ? editing.default_frequency
+        : enabled[0];
+      tiers = enabled.map((frequency, index) => {
+        const existingSimpleTier = editing.tiers.find((tier) =>
+          tierPricingFrequency(tier, editing.default_frequency) === frequency,
+        );
+        return {
+          name: existingSimpleTier?.name.trim() || FREQUENCIES[frequency],
+          price: Number(frequencyPrices[frequency]),
+          frequency,
+          rule_question_key: null,
+          rule_min: null,
+          rule_max: null,
+          includes: [...(existingSimpleTier?.includes ?? [])],
+          sort_order: index,
+        };
+      });
     }
 
     if (editing.addons.length > 10) {
@@ -626,15 +737,15 @@ export function VendorPackagesManager() {
     }
 
     const selectedService = services.find((service) => service.id === editing.service_id);
-    const priceReview = isFixedMode
-      ? evaluateCustomPackagePriceReview({
+    const priceReviews = isFixedMode
+      ? evaluateCustomPackageFrequencyPriceReviews({
           tiers,
-          frequency: editing.default_frequency,
+          defaultFrequency: savedDefaultFrequency,
           catalog: selectedService,
           templateRange: templateGuidance[editing.service_id] ?? null,
         })
-      : null;
-    const needsReview = priceReview?.needsReview ?? false;
+      : [];
+    const needsReview = priceReviews.some((review) => review.needsReview);
 
     if (isFixedMode && editing.is_active && !needsReview && !isPubliclyEligibleFixedPackage({
       ...editing,
@@ -658,7 +769,7 @@ export function VendorPackagesManager() {
       description: editing.description || null,
       service_id: editing.service_id,
       pricing_mode: editing.pricing_mode,
-      default_frequency: editing.default_frequency,
+      default_frequency: savedDefaultFrequency,
       deposit_amount: editing.pricing_mode === "deposit_quote" ? Number(editing.deposit_amount) : null,
       is_active: false,
       needs_review: needsReview,
@@ -672,16 +783,20 @@ export function VendorPackagesManager() {
         const result = await supabase.from("vendor_packages").update(payload).eq("id", packageId).eq("contractor_id", contractorId);
         if (result.error) throw result.error;
       }
-      if (isFixedMode) await replacePackageChildren(supabase, packageId, questions, tiers);
+      await replacePackageChildren(supabase, packageId, questions, tiers);
       await replaceCustomPackageAddons(supabase, packageId, addons);
       const publishResult = await supabase.from("vendor_packages").update({ is_active: editing.is_active, needs_review: needsReview }).eq("id", packageId).eq("contractor_id", contractorId);
       if (publishResult.error) throw publishResult.error;
       const live = editing.is_active && !needsReview;
       closeEditor();
       await refresh(contractorId);
-      if (needsReview && priceReview) {
+      if (needsReview) {
+        const flaggedCadences = priceReviews
+          .filter((review) => review.needsReview)
+          .map((review) => FREQUENCIES[review.frequency])
+          .join(", ");
         toast.warning("Saved for pricing review", {
-          description: `This package is hidden from public pricing because one or more tiers fall outside the expected ${money(priceReview.minPrice)}–${money(priceReview.maxPrice)} range. Adjust the price or contact Mercurius for review.`,
+          description: `This package is hidden from public pricing because ${flaggedCadences || "one or more cadences"} falls outside the expected range. Adjust the price or contact Mercurius for review.`,
         });
         if (continueAdding && nextCoverage) openCoverageEditor(nextCoverage);
       } else if (continueAdding && nextCoverage) {
@@ -929,21 +1044,33 @@ export function VendorPackagesManager() {
   const editorService = editing
     ? services.find((service) => service.id === editing.service_id)
     : undefined;
+  const editorPricingQuestionKey = editing ? pricingQuestionKey(editing.tiers) : null;
+  const editorPricingQuestionIndex = editing?.questions.findIndex((question) => question.question_key === editorPricingQuestionKey) ?? -1;
+  const editorIntakeQuestions = editing?.questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => question.question_key !== editorPricingQuestionKey) ?? [];
+  const editorEnabledFrequencies = editing
+    ? frequenciesForService(editorService).filter((frequency) => Object.hasOwn(frequencyPrices, frequency))
+    : [];
   const editorPreviewTiers: TierRow[] = editing
     ? advancedOpen
-      ? editing.tiers
-      : Number.isFinite(Number(customerPrice)) && Number(customerPrice) > 0
-        ? [{ name: "Standard", price: Number(customerPrice), includes: [], sort_order: 0 }]
-        : []
+      ? editing.tiers.map((tier) => ({ ...tier, frequency: editing.default_frequency }))
+      : editorEnabledFrequencies.flatMap((frequency, index) => {
+          const price = Number(frequencyPrices[frequency]);
+          return Number.isFinite(price) && price > 0
+            ? [{ name: FREQUENCIES[frequency], price, frequency, includes: [], sort_order: index }]
+            : [];
+        })
     : [];
-  const editorPriceReview = editing?.pricing_mode === "fixed" && editorPreviewTiers.length
-    ? evaluateCustomPackagePriceReview({
+  const editorPriceReviews = editing?.pricing_mode === "fixed" && editorPreviewTiers.length
+    ? evaluateCustomPackageFrequencyPriceReviews({
         tiers: editorPreviewTiers,
-        frequency: editing.default_frequency,
+        defaultFrequency: editing.default_frequency,
         catalog: editorService,
         templateRange: templateGuidance[editing.service_id] ?? null,
       })
-    : null;
+    : [];
+  const editorPriceReview = editorPriceReviews.find((review) => review.needsReview) ?? editorPriceReviews[0] ?? null;
 
   if (loading) return <div className="flex min-h-[360px] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading pricing…</div>;
   if (loadError) return <div className="mx-auto max-w-3xl p-6"><div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center"><h2 className="font-semibold">Pricing couldn’t be loaded</h2><p className="mt-2 text-sm text-muted-foreground">No preview packages have been substituted. {loadError}</p><Button variant="outline" className="mt-5" onClick={() => window.location.reload()}><RefreshCw />Try again</Button></div></div>;
@@ -1035,7 +1162,8 @@ export function VendorPackagesManager() {
         ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {sortedPackages.map((item) => {
-            const advanced = item.tiers.length > 1;
+            const advanced = isAdvancedTierStructure(item.tiers, item.questions);
+            const cadencePrices = lowestTierPriceByFrequency(item.tiers, item.default_frequency);
             const validPrices = item.tiers.map((tier) => Number(tier.price)).filter((price) => Number.isFinite(price) && price > 0);
             const displayPrice = validPrices.length ? Math.min(...validPrices) : null;
             const live = isLiveFixedPackage(item);
@@ -1044,15 +1172,15 @@ export function VendorPackagesManager() {
               <article key={item.id} className={cn("rounded-xl border bg-card p-5 shadow-sm", live && "border-accent-border", liveQuote && "border-info/40", item.needs_review && "border-amber-300/70")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.name}</h3><PackageStatus item={item} /><Badge variant="outline">{FREQUENCIES[item.default_frequency] ?? item.default_frequency}</Badge></div>
+                    <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.name}</h3><PackageStatus item={item} /><Badge variant="outline">{FREQUENCIES[item.default_frequency] ?? item.default_frequency} default</Badge>{cadencePrices.length > 1 && <Badge variant="outline">{cadencePrices.length} cadences</Badge>}</div>
                     <p className="mt-1 text-xs text-muted-foreground">{services.find((service) => service.id === item.service_id)?.name ?? "Service"}</p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1"><PricingToggle checked={item.is_active} disabled={mutatingId === item.id} onCheckedChange={() => void togglePackage(item)} label={`${item.is_active ? "Pause" : "Publish"} ${item.name}`} /><span className="text-[10px] font-medium text-muted-foreground">{mutatingId === item.id ? "Updating…" : live ? "Live price" : liveQuote ? "Quote live" : item.needs_review ? "Review blocked" : item.is_active ? "Invalid" : "Paused"}</span></div>
                 </div>
                 {item.pricing_mode === "fixed" && displayPrice !== null ? (
                   <div className="mt-4">
-                    {!advanced ? <p className="flex items-center text-2xl font-semibold"><DollarSign className="h-5 w-5" />{formatPrice(displayPrice)}</p> : (
-                      <div className="space-y-2"><p className="text-sm text-muted-foreground">From <span className="font-semibold text-foreground">${displayPrice}</span> · {item.tiers.length} price levels</p>{item.tiers.slice(0, 3).map((tier) => <div key={tier.id ?? tier.name} className="flex items-center justify-between rounded-lg border bg-background/50 px-3 py-2"><div><p className="text-sm font-medium">{tier.name}</p>{(tier.rule_min != null || tier.rule_max != null) && <p className="text-xs text-muted-foreground">{tier.rule_min}–{tier.rule_max} {item.questions[0]?.unit ?? ""}</p>}</div><p className="text-sm font-semibold text-primary">${tier.price}</p></div>)}</div>
+                    {!advanced ? <div className="space-y-2">{cadencePrices.map(({ frequency, price }) => <div key={frequency} className="flex items-center justify-between rounded-lg border bg-background/50 px-3 py-2"><div><p className="text-sm font-medium">{FREQUENCIES[frequency]}</p>{frequency === item.default_frequency && <p className="text-[11px] text-muted-foreground">Selected first for customers</p>}</div><p className="text-base font-semibold tabular-nums">{money(price)}</p></div>)}</div> : (
+                      <div className="space-y-2"><p className="text-sm text-muted-foreground">From <span className="font-semibold text-foreground">${displayPrice}</span> · {item.tiers.length} price levels · {FREQUENCIES[item.default_frequency]}</p>{item.tiers.slice(0, 3).map((tier) => <div key={tier.id ?? tier.name} className="flex items-center justify-between rounded-lg border bg-background/50 px-3 py-2"><div><p className="text-sm font-medium">{tier.name}</p>{(tier.rule_min != null || tier.rule_max != null) && <p className="text-xs text-muted-foreground">{tier.rule_min}–{tier.rule_max} {item.questions.find((question) => question.question_key === tier.rule_question_key)?.unit ?? ""}</p>}</div><p className="text-sm font-semibold text-primary">${tier.price}</p></div>)}</div>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground">{live ? "Available to public Pricing and Plan Builder flows." : item.needs_review ? "Hidden from public pricing and booking until the review flag is resolved." : "Saved privately until this package is published."}</p>
                   </div>
@@ -1133,10 +1261,21 @@ export function VendorPackagesManager() {
           {editing && <div className="space-y-5">
             <div className="space-y-2"><Label htmlFor="package-service">Service</Label><select id="package-service" className={nativeSelect} value={editing.service_id} onChange={(event) => changeService(event.target.value)}><option value="" disabled>Choose a service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></div>
             <div className="space-y-2"><Label htmlFor="package-pricing-mode">How should homeowners get a price?</Label><select id="package-pricing-mode" className={nativeSelect} value={editing.pricing_mode} onChange={(event) => changePricingMode(event.target.value as PricingMode)}><option value="fixed">Fixed price — show a live customer price</option><option value="deposit_quote">Quote required — deposit after confirmation</option><option value="custom_quote">Custom quote — confirm the full price first</option></select><div className="rounded-lg border bg-muted/25 px-3 py-2.5"><p className="text-sm font-medium text-foreground">{PRICING_MODES[editing.pricing_mode].label}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{PRICING_MODES[editing.pricing_mode].description}</p></div></div>
-            {editing.pricing_mode === "fixed" && !advancedOpen && <div className="space-y-2"><Label htmlFor="package-price">Price customers pay ($)</Label><Input id="package-price" className="h-12 text-lg" type="number" min="0" step="1" inputMode="decimal" placeholder="e.g. 80" value={customerPrice} onChange={(event) => setCustomerPrice(event.target.value)} /><p className="text-xs text-muted-foreground">This provider-backed price is shown publicly and revalidated when a homeowner submits a request.</p>{editing.tiers.length > 1 && <p className="text-xs text-amber-700">You explicitly selected simple pricing. Saving will replace the existing size-based levels with this single price.</p>}</div>}
+            {editing.pricing_mode === "fixed" && !advancedOpen && <div className="space-y-3 rounded-xl border bg-muted/15 p-3.5">
+              <div><Label>Cadences and customer prices</Label><p className="mt-1 text-xs leading-5 text-muted-foreground">Enable only cadences you actively offer. Each enabled cadence needs its own provider-backed price.</p></div>
+              <div className="space-y-2">{frequenciesForService(editorService).map((frequency) => {
+                const enabled = Object.hasOwn(frequencyPrices, frequency);
+                return <div key={frequency} className={cn("grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center", enabled ? "border-accent-border bg-background" : "bg-muted/20")}>
+                  <label className="flex cursor-pointer items-center gap-3"><input type="checkbox" checked={enabled} disabled={enabled && editorEnabledFrequencies.length === 1} onChange={(event) => toggleFrequency(frequency, event.target.checked)} className="h-4 w-4 accent-accent" /><span><span className="block text-sm font-medium">{FREQUENCIES[frequency]}</span>{editing.default_frequency === frequency && enabled && <span className="mt-0.5 block text-[11px] font-medium text-accent">Default cadence</span>}</span></label>
+                  {enabled ? <div className="relative"><DollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label={`${FREQUENCIES[frequency]} customer price`} className="h-11 pl-8 text-base" type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="0.00" value={frequencyPrices[frequency] ?? ""} onChange={(event) => updateFrequencyPrice(frequency, event.target.value)} /></div> : <p className="text-right text-xs text-muted-foreground">Not offered</p>}
+                </div>;
+              })}</div>
+              {editorEnabledFrequencies.length > 1 && <div className="space-y-2 border-t pt-3"><Label htmlFor="package-default-frequency">Default cadence</Label><select id="package-default-frequency" className={nativeSelect} value={editing.default_frequency} onChange={(event) => isPricingFrequency(event.target.value) && changeFrequency(event.target.value)}>{editorEnabledFrequencies.map((frequency) => <option key={frequency} value={frequency}>{FREQUENCIES[frequency]}</option>)}</select><p className="text-xs text-muted-foreground">This cadence is selected first for customers, but every enabled cadence remains available.</p></div>}
+              {isAdvancedTierStructure(editing.tiers, editing.questions) && <p className="text-xs text-amber-700 dark:text-amber-300">You selected simple cadence pricing. Saving will replace the prior home-detail price levels.</p>}
+            </div>}
             {editing.pricing_mode === "deposit_quote" && <div className="space-y-2"><Label htmlFor="package-deposit">Deposit after quote confirmation ($)</Label><Input id="package-deposit" className="h-12 text-lg" type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="e.g. 100" value={editing.deposit_amount ?? ""} onChange={(event) => updateField("deposit_amount", event.target.value ? Number(event.target.value) : null)} /><p className="text-xs leading-5 text-muted-foreground">This records your intended deposit. It is not charged when a homeowner sends the initial request; Mercurius confirms scope, final price, and payment timing first.</p></div>}
             {editing.pricing_mode === "custom_quote" && <div className="rounded-xl border border-info/30 bg-info/5 p-3.5"><p className="text-sm font-medium text-foreground">No public price required</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Homeowners can request this service, but Mercurius will coordinate the details and confirm your quote before booking. No instant checkout is offered.</p></div>}
-            <div className="space-y-2"><Label htmlFor="package-frequency">Cadence / frequency</Label><select id="package-frequency" className={nativeSelect} value={editing.default_frequency} onChange={(event) => isPricingFrequency(event.target.value) && changeFrequency(event.target.value)}>{frequenciesForService(services.find((service) => service.id === editing.service_id)).map((value) => <option key={value} value={value}>{FREQUENCIES[value]}</option>)}</select><p className="text-xs text-muted-foreground">Only cadences supported by this catalog service are shown.</p></div>
+            {(editing.pricing_mode !== "fixed" || advancedOpen) && <div className="space-y-2"><Label htmlFor="package-frequency">Cadence / frequency</Label><select id="package-frequency" className={nativeSelect} value={editing.default_frequency} onChange={(event) => isPricingFrequency(event.target.value) && changeFrequency(event.target.value)}>{frequenciesForService(editorService).map((value) => <option key={value} value={value}>{FREQUENCIES[value]}</option>)}</select><p className="text-xs text-muted-foreground">{advancedOpen ? "Home-detail price levels use this cadence. Use simple pricing when one package needs several cadences." : "Only cadences supported by this catalog service are shown."}</p></div>}
             <div className="rounded-lg border bg-muted/20">
               <button type="button" className="flex w-full items-center justify-between px-3 py-3 text-left text-sm hover:bg-muted/40" aria-expanded={nameEditorOpen} onClick={() => setNameEditorOpen((current) => !current)}><span><span className="font-medium">Customer-facing name</span><span className="mt-0.5 block text-xs text-muted-foreground">Optional — generated automatically from service and cadence.</span></span><ChevronDown className={cn("h-4 w-4 transition-transform", nameEditorOpen && "rotate-180")} /></button>
               {nameEditorOpen && <div className="space-y-2 border-t p-3"><Input id="package-name" className="h-11" placeholder="Standard lawn mow" value={editing.name} onChange={(event) => { setNameCustomized(true); updateField("name", event.target.value); }} />{nameCustomized && <Button type="button" variant="ghost" size="sm" onClick={() => { const service = services.find((candidate) => candidate.id === editing.service_id); setNameCustomized(false); updateField("name", packageName(service?.name ?? displayService(editing.service_id), editing.default_frequency)); }}>Use automatic name</Button>}</div>}
@@ -1148,16 +1287,20 @@ export function VendorPackagesManager() {
               </div>
               {editing.addons.length === 0 ? <p className="border-t px-3 py-4 text-center text-xs text-muted-foreground">No optional extras on this package.</p> : <div className="space-y-3 border-t p-3">{editing.addons.map((addon, index) => <div key={addon.id ?? index} className="space-y-3 rounded-lg border bg-background p-3"><div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]"><Field label="Add-on name"><Input maxLength={80} placeholder="Screen enclosure cleaning" value={addon.name} onChange={(event) => { const next = [...editing.addons]; next[index] = { ...addon, name: event.target.value }; updateField("addons", next); }} /></Field><Field label="Price $"><Input type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="25" value={addon.price || ""} onChange={(event) => { const next = [...editing.addons]; next[index] = { ...addon, price: Number(event.target.value) }; updateField("addons", next); }} /></Field><Button type="button" variant="ghost" className="h-10 w-10 self-end" aria-label={`Remove ${addon.name || "add-on"}`} onClick={() => updateField("addons", editing.addons.filter((_, addonIndex) => addonIndex !== index))}><Trash2 className="text-destructive" /></Button></div><Field label="Short description (optional)"><Input maxLength={160} placeholder="Includes frames and exterior screens" value={addon.description ?? ""} onChange={(event) => { const next = [...editing.addons]; next[index] = { ...addon, description: event.target.value || null }; updateField("addons", next); }} /></Field></div>)}</div>}
             </div>
+            <div className="overflow-hidden rounded-lg border">
+              <div className="flex flex-col gap-3 bg-muted/20 px-3 py-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-medium">Service questions</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">Ask up to 10 simple questions before a homeowner confirms the request. These do not create conditional branches.</p></div><Button type="button" variant="outline" size="sm" className="shrink-0" disabled={editing.questions.length >= 10} onClick={() => { const key = uniqueQuestionKey("question", editing.questions); updateField("questions", [...editing.questions, { question_key: key, question_label: "", input_type: "text", unit: null, options: null, is_required: true, sort_order: editing.questions.length }]); }}><Plus />Add question</Button></div>
+              {editorIntakeQuestions.length === 0 ? <p className="border-t px-3 py-4 text-center text-xs text-muted-foreground">No additional questions. Packages without questions continue through the standard request form.</p> : <div className="space-y-3 border-t p-3">{editorIntakeQuestions.map(({ question, index }, visibleIndex) => <div key={question.id ?? question.question_key} className="rounded-lg border bg-background p-3"><div className="grid gap-3 sm:grid-cols-[1fr_auto]"><Field label={`Question ${visibleIndex + 1}`}><Input maxLength={180} placeholder="Is there gate access we should know about?" value={question.question_label} onChange={(event) => { const next = [...editing.questions]; next[index] = { ...question, question_label: event.target.value }; updateField("questions", next); }} /></Field><div className="flex items-end gap-1"><Button type="button" variant="ghost" className="h-10 w-10" disabled={index === 0 || editing.questions[index - 1]?.question_key === editorPricingQuestionKey} aria-label="Move question up" onClick={() => updateField("questions", moveQuestion(editing.questions, index, index - 1))}><ArrowUp /></Button><Button type="button" variant="ghost" className="h-10 w-10" disabled={index >= editing.questions.length - 1} aria-label="Move question down" onClick={() => updateField("questions", moveQuestion(editing.questions, index, index + 1))}><ArrowDown /></Button><Button type="button" variant="ghost" className="h-10 w-10" aria-label={`Remove ${question.question_label || "question"}`} onClick={() => updateField("questions", editing.questions.filter((_, questionIndex) => questionIndex !== index).map((item, sortIndex) => ({ ...item, sort_order: sortIndex }))) }><Trash2 className="text-destructive" /></Button></div></div><label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={question.is_required !== false} onChange={(event) => { const next = [...editing.questions]; next[index] = { ...question, is_required: event.target.checked }; updateField("questions", next); }} className="h-4 w-4 accent-accent" />Require an answer before request submission</label></div>)}</div>}
+            </div>
             {editing.pricing_mode === "fixed" && <div className="overflow-hidden rounded-lg border">
               <button type="button" onClick={() => advancedOpen ? switchToSimplePricing() : enterAdvanced()} className="flex w-full items-center justify-between bg-muted/30 px-3 py-3 text-left text-sm hover:bg-muted/50" aria-expanded={advancedOpen}><span><span className="font-medium">Price varies by home details</span><span className="mt-0.5 block text-xs text-muted-foreground">{advancedOpen ? "Advanced pricing is active. Switching back to one price requires confirmation." : "Optional — add a customer question and size-based levels."}</span></span><ChevronDown className={cn("transition-transform", advancedOpen && "rotate-180")} /></button>
               {advancedOpen && <div className="space-y-5 border-t p-3">
-                <div className="space-y-3"><Label className="text-base">Ask the customer</Label>{editing.questions.slice(0, 1).map((question, index) => <div key={index} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2"><div className="space-y-1.5 sm:col-span-2"><Label className="text-xs text-muted-foreground">Question</Label><Input placeholder="How many bedrooms?" value={question.question_label} onChange={(event) => { const next = [...editing.questions]; const key = slugKey(event.target.value); next[index] = { ...next[index], question_label: event.target.value, question_key: key }; updateField("questions", next); updateField("tiers", editing.tiers.map((tier) => ({ ...tier, rule_question_key: key }))); }} /></div><div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Unit (optional)</Label><Input placeholder="bedrooms, sq ft…" value={question.unit ?? ""} onChange={(event) => { const next = [...editing.questions]; next[index] = { ...next[index], unit: event.target.value }; updateField("questions", next); }} /></div></div>)}</div>
-                <div className="space-y-3"><div className="flex items-center justify-between"><Label className="text-base">Price levels</Label><Button type="button" variant="outline" size="sm" onClick={() => updateField("tiers", [...editing.tiers, { name: `Level ${editing.tiers.length + 1}`, price: 0, rule_question_key: editing.questions[0]?.question_key ?? "size", rule_min: 0, rule_max: 100, includes: [], sort_order: editing.tiers.length }])}><Plus />Add level</Button></div>
+                <div className="space-y-3"><Label className="text-base">Question that chooses the price level</Label>{editorPricingQuestionIndex >= 0 && (() => { const question = editing.questions[editorPricingQuestionIndex]; return <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2"><div className="space-y-1.5 sm:col-span-2"><Label className="text-xs text-muted-foreground">Question</Label><Input placeholder="How many bedrooms?" value={question.question_label} onChange={(event) => { const next = [...editing.questions]; const key = uniqueQuestionKey(slugKey(event.target.value), next.filter((_, index) => index !== editorPricingQuestionIndex)); next[editorPricingQuestionIndex] = { ...question, question_label: event.target.value, question_key: key, input_type: "number", is_required: true }; updateField("questions", next); updateField("tiers", editing.tiers.map((tier) => ({ ...tier, rule_question_key: key }))); }} /></div><div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Unit (optional)</Label><Input placeholder="bedrooms, sq ft…" value={question.unit ?? ""} onChange={(event) => { const next = [...editing.questions]; next[editorPricingQuestionIndex] = { ...question, unit: event.target.value }; updateField("questions", next); }} /></div><p className="self-end text-xs leading-5 text-muted-foreground">Required because this answer selects the correct live price.</p></div>; })()}</div>
+                <div className="space-y-3"><div className="flex items-center justify-between"><Label className="text-base">Price levels</Label><Button type="button" variant="outline" size="sm" onClick={() => updateField("tiers", [...editing.tiers, { name: `Level ${editing.tiers.length + 1}`, price: 0, frequency: editing.default_frequency, rule_question_key: editorPricingQuestionKey ?? "size", rule_min: 0, rule_max: 100, includes: [], sort_order: editing.tiers.length }])}><Plus />Add level</Button></div>
                   {editing.tiers.map((tier, index) => <div key={index} className="space-y-3 rounded-lg border p-3"><div className="grid gap-3 sm:grid-cols-2"><Field label="Level name"><Input className="h-11" placeholder="e.g. 3–4 bedrooms" value={tier.name} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], name: event.target.value }; updateField("tiers", next); }} /></Field><Field label="Price $"><Input className="h-11" type="number" min="0" value={tier.price || ""} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], price: Number(event.target.value) }; updateField("tiers", next); }} /></Field><Field label="From"><Input className="h-11" type="number" value={tier.rule_min ?? ""} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], rule_min: event.target.value ? Number(event.target.value) : null }; updateField("tiers", next); }} /></Field><Field label="To"><Input className="h-11" type="number" value={tier.rule_max ?? ""} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], rule_max: event.target.value ? Number(event.target.value) : null }; updateField("tiers", next); }} /></Field></div><div className="flex items-end gap-2"><Field label="What’s included (optional)" className="flex-1"><Input className="h-11" placeholder="Mow, edge, blow" value={tier.includes.join(", ")} onChange={(event) => { const next = [...editing.tiers]; next[index] = { ...next[index], includes: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) }; updateField("tiers", next); }} /></Field><Button type="button" variant="ghost" className="h-11 w-11" aria-label={`Remove ${tier.name || "level"}`} onClick={() => updateField("tiers", editing.tiers.filter((_, tierIndex) => tierIndex !== index))}><Trash2 className="text-destructive" /></Button></div></div>)}
                 </div>
               </div>}
             </div>}
-            {editorPriceReview && <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editorPriceReview.needsReview ? "border-amber-300/70 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" : "border-accent-border bg-accent-subtle")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editorPriceReview.needsReview ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "bg-accent-soft text-sage-dark")}>{editorPriceReview.needsReview ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}</span><div><p className="text-sm font-medium">{editorPriceReview.needsReview ? "Pricing review required" : "Within the soft-launch pricing range"}</p><p className="mt-0.5 text-xs leading-5 opacity-80">Expected {money(editorPriceReview.minPrice)}–{money(editorPriceReview.maxPrice)} {priceReviewSourceLabel(editorPriceReview.source)}. {editorPriceReview.needsReview ? "Saving will flag this package and keep it hidden from public pricing and booking until the price is adjusted or reviewed." : "This package can be publicly eligible when it is published and all other checks pass."}</p></div></div>}
+            {editorPriceReview && <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editorPriceReview.needsReview ? "border-amber-300/70 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" : "border-accent-border bg-accent-subtle")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editorPriceReview.needsReview ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" : "bg-accent-soft text-sage-dark")}>{editorPriceReview.needsReview ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}</span><div><p className="text-sm font-medium">{editorPriceReview.needsReview ? "Pricing review required" : "Within the soft-launch pricing range"}</p><p className="mt-0.5 text-xs leading-5 opacity-80">{FREQUENCIES[editorPriceReview.frequency]} expected range: {money(editorPriceReview.minPrice)}–{money(editorPriceReview.maxPrice)} {priceReviewSourceLabel(editorPriceReview.source)}. {editorPriceReview.needsReview ? "Saving will flag this package and keep every cadence hidden from public pricing and booking until the price is adjusted or reviewed." : editorPriceReviews.length > 1 ? "All enabled cadence prices are checked separately before this package can go live." : "This package can be publicly eligible when it is published and all other checks pass."}</p></div></div>}
             <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editing.is_active ? "border-accent-border bg-accent-subtle" : "border-border bg-muted/30")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editing.is_active ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}>{editing.is_active ? <PackageCheck className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{editing.is_active ? editorPriceReview?.needsReview ? "Save for pricing review" : editing.pricing_mode === "fixed" ? "Publish live price" : "Publish quote package" : "Save as draft"}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{editing.is_active ? editorPriceReview?.needsReview ? "The active setting is preserved, but this package stays hidden until its pricing review is resolved." : editing.pricing_mode === "fixed" ? "After a successful save, this validated price can appear in public pricing and request flows." : "Homeowners will see quote / matching required. No instant price or checkout is presented." : "The package remains private until you publish it."}</p></div><PricingToggle checked={editing.is_active} onCheckedChange={(checked) => updateField("is_active", checked)} label={editing.is_active ? "Save this package as a private draft" : "Publish this package when saved"} /></div>
           </div>}
           <DialogFooter className="sm:grid sm:grid-cols-[auto_1fr_1fr]"><Button variant="ghost" className="min-h-11" disabled={saving} onClick={closeEditor}>Cancel</Button><Button variant="outline" className="min-h-11" disabled={saving} onClick={() => void savePackage(true)}>{saving ? <Loader2 className="animate-spin" /> : <Plus />}{editing?.is_active ? editorPriceReview?.needsReview ? "Save review & add next" : editing.pricing_mode === "fixed" ? "Publish & add next" : "Publish quote & add next" : "Save draft & add next"}</Button><Button className={cn("min-h-11", editing?.is_active && "bg-accent text-accent-foreground hover:bg-accent-hover")} disabled={saving} onClick={() => void savePackage(false)}>{saving ? <><Loader2 className="animate-spin" />Saving…</> : editing?.is_active ? editorPriceReview?.needsReview ? <><AlertTriangle />Save for review</> : editing.pricing_mode === "fixed" ? <><PackageCheck />Publish & finish</> : <><PackageCheck />Publish quote</> : <><PauseCircle />Save draft & finish</>}</Button></DialogFooter>
@@ -1215,6 +1358,7 @@ async function replacePackageChildren(
       input_type: question.input_type,
       unit: question.unit || null,
       options: question.options ?? null,
+      is_required: question.is_required !== false,
       sort_order: question.sort_order,
     })));
     if (result.error) throw result.error;
@@ -1223,6 +1367,7 @@ async function replacePackageChildren(
     package_id: packageId,
     name: tier.name,
     price: tier.price,
+    frequency: tier.frequency,
     rule_question_key: tier.rule_question_key || null,
     rule_min: tier.rule_min ?? null,
     rule_max: tier.rule_max ?? null,
@@ -1297,6 +1442,90 @@ function validateTierRanges(tiers: TierRow[]) {
     if (Number(ordered[index].rule_min) <= Number(ordered[index - 1].rule_max)) return `${ordered[index - 1].name} and ${ordered[index].name} have overlapping ranges.`;
   }
   return null;
+}
+
+function isAdvancedTierStructure(tiers: TierRow[], questions: QuestionRow[]) {
+  const questionKeys = new Set(questions.map((question) => question.question_key));
+  if (tiers.some((tier) =>
+    tier.rule_question_key || tier.rule_min != null || tier.rule_max != null
+  ) || tiers.some((tier) => tier.rule_question_key && questionKeys.has(tier.rule_question_key))) return true;
+  const counts = new Map<PricingFrequency, number>();
+  tiers.forEach((tier) => {
+    counts.set(tier.frequency, (counts.get(tier.frequency) ?? 0) + 1);
+  });
+  return [...counts.values()].some((count) => count > 1);
+}
+
+function pricingQuestionKey(tiers: TierRow[]) {
+  return tiers.find((tier) => tier.rule_question_key)?.rule_question_key ?? null;
+}
+
+function uniqueQuestionKey(base: string, questions: QuestionRow[]) {
+  const used = new Set(questions.map((question) => question.question_key));
+  if (!used.has(base)) return base;
+  let suffix = 2;
+  while (used.has(`${base}_${suffix}`)) suffix += 1;
+  return `${base}_${suffix}`;
+}
+
+function normalizeQuestionRows(rows: QuestionRow[]) {
+  const used = new Set<string>();
+  const keyMap = new Map<string, string>();
+  const questions = rows.map((question, index) => {
+    const base = slugKey(question.question_label);
+    let key = base;
+    let suffix = 2;
+    while (used.has(key)) {
+      key = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    used.add(key);
+    keyMap.set(question.question_key, key);
+    return {
+      ...question,
+      question_key: key,
+      question_label: question.question_label.trim(),
+      is_required: question.is_required !== false,
+      sort_order: index,
+    };
+  });
+  return { questions, keyMap };
+}
+
+function moveQuestion(rows: QuestionRow[], from: number, to: number) {
+  if (from < 0 || to < 0 || from >= rows.length || to >= rows.length || from === to) return rows;
+  const next = [...rows];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next.map((question, index) => ({ ...question, sort_order: index }));
+}
+
+function simpleFrequencyPriceDraft(
+  tiers: TierRow[],
+  fallback: PricingFrequency,
+): Partial<Record<PricingFrequency, string>> {
+  if (!tiers.length) return { [fallback]: "" };
+  const prices: Partial<Record<PricingFrequency, string>> = {};
+  tiers.forEach((tier) => {
+    const frequency = tierPricingFrequency(tier, fallback);
+    const price = Number(tier.price);
+    if (!Number.isFinite(price) || price <= 0) return;
+    const current = Number(prices[frequency]);
+    if (!prices[frequency] || price < current) prices[frequency] = String(price);
+  });
+  return Object.keys(prices).length ? prices : { [fallback]: "" };
+}
+
+function lowestTierPriceByFrequency(tiers: TierRow[], fallback: PricingFrequency) {
+  const prices = new Map<PricingFrequency, number>();
+  tiers.forEach((tier) => {
+    const frequency = tierPricingFrequency(tier, fallback);
+    const price = Number(tier.price);
+    if (!Number.isFinite(price) || price <= 0) return;
+    const current = prices.get(frequency);
+    if (current == null || price < current) prices.set(frequency, price);
+  });
+  return [...prices.entries()].map(([frequency, price]) => ({ frequency, price }));
 }
 
 function frequenciesForService(service?: ServiceOption): PricingFrequency[] {

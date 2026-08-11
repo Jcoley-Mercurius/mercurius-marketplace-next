@@ -17,7 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
-  evaluateCustomPackagePriceReview,
+  evaluateCustomPackageFrequencyPriceReviews,
   hasValidFixedTiers,
   isPricingFrequency,
   isPubliclyEligibleQuotePackage,
@@ -54,6 +54,7 @@ type PackageTier = {
   template_tier_id: string | null;
   name: string;
   price: number;
+  frequency: PricingFrequency;
   rule_min: number | null;
   rule_max: number | null;
   sort_order: number;
@@ -75,7 +76,7 @@ type ReviewItem = PackageRecord & {
   contractor: Contractor | null;
   service: Service | null;
   tiers: PackageTier[];
-  customReview: CustomPackagePriceReview | null;
+  customReviews: Array<CustomPackagePriceReview & { frequency: PricingFrequency }>;
   managedRanges: Record<string, TemplateTier>;
 };
 
@@ -118,7 +119,7 @@ export default function AdminPricingReviewsPage() {
       const [contractorResult, serviceResult, tierResult, templateResult, templateTierResult] = await Promise.all([
         supabase.from("contractors").select("id, name, is_active").in("id", contractorIds),
         supabase.from("services_catalog").select("id, name, weekly_price, monthly_price, one_time_price").in("id", serviceIds),
-        supabase.from("package_tiers").select("id, package_id, template_tier_id, name, price, rule_min, rule_max, sort_order").in("package_id", packageIds).order("sort_order"),
+        supabase.from("package_tiers").select("id, package_id, template_tier_id, name, price, frequency, rule_min, rule_max, sort_order").in("package_id", packageIds).order("sort_order"),
         supabase.from("pricing_templates").select("id, service_id, is_active"),
         supabase.from("pricing_template_tiers").select("id, template_id, name, min_price, max_price"),
       ]);
@@ -132,7 +133,7 @@ export default function AdminPricingReviewsPage() {
         monthly_price: item.monthly_price === null ? null : Number(item.monthly_price),
         one_time_price: item.one_time_price === null ? null : Number(item.one_time_price),
       }]));
-      const tiers = ((tierResult.data ?? []) as PackageTier[]).map((item) => ({ ...item, price: Number(item.price), rule_min: item.rule_min === null ? null : Number(item.rule_min), rule_max: item.rule_max === null ? null : Number(item.rule_max) }));
+      const tiers = ((tierResult.data ?? []) as PackageTier[]).map((item) => ({ ...item, frequency: isPricingFrequency(item.frequency) ? item.frequency : "one-time", price: Number(item.price), rule_min: item.rule_min === null ? null : Number(item.rule_min), rule_max: item.rule_max === null ? null : Number(item.rule_max) }));
       const templates = (templateResult.data ?? []) as PricingTemplate[];
       const templateTiers = ((templateTierResult.data ?? []) as TemplateTier[]).map((item) => ({ ...item, min_price: Number(item.min_price), max_price: Number(item.max_price) }));
       const managedRanges = Object.fromEntries(templateTiers.map((item) => [item.id, item]));
@@ -141,20 +142,20 @@ export default function AdminPricingReviewsPage() {
       setItems(packageRows.map((item) => {
         const packageTiers = tiers.filter((tier) => tier.package_id === item.id);
         const service = services.get(item.service_id) ?? null;
-        const customReview = item.template_id === null && item.pricing_mode === "fixed"
-          ? evaluateCustomPackagePriceReview({
+        const customReviews = item.template_id === null && item.pricing_mode === "fixed"
+          ? evaluateCustomPackageFrequencyPriceReviews({
               tiers: packageTiers,
-              frequency: item.default_frequency,
+              defaultFrequency: item.default_frequency,
               catalog: service,
               templateRange: templateGuidance[item.service_id] ?? null,
             })
-          : null;
+          : [];
         return {
           ...item,
           contractor: contractors.get(item.contractor_id) ?? null,
           service,
           tiers: packageTiers,
-          customReview,
+          customReviews,
           managedRanges,
         };
       }));
@@ -269,9 +270,9 @@ function ReviewCard({ item, busy, approve, pause }: { item: ReviewItem; busy: { 
       </div>
 
       <div className="space-y-5 p-5">
-        <div className="grid gap-3 sm:grid-cols-2"><Detail label="Vendor"><span className="flex items-center gap-1.5"><Store className="h-3.5 w-3.5" />{item.contractor?.name ?? "Unavailable"}</span></Detail><Detail label="Last package update">{formatDateTime(item.updated_at)}</Detail><Detail label="Cadence">{frequencyLabel(item.default_frequency)}</Detail><Detail label="Guardrail source">{guardrailSource(item)}</Detail></div>
+        <div className="grid gap-3 sm:grid-cols-2"><Detail label="Vendor"><span className="flex items-center gap-1.5"><Store className="h-3.5 w-3.5" />{item.contractor?.name ?? "Unavailable"}</span></Detail><Detail label="Last package update">{formatDateTime(item.updated_at)}</Detail><Detail label="Default cadence">{frequencyLabel(item.default_frequency)}</Detail><Detail label="Guardrail source">{guardrailSource(item)}</Detail></div>
 
-        <section><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Current pricing</h3>{item.customReview && <Badge variant="outline">Expected {money(item.customReview.minPrice)}–{money(item.customReview.maxPrice)}</Badge>}</div><PriceRows item={item} /></section>
+        <section><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Current pricing</h3>{item.customReviews.length > 1 && <Badge variant="outline">Cadence-specific ranges</Badge>}</div><PriceRows item={item} /></section>
 
         {!ready && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-5 text-destructive"><p className="font-medium">Approval blocked</p><p className="mt-0.5">{approvalBlockReason(item)}</p></div>}
 
@@ -288,10 +289,11 @@ function PriceRows({ item }: { item: ReviewItem }) {
 
   return <div className="space-y-2">{item.tiers.map((tier) => {
     const managedRange = tier.template_tier_id ? item.managedRanges[tier.template_tier_id] : null;
-    const min = managedRange?.min_price ?? item.customReview?.minPrice ?? null;
-    const max = managedRange?.max_price ?? item.customReview?.maxPrice ?? null;
+    const customReview = item.customReviews.find((review) => review.frequency === tier.frequency);
+    const min = managedRange?.min_price ?? customReview?.minPrice ?? null;
+    const max = managedRange?.max_price ?? customReview?.maxPrice ?? null;
     const outside = min !== null && max !== null && (tier.price < min || tier.price > max);
-    return <div key={tier.id} className={cn("rounded-lg border px-3 py-3 text-sm", outside ? "border-amber-300/70 bg-amber-50/60 dark:bg-amber-950/20" : "bg-muted/20")}><div className="flex items-center justify-between gap-3"><div><p className="font-medium">{tier.name}</p>{(tier.rule_min !== null || tier.rule_max !== null) && <p className="mt-0.5 text-xs text-muted-foreground">Range rule: {tier.rule_min ?? "—"}–{tier.rule_max ?? "—"}</p>}</div><div className="text-right"><p className={cn("font-semibold", outside && "text-amber-800 dark:text-amber-200")}>{money(tier.price)}</p><p className="text-xs text-muted-foreground">{min !== null && max !== null ? `Expected ${money(min)}–${money(max)}` : "Expected range unavailable"}</p></div></div></div>;
+    return <div key={tier.id} className={cn("rounded-lg border px-3 py-3 text-sm", outside ? "border-amber-300/70 bg-amber-50/60 dark:bg-amber-950/20" : "bg-muted/20")}><div className="flex items-center justify-between gap-3"><div><p className="font-medium">{tier.name}</p><p className="mt-0.5 text-xs text-muted-foreground">{frequencyLabel(tier.frequency)}</p>{(tier.rule_min !== null || tier.rule_max !== null) && <p className="mt-0.5 text-xs text-muted-foreground">Range rule: {tier.rule_min ?? "—"}–{tier.rule_max ?? "—"}</p>}</div><div className="text-right"><p className={cn("font-semibold", outside && "text-amber-800 dark:text-amber-200")}>{money(tier.price)}</p><p className="text-xs text-muted-foreground">{min !== null && max !== null ? `Expected ${money(min)}–${money(max)}` : "Expected range unavailable"}</p></div></div></div>;
   })}</div>;
 }
 
@@ -320,9 +322,10 @@ function approvalBlockReason(item: ReviewItem) {
 
 function guardrailSource(item: ReviewItem) {
   if (item.template_id !== null) return "Managed template tier bands";
-  if (!item.customReview) return "No fixed-price guardrail";
-  if (item.customReview.source === "managed_template") return "Service template range";
-  if (item.customReview.source === "service_catalog") return "Service catalog guidance";
+  if (!item.customReviews.length) return "No fixed-price guardrail";
+  const sources = new Set(item.customReviews.map((review) => review.source));
+  if (sources.has("managed_template")) return "Template/catalog cadence bands";
+  if (sources.has("service_catalog")) return "Service catalog cadence guidance";
   return "Soft-launch fallback ($20–$5,000)";
 }
 

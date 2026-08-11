@@ -18,6 +18,7 @@ import {
   PackageCheck,
   RefreshCw,
   Sparkles,
+  Timer,
   UserRound,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -49,6 +50,23 @@ type ServiceRequest = {
   id: string;
   status: string;
   created_at: string;
+};
+
+type OperationalMetrics = {
+  accepted_opportunities: number | string;
+  decided_opportunities: number | string;
+  win_rate: number | string | null;
+  median_response_minutes: number | string | null;
+  response_sample_size: number | string;
+};
+
+type EarningsMetrics = {
+  lifetime_earned: number | string;
+  current_month_earned: number | string;
+  released_invoice_count: number | string;
+  current_month_invoice_count: number | string;
+  untracked_release_count: number | string;
+  missing_payout_count: number | string;
 };
 
 type VendorPackage = {
@@ -84,6 +102,19 @@ type OverviewData = {
   completedJobs: number;
   actionableJobs: number;
   completionRate: number | null;
+  acceptedOpportunities: number;
+  decidedOpportunities: number;
+  winRate: number | null;
+  operationalMetricsAvailable: boolean;
+  medianResponseMinutes: number | null;
+  responseSampleSize: number;
+  lifetimeEarned: number | null;
+  currentMonthEarned: number | null;
+  releasedInvoiceCount: number;
+  currentMonthInvoiceCount: number;
+  untrackedReleaseCount: number;
+  missingPayoutCount: number;
+  earningsAvailable: boolean;
   profileComplete: boolean;
   profileStrength: number;
   livePackageCount: number;
@@ -106,6 +137,8 @@ export default function VendorOverviewPage() {
   const { user } = useAuth();
   const [contractor, setContractor] = useState<Contractor | null>(null);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
+  const [operationalMetrics, setOperationalMetrics] = useState<OperationalMetrics | null>(null);
+  const [earningsMetrics, setEarningsMetrics] = useState<EarningsMetrics | null>(null);
   const [packages, setPackages] = useState<VendorPackage[]>([]);
   const [catalogServices, setCatalogServices] = useState<CatalogService[]>([]);
   const [contact, setContact] = useState<ContactDetails | null>(null);
@@ -130,17 +163,22 @@ export default function VendorOverviewPage() {
       if (contractorResult.error) throw contractorResult.error;
       if (!contractorResult.data) {
         setContractor(null);
+        setRequests([]);
+        setOperationalMetrics(null);
+        setEarningsMetrics(null);
         setMode("unlinked");
         return;
       }
 
       const contractorData = contractorResult.data as Contractor;
-      const [requestsResult, packagesResult, catalogResult, contactResult, galleryResult] = await Promise.all([
+      const [requestsResult, operationalResult, earningsResult, packagesResult, catalogResult, contactResult, galleryResult] = await Promise.all([
         supabase
           .from("service_requests")
           .select("id, status, created_at")
           .eq("contractor_id", contractorData.id)
           .order("created_at", { ascending: false }),
+        supabase.rpc("get_vendor_operational_metrics", { _contractor_id: contractorData.id }).maybeSingle(),
+        supabase.rpc("get_vendor_earnings_metrics", { _contractor_id: contractorData.id }).maybeSingle(),
         supabase
           .from("vendor_packages")
           .select("id, service_id, is_active, pricing_mode, needs_review, deposit_amount")
@@ -179,6 +217,18 @@ export default function VendorOverviewPage() {
 
       setContractor(contractorData);
       setRequests((requestsResult.data ?? []) as ServiceRequest[]);
+      if (operationalResult.error) {
+        console.warn("Vendor operational metrics are unavailable", operationalResult.error);
+        setOperationalMetrics(null);
+      } else {
+        setOperationalMetrics(operationalResult.data as OperationalMetrics | null);
+      }
+      if (earningsResult.error) {
+        console.warn("Vendor earnings metrics are unavailable", earningsResult.error);
+        setEarningsMetrics(null);
+      } else {
+        setEarningsMetrics(earningsResult.data as EarningsMetrics | null);
+      }
       setPackages(packageRows.map((item) => ({
         ...item,
         deposit_amount: item.deposit_amount === null ? null : Number(item.deposit_amount),
@@ -193,6 +243,8 @@ export default function VendorOverviewPage() {
       console.error("Unable to load vendor overview", error);
       setContractor(null);
       setRequests([]);
+      setOperationalMetrics(null);
+      setEarningsMetrics(null);
       setPackages([]);
       setCatalogServices([]);
       setErrorMessage(error instanceof Error ? error.message : "Your live vendor data could not be loaded.");
@@ -213,6 +265,17 @@ export default function VendorOverviewPage() {
     const openRequests = requests.filter((request) => incomingStatuses.has(request.status)).length;
     const activeJobs = requests.filter((request) => !incomingStatuses.has(request.status) && !inactiveStatuses.has(request.status)).length;
     const completion = completionRateFromStatuses(requests.map((request) => request.status));
+    const acceptedOpportunities = safeCount(operationalMetrics?.accepted_opportunities);
+    const decidedOpportunities = safeCount(operationalMetrics?.decided_opportunities);
+    const winRate = safeNullableNumber(operationalMetrics?.win_rate);
+    const medianResponseMinutes = safeNullableNumber(operationalMetrics?.median_response_minutes);
+    const responseSampleSize = safeCount(operationalMetrics?.response_sample_size);
+    const lifetimeEarned = safeCurrency(earningsMetrics?.lifetime_earned);
+    const currentMonthEarned = safeCurrency(earningsMetrics?.current_month_earned);
+    const releasedInvoiceCount = safeCount(earningsMetrics?.released_invoice_count);
+    const currentMonthInvoiceCount = safeCount(earningsMetrics?.current_month_invoice_count);
+    const untrackedReleaseCount = safeCount(earningsMetrics?.untracked_release_count);
+    const missingPayoutCount = safeCount(earningsMetrics?.missing_payout_count);
     const serviceCoverage = profileServicePricingCoverage(contractor.services ?? [], catalogServices, packages);
     const strength = calculateVendorProfileStrength({
       ...contractor,
@@ -235,6 +298,19 @@ export default function VendorOverviewPage() {
       completedJobs: completion.completedJobs,
       actionableJobs: completion.actionableJobs,
       completionRate: completion.completionRate,
+      acceptedOpportunities,
+      decidedOpportunities,
+      winRate,
+      operationalMetricsAvailable: operationalMetrics !== null,
+      medianResponseMinutes,
+      responseSampleSize,
+      lifetimeEarned,
+      currentMonthEarned,
+      releasedInvoiceCount,
+      currentMonthInvoiceCount,
+      untrackedReleaseCount,
+      missingPayoutCount,
+      earningsAvailable: earningsMetrics !== null,
       profileComplete,
       profileStrength,
       livePackageCount,
@@ -250,7 +326,7 @@ export default function VendorOverviewPage() {
         .filter((service) => !service.isCovered)
         .map(({ key, label }) => ({ key, label })),
     };
-  }, [catalogServices, contact, contractor, galleryCount, loadedAt, packages, requests]);
+  }, [catalogServices, contact, contractor, earningsMetrics, galleryCount, loadedAt, operationalMetrics, packages, requests]);
 
   if (mode === "loading") return <PageLoading />;
   if (mode === "unlinked") return <UnlinkedState />;
@@ -299,6 +375,8 @@ export default function VendorOverviewPage() {
   const readiness = Math.round((completedSteps / checklist.length) * 100);
 
   const recommendations = buildRecommendations(contractor, overview);
+  const currentMonthLabel = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "America/New_York" }).format(new Date());
+  const earningsPartial = overview.untrackedReleaseCount > 0 || overview.missingPayoutCount > 0;
 
   return (
     <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 md:p-8">
@@ -368,13 +446,32 @@ export default function VendorOverviewPage() {
       </Card>
 
       <SectionHeading title="Operational scorecard" description="Live records from your Mercurius vendor account and assigned work." />
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <MetricCard icon={Clock3} label="Awaiting response" value={String(overview.openRequests)} note={overview.openRequests ? "Open Jobs & Requests" : "No open requests"} href="/vendor/jobs" emphasize={overview.openRequests > 0} />
         <MetricCard icon={Activity} label="Active jobs" value={String(overview.activeJobs)} note="Scheduled or in progress" href="/vendor/jobs" />
         <MetricCard icon={CheckCircle2} label="Completed jobs" value={String(overview.completedJobs)} note="Completed through Mercurius" />
         <MetricCard icon={Gauge} label="Completion rate" value={overview.completionRate === null ? "—" : `${overview.completionRate}%`} note={overview.completionRate === null ? "No actionable job history yet" : `${overview.completedJobs} of ${overview.actionableJobs} actionable ${overview.actionableJobs === 1 ? "request" : "requests"} completed`} />
+        <MetricCard icon={BriefcaseBusiness} label="Recorded win rate" value={overview.winRate === null ? "—" : `${overview.winRate}%`} note={!overview.operationalMetricsAvailable ? "Operational history is unavailable, so no rate is estimated" : overview.decidedOpportunities === 0 ? "No accepted, declined, or expired opportunities yet" : `${overview.acceptedOpportunities} of ${overview.decidedOpportunities} decided ${overview.decidedOpportunities === 1 ? "opportunity" : "opportunities"} accepted`} />
+        <MetricCard icon={Timer} label="Median response" value={overview.medianResponseMinutes === null ? "—" : formatResponseDuration(overview.medianResponseMinutes)} note={!overview.operationalMetricsAvailable ? "Response history is unavailable, so no time is estimated" : overview.responseSampleSize === 0 ? "No reliable first-action timestamps yet" : `Partial signal from ${overview.responseSampleSize} measurable scheduled/quoted ${overview.responseSampleSize === 1 ? "record" : "records"}`} />
         <MetricCard icon={Sparkles} label="Profile strength" value={`${overview.profileStrength}%`} note="Based on saved profile fields" href="/vendor/profile" emphasize={overview.profileStrength < 80} />
       </div>
+
+      <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">
+        <CardHeader className="border-b border-accent-border bg-accent-subtle">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div><CardTitle className="flex items-center gap-2 text-base"><DollarSign className="h-4 w-4 text-accent" />Released earnings</CardTitle><CardDescription className="mt-1">Net vendor payouts from invoices that Mercurius has moved to released status.</CardDescription></div>
+            <Badge variant="outline" className={cn("w-fit bg-background", earningsPartial && "border-amber-300 text-amber-700 dark:text-amber-300")}>{!overview.earningsAvailable ? "Unavailable" : earningsPartial ? "Partial history" : "Released invoices only"}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-medium text-muted-foreground">Lifetime earned</p><p className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{overview.earningsAvailable && overview.lifetimeEarned !== null ? formatMoney(overview.lifetimeEarned) : "—"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{!overview.earningsAvailable ? "The released-payout aggregate is not available, so no amount is estimated." : overview.releasedInvoiceCount === 0 ? "No released vendor payouts yet." : `${overview.releasedInvoiceCount} released ${overview.releasedInvoiceCount === 1 ? "invoice" : "invoices"}, net of the recorded platform commission.`}</p></div>
+            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-medium text-muted-foreground">Earned in {currentMonthLabel}</p><p className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{overview.earningsAvailable && overview.currentMonthEarned !== null ? formatMoney(overview.currentMonthEarned) : "—"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{!overview.earningsAvailable ? "Monthly release history is unavailable." : overview.untrackedReleaseCount > 0 ? `${overview.currentMonthInvoiceCount} dated ${overview.currentMonthInvoiceCount === 1 ? "release" : "releases"} this month. ${overview.untrackedReleaseCount} older released ${overview.untrackedReleaseCount === 1 ? "invoice lacks" : "invoices lack"} a release timestamp and are not assigned to a month.` : `${overview.currentMonthInvoiceCount} ${overview.currentMonthInvoiceCount === 1 ? "payout release" : "payout releases"} recorded this month.`}</p></div>
+          </div>
+          {overview.missingPayoutCount > 0 && <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{overview.missingPayoutCount} released {overview.missingPayoutCount === 1 ? "invoice is" : "invoices are"} missing a valid vendor payout amount and are excluded from these totals.</span></div>}
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">Customer payments that are still paid, pending release, disputed, refunded, cancelled, or otherwise unreleased are not counted as earnings.</p>
+        </CardContent>
+      </Card>
 
       <Card className="mb-8 overflow-hidden">
         <CardHeader className="border-b bg-muted/20">
@@ -443,7 +540,7 @@ export default function VendorOverviewPage() {
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-card text-muted-foreground"><BarChart3 className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-foreground">Growth analytics are coming soon</p><Badge variant="outline" className="gap-1 text-[10px]"><Eye className="h-3 w-3" />Deferred</Badge></div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Profile views, search impressions, click-through rate, and acceptance rate are hidden until Mercurius has reliable event and response-history tracking.</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Profile views, search impressions, click-through rate, and market benchmarks remain hidden until Mercurius has reliable event tracking. Operational rates above use only recorded request history.</p>
         </div>
       </div>
     </div>
@@ -571,6 +668,37 @@ function ScoreRow({ label, value, last = false }: { label: string; value: ReactN
 
 function SectionHeading({ title, description }: { title: string; description: string }) {
   return <div className="mb-4"><h2 className="font-heading text-lg font-semibold text-foreground">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>;
+}
+
+function safeCount(value: unknown) {
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? Math.floor(count) : 0;
+}
+
+function safeNullableNumber(value: unknown) {
+  if (value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
+}
+
+function safeCurrency(value: unknown) {
+  if (value === null || value === undefined) return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? Math.round((amount + Number.EPSILON) * 100) / 100 : null;
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+}
+
+function formatResponseDuration(minutes: number) {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours < 24) return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`;
 }
 
 function PageLoading() {

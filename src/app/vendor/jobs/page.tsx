@@ -40,6 +40,7 @@ type Job = {
   updated_at: string;
   assigned_at: string | null;
   match_expires_at: string | null;
+  package_question_answers: Record<string, { question?: unknown; answer?: unknown; unit?: unknown }> | null;
   homeowner_name?: string | null;
 };
 
@@ -100,7 +101,7 @@ export default function VendorJobsPage() {
       }
       const result = await supabase
         .from("service_requests")
-        .select("id, customer_id, service_type, description, status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at")
+        .select("id, customer_id, service_type, description, status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers")
         .eq("contractor_id", contractorResult.data.id)
         .order("created_at", { ascending: false });
       if (result.error) throw result.error;
@@ -254,6 +255,7 @@ function RequestCard({ job, now, action, view, accept, decline }: {
           <DecisionField icon={Clock} label="Response window"><span className={cn(expired && "font-medium text-destructive")}>{responseWindow(job, now)}</span>{deadline && <span className="block text-muted-foreground">{formatDeadline(deadline)}</span>}</DecisionField>
         </div>
         <div className="rounded-xl border bg-background p-4"><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><FileText className="h-4 w-4 text-accent" />Customer note</p><p className={cn("whitespace-pre-wrap text-sm leading-6", !note && "text-muted-foreground")}>{note || "No customer note was provided."}</p></div>
+        <QuestionAnswers job={job} />
       </CardContent>
       <CardFooter className="flex flex-col gap-4 border-t bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex max-w-xl items-start gap-2 text-xs leading-5 text-muted-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span>{job.status === "matched" ? "Accept confirms the assignment and moves it to Active Jobs. Coordinate through Messages before using Start Job when work begins." : "Mercurius is still preparing this match. Accept becomes available when the request is actively matched to you."}</span></div>
@@ -311,6 +313,7 @@ function Details({ job, close }: { job: Job | null; close: () => void }) {
       <Block icon={DollarSign} title={price.label}>{price.value}<br /><span className="text-muted-foreground">{price.note}</span></Block>
     </div>
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
+    <QuestionAnswers job={job} />
     {!incoming.has(job.status) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} onClick={close} className={cn(buttonVariants({ variant: "outline" }), "w-full")}><MessageSquare />Open Messages</Link>}
   </DialogContent></Dialog>;
 }
@@ -394,6 +397,16 @@ function formatDate(value: string) { const date = /^\d{4}-\d{2}-\d{2}$/.test(val
 
 function customerNote(job: Job) {
   return job.description?.trim() ?? "";
+}
+
+function QuestionAnswers({ job }: { job: Job }) {
+  const answers = Object.entries(job.package_question_answers ?? {}).flatMap(([key, value]) => {
+    const answer = typeof value?.answer === "string" || typeof value?.answer === "number" ? String(value.answer) : "";
+    if (!answer) return [];
+    return [{ key, question: typeof value.question === "string" ? value.question : key.replaceAll("_", " "), answer, unit: typeof value.unit === "string" ? value.unit : "" }];
+  });
+  if (!answers.length) return null;
+  return <div className="rounded-xl border bg-accent-subtle p-4"><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-accent" />Service answers</p><dl className="space-y-3">{answers.map((item) => <div key={item.key}><dt className="text-xs text-muted-foreground">{item.question}</dt><dd className="mt-0.5 text-sm font-medium text-foreground">{item.answer}{item.unit ? ` ${item.unit}` : ""}</dd></div>)}</dl></div>;
 }
 
 function responseWindow(job: Job, now: number) {

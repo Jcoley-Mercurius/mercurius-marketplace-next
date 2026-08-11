@@ -24,7 +24,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { cn } from "@/lib/utils";
-import type { PricingFrequency } from "@/lib/vendorPricing";
+import type { PricingFrequency, PublicPackageSelection } from "@/lib/vendorPricing";
 
 type Category = "outdoor" | "indoor" | "maintenance" | "repairs" | "specialty";
 type Frequency = PricingFrequency;
@@ -46,6 +46,7 @@ type Service = {
   basePrices?: Partial<Record<Frequency, number>>;
   promotionLabels?: Partial<Record<Frequency, string>>;
   promotionIds?: Partial<Record<Frequency, string>>;
+  packageSelections?: Partial<Record<Frequency, PublicPackageSelection>>;
 };
 
 const categoryLabels: Record<Category, string> = {
@@ -205,6 +206,7 @@ export function PlanBuilderSection() {
       basePrices: catalogService.basePrices,
       promotionLabels: catalogService.promotionLabels,
       promotionIds: catalogService.promotionIds,
+      packageSelections: catalogService.packageSelections,
     };
   }), [catalogServices]);
 
@@ -571,6 +573,7 @@ export function PlanBuilderSection() {
                               basePrices: service.basePrices,
                               promotionLabels: service.promotionLabels,
                               promotionIds: service.promotionIds,
+                              ...service.packageSelections?.[frequencies[service.id] ?? service.defaultFrequency],
                             })),
                           }));
                         }}

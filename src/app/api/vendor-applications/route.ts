@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import {
   MAX_VENDOR_DOCUMENT_COUNT,
   VENDOR_DOCUMENT_BUCKET,
@@ -10,6 +10,7 @@ import {
   type VendorDocumentDescriptor,
 } from "@/lib/vendorApplicationDocuments";
 import { signVendorDocumentUploadGrant } from "@/lib/vendorApplicationUploadToken";
+import { sendOwnerNotification } from "@/lib/ownerNotifications";
 
 export const runtime = "nodejs";
 
@@ -283,13 +284,32 @@ export async function POST(request: Request) {
           })
         : null;
 
-    try {
-      await supabase.functions.invoke("vendor-application-notify", {
-        body: { application_id: applicationId, ...application },
+    const submittedAt = new Date().toISOString();
+    const businessSummary = application.business_name.replace(/\s+/g, " ").slice(0, 100);
+    after(async () => {
+      const result = await sendOwnerNotification({
+        subject: `New vendor application — ${businessSummary}`,
+        replyTo: application.email,
+        text: [
+          "New Mercurius vendor application",
+          "",
+          `Submitted: ${submittedAt}`,
+          `Business: ${application.business_name}`,
+          `Contact: ${`${application.first_name} ${application.last_name}`.trim()}`,
+          `Email: ${application.email}`,
+          `Phone: ${application.phone}`,
+          `Primary category: ${application.primary_category}`,
+          `Services: ${application.services.join(", ") || "Not provided"}`,
+          `Service areas: ${application.service_areas ?? "Not provided"}`,
+        ].join("\n"),
       });
-    } catch (error) {
-      console.warn("Vendor application notification failed", error);
-    }
+      if (!result.ok) {
+        console.error("Vendor application owner notification failed", {
+          applicationId,
+          error: result.error,
+        });
+      }
+    });
 
     return NextResponse.json(
       {

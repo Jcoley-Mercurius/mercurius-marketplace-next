@@ -9,7 +9,6 @@ import { Header } from "@/components/layout/Header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 export default function ContactPage() {
@@ -24,17 +23,22 @@ export default function ContactPage() {
     const formData = new FormData(form);
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase.from("contact_submissions").insert({
-        first_name: String(formData.get("firstName") ?? "").trim(),
-        last_name: String(formData.get("lastName") ?? "").trim(),
-        email: String(formData.get("email") ?? "").trim(),
-        phone: String(formData.get("phone") ?? "").trim() || null,
-        subject: String(formData.get("subject") ?? "").trim(),
-        message: String(formData.get("message") ?? "").trim(),
+      const response = await fetch("/api/contact-submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: String(formData.get("firstName") ?? "").trim(),
+          last_name: String(formData.get("lastName") ?? "").trim(),
+          email: String(formData.get("email") ?? "").trim(),
+          phone: String(formData.get("phone") ?? "").trim() || null,
+          subject: String(formData.get("subject") ?? "").trim(),
+          message: String(formData.get("message") ?? "").trim(),
+        }),
       });
-
-      if (error) throw error;
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || "Your message could not be submitted.");
+      }
 
       form.reset();
       setIsSubmitted(true);

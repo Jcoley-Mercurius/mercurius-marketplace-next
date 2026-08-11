@@ -38,6 +38,8 @@ export interface Service {
   /** Active database-timed promotion metadata by cadence. */
   promotionLabels?: Partial<Record<ServiceFrequency, string>>;
   promotionIds?: Partial<Record<ServiceFrequency, string>>;
+  /** Concrete live package selected for each displayed cadence. */
+  packageSelections?: Partial<Record<ServiceFrequency, import("@/lib/vendorPricing").PublicPackageSelection>>;
 }
 
 // ─────────────────────────────────────────────

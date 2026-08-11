@@ -2,8 +2,28 @@ export const pricingFrequencies = ["one-time", "weekly", "bi-monthly", "monthly"
 
 export type PricingFrequency = (typeof pricingFrequencies)[number];
 
+export type PackageQualifyingQuestion = {
+  id?: string;
+  package_id?: string;
+  question_key: string;
+  question_label: string;
+  input_type: "number" | "select" | "text";
+  unit?: string | null;
+  options?: unknown;
+  is_required?: boolean | null;
+  sort_order: number;
+};
+
+export type PublicPackageSelection = {
+  packageId: string;
+  tierId?: string;
+  pricingMode: "fixed" | "deposit_quote" | "custom_quote";
+  questions?: PackageQualifyingQuestion[];
+};
+
 export type PriceTierLike = {
   price: unknown;
+  frequency?: unknown;
 };
 
 export type CatalogPriceGuidanceLike = {
@@ -75,6 +95,48 @@ export function isPositiveTierPrice(value: unknown): boolean {
  */
 export function hasValidFixedTiers(tiers: readonly PriceTierLike[]): boolean {
   return tiers.length > 0 && tiers.every((tier) => isPositiveTierPrice(tier.price));
+}
+
+export function tierPricingFrequency(
+  tier: PriceTierLike,
+  fallback: PricingFrequency,
+): PricingFrequency {
+  return isPricingFrequency(tier.frequency) ? tier.frequency : fallback;
+}
+
+export function publiclyEligibleFixedFrequencies<TTier extends PriceTierLike>(
+  item: PublicPackageLike<TTier>,
+  fallback: PricingFrequency,
+): PricingFrequency[] {
+  if (!isPubliclyEligibleFixedPackage(item)) return [];
+  return [...new Set(item.tiers.map((tier) => tierPricingFrequency(tier, fallback)))];
+}
+
+export function evaluateCustomPackageFrequencyPriceReviews({
+  tiers,
+  defaultFrequency,
+  catalog,
+  templateRange,
+}: {
+  tiers: readonly PriceTierLike[];
+  defaultFrequency: PricingFrequency;
+  catalog?: CatalogPriceGuidanceLike | null;
+  templateRange?: { minPrice: number; maxPrice: number } | null;
+}): Array<CustomPackagePriceReview & { frequency: PricingFrequency }> {
+  const grouped = new Map<PricingFrequency, PriceTierLike[]>();
+  tiers.forEach((tier) => {
+    const frequency = tierPricingFrequency(tier, defaultFrequency);
+    grouped.set(frequency, [...(grouped.get(frequency) ?? []), tier]);
+  });
+  return [...grouped.entries()].map(([frequency, frequencyTiers]) => ({
+    frequency,
+    ...evaluateCustomPackagePriceReview({
+      tiers: frequencyTiers,
+      frequency,
+      catalog,
+      templateRange,
+    }),
+  }));
 }
 
 /**

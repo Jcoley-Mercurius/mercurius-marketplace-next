@@ -192,6 +192,7 @@ export function ManagedPricingEditor({ contractorId }: { contractorId: string })
       template_tier_id: tier.id,
       name: tier.name,
       price: tier.suggested_price ?? tier.min_price,
+      frequency: "one-time",
       includes: tier.includes,
       sort_order: index,
     })));
@@ -247,6 +248,7 @@ export function ManagedPricingEditor({ contractorId }: { contractorId: string })
       template_tier_id: tier.id,
       name: tier.name,
       price: item.tierPrices[tier.id],
+      frequency: "one-time",
       includes: tier.includes,
       sort_order: index,
     })));
