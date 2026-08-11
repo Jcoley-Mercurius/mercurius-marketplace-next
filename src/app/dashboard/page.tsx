@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,11 +16,16 @@ import {
   Loader2,
   MessageSquare,
   Plus,
+  RefreshCw,
   ShieldCheck,
   Star,
   WalletCards,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import {
+  HomeownerJobDetailDialog,
+  type HomeownerDashboardJob,
+} from "@/components/dashboard/HomeownerJobDetailDialog";
 import { Header } from "@/components/layout/Header";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -33,23 +38,16 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { paymentFunctionError } from "@/lib/payments";
+import {
+  isPastServiceRequestStatus,
+  serviceRequestStatusLabel,
+  serviceRequestStatusStyle,
+} from "@/lib/serviceRequestStatus";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-type ServiceRequest = {
-  id: string;
-  service_type: string;
-  status: string;
-  preferred_date: string | null;
-  preferred_time: string | null;
-  address: string;
-  city: string;
-  state: string;
-  contractor_id: string | null;
-  total_amount: number | null;
-  created_at: string;
-};
+type ServiceRequest = HomeownerDashboardJob;
 
 type Invoice = {
   id: string;
@@ -60,73 +58,12 @@ type Invoice = {
   paid_at: string | null;
 };
 
-type DataMode = "loading" | "live" | "preview";
+type DataMode = "loading" | "live" | "error";
 type PaymentMethod = { id: string; brand: string; last4: string; exp_month: number | null; exp_year: number | null; is_default: boolean };
 type PaymentNotice = { tone: "success" | "warning"; title: string; description: string };
 
-const previewRequests: ServiceRequest[] = [
-  {
-    id: "preview-service-1",
-    service_type: "Lawn Care",
-    status: "scheduled",
-    preferred_date: "2026-08-12",
-    preferred_time: "9:00–11:00 AM",
-    address: "123 Palm Avenue",
-    city: "Cape Coral",
-    state: "FL",
-    contractor_id: "preview-contractor-1",
-    total_amount: 89,
-    created_at: "2026-08-02T12:00:00Z",
-  },
-  {
-    id: "preview-service-2",
-    service_type: "Pool Service",
-    status: "matched",
-    preferred_date: "2026-08-18",
-    preferred_time: null,
-    address: "123 Palm Avenue",
-    city: "Cape Coral",
-    state: "FL",
-    contractor_id: "preview-contractor-2",
-    total_amount: null,
-    created_at: "2026-08-01T12:00:00Z",
-  },
-  {
-    id: "preview-service-3",
-    service_type: "Air Conditioning Tune-Up",
-    status: "completed",
-    preferred_date: "2026-07-24",
-    preferred_time: null,
-    address: "123 Palm Avenue",
-    city: "Cape Coral",
-    state: "FL",
-    contractor_id: "preview-contractor-3",
-    total_amount: 149,
-    created_at: "2026-07-20T12:00:00Z",
-  },
-];
-
-const previewInvoices: Invoice[] = [
-  { id: "preview-invoice-1", invoice_number: "INV-1048", amount: 89, status: "sent", created_at: "2026-08-02T12:00:00Z", paid_at: null },
-  { id: "preview-invoice-2", invoice_number: "INV-1029", amount: 149, status: "paid", created_at: "2026-07-24T12:00:00Z", paid_at: "2026-07-24T16:00:00Z" },
-];
-
-const closedStatuses = new Set(["completed", "cancelled", "closed", "reviewed"]);
 // Keep this aligned with the create-checkout Edge Function's accepted statuses.
 const payableStatuses = new Set(["draft", "pending"]);
-
-const statusColor: Record<string, string> = {
-  pending: "border-yellow-200 bg-yellow-100 text-yellow-800",
-  matched: "border-blue-200 bg-blue-100 text-blue-800",
-  quoted: "border-violet-200 bg-violet-100 text-violet-700",
-  scheduled: "border-sage/20 bg-sage-light text-sage-dark",
-  in_progress: "border-accent/20 bg-accent/10 text-accent",
-  pending_review: "border-amber-200 bg-amber-100 text-amber-700",
-  vendor_completed: "border-amber-200 bg-amber-100 text-amber-700",
-  review_requested: "border-sage/20 bg-sage-light text-sage-dark",
-  completed: "border-border bg-muted text-muted-foreground",
-  cancelled: "border-red-200 bg-red-100 text-red-800",
-};
 
 const invoiceStatusColor: Record<string, string> = {
   paid: "bg-sage-light text-sage-dark",
@@ -142,7 +79,9 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [selectedJob, setSelectedJob] = useState<ServiceRequest | null>(null);
   const [dataMode, setDataMode] = useState<DataMode>("loading");
+  const [dashboardError, setDashboardError] = useState("");
   const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
@@ -176,47 +115,79 @@ export default function DashboardPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const loadDashboard = useCallback(async ({
+    showLoading = true,
+    surfaceError = true,
+  }: {
+    showLoading?: boolean;
+    surfaceError?: boolean;
+  } = {}) => {
+    if (!user) return;
+    await Promise.resolve();
+    if (showLoading) setDataMode("loading");
+    if (surfaceError) setDashboardError("");
+
+    try {
+      const supabase = createClient();
+      const [requestResult, invoiceResult] = await Promise.all([
+        supabase
+          .from("service_requests")
+          .select("id, service_type, status, preferred_date, preferred_time, address, city, state, contractor_id, description, photo_proof_urls, total_amount, created_at")
+          .eq("customer_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("invoices")
+          .select("id, invoice_number, amount, status, created_at, paid_at")
+          .eq("customer_id", user.id)
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (requestResult.error) throw requestResult.error;
+      if (invoiceResult.error) throw invoiceResult.error;
+
+      setRequests((requestResult.data ?? []) as ServiceRequest[]);
+      setInvoices(invoiceResult.data ?? []);
+      setDashboardError("");
+      setDataMode("live");
+    } catch (error) {
+      if (!surfaceError) throw error;
+
+      // Never substitute fabricated records for a failed authenticated query.
+      // Empty arrays in the success branch above represent a real zero-row result;
+      // this branch is reserved for an actual data-access failure.
+      setRequests([]);
+      setInvoices([]);
+      setSelectedJob(null);
+      setDashboardError(dashboardLoadErrorMessage(error));
+      setDataMode("error");
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
-    let active = true;
+    const timer = window.setTimeout(() => {
+      void loadDashboard();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadDashboard, user]);
 
-    async function loadDashboard() {
-      setDataMode("loading");
-      try {
-        const supabase = createClient();
-        const [requestResult, invoiceResult] = await Promise.all([
-          supabase
-            .from("service_requests")
-            .select("id, service_type, status, preferred_date, preferred_time, address, city, state, contractor_id, total_amount, created_at")
-            .eq("customer_id", user!.id)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("invoices")
-            .select("id, invoice_number, amount, status, created_at, paid_at")
-            .eq("customer_id", user!.id)
-            .order("created_at", { ascending: false }),
-        ]);
+  const refreshAfterJobAction = useCallback(
+    () => loadDashboard({ showLoading: false, surfaceError: false }),
+    [loadDashboard],
+  );
 
-        if (requestResult.error) throw requestResult.error;
-        if (invoiceResult.error) throw invoiceResult.error;
-        if (!active) return;
+  const updateJobStatusOptimistically = useCallback(
+    (jobId: string, status: string) => {
+      setRequests((current) =>
+        current.map((job) => (job.id === jobId ? { ...job, status } : job)),
+      );
+    },
+    [],
+  );
 
-        setRequests(requestResult.data ?? []);
-        setInvoices(invoiceResult.data ?? []);
-        setDataMode("live");
-      } catch {
-        if (!active) return;
-        setRequests(previewRequests);
-        setInvoices(previewInvoices);
-        setDataMode("preview");
-      }
-    }
-
-    void loadDashboard();
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  const removeJobFromDashboard = useCallback((jobId: string) => {
+    setRequests((current) => current.filter((job) => job.id !== jobId));
+  }, []);
 
   useEffect(() => {
     if (!user || activeTab !== "payment-methods" || dataMode !== "live") return;
@@ -275,8 +246,8 @@ export default function DashboardPage() {
 
   const { upcoming, past, quoted, awaitingConfirmation, awaitingReview } = useMemo(
     () => ({
-      upcoming: requests.filter((request) => !closedStatuses.has(request.status)),
-      past: requests.filter((request) => closedStatuses.has(request.status)),
+      upcoming: requests.filter((request) => !isPastServiceRequestStatus(request.status)),
+      past: requests.filter((request) => isPastServiceRequestStatus(request.status)),
       quoted: requests.filter((request) => request.status === "quoted"),
       awaitingConfirmation: requests.filter((request) =>
         ["pending_review", "vendor_completed"].includes(request.status),
@@ -314,27 +285,30 @@ export default function DashboardPage() {
 
         <section className="bg-background py-12 md:py-16">
           <div className="container-wide">
-            {dataMode === "preview" && (
-              <div className="mb-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <p><strong>Preview mode:</strong> Live dashboard data is unavailable, so sample services and invoices are shown below.</p>
-              </div>
-            )}
-
-            {paymentNotice && (
+            {dataMode === "error" ? (
+              <DashboardLoadError
+                message={dashboardError}
+                onRetry={() => void loadDashboard()}
+              />
+            ) : (
+              <>
+              {paymentNotice && (
               <div className={cn("mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", paymentNotice.tone === "success" ? "border-sage/30 bg-sage-light/60 text-sage-dark" : "border-amber-200 bg-amber-50 text-amber-950")}>
                 {paymentNotice.tone === "success" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
                 <div><p className="font-semibold">{paymentNotice.title}</p><p className="mt-0.5 text-current/80">{paymentNotice.description}</p></div>
               </div>
             )}
 
-            {dataMode !== "loading" && (awaitingConfirmation.length > 0 || awaitingReview.length > 0) && (
+            {dataMode !== "loading" && (quoted.length > 0 || awaitingConfirmation.length > 0 || awaitingReview.length > 0) && (
               <div className="mb-8 space-y-3">
+                {quoted.map((job) => (
+                  <ActionBanner key={job.id} icon={CreditCard} title={`A quote is ready for ${job.service_type}`} description="Review the price and service details before approving or declining." action="Review quote" onClick={() => setSelectedJob(job)} tone="violet" />
+                ))}
                 {awaitingConfirmation.map((job) => (
-                  <ActionBanner key={job.id} icon={CheckCircle2} title={`Is your ${job.service_type} all set?`} description="Your provider marked this service complete. Review the details and confirm the work." action="Review service" onClick={() => setActiveTab("upcoming")} tone="amber" />
+                  <ActionBanner key={job.id} icon={CheckCircle2} title={`Is your ${job.service_type} all set?`} description="Your provider marked this service complete. Review the details and confirm the work." action="Review service" onClick={() => setSelectedJob(job)} tone="amber" />
                 ))}
                 {awaitingReview.map((job) => (
-                  <ActionBanner key={job.id} icon={Star} title={`How did your ${job.service_type} go?`} description="Share a rating for your provider — it only takes a moment." action="View service" onClick={() => setActiveTab("upcoming")} tone="sage" />
+                  <ActionBanner key={job.id} icon={Star} title={`How did your ${job.service_type} go?`} description="Share a rating for your provider — it only takes a moment." action="Leave review" onClick={() => setSelectedJob(job)} tone="sage" />
                 ))}
               </div>
             )}
@@ -373,7 +347,7 @@ export default function DashboardPage() {
                         <CreditCard className="h-5 w-5" />
                         <p className="font-medium">{quoted.length} quote{quoted.length === 1 ? "" : "s"} awaiting your approval</p>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => setActiveTab("upcoming")}>Review <ArrowRight className="h-3 w-3" /></Button>
+                      <Button size="sm" variant="outline" onClick={() => setSelectedJob(quoted[0])}>Review <ArrowRight className="h-3 w-3" /></Button>
                     </CardContent>
                   </Card>
                 )}
@@ -386,7 +360,7 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                       {dataMode === "loading" ? <ListLoading /> : upcoming.length === 0 ? <EmptyState icon={Calendar} title="No upcoming services" description="When you request a service, its status and schedule will appear here." actionHref="/request" actionLabel="Request a Service" compact /> : (
-                        <div className="space-y-3">{upcoming.slice(0, 2).map((job) => <ServiceRow key={job.id} job={job} compact />)}</div>
+                        <div className="space-y-3">{upcoming.slice(0, 2).map((job) => <ServiceRow key={job.id} job={job} compact onOpen={() => setSelectedJob(job)} />)}</div>
                       )}
                     </CardContent>
                   </Card>
@@ -410,7 +384,7 @@ export default function DashboardPage() {
                   <CardHeader><CardTitle>Upcoming Services</CardTitle><CardDescription>Track requests, quotes, schedules, and active work.</CardDescription></CardHeader>
                   <CardContent>
                     {dataMode === "loading" ? <ListLoading large /> : upcoming.length === 0 ? <EmptyState icon={Calendar} title="No upcoming services scheduled" description="Build a service plan whenever your home needs attention." actionHref="/request" actionLabel="Request a Service" /> : (
-                      <div className="space-y-4">{upcoming.map((job) => <ServiceRow key={job.id} job={job} />)}</div>
+                      <div className="space-y-4">{upcoming.map((job) => <ServiceRow key={job.id} job={job} onOpen={() => setSelectedJob(job)} />)}</div>
                     )}
                   </CardContent>
                 </Card>
@@ -443,21 +417,67 @@ export default function DashboardPage() {
                 <Card>
                   <CardHeader><CardTitle className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-accent" /> Payment Methods</CardTitle><CardDescription>Manage how you pay for Mercurius services.</CardDescription></CardHeader>
                   <CardContent className="space-y-4">
-                    {dataMode === "preview" ? <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center"><ShieldCheck className="mx-auto mb-4 h-10 w-10 text-accent" /><p className="font-medium">Live billing is currently unavailable</p><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Payment methods are never simulated in preview mode.</p></div> : paymentMethodsLoading ? <ListLoading large /> : paymentMethodsError ? <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-6 text-center"><p className="font-medium text-red-900">Payment methods could not be loaded</p><p className="mt-1 text-sm text-red-800">{paymentMethodsError}</p></div> : paymentMethods.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center"><CreditCard className="mx-auto mb-4 h-9 w-9 text-muted-foreground" /><p className="font-medium">No saved cards yet</p><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Cards saved through Stripe can make future invoice checkout faster.</p></div> : <div className="space-y-3">{paymentMethods.map((method) => <div key={method.id} className="flex items-center justify-between rounded-xl border border-border p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-12 items-center justify-center rounded-lg bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></span><div><p className="font-medium capitalize">{cardBrand(method.brand)} •••• {method.last4}</p>{method.exp_month && method.exp_year && <p className="text-sm text-muted-foreground">Expires {String(method.exp_month).padStart(2, "0")}/{String(method.exp_year).slice(-2)}</p>}</div></div>{method.is_default && <Badge className="bg-sage-light text-sage-dark">Default</Badge>}</div>)}</div>}
+                    {paymentMethodsLoading ? <ListLoading large /> : paymentMethodsError ? <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-6 text-center"><p className="font-medium text-red-900">Payment methods could not be loaded</p><p className="mt-1 text-sm text-red-800">{paymentMethodsError}</p></div> : paymentMethods.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center"><CreditCard className="mx-auto mb-4 h-9 w-9 text-muted-foreground" /><p className="font-medium">No saved cards yet</p><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Cards saved through Stripe can make future invoice checkout faster.</p></div> : <div className="space-y-3">{paymentMethods.map((method) => <div key={method.id} className="flex items-center justify-between rounded-xl border border-border p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-12 items-center justify-center rounded-lg bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></span><div><p className="font-medium capitalize">{cardBrand(method.brand)} •••• {method.last4}</p>{method.exp_month && method.exp_year && <p className="text-sm text-muted-foreground">Expires {String(method.exp_month).padStart(2, "0")}/{String(method.exp_year).slice(-2)}</p>}</div></div>{method.is_default && <Badge className="bg-sage-light text-sage-dark">Default</Badge>}</div>)}</div>}
                     <div className="flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-2 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Cards are stored and managed by Stripe, not in the Mercurius app.</p></div><Button variant="outline" disabled={openingPortal || dataMode !== "live"} onClick={() => void openPaymentPortal()}>{openingPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}Manage Cards</Button></div>
                   </CardContent>
                 </Card>
               </TabsContent>
             </Tabs>
+              </>
+            )}
           </div>
         </section>
       </main>
+      <HomeownerJobDetailDialog
+        key={selectedJob?.id ?? "no-selected-job"}
+        job={selectedJob}
+        homeownerId={user.id}
+        open={Boolean(selectedJob)}
+        actionsEnabled={dataMode === "live"}
+        onOpenChange={(open) => {
+          if (!open) setSelectedJob(null);
+        }}
+        onRemoveJob={removeJobFromDashboard}
+        onOptimisticStatus={updateJobStatusOptimistically}
+        onRefresh={refreshAfterJobAction}
+      />
     </div>
   );
 }
 
 function FullPageLoading({ label }: { label: string }) {
   return <div className="flex min-h-screen items-center justify-center bg-background"><div className="flex items-center gap-3 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin text-accent" />{label}</div></div>;
+}
+
+function DashboardLoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <Card className="mx-auto max-w-2xl border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20">
+      <CardContent className="flex flex-col items-center px-6 py-10 text-center sm:px-10">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 dark:bg-red-950/50">
+          <AlertTriangle className="h-6 w-6 text-red-700 dark:text-red-300" />
+        </div>
+        <h2 className="text-xl font-semibold text-red-950 dark:text-red-100">
+          We couldn’t load your dashboard
+        </h2>
+        <p className="mt-2 max-w-lg text-sm leading-6 text-red-900/80 dark:text-red-200/80">
+          Your live services and invoices are temporarily unavailable. No sample records have been substituted.
+        </p>
+        {message && (
+          <p className="mt-3 max-w-lg text-xs text-red-800/80 dark:text-red-300/80">
+            {message}
+          </p>
+        )}
+        <Button
+          type="button"
+          className="mt-6 bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
+          onClick={onRetry}
+        >
+          <RefreshCw className="h-4 w-4" />
+          Try again
+        </Button>
+      </CardContent>
+    </Card>
+  );
 }
 
 function StatCard({ icon: Icon, label, value, loading }: { icon: ComponentType<{ className?: string }>; label: string; value: number; loading: boolean }) {
@@ -468,8 +488,14 @@ function QuickAction({ href, icon: Icon, label }: { href: string; icon: Componen
   return <Link href={href} className="flex items-center rounded-xl border border-border bg-card p-4 font-medium transition-all hover:border-accent/40 hover:bg-muted/50"><Icon className="mr-3 h-5 w-5 text-accent" />{label}</Link>;
 }
 
-function ActionBanner({ icon: Icon, title, description, action, onClick, tone }: { icon: ComponentType<{ className?: string }>; title: string; description: string; action: string; onClick: () => void; tone: "amber" | "sage" }) {
-  return <Card className={tone === "amber" ? "border-amber-200 bg-amber-50 ring-amber-200" : "border-sage/30 bg-sage-light/40 ring-sage/30"}><CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Icon className={cn("mt-0.5 h-5 w-5", tone === "amber" ? "text-amber-700" : "text-sage-dark")} /><div><p className="font-medium">{title}</p><p className="text-sm text-muted-foreground">{description}</p></div></div><Button onClick={onClick} className="bg-accent text-accent-foreground hover:bg-accent/90">{action}</Button></CardContent></Card>;
+function ActionBanner({ icon: Icon, title, description, action, onClick, tone }: { icon: ComponentType<{ className?: string }>; title: string; description: string; action: string; onClick: () => void; tone: "amber" | "sage" | "violet" }) {
+  const toneClasses = tone === "amber"
+    ? "border-amber-200 bg-amber-50 ring-amber-200 dark:bg-amber-950/20"
+    : tone === "violet"
+      ? "border-violet-200 bg-violet-50 ring-violet-200 dark:bg-violet-950/20"
+      : "border-sage/30 bg-sage-light/40 ring-sage/30";
+  const iconClasses = tone === "amber" ? "text-amber-700" : tone === "violet" ? "text-violet-700" : "text-sage-dark";
+  return <Card className={toneClasses}><CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Icon className={cn("mt-0.5 h-5 w-5", iconClasses)} /><div><p className="font-medium">{title}</p><p className="text-sm text-muted-foreground">{description}</p></div></div><Button onClick={onClick} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">{action}</Button></CardContent></Card>;
 }
 
 function ListLoading({ large = false }: { large?: boolean }) {
@@ -480,10 +506,14 @@ function EmptyState({ icon: Icon, title, description, actionHref, actionLabel, c
   return <div className={cn("flex flex-col items-center px-4 text-center", compact ? "py-7" : "py-12")}><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-muted"><Icon className="h-6 w-6 text-muted-foreground" /></div><p className="font-medium">{title}</p><p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>{actionHref && actionLabel && <Link href={actionHref} className={cn(buttonVariants(), "mt-5 bg-accent text-accent-foreground hover:bg-accent/90")}>{actionLabel}</Link>}</div>;
 }
 
-function ServiceRow({ job, compact = false }: { job: ServiceRequest; compact?: boolean }) {
+function ServiceRow({ job, compact = false, onOpen }: { job: ServiceRequest; compact?: boolean; onOpen?: () => void }) {
   const displayDate = job.preferred_date ? formatDate(job.preferred_date) : "Date TBD";
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
-  return <div className={cn("flex flex-col justify-between gap-4 rounded-xl bg-muted p-4 sm:flex-row sm:items-center", !compact && "border border-border bg-card p-5 hover:bg-muted/40")}><div className="flex min-w-0 items-start gap-4"><div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", closedStatuses.has(job.status) ? "bg-sage-light" : "bg-background")} >{closedStatuses.has(job.status) ? <CheckCircle2 className="h-5 w-5 text-sage-dark" /> : <Calendar className="h-5 w-5 text-accent" />}</div><div className="min-w-0"><p className="font-semibold">{job.service_type}</p><p className="text-sm text-muted-foreground">{job.contractor_id ? "Provider assigned" : "Awaiting assignment"}</p>{!compact && location && <p className="truncate text-sm text-muted-foreground">{location}</p>}<p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" />{displayDate}{job.preferred_time ? ` • ${job.preferred_time}` : ""}</p></div></div><Badge className={cn("w-fit border capitalize", statusColor[job.status] ?? "border-border bg-muted text-muted-foreground")}>{formatStatus(job.status)}</Badge></div>;
+  const className = cn("flex w-full flex-col justify-between gap-4 rounded-xl bg-muted p-4 text-left sm:flex-row sm:items-center", !compact && "border border-border bg-card p-5", onOpen && "cursor-pointer transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring");
+  const isPast = isPastServiceRequestStatus(job.status);
+  const needsAttention = job.status === "disputed" || job.status === "cancelled";
+  const content = <><div className="flex min-w-0 items-start gap-4"><div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", isPast ? "bg-sage-light" : "bg-background", needsAttention && "bg-red-100 dark:bg-red-950/30")} >{needsAttention ? <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-300" /> : isPast ? <CheckCircle2 className="h-5 w-5 text-sage-dark" /> : <Calendar className="h-5 w-5 text-accent" />}</div><div className="min-w-0"><p className="font-semibold">{job.service_type}</p><p className="text-sm text-muted-foreground">{job.contractor_id ? "Provider assigned" : "Awaiting assignment"}</p>{!compact && location && <p className="truncate text-sm text-muted-foreground">{location}</p>}<p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" />{displayDate}{job.preferred_time ? ` • ${job.preferred_time}` : ""}</p></div></div><div className="flex items-center gap-2"><Badge className={cn("w-fit border", serviceRequestStatusStyle(job.status))}>{serviceRequestStatusLabel(job.status)}</Badge>{onOpen && <ArrowRight className="h-4 w-4 text-muted-foreground" />}</div></>;
+  return onOpen ? <button type="button" className={className} onClick={onOpen} aria-label={`Open ${job.service_type} details`}>{content}</button> : <div className={className}>{content}</div>;
 }
 
 function InvoiceRow({ invoice, compact = false, paying = false, paymentsEnabled = false, onPay }: { invoice: Invoice; compact?: boolean; paying?: boolean; paymentsEnabled?: boolean; onPay?: (invoiceId: string) => Promise<void> }) {
@@ -494,6 +524,20 @@ function InvoiceRow({ invoice, compact = false, paying = false, paymentsEnabled 
 function cardBrand(value: string) {
   const labels: Record<string, string> = { visa: "Visa", mastercard: "Mastercard", amex: "American Express", discover: "Discover", jcb: "JCB", diners: "Diners Club", unionpay: "UnionPay", card: "Card" };
   return labels[value] ?? value;
+}
+
+function dashboardLoadErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.trim()
+  ) {
+    return error.message;
+  }
+  return "Please check your connection and try again.";
 }
 
 function formatDate(value: string) {
