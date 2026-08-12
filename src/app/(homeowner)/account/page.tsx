@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeft,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -18,7 +16,6 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Header } from "@/components/layout/Header";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import {
@@ -263,19 +260,8 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="py-10 md:py-14">
-        <div className="container-wide max-w-4xl">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to dashboard
-          </Link>
-
-          <div className="mt-5">
+    <div className="mx-auto w-full max-w-4xl p-4 sm:p-6 md:p-8">
+          <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
               Homeowner account
             </p>
@@ -499,8 +485,6 @@ export default function AccountPage() {
               </Card>
             </div>
           )}
-        </div>
-      </main>
     </div>
   );
 }
@@ -558,7 +542,7 @@ function StateCard({
 
 function FullPageLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-[50vh] items-center justify-center bg-background">
       <Loader2 className="h-7 w-7 animate-spin text-accent" />
       <span className="sr-only">Loading account settings</span>
     </div>

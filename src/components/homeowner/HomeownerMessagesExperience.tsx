@@ -15,7 +15,6 @@ import {
   User,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Header } from "@/components/layout/Header";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -725,12 +724,7 @@ function HomeownerMessageThread({
 }
 
 function PageFrame({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main>{children}</main>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 function PageState({
@@ -760,7 +754,7 @@ function PageState({
 
 function FullPageLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-background">
       <Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" />
       <span className="text-muted-foreground">Loading messages...</span>
     </div>

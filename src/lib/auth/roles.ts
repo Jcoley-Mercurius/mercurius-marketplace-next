@@ -63,6 +63,8 @@ export function safeRedirectForRoles(
   if (isWithin(pathname, "/vendor") && !roles.includes("vendor")) return null;
   if (isWithin(pathname, "/dashboard") && !roles.includes("homeowner")) return null;
   if (isWithin(pathname, "/account") && !roles.includes("homeowner")) return null;
+  if (isWithin(pathname, "/messages") && !roles.includes("homeowner")) return null;
+  if (isWithin(pathname, "/notifications") && !roles.includes("homeowner")) return null;
 
   return destination.pathname + destination.search + destination.hash;
 }

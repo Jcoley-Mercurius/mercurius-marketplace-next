@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Bell, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Bell, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationItem } from "@/components/notifications/NotificationItem";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { defaultPathForRoles, fetchRoles } from "@/lib/auth/roles";
@@ -96,19 +94,8 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="py-10 md:py-14">
-        <div className="container-wide max-w-4xl">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to dashboard
-          </Link>
-
-          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto w-full max-w-4xl p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
                 Homeowner updates
@@ -187,8 +174,6 @@ export default function NotificationsPage() {
               </Card>
             </>
           )}
-        </div>
-      </main>
     </div>
   );
 }
@@ -220,7 +205,7 @@ function safeLocalLink(value: string | null) {
 
 function FullPageLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-[50vh] items-center justify-center bg-background">
       <div className="flex items-center gap-3 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin text-accent" />
         Loading notifications...

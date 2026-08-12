@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -26,7 +26,6 @@ import {
   HomeownerJobDetailDialog,
   type HomeownerDashboardJob,
 } from "@/components/dashboard/HomeownerJobDetailDialog";
-import { Header } from "@/components/layout/Header";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -36,7 +35,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  dashboardSectionFromParam,
+  dashboardSectionHref,
+} from "@/lib/homeownerPortal";
 import { paymentFunctionError } from "@/lib/payments";
 import {
   isPastServiceRequestStatus,
@@ -76,7 +78,6 @@ const invoiceStatusColor: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState("overview");
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedJob, setSelectedJob] = useState<ServiceRequest | null>(null);
@@ -91,6 +92,14 @@ export default function DashboardPage() {
   const [paymentNotice, setPaymentNotice] = useState<PaymentNotice | null>(null);
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const paymentCallbackPresent =
+    searchParams.has("paid") ||
+    searchParams.has("subscribed") ||
+    searchParams.has("cancelled");
+  const activeTab = paymentCallbackPresent
+    ? "invoices"
+    : dashboardSectionFromParam(searchParams.get("tab"));
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
@@ -98,24 +107,20 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const query = new URLSearchParams(window.location.search);
-      setRequestedJobId(query.get("job"));
-      const requestedTab = query.get("tab");
-      if (["overview", "upcoming", "past", "invoices", "payment-methods"].includes(requestedTab ?? "")) setActiveTab(requestedTab!);
-      if (query.has("paid")) {
-        setActiveTab("invoices");
+      setRequestedJobId(searchParams.get("job"));
+      if (searchParams.has("paid")) {
         setPaymentNotice({ tone: "success", title: "Payment submitted securely", description: "Stripe returned you to Mercurius. The invoice status below is authoritative and will update after webhook confirmation." });
-      } else if (query.has("subscribed")) {
-        setActiveTab("invoices");
+      } else if (searchParams.has("subscribed")) {
         setPaymentNotice({ tone: "success", title: "Subscription checkout submitted", description: "Stripe is confirming the subscription. Your service and invoice status will update after confirmation." });
-      } else if (query.has("cancelled")) {
-        setActiveTab("invoices");
+      } else if (searchParams.has("cancelled")) {
         setPaymentNotice({ tone: "warning", title: "Checkout cancelled", description: "No new payment was completed. An eligible invoice can be paid from this page when you’re ready." });
       }
-      if (query.has("paid") || query.has("subscribed") || query.has("cancelled")) window.history.replaceState({}, "", "/dashboard?tab=invoices");
+      if (paymentCallbackPresent) {
+        router.replace("/dashboard?tab=invoices", { scroll: false });
+      }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [paymentCallbackPresent, router, searchParams]);
 
   const loadDashboard = useCallback(async ({
     showLoading = true,
@@ -295,25 +300,32 @@ export default function DashboardPage() {
   const openInvoices = invoices.filter((invoice) => payableStatuses.has(invoice.status));
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main>
-        <section className="bg-primary py-8">
-          <div className="container-wide flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="mb-2 flex items-center gap-2 text-sm text-primary-foreground/70">
-                <Home className="h-4 w-4" /> Homeowner Portal
-              </div>
-              <h1 className="text-2xl font-semibold !text-primary-foreground">Welcome back, {firstName}!</h1>
-            </div>
-            <Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-4 text-accent-foreground hover:bg-accent/90")}>
-              <Plus className="h-4 w-4" /> Request Service
-            </Link>
+    <>
+      <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 md:p-8">
+        <header className="mb-7 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+              <Home className="h-4 w-4" /> Homeowner overview
+            </p>
+            <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+              Welcome back, {firstName}!
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Track upcoming work, review completed services, and manage billing
+              from one place.
+            </p>
           </div>
-        </section>
+          <Link
+            href="/request"
+            className={cn(
+              buttonVariants({ size: "lg" }),
+              "h-11 w-full shrink-0 bg-accent px-4 text-accent-foreground hover:bg-accent-hover sm:w-auto",
+            )}
+          >
+            <Plus className="h-4 w-4" /> Request Service
+          </Link>
+        </header>
 
-        <section className="bg-background py-12 md:py-16">
-          <div className="container-wide">
             {dataMode === "error" ? (
               <DashboardLoadError
                 message={dashboardError}
@@ -342,18 +354,8 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <div className="mb-8 overflow-x-auto pb-1">
-                <TabsList className="h-auto min-w-max gap-1 p-1">
-                  <TabsTrigger value="overview" className="px-3 py-1.5">Overview</TabsTrigger>
-                  <TabsTrigger value="upcoming" className="px-3 py-1.5">Upcoming</TabsTrigger>
-                  <TabsTrigger value="past" className="px-3 py-1.5">Past Services</TabsTrigger>
-                  <TabsTrigger value="invoices" className="px-3 py-1.5">Invoices</TabsTrigger>
-                  <TabsTrigger value="payment-methods" className="px-3 py-1.5">Payment Methods</TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="overview" className="space-y-8">
+            {activeTab === "overview" && (
+              <div className="space-y-8">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <StatCard icon={Calendar} label="Upcoming Services" value={upcoming.length} loading={dataMode === "loading"} />
                   <StatCard icon={CheckCircle2} label="Completed" value={past.length} loading={dataMode === "loading"} />
@@ -385,7 +387,7 @@ export default function DashboardPage() {
                   <Card>
                     <CardHeader className="flex-row items-center justify-between">
                       <CardTitle>Upcoming Services</CardTitle>
-                      <Button variant="link" size="sm" onClick={() => setActiveTab("upcoming")}>View All <ArrowRight className="h-3 w-3" /></Button>
+                      <Button variant="link" size="sm" onClick={() => router.push(dashboardSectionHref("upcoming"), { scroll: false })}>View All <ArrowRight className="h-3 w-3" /></Button>
                     </CardHeader>
                     <CardContent>
                       {dataMode === "loading" ? <ListLoading /> : upcoming.length === 0 ? <EmptyState icon={Calendar} title="No upcoming services" description="When you request a service, its status and schedule will appear here." actionHref="/request" actionLabel="Request a Service" compact /> : (
@@ -397,7 +399,7 @@ export default function DashboardPage() {
                   <Card>
                     <CardHeader className="flex-row items-center justify-between">
                       <CardTitle>Recent Invoices</CardTitle>
-                      <Button variant="link" size="sm" onClick={() => setActiveTab("invoices")}>View All <ArrowRight className="h-3 w-3" /></Button>
+                      <Button variant="link" size="sm" onClick={() => router.push(dashboardSectionHref("invoices"), { scroll: false })}>View All <ArrowRight className="h-3 w-3" /></Button>
                     </CardHeader>
                     <CardContent>
                       {dataMode === "loading" ? <ListLoading /> : invoices.length === 0 ? <EmptyState icon={CreditCard} title="No invoices yet" description="Invoices will appear here after service work is billed." compact /> : (
@@ -406,9 +408,11 @@ export default function DashboardPage() {
                     </CardContent>
                   </Card>
                 </div>
-              </TabsContent>
+              </div>
+            )}
 
-              <TabsContent value="upcoming">
+            {activeTab === "upcoming" && (
+              <div>
                 <Card>
                   <CardHeader><CardTitle>Upcoming Services</CardTitle><CardDescription>Track requests, quotes, schedules, and active work.</CardDescription></CardHeader>
                   <CardContent>
@@ -417,9 +421,11 @@ export default function DashboardPage() {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </div>
+            )}
 
-              <TabsContent value="past">
+            {activeTab === "past" && (
+              <div>
                 <Card>
                   <CardHeader><CardTitle>Past Services</CardTitle><CardDescription>Your completed and closed service history.</CardDescription></CardHeader>
                   <CardContent>
@@ -428,9 +434,11 @@ export default function DashboardPage() {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </div>
+            )}
 
-              <TabsContent value="invoices">
+            {activeTab === "invoices" && (
+              <div>
                 <Card>
                   <CardHeader><CardTitle>Invoices &amp; Payments</CardTitle><CardDescription>Review charges and track payment status.</CardDescription></CardHeader>
                   <CardContent>
@@ -440,9 +448,11 @@ export default function DashboardPage() {
                     <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Card details are entered on Stripe Checkout. Mercurius shows an invoice as paid only after server-side confirmation.</p></div>
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </div>
+            )}
 
-              <TabsContent value="payment-methods">
+            {activeTab === "payment-methods" && (
+              <div>
                 <Card>
                   <CardHeader><CardTitle className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-accent" /> Payment Methods</CardTitle><CardDescription>Manage how you pay for Mercurius services.</CardDescription></CardHeader>
                   <CardContent className="space-y-4">
@@ -450,13 +460,11 @@ export default function DashboardPage() {
                     <div className="flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-2 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Cards are stored and managed by Stripe, not in the Mercurius app.</p></div><Button variant="outline" disabled={openingPortal || dataMode !== "live"} onClick={() => void openPaymentPortal()}>{openingPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}Manage Cards</Button></div>
                   </CardContent>
                 </Card>
-              </TabsContent>
-            </Tabs>
+              </div>
+            )}
               </>
             )}
-          </div>
-        </section>
-      </main>
+      </div>
       <HomeownerJobDetailDialog
         key={selectedJob?.id ?? "no-selected-job"}
         job={selectedJob}
@@ -470,7 +478,7 @@ export default function DashboardPage() {
         onOptimisticStatus={updateJobStatusOptimistically}
         onRefresh={refreshAfterJobAction}
       />
-    </div>
+    </>
   );
 }
 
