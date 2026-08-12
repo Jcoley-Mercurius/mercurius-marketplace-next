@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowUpRight, CheckCircle2, ClipboardList, FileText, Loader2, UserCheck, Users } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, CheckCircle2, ClipboardList, FileText, UserCheck, Users } from "lucide-react";
+import { AdminError, AdminLoading } from "@/components/admin/AdminPageState";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
@@ -16,57 +17,66 @@ const statusStyle: Record<string, string> = { pending: "bg-amber-100 text-amber-
 export default function AdminOverviewPage() {
   const [stats, setStats] = useState(initialStats);
   const [requests, setRequests] = useState<RequestRow[]>([]);
-  const [mode, setMode] = useState<"loading" | "live" | "preview">("loading");
+  const [mode, setMode] = useState<"loading" | "live" | "error">("loading");
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    async function loadOverview() {
-      try {
-        const supabase = createClient();
-        const [requestResult, profileResult, vendorResult, applicationResult] = await Promise.all([
-          supabase.from("service_requests").select("id, service_type, city, status, created_at").order("created_at", { ascending: false }),
-          supabase.from("profiles").select("id"),
-          supabase.from("contractors").select("id, is_active"),
-          supabase.from("vendor_applications").select("id, status"),
-        ]);
-        const error = requestResult.error ?? profileResult.error ?? vendorResult.error ?? applicationResult.error;
-        if (error) throw error;
-        if (!active) return;
-        const allRequests = requestResult.data ?? [];
-        const vendors = vendorResult.data ?? [];
-        const applications = applicationResult.data ?? [];
-        setStats({
-          totalRequests: allRequests.length,
-          pendingRequests: allRequests.filter((item) => item.status === "pending").length,
-          activeRequests: allRequests.filter((item) => ["matched", "scheduled", "in_progress", "pending_review"].includes(item.status)).length,
-          completedRequests: allRequests.filter((item) => item.status === "completed").length,
-          homeowners: profileResult.data?.length ?? 0,
-          vendors: vendors.length,
-          activeVendors: vendors.filter((item) => item.is_active).length,
-          pendingApplications: applications.filter((item) => item.status === "pending").length,
-        });
-        setRequests(allRequests.slice(0, 5));
-        setMode("live");
-      } catch {
-        if (!active) return;
-        setStats({ totalRequests: 24, pendingRequests: 4, activeRequests: 7, completedRequests: 13, homeowners: 18, vendors: 9, activeVendors: 7, pendingApplications: 3 });
-        setRequests([
-          { id: "preview-1", service_type: "Pool Service", city: "Cape Coral", status: "pending", created_at: "2026-08-05T12:00:00Z" },
-          { id: "preview-2", service_type: "Lawn Care", city: "Fort Myers", status: "scheduled", created_at: "2026-08-04T12:00:00Z" },
-          { id: "preview-3", service_type: "House Cleaning", city: "Cape Coral", status: "completed", created_at: "2026-08-03T12:00:00Z" },
-        ]);
-        setMode("preview");
+  const loadOverview = useCallback(async () => {
+    setMode("loading");
+    setError("");
+    try {
+      const supabase = createClient();
+      const [requestResult, homeownerResult, vendorResult, applicationResult] = await Promise.all([
+        supabase.from("service_requests").select("id, service_type, city, status, created_at").order("created_at", { ascending: false }),
+        supabase.from("user_roles").select("user_id").eq("role", "homeowner"),
+        supabase.from("contractors").select("id, is_active"),
+        supabase.from("vendor_applications").select("id, status"),
+      ]);
+      const failedQuery = [
+        ["service requests", requestResult.error],
+        ["homeowner roles", homeownerResult.error],
+        ["vendors", vendorResult.error],
+        ["vendor applications", applicationResult.error],
+      ].find((entry) => entry[1]);
+      if (failedQuery) {
+        const queryError = failedQuery[1] as { message?: string };
+        throw new Error(`Unable to load ${failedQuery[0]}${queryError.message ? `: ${queryError.message}` : "."}`);
       }
+
+      const allRequests = requestResult.data ?? [];
+      const vendors = vendorResult.data ?? [];
+      const applications = applicationResult.data ?? [];
+      setStats({
+        totalRequests: allRequests.length,
+        pendingRequests: allRequests.filter((item) => item.status === "pending").length,
+        activeRequests: allRequests.filter((item) => ["matched", "scheduled", "in_progress", "pending_review"].includes(item.status)).length,
+        completedRequests: allRequests.filter((item) => item.status === "completed").length,
+        homeowners: homeownerResult.data?.length ?? 0,
+        vendors: vendors.length,
+        activeVendors: vendors.filter((item) => item.is_active).length,
+        pendingApplications: applications.filter((item) => item.status === "pending").length,
+      });
+      setRequests(allRequests.slice(0, 5));
+      setMode("live");
+    } catch (reason) {
+      console.error("Unable to load admin overview", reason);
+      setStats(initialStats);
+      setRequests([]);
+      setError(reason instanceof Error ? reason.message : "The live admin overview could not be loaded.");
+      setMode("error");
     }
-    void loadOverview();
-    return () => { active = false; };
   }, []);
 
-  if (mode === "loading") return <LoadingState label="Loading platform overview..." />;
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadOverview(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadOverview]);
+
+  if (mode === "loading") return <AdminLoading label="Loading platform overview..." />;
+  if (mode === "error") return <AdminError title="Admin overview could not be loaded" message={error} retry={() => void loadOverview()} />;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-7 p-4 sm:p-6 md:p-8">
-      <PageTitle title="Dashboard" description="Platform operations at a glance" preview={mode === "preview"} />
+      <PageTitle title="Dashboard" description="Platform operations at a glance" />
 
       {(stats.pendingApplications > 0 || stats.pendingRequests > 0) && <div className="space-y-3">{stats.pendingApplications > 0 && <Alert href="/admin/applications" icon={FileText} text={`${stats.pendingApplications} vendor application${stats.pendingApplications === 1 ? "" : "s"} awaiting review`} action="Review applications" />}{stats.pendingRequests > 0 && <Alert href="/admin/requests" icon={AlertTriangle} text={`${stats.pendingRequests} unassigned service request${stats.pendingRequests === 1 ? "" : "s"} need attention`} action="View requests" />}</div>}
 
@@ -88,6 +98,5 @@ export default function AdminOverviewPage() {
 function Metric({ icon: Icon, label, value, tone = "default" }: { icon: typeof ClipboardList; label: string; value: number; tone?: "default" | "amber" | "accent" }) { return <Card className={cn(tone === "amber" && "border-amber-200 bg-amber-50", tone === "accent" && "border-accent/25 bg-accent/5")}><CardContent><Icon className={cn("mb-4 h-5 w-5 text-muted-foreground", tone === "amber" && "text-amber-700", tone === "accent" && "text-accent")} /><p className="text-3xl font-bold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></CardContent></Card>; }
 function Alert({ href, icon: Icon, text, action }: { href: string; icon: typeof FileText; text: string; action: string }) { return <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><Icon className="h-5 w-5 shrink-0 text-amber-700" /><p className="flex-1 text-sm font-medium text-amber-900">{text}</p><Link href={href} className="flex items-center gap-1 text-sm font-medium text-amber-800 hover:underline">{action}<ArrowUpRight className="h-3.5 w-3.5" /></Link></div>; }
 function QuickLink({ href, icon: Icon, label, value }: { href: string; icon: typeof FileText; label: string; value: number }) { return <Link href={href} className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-muted"><Icon className="h-4 w-4 text-muted-foreground" /><span className="flex-1 text-sm">{label}</span><span className="text-xs text-muted-foreground">{value}</span><ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" /></Link>; }
-function PageTitle({ title, description, preview }: { title: string; description: string; preview: boolean }) { return <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>{preview && <Badge className="bg-blue-100 text-blue-800">Preview data</Badge>}</div>; }
-function LoadingState({ label }: { label: string }) { return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" /><span className="text-muted-foreground">{label}</span></div>; }
+function PageTitle({ title, description }: { title: string; description: string }) { return <div><h1 className="text-2xl font-bold">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
