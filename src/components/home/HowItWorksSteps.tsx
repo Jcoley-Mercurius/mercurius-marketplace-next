@@ -72,7 +72,7 @@ export function HowItWorksSteps() {
             alt="Vetted Mercurius service professional at a Cape Coral home"
             width={1600}
             height={912}
-            className="h-[260px] w-full object-cover md:h-[340px]"
+            className="h-[260px] w-full object-cover md:h-[340px] lg:object-[center_12%]"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-primary/70 via-primary/25 to-transparent" />
           <div className="bg-motif-lines pointer-events-none absolute inset-0 opacity-40" />
