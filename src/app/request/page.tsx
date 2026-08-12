@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { DragEvent, FormEvent } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -11,18 +12,22 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  Clock3,
   CreditCard,
   Droplets,
   Home,
+  ImagePlus,
   Info,
   Leaf,
   Loader2,
   LogIn,
+  Search,
   ShieldCheck,
   Sparkles,
   Waves,
   Wind,
   Wrench,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -45,6 +50,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { paymentFunctionError } from "@/lib/payments";
+import {
+  MAX_REQUEST_PHOTOS,
+  attachRequestPhotos,
+  createRequestPhotoDraft,
+  type RequestPhotoDraft,
+} from "@/lib/requestPhotos";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
@@ -63,6 +74,8 @@ import {
 
 type Step = "services" | "details" | "contact";
 type Frequency = PricingFrequency;
+type TimingPreference = "asap" | "next-few-days" | "this-week" | "flexible";
+type TimeOfDay = "morning" | "afternoon" | "anytime";
 
 type ServiceOption = {
   id: string;
@@ -79,7 +92,11 @@ type ServiceOption = {
   promotionIds?: Partial<Record<Frequency, string>>;
   packageSelections?: Partial<Record<Frequency, PublicPackageSelection>>;
   availability?: "fixed" | "quote" | "sourcing";
+  categoryId?: string;
+  popular?: boolean;
 };
+
+type RequestCategory = { id: string; name: string; description: string };
 
 type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[]; packageName?: string; packageDescription?: string | null; tierName?: string; tierIncludes?: string[] };
 type PackageSelection = PublicPackageSelection;
@@ -100,6 +117,17 @@ const serviceOptions: ServiceOption[] = [
 const stepOrder: Step[] = ["services", "details", "contact"];
 const stepLabels: Record<Step, string> = { services: "Services", details: "Your Home", contact: "Review" };
 const storageKey = "nextRequestFlowState";
+const otherServiceId = "general-home-service";
+const featuredServiceIds = [
+  "lawn-mowing",
+  "pool-service",
+  "house-cleaning",
+  "ac-maintenance",
+  "pressure-washing",
+  "pest-control",
+  "handyman",
+  "plumbing-repair",
+];
 
 export default function RequestServicePage() {
   const [step, setStep] = useState<Step>("services");
@@ -109,8 +137,13 @@ export default function RequestServicePage() {
   const [city, setCity] = useState("Cape Coral");
   const [stateCode, setStateCode] = useState("FL");
   const [zipCode, setZipCode] = useState("");
+  const [timingPreference, setTimingPreference] = useState<TimingPreference>("flexible");
   const [preferredDate, setPreferredDate] = useState("");
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>("anytime");
   const [description, setDescription] = useState("");
+  const [otherServiceDetails, setOtherServiceDetails] = useState("");
+  const [photos, setPhotos] = useState<RequestPhotoDraft[]>([]);
+  const [photoUploadProgress, setPhotoUploadProgress] = useState({ completed: 0, total: 0 });
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -127,7 +160,7 @@ export default function RequestServicePage() {
   const [completionKind, setCompletionKind] = useState<CompletionKind>("quote");
   const { user } = useAuth();
   const router = useRouter();
-  const { services: catalogServices } = useServiceCatalog();
+  const { services: catalogServices, categories: catalogCategories, loading: catalogLoading } = useServiceCatalog();
 
   useEffect(() => {
     try {
@@ -145,8 +178,11 @@ export default function RequestServicePage() {
         if (typeof value.city === "string") setCity(value.city);
         if (typeof value.stateCode === "string") setStateCode(value.stateCode);
         if (typeof value.zipCode === "string") setZipCode(value.zipCode);
+        if (isTimingPreference(value.timingPreference)) setTimingPreference(value.timingPreference);
         if (typeof value.preferredDate === "string") setPreferredDate(value.preferredDate);
+        if (isTimeOfDay(value.timeOfDay)) setTimeOfDay(value.timeOfDay);
         if (typeof value.description === "string") setDescription(value.description);
+        if (typeof value.otherServiceDetails === "string") setOtherServiceDetails(value.otherServiceDetails);
         if (typeof value.firstName === "string") setFirstName(value.firstName);
         if (typeof value.lastName === "string") setLastName(value.lastName);
         if (typeof value.email === "string") setEmail(value.email);
@@ -234,24 +270,28 @@ export default function RequestServicePage() {
     if (!hydrated || isComplete) return;
     window.sessionStorage.setItem(storageKey, JSON.stringify({
       step, selectedIds, frequencies, streetAddress, city, stateCode, zipCode,
-      preferredDate, description, firstName, lastName, email, phone, smsUpdates,
+      timingPreference, preferredDate, timeOfDay, description, otherServiceDetails,
+      firstName, lastName, email, phone, smsUpdates,
       serviceOverrides, preferredProviders, preferredProviderNames,
       packageSelections,
       questionAnswers,
     }));
-  }, [city, description, email, firstName, frequencies, hydrated, isComplete, lastName, packageSelections, phone, preferredDate, preferredProviderNames, preferredProviders, questionAnswers, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, zipCode]);
+  }, [city, description, email, firstName, frequencies, hydrated, isComplete, lastName, otherServiceDetails, packageSelections, phone, preferredDate, preferredProviderNames, preferredProviders, questionAnswers, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, timeOfDay, timingPreference, zipCode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step, isComplete]);
 
   const requestServiceOptions = useMemo(() => {
-    const knownIds = new Set(serviceOptions.map((service) => service.id));
-    const catalogOverrides = Object.fromEntries(catalogServices.map((service) => {
+    const catalogOptions = catalogServices.map((service): ServiceOption => {
       const frequencies = (service.availableFrequencies ?? [service.defaultFrequency]).filter(isFrequency);
-      return [service.id, {
+      const base: ServiceOption = {
+        id: service.id,
         name: service.name,
         description: service.descriptor,
+        icon: serviceIcon(service.id, service.categoryId),
+        monthlyPrice: 0,
+        oneTimePrice: 0,
         defaultFrequency: isFrequency(service.defaultFrequency) ? service.defaultFrequency : "one-time",
         frequencies: frequencies.length ? frequencies : ["one-time"],
         availability: service.availability ?? "sourcing",
@@ -266,11 +306,19 @@ export default function RequestServicePage() {
         promotionLabels: service.promotionLabels,
         promotionIds: service.promotionIds,
         packageSelections: service.packageSelections,
-      } satisfies Partial<ServiceOption>];
-    }));
-    const known = serviceOptions.map((service) => ({ ...service, ...catalogOverrides[service.id], ...serviceOverrides[service.id] }));
-    const live = Object.entries(serviceOverrides)
-      .filter(([id]) => !knownIds.has(id))
+        categoryId: service.categoryId,
+        popular: service.popular,
+      };
+      return { ...base, ...serviceOverrides[service.id] };
+    });
+    const catalogIds = new Set(catalogOptions.map((service) => service.id));
+    const fallbackFeatured = catalogOptions.length >= 6
+      ? []
+      : serviceOptions
+          .filter((service) => service.id !== otherServiceId && !catalogIds.has(service.id))
+          .map((service) => ({ ...service, categoryId: fallbackServiceCategory(service.id), availability: "sourcing" as const }));
+    const prefilled = Object.entries(serviceOverrides)
+      .filter(([id]) => !catalogIds.has(id) && id !== otherServiceId)
       .map(([id, override]): ServiceOption => ({
         id,
         name: override.name ?? formatServiceName(id),
@@ -282,8 +330,14 @@ export default function RequestServicePage() {
         frequencies: override.frequencies?.length ? override.frequencies : ["one-time"],
         livePrices: override.livePrices,
         availability: override.availability ?? "sourcing",
+        categoryId: override.categoryId,
+        popular: override.popular,
       }));
-    return [...known, ...live];
+    const catchAll = {
+      ...serviceOptions.find((service) => service.id === otherServiceId)!,
+      availability: "sourcing" as const,
+    };
+    return [...catalogOptions, ...fallbackFeatured, ...prefilled, catchAll];
   }, [catalogServices, serviceOverrides]);
   const selectedServices = useMemo(() => requestServiceOptions.filter((service) => selectedIds.includes(service.id)), [requestServiceOptions, selectedIds]);
   const estimate = useMemo(() => selectedServices.reduce((total, service) => total + servicePrice(service, frequencies[service.id] ?? service.defaultFrequency), 0), [frequencies, selectedServices]);
@@ -325,8 +379,12 @@ export default function RequestServicePage() {
   }
 
   function continueFromServices() {
-    if (selectedIds.length === 0) {
+    if (selectedServices.length === 0) {
       toast.error("Choose at least one service", { description: "Select what your home needs before continuing." });
+      return;
+    }
+    if (selectedIds.includes(otherServiceId) && !otherServiceDetails.trim()) {
+      toast.error("Tell us what you need", { description: "Add a short description for Something Else before continuing." });
       return;
     }
     setStep("details");
@@ -357,6 +415,39 @@ export default function RequestServicePage() {
     setStep("contact");
   }
 
+  function addPhotos(files: File[]) {
+    const remaining = MAX_REQUEST_PHOTOS - photos.length;
+    if (remaining <= 0) {
+      toast.error("Photo limit reached", { description: `You can attach up to ${MAX_REQUEST_PHOTOS} photos.` });
+      return;
+    }
+    const accepted: RequestPhotoDraft[] = [];
+    for (const file of files.slice(0, remaining)) {
+      try {
+        accepted.push(createRequestPhotoDraft(file));
+      } catch (reason) {
+        toast.error("Photo not added", { description: reason instanceof Error ? reason.message : "Choose a valid image." });
+      }
+    }
+    if (files.length > remaining) {
+      toast.info("Photo limit applied", { description: `Only the first ${remaining} remaining photo${remaining === 1 ? "" : "s"} were added.` });
+    }
+    if (accepted.length > 0) setPhotos((current) => [...current, ...accepted]);
+  }
+
+  function removePhoto(id: string) {
+    setPhotos((current) => {
+      const removing = current.find((photo) => photo.id === id);
+      if (removing) URL.revokeObjectURL(removing.previewUrl);
+      return current.filter((photo) => photo.id !== id);
+    });
+  }
+
+  function handlePhotoDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    addPhotos(Array.from(event.dataTransfer.files));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim()) {
@@ -364,7 +455,11 @@ export default function RequestServicePage() {
       return;
     }
     if (!user) {
-      toast.info("Almost done — sign in to confirm", { description: "Your request has been saved in this browser." });
+      toast.info("Almost done — sign in to confirm", {
+        description: photos.length > 0
+          ? "Your request details are saved in this browser. For privacy, reattach your photos after signing in."
+          : "Your request has been saved in this browser.",
+      });
       router.push("/login?redirect=/request");
       return;
     }
@@ -405,7 +500,8 @@ export default function RequestServicePage() {
           state: stateCode.trim().toUpperCase(),
           zip_code: zipCode.trim(),
           preferred_date: preferredDate || null,
-          description: description.trim() || null,
+          preferred_time: schedulingPreferenceValue(timingPreference, timeOfDay),
+          description: requestDescription(service, description, otherServiceDetails),
           status: "pending",
           frequency,
           pricing_mode: requestPricingMode,
@@ -424,7 +520,36 @@ export default function RequestServicePage() {
         .select("id, pricing_mode, quote_only, package_id, package_tier_id");
       if (error) throw error;
 
+      const requestIds = (insertedRequests ?? []).map((request) => request.id).filter(Boolean);
+      if (photos.length > 0) {
+        setPhotoUploadProgress({ completed: 0, total: photos.length });
+        try {
+          await attachRequestPhotos({
+            supabase,
+            userId: user.id,
+            requestIds,
+            photos,
+            onProgress: (completed, total) => setPhotoUploadProgress({ completed, total }),
+          });
+        } catch (reason) {
+          const rollback = requestIds.length
+            ? await supabase
+                .from("service_requests")
+                .delete()
+                .in("id", requestIds)
+                .eq("customer_id", user.id)
+                .eq("status", "pending")
+            : { error: null };
+          if (rollback.error) {
+            console.error("Request photo upload failed and request rollback was unavailable", rollback.error);
+            throw new Error("Your request was saved, but its photos could not be attached. Please check your dashboard before trying again.");
+          }
+          throw new Error(`Your photos could not be uploaded, so no request was submitted. ${errorMessage(reason)}`);
+        }
+      }
+
       window.sessionStorage.removeItem(storageKey);
+      photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
       const payable = insertedRequests?.length === 1 && insertedRequests[0]?.pricing_mode === "fixed" && !insertedRequests[0]?.quote_only && insertedRequests[0]?.package_tier_id
         ? insertedRequests[0]
         : null;
@@ -456,6 +581,7 @@ export default function RequestServicePage() {
       toast.error("Submission failed", { description: error instanceof Error ? error.message : "Please try again." });
     } finally {
       setIsSubmitting(false);
+      setPhotoUploadProgress({ completed: 0, total: 0 });
     }
   }
 
@@ -505,9 +631,9 @@ export default function RequestServicePage() {
         <section className="py-12 md:py-16">
           <div className="container-wide max-w-6xl">
             <form onSubmit={handleSubmit}>
-              {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
-              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
+              {step === "services" && <ServicesStep services={requestServiceOptions} categories={catalogCategories} catalogLoading={catalogLoading} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} otherServiceDetails={otherServiceDetails} onOtherServiceDetails={setOtherServiceDetails} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} timingPreference={timingPreference} preferredDate={preferredDate} timeOfDay={timeOfDay} description={description} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onTimingPreference={setTimingPreference} onPreferredDate={setPreferredDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
+              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} timingPreference={timingPreference} preferredDate={preferredDate} timeOfDay={timeOfDay} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
             </form>
           </div>
         </section>
@@ -519,28 +645,72 @@ export default function RequestServicePage() {
 
 function ServicesStep({
   services,
+  categories,
+  catalogLoading,
   selectedIds,
   frequencies,
   preferredProviderNames,
+  otherServiceDetails,
+  onOtherServiceDetails,
   onToggle,
   onFrequencyChange,
   estimate,
   onContinue,
 }: {
   services: ServiceOption[];
+  categories: RequestCategory[];
+  catalogLoading: boolean;
   selectedIds: string[];
   frequencies: Record<string, Frequency>;
   preferredProviderNames: Record<string, string>;
+  otherServiceDetails: string;
+  onOtherServiceDetails: (value: string) => void;
   onToggle: (id: string) => void;
   onFrequencyChange: (id: string, value: Frequency) => void;
   estimate: number;
   onContinue: () => void;
 }) {
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [browseAll, setBrowseAll] = useState(false);
+  const [search, setSearch] = useState("");
+  const catalogServices = services.filter((service) => service.id !== otherServiceId);
+  const catchAll = services.find((service) => service.id === otherServiceId);
   const selected = services.filter((service) => selectedIds.includes(service.id));
   const summaryItems = selected.map((service) => {
     const frequency = frequencies[service.id] ?? service.defaultFrequency;
     return planningSummaryItem(toPlanningService(service), frequency);
   });
+  const availableCategories = categories.filter((category) =>
+    catalogServices.some((service) => service.categoryId === category.id),
+  );
+  const featured = catalogServices
+    .filter((service) => service.popular || featuredServiceIds.includes(service.id))
+    .slice(0, 8);
+  const featuredServices = featured.length >= 4 ? featured : catalogServices.slice(0, 8);
+  const categoryServices = activeCategory
+    ? catalogServices.filter((service) => service.categoryId === activeCategory)
+    : [];
+  const normalizedSearch = search.trim().toLowerCase();
+  const browsableServices = catalogServices.filter((service) =>
+    !normalizedSearch
+    || `${service.name} ${service.description}`.toLowerCase().includes(normalizedSearch),
+  );
+
+  function renderServiceCard(service: ServiceOption, layout: "tile" | "row" = "tile") {
+    const frequency = frequencies[service.id] ?? service.defaultFrequency;
+    return (
+      <PlanningServiceCard
+        key={service.id}
+        service={toPlanningService(service)}
+        selected={selectedIds.includes(service.id)}
+        frequency={frequency}
+        onToggle={() => onToggle(service.id)}
+        onFrequencyChange={(value) => onFrequencyChange(service.id, value)}
+        requestedProviderName={preferredProviderNames[service.id]}
+        layout={layout}
+      />
+    );
+  }
 
   return (
     <div className="pb-24 lg:pb-0">
@@ -558,22 +728,93 @@ function ServicesStep({
       </div>
 
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="grid gap-4 sm:grid-cols-2">
-          {services.map((service) => {
-            const isSelected = selectedIds.includes(service.id);
-            const frequency = frequencies[service.id] ?? service.defaultFrequency;
-            return (
-              <PlanningServiceCard
-                key={service.id}
-                service={toPlanningService(service)}
-                selected={isSelected}
-                frequency={frequency}
-                onToggle={() => onToggle(service.id)}
-                onFrequencyChange={(value) => onFrequencyChange(service.id, value)}
-                requestedProviderName={preferredProviderNames[service.id]}
-              />
-            );
-          })}
+        <div className="space-y-10">
+          <section>
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold">Popular home services</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Start with the services homeowners request most often.</p>
+              </div>
+              {catalogLoading && <Loader2 className="h-5 w-5 animate-spin text-accent" aria-label="Loading live catalog" />}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {featuredServices.map((service) => renderServiceCard(service))}
+            </div>
+          </section>
+
+          {availableCategories.length > 0 && (
+            <section>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold">Explore by service area</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Choose a category to see the specific catalog services available to request.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    aria-pressed={activeCategory === category.id}
+                    onClick={() => setActiveCategory((current) => current === category.id ? null : category.id)}
+                    className={cn(
+                      "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+                      activeCategory === category.id
+                        ? "border-accent bg-accent text-accent-foreground"
+                        : "border-border-strong bg-card text-muted-foreground hover:border-accent-border hover:text-foreground",
+                    )}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+              {activeCategory && (
+                <div className="mt-4 space-y-3">
+                  {categoryServices.length > 0
+                    ? categoryServices.map((service) => renderServiceCard(service, "row"))
+                    : <p className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">No catalog services are currently listed in this category.</p>}
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="rounded-3xl border border-border bg-muted/20 p-5 sm:p-6">
+            <button type="button" onClick={() => setBrowseAll((current) => !current)} className="flex w-full items-center justify-between gap-4 text-left">
+              <div>
+                <h3 className="text-lg font-semibold">Browse all services</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Search the full live catalog for a more specific need.</p>
+              </div>
+              <span className="rounded-full border border-accent-border bg-card px-3 py-1.5 text-xs font-semibold text-sage-dark">{browseAll ? "Close" : `${catalogServices.length} services`}</span>
+            </button>
+            {browseAll && (
+              <div className="mt-5 space-y-4">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search lawn, cleaning, plumbing…" className="h-11 bg-background pl-10" />
+                </div>
+                <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-1">
+                  {browsableServices.length > 0
+                    ? browsableServices.map((service) => renderServiceCard(service, "row"))
+                    : <p className="rounded-xl border border-dashed border-border bg-background p-6 text-center text-sm text-muted-foreground">No catalog service matches that search. Use Something Else below and tell us what you need.</p>}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {catchAll && (
+            <section>
+              <div className="mb-3">
+                <h3 className="text-lg font-semibold">Can&apos;t find the right service?</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Use the guided catch-all only for needs that are not represented in the catalog.</p>
+              </div>
+              {renderServiceCard(catchAll, "row")}
+              {selectedIds.includes(otherServiceId) && (
+                <div className="mt-3 rounded-2xl border border-accent-border bg-accent-subtle/35 p-4">
+                  <Label htmlFor="otherServiceDetails">What service do you need?</Label>
+                  <textarea id="otherServiceDetails" rows={3} value={otherServiceDetails} onChange={(event) => onOtherServiceDetails(event.target.value)} placeholder="Describe the work or issue in a sentence or two…" className="mt-2 w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
+                  <p className="mt-2 text-xs text-muted-foreground">We&apos;ll review the request, source a suitable pro where possible, and confirm pricing before booking.</p>
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
         <PlanningPlanSummary
@@ -594,19 +835,28 @@ type DetailsStepProps = {
   city: string;
   stateCode: string;
   zipCode: string;
+  timingPreference: TimingPreference;
   preferredDate: string;
+  timeOfDay: TimeOfDay;
   description: string;
+  photos: RequestPhotoDraft[];
   selectedServices: ServiceOption[];
   frequencies: Record<string, Frequency>;
   packageSelections: Record<string, PackageSelection>;
   questionAnswers: Record<string, Record<string, string>>;
+  isSignedIn: boolean;
   onQuestionAnswer: (serviceId: string, questionKey: string, answer: string) => void;
   onStreetAddress: (value: string) => void;
   onCity: (value: string) => void;
   onStateCode: (value: string) => void;
   onZipCode: (value: string) => void;
+  onTimingPreference: (value: TimingPreference) => void;
   onPreferredDate: (value: string) => void;
+  onTimeOfDay: (value: TimeOfDay) => void;
   onDescription: (value: string) => void;
+  onAddPhotos: (files: File[]) => void;
+  onRemovePhoto: (id: string) => void;
+  onPhotoDrop: (event: DragEvent<HTMLLabelElement>) => void;
   onBack: () => void;
   onContinue: () => void;
 };
@@ -846,23 +1096,40 @@ function DetailsStep(props: DetailsStepProps) {
             />
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="preferredDate">Preferred date</Label>
-            <div className="relative">
-              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="preferredDate"
-                type="date"
-                min={minDate}
-                className="h-12 pl-10"
-                value={props.preferredDate}
-                onChange={(event) => props.onPreferredDate(event.target.value)}
+          <div className="rounded-2xl border border-border-strong bg-background p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-sage-dark"><Clock3 className="h-5 w-5" /></span>
+              <div>
+                <h3 className="font-semibold">When would you prefer service?</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">Share your preference—not a guaranteed appointment. We&apos;ll confirm the actual date and time with you.</p>
+              </div>
+            </div>
+            <div className="mt-5 space-y-5">
+              <PreferencePills<TimingPreference>
+                label="Timing"
+                value={props.timingPreference}
+                options={[
+                  ["asap", "ASAP"],
+                  ["next-few-days", "Next few days"],
+                  ["this-week", "This week"],
+                  ["flexible", "Flexible"],
+                ]}
+                onChange={props.onTimingPreference}
+              />
+              <div className="space-y-2">
+                <Label htmlFor="preferredDate">Specific date <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <div className="relative max-w-sm">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} />
+                </div>
+              </div>
+              <PreferencePills<TimeOfDay>
+                label="Time of day"
+                value={props.timeOfDay}
+                options={[["morning", "Morning"], ["afternoon", "Afternoon"], ["anytime", "Anytime"]]}
+                onChange={props.onTimeOfDay}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              This is a preference. We&apos;ll confirm the actual appointment
-              with you.
-            </p>
           </div>
 
           {!descriptionIsProminent && (
@@ -872,17 +1139,13 @@ function DetailsStep(props: DetailsStepProps) {
             />
           )}
 
-          <div className="flex items-start gap-3 rounded-xl border border-dashed border-border-strong bg-muted/40 p-4">
-            <Info className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-            <div>
-              <p className="text-sm font-medium">Photo upload is coming soon</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                No files are collected or attached in this version. For now,
-                describe any visible damage, dimensions, or access details in the
-                notes above.
-              </p>
-            </div>
-          </div>
+          <RequestPhotoPicker
+            photos={props.photos}
+            isSignedIn={props.isSignedIn}
+            onAdd={props.onAddPhotos}
+            onRemove={props.onRemovePhoto}
+            onDrop={props.onPhotoDrop}
+          />
         </CardContent>
       </Card>
 
@@ -900,6 +1163,111 @@ function DetailsStep(props: DetailsStepProps) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function PreferencePills<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Array<[T, string]>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">{label}</legend>
+      <div className="flex flex-wrap gap-2">
+        {options.map(([option, optionLabel]) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={value === option}
+            onClick={() => onChange(option)}
+            className={cn(
+              "rounded-full border px-4 py-2 text-sm transition-all",
+              value === option
+                ? "border-accent bg-accent font-semibold text-accent-foreground shadow-sm"
+                : "border-border-strong bg-background text-muted-foreground hover:border-accent-border hover:text-foreground",
+            )}
+          >
+            {optionLabel}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function RequestPhotoPicker({
+  photos,
+  isSignedIn,
+  onAdd,
+  onRemove,
+  onDrop,
+}: {
+  photos: RequestPhotoDraft[];
+  isSignedIn: boolean;
+  onAdd: (files: File[]) => void;
+  onRemove: (id: string) => void;
+  onDrop: (event: DragEvent<HTMLLabelElement>) => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-border-strong bg-muted/20 p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-sage-dark"><ImagePlus className="h-5 w-5" /></span>
+        <div>
+          <h3 className="font-semibold">Add helpful photos <span className="font-normal text-muted-foreground">(optional)</span></h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Attach up to {MAX_REQUEST_PHOTOS} JPG, PNG, or WebP images, 8 MB each. They upload securely and are linked to your request when you submit.</p>
+        </div>
+      </div>
+
+      <label
+        htmlFor="requestPhotos"
+        onDrop={onDrop}
+        onDragOver={(event) => event.preventDefault()}
+        className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-accent-border bg-background px-5 py-7 text-center transition-colors hover:bg-accent-subtle/30"
+      >
+        <ImagePlus className="mb-2 h-6 w-6 text-accent" />
+        <span className="text-sm font-semibold">Choose photos or drop them here</span>
+        <span className="mt-1 text-xs text-muted-foreground">Visible damage, affected areas, or access context can help providers prepare.</span>
+        <input
+          id="requestPhotos"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          className="sr-only"
+          onChange={(event) => {
+            onAdd(Array.from(event.target.files ?? []));
+            event.target.value = "";
+          }}
+        />
+      </label>
+
+      {!isSignedIn && photos.length > 0 && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>Request details persist through sign-in, but browsers cannot safely persist selected files. Reattach these photos after signing in before you submit.</p>
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {photos.map((photo, index) => (
+            <div key={photo.id} className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-border bg-muted">
+              <Image src={photo.previewUrl} alt={`Request photo preview ${index + 1}`} fill unoptimized className="object-cover" />
+              <button type="button" onClick={() => onRemove(photo.id)} aria-label={`Remove photo ${index + 1}`} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-background/95 text-foreground shadow-md transition-colors hover:bg-destructive hover:text-destructive-foreground">
+                <X className="h-4 w-4" />
+              </button>
+              <span className="absolute bottom-2 left-2 rounded-full bg-slate/80 px-2 py-1 text-[10px] font-medium text-white">{index + 1} of {photos.length}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -950,6 +1318,11 @@ type ContactStepProps = {
   estimate: number;
   directCheckoutExpected: boolean;
   hasQuoteServices: boolean;
+  timingPreference: TimingPreference;
+  preferredDate: string;
+  timeOfDay: TimeOfDay;
+  photos: RequestPhotoDraft[];
+  photoUploadProgress: { completed: number; total: number };
   firstName: string;
   lastName: string;
   email: string;
@@ -997,6 +1370,38 @@ function ContactStep(props: ContactStepProps) {
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-6">
+          <Card className="border-accent-border bg-accent-subtle/25 shadow-sm">
+            <CardHeader>
+              <CardTitle>Visit preferences</CardTitle>
+              <p className="text-sm text-muted-foreground">These are scheduling preferences. Mercurius or your provider will confirm the actual appointment.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 text-sm sm:grid-cols-3">
+                <ReviewDetail label="Timing" value={timingPreferenceLabel(props.timingPreference)} />
+                <ReviewDetail label="Specific date" value={props.preferredDate ? formatReviewDate(props.preferredDate) : "No specific date"} />
+                <ReviewDetail label="Time of day" value={timeOfDayLabel(props.timeOfDay)} />
+              </div>
+              <div className="border-t border-accent-border pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Request photos</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{props.photos.length ? `${props.photos.length} photo${props.photos.length === 1 ? "" : "s"} will upload securely when you submit.` : "No photos attached."}</p>
+                  </div>
+                  {props.photos.length > 0 && <Badge variant="secondary" className="border-accent-border bg-card text-sage-dark">{props.photos.length} attached</Badge>}
+                </div>
+                {props.photos.length > 0 && (
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                    {props.photos.map((photo, index) => (
+                      <div key={photo.id} className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                        <Image src={photo.previewUrl} alt={`Attached request photo ${index + 1}`} fill unoptimized className="object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle>Contact information</CardTitle>
@@ -1119,7 +1524,7 @@ function ContactStep(props: ContactStepProps) {
         </Button>
         <Button type="submit" size="lg" disabled={props.isSubmitting} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
           {props.isSubmitting ? (
-            <><Loader2 className="h-4 w-4 animate-spin" /> {props.directCheckoutExpected ? "Re-checking live rate..." : "Submitting..."}</>
+            <><Loader2 className="h-4 w-4 animate-spin" /> {props.photoUploadProgress.total > 0 ? `Uploading photos ${props.photoUploadProgress.completed}/${props.photoUploadProgress.total}` : props.directCheckoutExpected ? "Re-checking live rate..." : "Submitting..."}</>
           ) : props.isSignedIn ? (
             props.directCheckoutExpected ? "Submit & Continue if Eligible" : "Submit Request"
           ) : (
@@ -1139,6 +1544,68 @@ function SuccessState({ services, preferredProviderNames, completionKind }: { se
       ? "Nothing was charged today. We’ll coordinate the selected services and place any payable invoices in your dashboard."
       : "No payment was collected. We’ll confirm scope, availability, and pricing before asking you to approve or pay anything.";
   return <div className="min-h-screen bg-background"><Header /><main className="py-16 md:py-24"><div className="container-narrow"><div className="mb-10 text-center"><span className="mx-auto mb-7 flex h-20 w-20 items-center justify-center rounded-full bg-sage-light"><CheckCircle2 className="h-10 w-10 text-sage-dark" /></span><h1 className="mb-4 text-3xl font-semibold">Request Submitted!</h1><p className="mx-auto max-w-xl text-lg text-muted-foreground">Thank you for your request. Our team will review the details and contact you to confirm next steps.</p></div><Card className="mx-auto mb-8 max-w-xl"><CardHeader><CardTitle>Request Summary</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="flex justify-between gap-4"><span className="text-muted-foreground">Services</span><span className="text-right font-medium">{services.map((service) => service.name).join(", ")}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Provider</span><span className="text-right font-medium">{providerNames.length ? providerNames.join(", ") : "Matching in progress"}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Request status</span><span className="font-semibold text-sage-dark">Received</span></div><div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"><CreditCard className="mt-0.5 h-4 w-4 shrink-0" /><p className="text-xs leading-relaxed">{paymentMessage}</p></div></CardContent></Card><div className="mx-auto mb-8 max-w-xl"><h2 className="mb-5 text-center font-semibold">What happens next</h2>{["Request received", "Pricing and provider confirmed", "Payment confirmed when required", "Service completed", "Leave a review"].map((label, index, items) => <div key={label} className="flex items-start gap-4"><div className="flex flex-col items-center"><span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium", index === 0 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{index === 0 ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>{index < items.length - 1 && <span className="h-6 w-0.5 bg-border" />}</div><p className={cn("pt-1.5 text-sm", index === 0 ? "font-medium" : "text-muted-foreground")}>{label}</p></div>)}</div><div className="flex justify-center gap-3"><Link href="/dashboard?tab=invoices" className={buttonVariants({ variant: "outline", size: "lg" })}>View Dashboard</Link><Link href="/" className={buttonVariants({ size: "lg" })}>Return Home</Link></div></div></main></div>;
+}
+
+function ReviewDetail({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-accent-border bg-card p-3"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>;
+}
+
+function isTimingPreference(value: unknown): value is TimingPreference {
+  return value === "asap" || value === "next-few-days" || value === "this-week" || value === "flexible";
+}
+
+function isTimeOfDay(value: unknown): value is TimeOfDay {
+  return value === "morning" || value === "afternoon" || value === "anytime";
+}
+
+function timingPreferenceLabel(value: TimingPreference) {
+  return value === "asap" ? "ASAP" : value === "next-few-days" ? "Next few days" : value === "this-week" ? "This week" : "Flexible";
+}
+
+function timeOfDayLabel(value: TimeOfDay) {
+  return value === "morning" ? "Morning" : value === "afternoon" ? "Afternoon" : "Anytime";
+}
+
+function schedulingPreferenceValue(timing: TimingPreference, timeOfDay: TimeOfDay) {
+  return `${timingPreferenceLabel(timing)} · ${timeOfDayLabel(timeOfDay)}`;
+}
+
+function formatReviewDate(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function requestDescription(service: ServiceOption, notes: string, otherServiceDetails: string) {
+  const detail = notes.trim();
+  if (service.id !== otherServiceId) return detail || null;
+  return [`Requested service: ${otherServiceDetails.trim()}`, detail].filter(Boolean).join("\n\n");
+}
+
+function serviceIcon(id: string, categoryId?: string) {
+  const known = serviceOptions.find((service) => service.id === id)?.icon;
+  if (known) return known;
+  if (categoryId?.includes("clean")) return Sparkles;
+  if (categoryId?.includes("lawn") || categoryId?.includes("landscap")) return Leaf;
+  if (categoryId?.includes("pool")) return Waves;
+  if (categoryId?.includes("hvac") || categoryId?.includes("mechanical")) return Wind;
+  if (categoryId?.includes("pest")) return Bug;
+  if (categoryId?.includes("outdoor") || categoryId?.includes("exterior")) return Droplets;
+  if (categoryId?.includes("repair") || categoryId?.includes("trade")) return Wrench;
+  return Home;
+}
+
+function fallbackServiceCategory(id: string) {
+  if (id.includes("lawn")) return "lawn-landscape";
+  if (id.includes("pool")) return "pool-service";
+  if (id.includes("clean")) return "cleaning";
+  if (id.includes("ac-")) return "hvac-mechanical";
+  if (id.includes("pressure")) return "outdoor-exterior";
+  if (id.includes("pest")) return "pest-control";
+  return "repairs-trades";
+}
+
+function errorMessage(reason: unknown) {
+  return reason instanceof Error ? reason.message : "Please check the files and try again.";
 }
 
 function servicePrice(service: ServiceOption, frequency: Frequency) {
