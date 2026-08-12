@@ -22,6 +22,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { VendorPasswordNudge } from "@/components/vendor/VendorPasswordNudge";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -396,6 +397,8 @@ export default function VendorOverviewPage() {
           </Link>
         )}
       </header>
+
+      <VendorPasswordNudge />
 
       <div className="mb-6 flex flex-col gap-3 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">

@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FormEvent,
   type ReactNode,
 } from "react";
 import Link from "next/link";
@@ -16,8 +17,11 @@ import {
   Award,
   Building2,
   Camera,
+  Eye,
+  EyeOff,
   ExternalLink,
   HandHeart,
+  KeyRound,
   Loader2,
   Mail,
   MapPin,
@@ -49,6 +53,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  clearVendorPasswordNudgeDismissal,
+  PASSWORD_SET_BY_USER_KEY,
+} from "@/lib/vendorPasswordNudge";
 import {
   removeUploadedVendorMedia,
   uploadVendorMedia,
@@ -128,6 +136,11 @@ export default function VendorProfilePage() {
   const [removingLogo, setRemovingLogo] = useState(false);
   const [galleryUploadProgress, setGalleryUploadProgress] = useState<{ completed: number; total: number } | null>(null);
   const [removingGalleryId, setRemovingGalleryId] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -199,6 +212,16 @@ export default function VendorProfilePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadProfile();
   }, [loadProfile, user]);
+
+  useEffect(() => {
+    if (mode !== "live" || !profile || window.location.hash !== "#password") return;
+    window.requestAnimationFrame(() => {
+      document.getElementById("password")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [mode, profile]);
 
   const strength = useMemo<StrengthModel>(
     () => buildStrength(profile, gallery.length),
@@ -508,6 +531,48 @@ export default function VendorProfilePage() {
       });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function savePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPasswordError("");
+
+    if (password.length < 8) {
+      const message = "Use at least 8 characters.";
+      setPasswordError(message);
+      toast.error("Password is too short", { description: message });
+      return;
+    }
+    if (password !== confirmPassword) {
+      const message = "The passwords you entered do not match.";
+      setPasswordError(message);
+      toast.error("Passwords don’t match", { description: message });
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const { data, error } = await createClient().auth.updateUser({
+        password,
+        data: { [PASSWORD_SET_BY_USER_KEY]: true },
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error("Your account could not be verified after the update.");
+
+      clearVendorPasswordNudgeDismissal();
+      setPassword("");
+      setConfirmPassword("");
+      setShowPassword(false);
+      toast.success("Password updated", {
+        description: "Your new password is active. You’ll remain signed in to the vendor portal.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Please try again.";
+      setPasswordError(message);
+      toast.error("Password could not be updated", { description: message });
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -954,6 +1019,89 @@ export default function VendorProfilePage() {
               </p>
             </Field>
 
+          </CardContent>
+        </Card>
+
+        <Card id="password" className="scroll-mt-24 overflow-hidden">
+          <CardHeader className="border-b border-border bg-muted/20">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-sage-dark">
+                <KeyRound className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div>
+                <CardTitle className="text-base">Account password</CardTitle>
+                <CardDescription className="mt-1">
+                  Choose a password only you know. Saving it does not interrupt your portal session.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form className="space-y-5" onSubmit={savePassword}>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="vendor-new-password">New password</Label>
+                  <div className="relative">
+                    <Input
+                      id="vendor-new-password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      minLength={8}
+                      className="h-11 pr-11"
+                      disabled={passwordSaving}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-pressed={showPassword}
+                      disabled={passwordSaving}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Use at least 8 characters.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vendor-confirm-password">Confirm new password</Label>
+                  <Input
+                    id="vendor-confirm-password"
+                    name="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    minLength={8}
+                    className="h-11"
+                    disabled={passwordSaving}
+                    required
+                  />
+                </div>
+              </div>
+
+              {passwordError && (
+                <div role="alert" className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{passwordError}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 text-xs leading-5 text-muted-foreground">
+                  <ShieldCheck className="h-4 w-4 shrink-0 text-accent" />
+                  Supabase Auth securely updates your signed-in account.
+                </div>
+                <Button type="submit" className="min-h-11 w-full sm:w-auto" disabled={passwordSaving}>
+                  {passwordSaving ? <Loader2 className="animate-spin" /> : <KeyRound />}
+                  {passwordSaving ? "Updating..." : "Update password"}
+                </Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
 
