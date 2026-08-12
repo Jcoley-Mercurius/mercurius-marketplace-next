@@ -19,6 +19,11 @@ export type PublicPackageSelection = {
   tierId?: string;
   pricingMode: "fixed" | "deposit_quote" | "custom_quote";
   questions?: PackageQualifyingQuestion[];
+  /** Optional public-facing package substance carried with the selected live tier. */
+  packageName?: string;
+  packageDescription?: string | null;
+  tierName?: string;
+  tierIncludes?: string[];
 };
 
 export type PriceTierLike = {

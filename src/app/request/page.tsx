@@ -75,7 +75,7 @@ type ServiceOption = {
   availability?: "fixed" | "quote" | "sourcing";
 };
 
-type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[] };
+type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[]; packageName?: string; packageDescription?: string | null; tierName?: string; tierIncludes?: string[] };
 type PackageSelection = PublicPackageSelection;
 type ResolvedPackage = PackageSelection & { contractorId: string; price: number | null; basePrice?: number; promotionId?: string; promotionLabel?: string };
 type CompletionKind = "quote" | "payment_pending" | "multi_service";
@@ -168,12 +168,12 @@ export default function RequestServicePage() {
             promotionIds: item.promotionIds,
             availability: item.availability,
             packageSelections: item.packageId && item.pricingMode
-              ? Object.fromEntries((item.frequencies ?? [item.defaultFrequency ?? "one-time"]).map((frequency) => [frequency, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions }]))
+              ? Object.fromEntries((item.frequencies ?? [item.defaultFrequency ?? "one-time"]).map((frequency) => [frequency, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions, packageName: item.packageName, packageDescription: item.packageDescription, tierName: item.tierName, tierIncludes: item.tierIncludes }]))
               : undefined,
           }])));
           setPackageSelections(Object.fromEntries(requestedServices
             .filter((item) => item.packageId && item.pricingMode)
-            .map((item) => [item.id, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions }])));
+            .map((item) => [item.id, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions, packageName: item.packageName, packageDescription: item.packageDescription, tierName: item.tierName, tierIncludes: item.tierIncludes }])));
           const needsMatching = requestedServices.filter((item) => item.availability !== "fixed");
           if (needsMatching.length > 0) setDescription((current) => current || `Please help me with: ${needsMatching.map((item) => item.name).join(", ")}. I understand provider coverage and pricing still need to be confirmed.`);
         } else if (Array.isArray(value.selectedServiceIds)) {
@@ -500,7 +500,7 @@ export default function RequestServicePage() {
           <div className="container-wide max-w-6xl">
             <form onSubmit={handleSubmit}>
               {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} selectedServices={selectedServices} packageSelections={packageSelections} questionAnswers={questionAnswers} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
               {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
             </form>
           </div>
@@ -720,6 +720,7 @@ type DetailsStepProps = {
   preferredDate: string;
   description: string;
   selectedServices: ServiceOption[];
+  frequencies: Record<string, Frequency>;
   packageSelections: Record<string, PackageSelection>;
   questionAnswers: Record<string, Record<string, string>>;
   onQuestionAnswer: (serviceId: string, questionKey: string, answer: string) => void;
@@ -735,57 +736,166 @@ type DetailsStepProps = {
 
 function DetailsStep(props: DetailsStepProps) {
   const minDate = new Date().toISOString().slice(0, 10);
-  const questionGroups = props.selectedServices.map((service) => ({ service, questions: props.packageSelections[service.id]?.questions ?? [] })).filter((group) => group.questions.length);
+  const fixedServices = props.selectedServices.filter((service) => {
+    const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
+    return service.availability === "fixed" && servicePrice(service, frequency) > 0;
+  });
+  const matchingServices = props.selectedServices.filter(
+    (service) => !fixedServices.some((fixed) => fixed.id === service.id),
+  );
+  const selectionMix = fixedServices.length === props.selectedServices.length
+    ? "fixed"
+    : fixedServices.length === 0
+      ? "matching"
+      : "mixed";
+  const framing = selectionMix === "fixed"
+    ? {
+        eyebrow: "Schedule your live-priced services",
+        title: "Where and when should we plan service?",
+        helper: "Your selected services currently have provider-backed rates. Confirm the location and preferred timing; additional notes are optional.",
+      }
+    : selectionMix === "matching"
+      ? {
+          eyebrow: "Help us match the right provider",
+          title: "Tell us what your home needs",
+          helper: "A little context helps Mercurius match the right provider and confirm an accurate quote before booking.",
+        }
+      : {
+          eyebrow: "Complete your mixed service plan",
+          title: "Add the details we need to coordinate",
+          helper: `${fixedServices.length} service${fixedServices.length === 1 ? " has" : "s have"} a live rate today, while ${matchingServices.length} still need${matchingServices.length === 1 ? "s" : ""} matching or a quote.`,
+        };
+  const questionGroups = props.selectedServices
+    .map((service) => ({
+      service,
+      questions: props.packageSelections[service.id]?.questions ?? [],
+    }))
+    .filter((group) => group.questions.length);
+  const packageDetails = fixedServices.flatMap((service) => {
+    const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
+    const selection = props.packageSelections[service.id];
+    if (!selection) return [];
+    const description = selection.packageDescription?.trim();
+    const includes = selection.tierIncludes?.filter(Boolean) ?? [];
+    return description || includes.length > 0
+      ? [{ service, frequency, selection, description, includes }]
+      : [];
+  });
+  const descriptionIsProminent = selectionMix !== "fixed";
+
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-5xl">
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold">Tell us about your home</h2>
-        <p className="mt-2 text-muted-foreground">
-          Add the service location, timing, and anything our team should know.
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+          {framing.eyebrow}
+        </p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">{framing.title}</h2>
+        <p className="mt-2 max-w-3xl leading-6 text-muted-foreground">
+          {framing.helper}
         </p>
       </div>
 
+      {packageDetails.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h3 className="font-semibold">What&apos;s included</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Published details from the live package and selected starting tier.
+              </p>
+            </div>
+            <Badge variant="secondary" className="hidden border-accent-border bg-accent-soft text-sage-dark sm:inline-flex">
+              Provider published
+            </Badge>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {packageDetails.map(({ service, frequency, selection, description, includes }) => (
+              <Card key={service.id} className="border-accent-border bg-accent-subtle/30 shadow-sm">
+                <CardHeader className="gap-2 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="text-base">{service.name}</CardTitle>
+                    <Badge variant="outline" className="border-accent-border bg-background text-sage-dark">
+                      {frequencyLabel(frequency)} · {servicePriceLabel(service, frequency)}
+                    </Badge>
+                  </div>
+                  {selection.packageName && selection.packageName !== service.name && (
+                    <p className="text-xs font-medium text-muted-foreground">{selection.packageName}</p>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {description && (
+                    <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+                  )}
+                  {includes.length > 0 && (
+                    <ul className="grid gap-2 text-sm sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-2">
+                      {includes.map((included) => (
+                        <li key={included} className="flex items-start gap-2">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                          <span>{included}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {selection.tierName && (
+                    <p className="border-t border-accent-border pt-2 text-[11px] text-muted-foreground">
+                      Scope shown for the {selection.tierName} tier. Final tier is re-checked with your answers at submit.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       {questionGroups.length > 0 && (
-        <Card className="mb-6 border-accent-border">
-          <CardHeader>
-            <CardTitle>Questions from your provider</CardTitle>
+        <section className="mb-6">
+          <div className="mb-3">
+            <h3 className="font-semibold">Service-specific questions</h3>
             <p className="text-sm text-muted-foreground">
               These details help confirm the right price level and prepare for
               the visit.
             </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
             {questionGroups.map(({ service, questions }) => (
-              <section key={service.id} className="space-y-4">
-                <div>
-                  <p className="font-semibold">{service.name}</p>
+              <Card key={service.id} className="border-border-strong shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">{service.name}</CardTitle>
                   <p className="text-xs text-muted-foreground">
                     Your answers are saved with this request only after you
                     confirm it.
                   </p>
-                </div>
-                {questions.map((question) => (
-                  <PackageQuestionInput
-                    key={question.question_key}
-                    serviceId={service.id}
-                    question={question}
-                    value={
-                      props.questionAnswers[service.id]?.[
-                        question.question_key
-                      ] ?? ""
-                    }
-                    onChange={props.onQuestionAnswer}
-                  />
-                ))}
-              </section>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {questions.map((question) => (
+                    <PackageQuestionInput
+                      key={question.question_key}
+                      serviceId={service.id}
+                      question={question}
+                      value={
+                        props.questionAnswers[service.id]?.[
+                          question.question_key
+                        ] ?? ""
+                      }
+                      onChange={props.onQuestionAnswer}
+                    />
+                  ))}
+                </CardContent>
+              </Card>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
       <Card className="shadow-sm">
         <CardHeader>
-          <CardTitle>Service details</CardTitle>
+          <CardTitle>
+            {selectionMix === "fixed" ? "Schedule and service location" : "Service location and request details"}
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            We&apos;ll confirm that the assigned provider serves this address before the appointment is finalized.
+          </p>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
@@ -840,6 +950,25 @@ function DetailsStep(props: DetailsStepProps) {
               />
             </div>
           </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-accent-border bg-accent-subtle/40 p-4">
+            <Home className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+            <div>
+              <p className="text-sm font-medium">Southwest Florida service area</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Mercurius primarily serves Southwest Florida, with an initial focus on Lee County and the Cape Coral–Fort Myers area. You can still submit if you&apos;re nearby; we&apos;ll confirm provider availability for your address.
+              </p>
+            </div>
+          </div>
+
+          {descriptionIsProminent && (
+            <DescriptionField
+              value={props.description}
+              onChange={props.onDescription}
+              prominent
+            />
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="preferredDate">Preferred date</Label>
             <div className="relative">
@@ -858,17 +987,13 @@ function DetailsStep(props: DetailsStepProps) {
               with you.
             </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <textarea
-              id="description"
-              rows={5}
-              placeholder="Describe the work, access instructions, or anything else we should know..."
+
+          {!descriptionIsProminent && (
+            <DescriptionField
               value={props.description}
-              onChange={(event) => props.onDescription(event.target.value)}
-              className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+              onChange={props.onDescription}
             />
-          </div>
+          )}
 
           <div className="flex items-start gap-3 rounded-xl border border-dashed border-border-strong bg-muted/40 p-4">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
@@ -897,6 +1022,40 @@ function DetailsStep(props: DetailsStepProps) {
           Continue to Review <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+function DescriptionField({
+  value,
+  onChange,
+  prominent = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  prominent?: boolean;
+}) {
+  return (
+    <div className={cn("space-y-2", prominent && "rounded-xl border border-accent-border bg-accent-subtle/30 p-4")}>
+      <div>
+        <Label htmlFor="description">
+          {prominent ? "What do you need help with?" : "Additional notes"}
+          <span className="font-normal text-muted-foreground"> (optional)</span>
+        </Label>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          {prominent
+            ? "Share the scope, condition, dimensions, or access details that will help us match and quote accurately."
+            : "Add access instructions or details the provider should know before the visit."}
+        </p>
+      </div>
+      <textarea
+        id="description"
+        rows={prominent ? 6 : 3}
+        placeholder={prominent ? "Describe the work you need, what you’re seeing, and any important home details..." : "Anything else we should know?"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+      />
     </div>
   );
 }

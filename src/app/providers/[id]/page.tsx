@@ -395,6 +395,10 @@ export default function ProviderStorefrontPage() {
           tierId: tier?.id,
           pricingMode: selectedPackage?.pricing_mode,
           questions: selectedPackage?.questions,
+          packageName: selectedPackage?.name,
+          packageDescription: selectedPackage?.description,
+          tierName: tier?.name,
+          tierIncludes: tier?.includes ?? undefined,
         }],
       }));
     }

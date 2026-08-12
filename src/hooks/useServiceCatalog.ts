@@ -24,8 +24,8 @@ import {
 
 type CategoryRow = { id: string; name: string; icon: string; description: string };
 type ServiceRow = { id: string; name: string; category_id: string; tags: string[] | null; icon: string; descriptor: string; is_popular: boolean | null; weekly_price: number | null; monthly_price: number; one_time_price: number; default_frequency: ServiceFrequency; available_frequencies: ServiceFrequency[] | null };
-type PackageRow = { id: string; service_id: string; default_frequency: ServiceFrequency; pricing_mode: string; deposit_amount: number | null; is_active: boolean; needs_review: boolean | null };
-type TierRow = { id: string; package_id: string; price: number | null; frequency: ServiceFrequency | null };
+type PackageRow = { id: string; service_id: string; name: string; description: string | null; default_frequency: ServiceFrequency; pricing_mode: string; deposit_amount: number | null; is_active: boolean; needs_review: boolean | null };
+type TierRow = { id: string; package_id: string; name: string; price: number | null; frequency: ServiceFrequency | null; includes: string[] | null };
 type QuestionRow = PackageQualifyingQuestion & { package_id: string };
 type PricePoint = { base: number; effective: number; promotionId?: string; promotionLabel?: string; selection: PublicPackageSelection };
 type PriceBucket = { weekly?: PricePoint; monthly?: PricePoint; biMonthly?: PricePoint; quarterly?: PricePoint; oneTime?: PricePoint; anyMin?: number };
@@ -42,8 +42,8 @@ export function useServiceCatalog() {
     const load = () => { void Promise.all([
       supabase.from("service_categories").select("*").eq("is_active", true).order("sort_order"),
       supabase.from("services_catalog").select("*").eq("is_active", true).order("sort_order"),
-      supabase.from("vendor_packages").select("id, service_id, default_frequency, pricing_mode, deposit_amount, is_active, needs_review, contractor_id, contractors!inner(is_active)").eq("is_active", true).eq("needs_review", false).eq("contractors.is_active", true),
-      supabase.from("package_tiers").select("id, package_id, price, frequency"),
+      supabase.from("vendor_packages").select("id, service_id, name, description, default_frequency, pricing_mode, deposit_amount, is_active, needs_review, contractor_id, contractors!inner(is_active)").eq("is_active", true).eq("needs_review", false).eq("contractors.is_active", true),
+      supabase.from("package_tiers").select("id, package_id, name, price, frequency, includes"),
       supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").eq("is_enabled", true),
       supabase.rpc("pricing_server_now"),
     ]).then(async ([categoryResult, serviceResult, packageResult, tierResult, promotionResult, clockResult]) => {
@@ -95,6 +95,12 @@ export function useServiceCatalog() {
               tierId: selectedTier?.id,
               pricingMode: "fixed",
               questions: questionRows.filter((question) => question.package_id === item.id),
+              packageName: item.name,
+              packageDescription: item.description,
+              tierName: selectedTier?.name,
+              tierIncludes: selectedTier?.includes?.filter(
+                (included) => typeof included === "string" && Boolean(included.trim()),
+              ),
             },
           };
           bucket.anyMin = bucket.anyMin == null ? point.effective : Math.min(bucket.anyMin, point.effective);
