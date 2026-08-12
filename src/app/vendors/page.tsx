@@ -15,6 +15,7 @@ import {
   Headphones,
   MapPin,
   Megaphone,
+  PackageCheck,
   Target,
   TrendingUp,
   Users,
