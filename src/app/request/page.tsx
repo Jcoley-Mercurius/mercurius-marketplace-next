@@ -21,6 +21,8 @@ import {
   Leaf,
   Loader2,
   LogIn,
+  MapPin,
+  RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -50,6 +52,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { paymentFunctionError } from "@/lib/payments";
+import {
+  resolveRequestCoverage,
+  type RequestCoverageResult,
+  type RequestCoverageStatus,
+} from "@/lib/requestCoverage";
 import {
   MAX_REQUEST_PHOTOS,
   attachRequestPhotos,
@@ -105,7 +112,7 @@ type RequestCategory = { id: string; name: string; description: string };
 type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[]; packageName?: string; packageDescription?: string | null; tierName?: string; tierIncludes?: string[] };
 type PackageSelection = PublicPackageSelection;
 type ResolvedPackage = PackageSelection & { contractorId: string; price: number | null; basePrice?: number; promotionId?: string; promotionLabel?: string };
-type CompletionKind = "quote" | "payment_pending" | "multi_service";
+type CompletionKind = "quote" | "payment_pending" | "multi_service" | "coverage_interest";
 
 const serviceOptions: ServiceOption[] = [
   { id: "lawn-mowing", name: "Lawn Mowing", description: "Mowing, edging, and cleanup", icon: Leaf, monthlyPrice: 120, oneTimePrice: 45, defaultFrequency: "weekly", frequencies: ["weekly", "monthly", "one-time"] },
@@ -166,6 +173,8 @@ export default function RequestServicePage() {
   const [packageSelections, setPackageSelections] = useState<Record<string, PackageSelection>>({});
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, Record<string, string>>>({});
   const [completionKind, setCompletionKind] = useState<CompletionKind>("quote");
+  const [coverageStatus, setCoverageStatus] = useState<RequestCoverageStatus>("idle");
+  const [coverageResult, setCoverageResult] = useState<RequestCoverageResult | null>(null);
   const { user } = useAuth();
   const router = useRouter();
   const { services: catalogServices, categories: catalogCategories, loading: catalogLoading } = useServiceCatalog();
@@ -275,6 +284,35 @@ export default function RequestServicePage() {
     if (!preferredDate) setPreferredDate(window.start);
     if (!preferredEndDate) setPreferredEndDate(window.end);
   }, [hydrated, preferredDate, preferredEndDate]);
+
+  useEffect(() => {
+    const normalizedZip = zipCode.trim().slice(0, 5);
+    if (!/^\d{5}$/.test(normalizedZip) || !city.trim() || !/^[A-Za-z]{2}$/.test(stateCode.trim())) {
+      const reset = window.setTimeout(() => {
+        setCoverageStatus("idle");
+        setCoverageResult(null);
+      }, 0);
+      return () => window.clearTimeout(reset);
+    }
+
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setCoverageStatus("checking");
+      const result = await resolveRequestCoverage({
+        zipCode: normalizedZip,
+        city,
+        state: stateCode,
+      });
+      if (!active) return;
+      setCoverageResult(result);
+      setCoverageStatus(result.status);
+    }, 350);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [city, stateCode, zipCode]);
 
   useEffect(() => {
     if (!user) return;
@@ -416,7 +454,19 @@ export default function RequestServicePage() {
     setStep("details");
   }
 
-  function continueFromDetails() {
+  async function verifyCoverage() {
+    setCoverageStatus("checking");
+    const result = await resolveRequestCoverage({
+      zipCode,
+      city,
+      state: stateCode,
+    });
+    setCoverageResult(result);
+    setCoverageStatus(result.status);
+    return result;
+  }
+
+  async function continueFromDetails() {
     if (!streetAddress.trim() || !city.trim()) {
       toast.error("Service address required", { description: "Enter the address where service is needed." });
       return;
@@ -441,14 +491,17 @@ export default function RequestServicePage() {
       toast.error("Check the preferred window", { description: "The end date cannot be before the start date." });
       return;
     }
-    const unanswered = selectedServices.flatMap((service) =>
-      (packageSelections[service.id]?.questions ?? [])
-        .filter((question) => question.is_required !== false && !questionAnswers[service.id]?.[question.question_key]?.trim())
-        .map((question) => question.question_label),
-    );
-    if (unanswered.length) {
-      toast.error("Answer the required service questions", { description: unanswered[0] });
-      return;
+    const currentCoverage = await verifyCoverage();
+    if (currentCoverage.status === "covered") {
+      const unanswered = selectedServices.flatMap((service) =>
+        (packageSelections[service.id]?.questions ?? [])
+          .filter((question) => question.is_required !== false && !questionAnswers[service.id]?.[question.question_key]?.trim())
+          .map((question) => question.question_label),
+      );
+      if (unanswered.length) {
+        toast.error("Answer the required service questions", { description: unanswered[0] });
+        return;
+      }
     }
     setStep("contact");
   }
@@ -492,18 +545,58 @@ export default function RequestServicePage() {
       toast.error("Contact information required", { description: "Complete all contact fields before submitting." });
       return;
     }
-    if (!user) {
-      toast.info("Almost done — sign in to confirm", {
-        description: photos.length > 0
-          ? "Your request details are saved in this browser. For privacy, reattach your photos after signing in."
-          : "Your request has been saved in this browser.",
-      });
-      router.push("/login?redirect=/request");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
+      const currentCoverage = await verifyCoverage();
+      if (currentCoverage.status !== "covered") {
+        const response = await fetch("/api/contact-submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            email: email.trim(),
+            phone: phone.trim() || null,
+            subject: currentCoverage.status === "waitlist"
+              ? `Service-area waitlist — ${zipCode.trim()}`
+              : `Service-area notification request — ${zipCode.trim()}`,
+            message: coverageInterestMessage({
+              coverage: currentCoverage,
+              selectedServices,
+              streetAddress,
+              city,
+              stateCode,
+              zipCode,
+              preferredDate,
+              preferredEndDate,
+              timeOfDay,
+              description,
+            }),
+          }),
+        });
+        const result = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(result.error || "We couldn’t save your service-area interest.");
+
+        window.sessionStorage.removeItem(storageKey);
+        photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+        setCompletionKind("coverage_interest");
+        setIsComplete(true);
+        toast.success(currentCoverage.status === "waitlist" ? "Added to the service-area list" : "Coverage interest received", {
+          description: "No service request, booking, photo upload, or payment was created.",
+        });
+        return;
+      }
+
+      if (!user) {
+        toast.info("Almost done — sign in to confirm", {
+          description: photos.length > 0
+            ? "Your request details are saved in this browser. For privacy, reattach your photos after signing in."
+            : "Your request has been saved in this browser.",
+        });
+        router.push("/login?redirect=/request");
+        return;
+      }
+
       const supabase = createClient();
       let resolvedPackages: Record<string, ResolvedPackage> = {};
       try {
@@ -677,8 +770,8 @@ export default function RequestServicePage() {
           <div className="container-wide max-w-6xl">
             <form onSubmit={handleSubmit}>
               {step === "services" && <ServicesStep services={requestServiceOptions} categories={catalogCategories} catalogLoading={catalogLoading} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} otherServiceDetails={otherServiceDetails} onOtherServiceDetails={setOtherServiceDetails} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
-              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
+              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected && coverageStatus === "covered"} hasQuoteServices={fixedServices.length !== selectedServices.length} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onRetryCoverage={() => void verifyCoverage()} onBack={() => setStep("details")} />}
             </form>
           </div>
         </section>
@@ -880,6 +973,8 @@ type DetailsStepProps = {
   city: string;
   stateCode: string;
   zipCode: string;
+  coverageStatus: RequestCoverageStatus;
+  coverageResult: RequestCoverageResult | null;
   preferredDate: string;
   preferredEndDate: string;
   timeOfDay: TimeOfDay;
@@ -910,6 +1005,7 @@ type DetailsStepProps = {
   onAddPhotos: (files: File[]) => void;
   onRemovePhoto: (id: string) => void;
   onPhotoDrop: (event: DragEvent<HTMLLabelElement>) => void;
+  onRetryCoverage: () => void;
   onBack: () => void;
   onContinue: () => void;
 };
@@ -928,7 +1024,16 @@ function DetailsStep(props: DetailsStepProps) {
     : fixedServices.length === 0
       ? "matching"
       : "mixed";
-  const framing = selectionMix === "fixed"
+  const coverageBlocksBooking = props.coverageStatus === "waitlist"
+    || props.coverageStatus === "uncovered"
+    || props.coverageStatus === "error";
+  const framing = coverageBlocksBooking
+    ? {
+        eyebrow: "Service-area availability",
+        title: "Keep your service needs ready",
+        helper: "You can review your selections and leave contact details, but we won’t present providers or rates as bookable for this address until coverage is available.",
+      }
+    : selectionMix === "fixed"
     ? {
         eyebrow: "Schedule your live-priced services",
         title: "Where and when should we plan service?",
@@ -975,7 +1080,7 @@ function DetailsStep(props: DetailsStepProps) {
         </p>
       </div>
 
-      {packageDetails.length > 0 && (
+      {!coverageBlocksBooking && packageDetails.length > 0 && (
         <section className="mb-6">
           <div className="mb-3 flex items-end justify-between gap-4">
             <div>
@@ -1028,7 +1133,7 @@ function DetailsStep(props: DetailsStepProps) {
         </section>
       )}
 
-      {questionGroups.length > 0 && (
+      {!coverageBlocksBooking && questionGroups.length > 0 && (
         <section className="mb-6">
           <div className="mb-3">
             <h3 className="font-semibold">Service-specific questions</h3>
@@ -1131,15 +1236,7 @@ function DetailsStep(props: DetailsStepProps) {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 rounded-xl border border-accent-border bg-accent-subtle/40 p-4">
-            <Home className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-            <div>
-              <p className="text-sm font-medium">Southwest Florida service area</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Mercurius primarily serves Southwest Florida, with an initial focus on Lee County and the Cape Coral–Fort Myers area. You can still submit if you&apos;re nearby; we&apos;ll confirm provider availability for your address.
-              </p>
-            </div>
-          </div>
+          <CoverageStatusPanel status={props.coverageStatus} result={props.coverageResult} onRetry={props.onRetryCoverage} />
 
           {descriptionIsProminent && (
             <DescriptionField
@@ -1226,13 +1323,27 @@ function DetailsStep(props: DetailsStepProps) {
             />
           )}
 
-          <RequestPhotoPicker
-            photos={props.photos}
-            isSignedIn={props.isSignedIn}
-            onAdd={props.onAddPhotos}
-            onRemove={props.onRemovePhoto}
-            onDrop={props.onPhotoDrop}
-          />
+          {coverageBlocksBooking ? (
+            <div className="flex items-start gap-3 rounded-xl border border-border-strong bg-muted/30 p-4">
+              <ImagePlus className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Photos are not requested for coverage interest</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {props.photos.length
+                    ? `${props.photos.length} photo${props.photos.length === 1 ? " was" : "s were"} selected before coverage was checked. ${props.photos.length === 1 ? "It" : "They"} will remain on this device and will not upload.`
+                    : "A coverage-interest submission records contact and service-area demand only; it does not upload project photos."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <RequestPhotoPicker
+              photos={props.photos}
+              isSignedIn={props.isSignedIn}
+              onAdd={props.onAddPhotos}
+              onRemove={props.onRemovePhoto}
+              onDrop={props.onPhotoDrop}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -1248,6 +1359,54 @@ function DetailsStep(props: DetailsStepProps) {
         >
           Continue to Review <ArrowRight className="h-4 w-4" />
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function CoverageStatusPanel({
+  status,
+  result,
+  onRetry,
+  review = false,
+}: {
+  status: RequestCoverageStatus;
+  result: RequestCoverageResult | null;
+  onRetry: () => void;
+  review?: boolean;
+}) {
+  if (status === "idle") {
+    return <div className="flex items-start gap-3 rounded-xl border border-border-strong bg-muted/30 p-4"><MapPin className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><div><p className="text-sm font-medium">Check your managed service area</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Enter a valid ZIP code above. Mercurius uses the live admin-managed coverage list and does not assume nationwide availability.</p></div></div>;
+  }
+  if (status === "checking") {
+    return <div className="flex items-center gap-3 rounded-xl border border-accent-border bg-accent-subtle/35 p-4"><Loader2 className="h-5 w-5 shrink-0 animate-spin text-accent" /><div><p className="text-sm font-medium">Checking live service coverage</p><p className="mt-1 text-xs text-muted-foreground">Confirming this ZIP against the current Mercurius service-area list.</p></div></div>;
+  }
+  if (status === "covered") {
+    const area = result?.area;
+    return <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-100"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-300" /><div><p className="text-sm font-semibold">You&apos;re in our current service area</p><p className="mt-1 text-xs leading-5 opacity-80">{area ? `${area.zip_code} · ${area.city}, ${area.state}. ` : ""}You can continue through the normal managed request flow. Package eligibility and rates are still re-checked when you submit.</p></div></div>;
+  }
+
+  const waitlist = status === "waitlist";
+  const lookupError = status === "error";
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+      <div className="flex items-start gap-3">
+        <MapPin className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">{waitlist ? "This area is coming soon" : lookupError ? "We couldn’t verify coverage" : "We don’t fully service this area yet"}</p>
+          <p className="mt-1 text-xs leading-5 opacity-85">
+            {waitlist
+              ? `${result?.checkedZip || "This ZIP"} is on the admin-managed waitlist. A standard service request will not be created yet.`
+              : lookupError
+                ? `${result?.message ?? "The live coverage check is unavailable."} To avoid overpromising, we won’t treat this address as covered.`
+                : `${result?.checkedZip || "This ZIP"} is not in the active Mercurius coverage list. Published catalog providers or rates are not confirmed for this address.`}
+          </p>
+          <p className="mt-2 text-xs leading-5 opacity-85">{review ? "Complete your contact details below to join the service-area notification list. No booking, provider assignment, photo upload, or payment will be created." : "You can still continue to Review and leave contact details for a coverage notification."}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {lookupError && <Button type="button" variant="outline" size="sm" onClick={onRetry} className="border-amber-300 bg-background/70"><RefreshCw className="h-3.5 w-3.5" />Try Again</Button>}
+            <Link href="/contact" className={buttonVariants({ variant: "outline", size: "sm", className: "border-amber-300 bg-background/70" })}>Contact Mercurius</Link>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1405,6 +1564,8 @@ type ContactStepProps = {
   estimate: number;
   directCheckoutExpected: boolean;
   hasQuoteServices: boolean;
+  coverageStatus: RequestCoverageStatus;
+  coverageResult: RequestCoverageResult | null;
   preferredDate: string;
   preferredEndDate: string;
   timeOfDay: TimeOfDay;
@@ -1426,31 +1587,49 @@ type ContactStepProps = {
   onEmail: (value: string) => void;
   onPhone: (value: string) => void;
   onSmsUpdates: (value: boolean) => void;
+  onRetryCoverage: () => void;
   onBack: () => void;
 };
 
 function ContactStep(props: ContactStepProps) {
+  const coverageAllowsRequest = props.coverageStatus === "covered";
   const pricedCount = props.selectedServices.filter((service) => {
     const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
     return service.availability === "fixed" && servicePrice(service, frequency) > 0;
   }).length;
   const matchingCount = props.selectedServices.length - pricedCount;
-  const paymentTitle = props.directCheckoutExpected
+  const paymentTitle = !coverageAllowsRequest
+    ? "No booking or payment will be created"
+    : props.directCheckoutExpected
     ? "This request may continue to secure checkout"
     : props.hasQuoteServices
       ? "Requests first — no payment on this screen"
       : "Multiple services are coordinated before payment";
-  const paymentCopy = props.directCheckoutExpected
+  const paymentCopy = !coverageAllowsRequest
+    ? "Submit your contact details only if you want a service-area notification. We will not create a standard service request, assign a provider, upload photos, or collect payment for this address."
+    : props.directCheckoutExpected
     ? "At submit, we re-check the active package and tier. If this single fixed-price request is still eligible, you’ll continue to Stripe Checkout. No payment is complete until Stripe confirms it."
     : props.hasQuoteServices
       ? "Services that need matching or a quote are submitted first. Any live-priced items in this mixed plan are also coordinated as requests; we’ll confirm scope and pricing before payment."
       : "Current secure checkout supports exactly one verified fixed-tier request. This multi-service plan is submitted for coordination first; payable invoices can appear in your dashboard later.";
-  const providerProofRows = props.selectedServices.flatMap((service) => {
+  const providerProofRows = coverageAllowsRequest ? props.selectedServices.flatMap((service) => {
     const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
     if (service.availability !== "fixed" || servicePrice(service, frequency) <= 0) return [];
     const providers = service.providerProofsByFrequency?.[frequency] ?? service.providerProofs ?? [];
     return providers.length ? [{ service, providers: providers.slice(0, 3) }] : [];
-  });
+  }) : [];
+  const nextSteps = coverageAllowsRequest
+    ? [
+        ["Rates are re-checked", "We verify each selected live package and tier when you submit."],
+        ["Matching is coordinated", "Quote or matching requests go to Mercurius for provider and scope confirmation."],
+        ["Payment follows the verified path", props.directCheckoutExpected ? "An eligible single fixed-tier request may continue to Stripe Checkout." : "This plan is submitted as requests first; any payable invoice follows after coordination."],
+        ["Track progress", "Status updates and invoices appear in your homeowner dashboard."],
+      ]
+    : [
+        ["Coverage interest is recorded", "Your contact details and requested services go to the Mercurius team—not the active service-request queue."],
+        ["No provider is assigned", "Published providers and catalog rates are not presented as available for this address."],
+        ["We’ll notify you if coverage changes", "The team can follow up when the managed service area expands or help with questions."],
+      ];
 
   return (
     <div>
@@ -1467,6 +1646,8 @@ function ContactStep(props: ContactStepProps) {
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-6">
+          <CoverageStatusPanel status={props.coverageStatus} result={props.coverageResult} onRetry={props.onRetryCoverage} review />
+
           <Card className="border-accent-border bg-accent-subtle/25 shadow-sm">
             <CardHeader>
               <CardTitle>Visit preferences</CardTitle>
@@ -1507,7 +1688,7 @@ function ContactStep(props: ContactStepProps) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">Request photos</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{props.photos.length ? `${props.photos.length} photo${props.photos.length === 1 ? "" : "s"} will upload securely when you submit.` : "No photos attached."}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{props.photos.length ? coverageAllowsRequest ? `${props.photos.length} photo${props.photos.length === 1 ? "" : "s"} will upload securely when you submit.` : `${props.photos.length} photo${props.photos.length === 1 ? "" : "s"} selected locally; they will not upload with a coverage-interest submission.` : "No photos attached."}</p>
                   </div>
                   {props.photos.length > 0 && <Badge variant="secondary" className="border-accent-border bg-card text-sage-dark">{props.photos.length} attached</Badge>}
                 </div>
@@ -1528,8 +1709,9 @@ function ContactStep(props: ContactStepProps) {
             <CardHeader>
               <CardTitle>Contact information</CardTitle>
               <p className="text-sm text-muted-foreground">
-                We use these details to coordinate your request and confirm the
-                appointment.
+                {coverageAllowsRequest
+                  ? "We use these details to coordinate your request and confirm the appointment."
+                  : "We use these details only to record your service-area interest and notify you if coverage changes."}
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -1551,10 +1733,12 @@ function ContactStep(props: ContactStepProps) {
                 <Label htmlFor="phone">Phone</Label>
                 <Input id="phone" type="tel" autoComplete="tel" placeholder="(239) 555-0123" className="h-12" value={props.phone} onChange={(event) => props.onPhone(event.target.value)} required />
               </div>
-              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted-foreground">
-                <input type="checkbox" checked={props.smsUpdates} onChange={(event) => props.onSmsUpdates(event.target.checked)} className="mt-1 h-4 w-4 accent-accent" />
-                <span>I agree to receive SMS updates about this service request. Standard messaging rates may apply.</span>
-              </label>
+              {coverageAllowsRequest && (
+                <label className="flex cursor-pointer items-start gap-3 text-sm text-muted-foreground">
+                  <input type="checkbox" checked={props.smsUpdates} onChange={(event) => props.onSmsUpdates(event.target.checked)} className="mt-1 h-4 w-4 accent-accent" />
+                  <span>I agree to receive SMS updates about this service request. Standard messaging rates may apply.</span>
+                </label>
+              )}
             </CardContent>
           </Card>
 
@@ -1568,12 +1752,7 @@ function ContactStep(props: ContactStepProps) {
             </CardHeader>
             <CardContent>
               <ol className="space-y-4">
-                {[
-                  ["Rates are re-checked", "We verify each selected live package and tier when you submit."],
-                  ["Matching is coordinated", "Quote or matching requests go to Mercurius for provider and scope confirmation."],
-                  ["Payment follows the verified path", props.directCheckoutExpected ? "An eligible single fixed-tier request may continue to Stripe Checkout." : "This plan is submitted as requests first; any payable invoice follows after coordination."],
-                  ["Track progress", "Status updates and invoices appear in your homeowner dashboard."],
-                ].map(([title, copy], index) => (
+                {nextSteps.map(([title, copy], index) => (
                   <li key={title} className="flex gap-3">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">{index + 1}</span>
                     <div>
@@ -1600,24 +1779,26 @@ function ContactStep(props: ContactStepProps) {
                   <div key={service.id} className="flex justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0">
                     <div>
                       <p className="text-sm font-medium">{service.name}</p>
-                      <p className="text-xs text-muted-foreground">{price > 0 ? frequencyLabel(frequency) : "Price confirmed before booking"}</p>
+                      <p className="text-xs text-muted-foreground">{coverageAllowsRequest ? price > 0 ? frequencyLabel(frequency) : "Price confirmed before booking" : "Coverage required before booking"}</p>
                     </div>
-                    <p className="shrink-0 text-sm font-semibold">{price > 0 ? servicePriceLabel(service, frequency) : service.availability === "quote" ? "Quote" : "Matching"}</p>
+                    <p className="shrink-0 text-sm font-semibold">{coverageAllowsRequest ? price > 0 ? servicePriceLabel(service, frequency) : service.availability === "quote" ? "Quote" : "Matching" : "Not confirmed here"}</p>
                   </div>
                 );
               })}
             </div>
 
             <div className="space-y-3 border-t border-accent-border pt-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm text-muted-foreground">Priced today</span>
-                <span className="text-2xl font-semibold tabular-nums">{formatMoney(props.estimate)}</span>
-              </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
-                {matchingCount > 0
-                  ? `${matchingCount} service${matchingCount === 1 ? "" : "s"} need matching or a quote. No price for those services is included above.`
-                  : "All selected services currently have live provider-backed rates."}
-              </div>
+              {coverageAllowsRequest ? <>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Priced today</span>
+                  <span className="text-2xl font-semibold tabular-nums">{formatMoney(props.estimate)}</span>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+                  {matchingCount > 0
+                    ? `${matchingCount} service${matchingCount === 1 ? "" : "s"} need matching or a quote. No price for those services is included above.`
+                    : "All selected services currently have live provider-backed rates."}
+                </div>
+              </> : <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">Catalog prices may be published elsewhere in the Mercurius network, but none are treated as bookable for this address until coverage is confirmed.</div>}
               <div className="rounded-xl border border-accent-border bg-accent-subtle/50 p-4">
                 <div className="flex items-start gap-3">
                   <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
@@ -1627,14 +1808,14 @@ function ContactStep(props: ContactStepProps) {
                   </div>
                 </div>
               </div>
-              <div className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+              {coverageAllowsRequest && <div className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                 <p>
                   Live rates are re-checked when you submit. If a selected rate
                   is no longer eligible, that service becomes a quote or
                   matching request instead.
                 </p>
-              </div>
+              </div>}
             </div>
           </CardContent>
         </Card>
@@ -1644,9 +1825,13 @@ function ContactStep(props: ContactStepProps) {
         <Button type="button" variant="outline" size="lg" onClick={props.onBack}>
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        <Button type="submit" size="lg" disabled={props.isSubmitting} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
+        <Button type="submit" size="lg" disabled={props.isSubmitting || props.coverageStatus === "checking" || props.coverageStatus === "idle"} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
           {props.isSubmitting ? (
-            <><Loader2 className="h-4 w-4 animate-spin" /> {props.photoUploadProgress.total > 0 ? `Uploading photos ${props.photoUploadProgress.completed}/${props.photoUploadProgress.total}` : props.directCheckoutExpected ? "Re-checking live rate..." : "Submitting..."}</>
+            <><Loader2 className="h-4 w-4 animate-spin" /> {coverageAllowsRequest && props.photoUploadProgress.total > 0 ? `Uploading photos ${props.photoUploadProgress.completed}/${props.photoUploadProgress.total}` : coverageAllowsRequest && props.directCheckoutExpected ? "Re-checking live rate..." : coverageAllowsRequest ? "Submitting..." : "Saving coverage interest..."}</>
+          ) : props.coverageStatus === "checking" || props.coverageStatus === "idle" ? (
+            "Checking service area..."
+          ) : !coverageAllowsRequest ? (
+            props.coverageStatus === "waitlist" ? "Join Service-Area Waitlist" : props.coverageStatus === "error" ? "Contact Us About Coverage" : "Notify Me When Coverage Expands"
           ) : props.isSignedIn ? (
             props.directCheckoutExpected ? "Submit & Continue if Eligible" : "Submit Request"
           ) : (
@@ -1659,6 +1844,54 @@ function ContactStep(props: ContactStepProps) {
 }
 
 function SuccessState({ services, preferredProviderNames, completionKind }: { services: ServiceOption[]; preferredProviderNames: Record<string, string>; completionKind: CompletionKind }) {
+  if (completionKind === "coverage_interest") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="py-16 md:py-24">
+          <div className="container-narrow">
+            <div className="mb-10 text-center">
+              <span className="mx-auto mb-7 flex h-20 w-20 items-center justify-center rounded-full bg-accent-soft">
+                <MapPin className="h-10 w-10 text-sage-dark" />
+              </span>
+              <h1 className="mb-4 text-3xl font-semibold">Coverage interest received</h1>
+              <p className="mx-auto max-w-xl text-lg text-muted-foreground">
+                Thanks for letting us know where you need service. We saved your contact request so the Mercurius team can follow up as coverage expands.
+              </p>
+            </div>
+            <Card className="mx-auto mb-8 max-w-xl border-accent-border">
+              <CardHeader><CardTitle>Service-area summary</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Interested in</span><span className="text-right font-medium">{services.map((service) => service.name).join(", ")}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Next step</span><span className="text-right font-medium">Coverage notification</span></div>
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="text-xs leading-relaxed">No standard service request, provider assignment, photo upload, booking, or payment was created for this address.</p>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="mx-auto mb-8 max-w-xl">
+              <h2 className="mb-5 text-center font-semibold">What happens next</h2>
+              {["Coverage interest recorded", "Mercurius reviews service-area demand", "We contact you if coverage becomes available"].map((label, index, items) => (
+                <div key={label} className="flex items-start gap-4">
+                  <div className="flex flex-col items-center">
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium", index === 0 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{index === 0 ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>
+                    {index < items.length - 1 && <span className="h-6 w-0.5 bg-border" />}
+                  </div>
+                  <p className={cn("pt-1.5 text-sm", index === 0 ? "font-medium" : "text-muted-foreground")}>{label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link href="/contact" className={buttonVariants({ variant: "outline", size: "lg" })}>Contact Mercurius</Link>
+              <Link href="/" className={buttonVariants({ size: "lg" })}>Return Home</Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const providerNames = [...new Set(Object.values(preferredProviderNames))];
   const paymentMessage = completionKind === "payment_pending"
     ? "Your request is saved, but secure checkout could not be opened and no payment was collected. Check your dashboard for an eligible invoice or contact support."
@@ -1741,6 +1974,49 @@ function requestDescription(service: ServiceOption, details: {
     details.parkingNotes.trim() ? `Parking/location: ${details.parkingNotes.trim()}` : "",
   ].filter(Boolean).join("\n");
   return [`Project details:\n${scope || "No additional project notes provided."}`, `Access and arrival:\n${access}`].join("\n\n");
+}
+
+function coverageInterestMessage({
+  coverage,
+  selectedServices,
+  streetAddress,
+  city,
+  stateCode,
+  zipCode,
+  preferredDate,
+  preferredEndDate,
+  timeOfDay,
+  description,
+}: {
+  coverage: RequestCoverageResult;
+  selectedServices: ServiceOption[];
+  streetAddress: string;
+  city: string;
+  stateCode: string;
+  zipCode: string;
+  preferredDate: string;
+  preferredEndDate: string;
+  timeOfDay: TimeOfDay;
+  description: string;
+}) {
+  const coverageLabel = coverage.status === "waitlist"
+    ? "Admin-managed waitlist area"
+    : coverage.status === "error"
+      ? "Coverage could not be verified"
+      : "Outside current active coverage";
+  const dateWindow = preferredDate
+    ? `${formatReviewDate(preferredDate)}${preferredEndDate && preferredEndDate !== preferredDate ? ` through ${formatReviewDate(preferredEndDate)}` : ""} · ${timeOfDayLabel(timeOfDay)}`
+    : "No timing preference supplied";
+
+  return [
+    "Service-area interest submitted from /request.",
+    `Coverage result: ${coverageLabel}`,
+    `Location: ${streetAddress.trim()}, ${city.trim()}, ${stateCode.trim().toUpperCase()} ${zipCode.trim()}`,
+    `Services: ${selectedServices.map((service) => service.name).join(", ")}`,
+    `Preferred timing: ${dateWindow}`,
+    `Project notes: ${description.trim() || "None provided"}`,
+    "No service_request was created. No provider was assigned. No photos were uploaded. No payment was collected.",
+  ].join("\n");
 }
 
 function defaultPreferredWindow(existingStart?: string) {
