@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { DragEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -20,13 +20,16 @@ import {
   LogIn,
   ShieldCheck,
   Sparkles,
-  Upload,
   Waves,
   Wind,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
+import {
+  RequestPlanSummary,
+  type RequestPlanSummaryItem,
+} from "@/components/request/RequestPlanSummary";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Badge } from "@/components/ui/badge";
@@ -102,7 +105,6 @@ export default function RequestServicePage() {
   const [zipCode, setZipCode] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
   const [description, setDescription] = useState("");
-  const [photos, setPhotos] = useState<File[]>([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -293,7 +295,17 @@ export default function RequestServicePage() {
       setQuestionAnswers((answers) => withoutKey(answers, id));
     } else {
       const service = requestServiceOptions.find((item) => item.id === id);
-      const frequency = frequencies[id] ?? service?.defaultFrequency;
+      const requestedFrequency = frequencies[id] ?? service?.defaultFrequency;
+      const firstLiveFrequency = service?.frequencies.find(
+        (item) => servicePrice(service, item) > 0,
+      );
+      const frequency =
+        requestedFrequency && service && servicePrice(service, requestedFrequency) > 0
+          ? requestedFrequency
+          : firstLiveFrequency ?? requestedFrequency;
+      if (frequency) {
+        setFrequencies((current) => ({ ...current, [id]: frequency }));
+      }
       const selection = frequency ? service?.packageSelections?.[frequency] : undefined;
       if (selection) setPackageSelections((current) => ({ ...current, [id]: selection }));
     }
@@ -337,16 +349,6 @@ export default function RequestServicePage() {
       return;
     }
     setStep("contact");
-  }
-
-  function addPhotos(files: File[]) {
-    const images = files.filter((file) => file.type.startsWith("image/"));
-    setPhotos((current) => [...current, ...images].slice(0, 6));
-  }
-
-  function handleDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    addPhotos(Array.from(event.dataTransfer.files));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -460,7 +462,7 @@ export default function RequestServicePage() {
       <Header />
       <main>
         <section className="bg-hero py-12 text-center md:py-16">
-          <div className="container-narrow">
+          <div className="container-wide max-w-6xl">
             <Badge variant="secondary" className="mb-4">Homeowner Service Request</Badge>
             <h1 className="mb-4 text-3xl font-semibold md:text-4xl">Request a Service</h1>
             <p className="text-lg text-muted-foreground">Tell us what your home needs and we&apos;ll take care of the rest.</p>
@@ -495,10 +497,10 @@ export default function RequestServicePage() {
         </div>
 
         <section className="py-12 md:py-16">
-          <div className="container-narrow">
+          <div className="container-wide max-w-6xl">
             <form onSubmit={handleSubmit}>
               {step === "services" && <ServicesStep services={requestServiceOptions} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} photos={photos} selectedServices={selectedServices} packageSelections={packageSelections} questionAnswers={questionAnswers} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onPhotos={addPhotos} onDrop={handleDrop} onRemovePhoto={(index) => setPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index))} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} description={description} selectedServices={selectedServices} packageSelections={packageSelections} questionAnswers={questionAnswers} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={setPreferredDate} onDescription={setDescription} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
               {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
             </form>
           </div>
@@ -509,36 +511,394 @@ export default function RequestServicePage() {
   );
 }
 
-function ServicesStep({ services, selectedIds, frequencies, preferredProviderNames, onToggle, onFrequencyChange, estimate, onContinue }: { services: ServiceOption[]; selectedIds: string[]; frequencies: Record<string, Frequency>; preferredProviderNames: Record<string, string>; onToggle: (id: string) => void; onFrequencyChange: (id: string, value: Frequency) => void; estimate: number; onContinue: () => void }) {
+function ServicesStep({
+  services,
+  selectedIds,
+  frequencies,
+  preferredProviderNames,
+  onToggle,
+  onFrequencyChange,
+  estimate,
+  onContinue,
+}: {
+  services: ServiceOption[];
+  selectedIds: string[];
+  frequencies: Record<string, Frequency>;
+  preferredProviderNames: Record<string, string>;
+  onToggle: (id: string) => void;
+  onFrequencyChange: (id: string, value: Frequency) => void;
+  estimate: number;
+  onContinue: () => void;
+}) {
   const selected = services.filter((service) => selectedIds.includes(service.id));
-  const hasUnpriced = selected.some((service) => service.availability !== "fixed");
-  return <div>
-    <div className="mb-8"><h2 className="text-2xl font-semibold">What does your home need?</h2><p className="mt-2 text-muted-foreground">Choose one or more services. Live rates appear only where an active provider has published pricing.</p></div>
-    <div className="grid gap-4 sm:grid-cols-2">{services.map((service) => {
-      const isSelected = selectedIds.includes(service.id);
-      const Icon = service.icon;
-      const frequency = frequencies[service.id] ?? service.defaultFrequency;
-      const availableNow = service.availability === "fixed" && servicePrice(service, frequency) > 0;
-      return <Card key={service.id} className={cn("cursor-pointer transition-all", isSelected ? "ring-2 ring-accent" : "hover:ring-accent/30")} onClick={() => onToggle(service.id)}>
-        <CardContent className="flex gap-4">
-          <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", isSelected ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}><Icon className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{service.name}</p><Badge variant="secondary" className={availableNow ? "bg-sage-light text-sage-dark" : "bg-muted text-muted-foreground"}>{availableNow ? "Available now" : service.availability === "quote" ? "Quote required" : "Matching required"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{service.description}</p>{preferredProviderNames[service.id] && <p className="mt-2 flex items-center gap-1 text-xs font-medium text-accent"><ShieldCheck className="h-3.5 w-3.5" />Requested provider: {preferredProviderNames[service.id]}</p>}</div>{isSelected && <CheckCircle2 className="h-5 w-5 shrink-0 text-accent" />}</div>
-            {isSelected && <div className="mt-4" onClick={(event) => event.stopPropagation()}><Label htmlFor={`frequency-${service.id}`} className="text-xs text-muted-foreground">Frequency</Label><select id={`frequency-${service.id}`} value={frequency} onChange={(event) => onFrequencyChange(service.id, event.target.value as Frequency)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">{service.frequencies.map((item) => <option key={item} value={item}>{frequencyLabel(item)} · {servicePriceLabel(service, item)}</option>)}</select></div>}
-          </div>
-        </CardContent>
-      </Card>;
-    })}</div>
-    <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm text-muted-foreground">{hasUnpriced && estimate > 0 ? "Live-priced portion" : "Current pricing"}</p><p className="text-2xl font-bold">{estimate > 0 ? `$${estimate}` : "Price confirmed after matching"}</p><p className="text-xs text-muted-foreground">No unpublished catalog estimate is treated as a bookable price.</p></div><Button type="button" size="lg" onClick={onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Your Home <ArrowRight className="h-4 w-4" /></Button></div>
-  </div>;
+  const summaryItems: RequestPlanSummaryItem[] = selected.map((service) => {
+    const frequency = frequencies[service.id] ?? service.defaultFrequency;
+    return {
+      id: service.id,
+      name: service.name,
+      cadence: frequencyLabel(frequency),
+      price: servicePrice(service, frequency),
+      priceLabel: servicePriceLabel(service, frequency),
+      availability: service.availability ?? "sourcing",
+    };
+  });
+
+  return (
+    <div className="pb-24 lg:pb-0">
+      <div className="mb-8">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+          Build your request
+        </p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">
+          What does your home need?
+        </h2>
+        <p className="mt-2 max-w-2xl leading-6 text-muted-foreground">
+          Choose one or more services. Live rates appear only where an active
+          provider has published eligible pricing.
+        </p>
+      </div>
+
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {services.map((service) => {
+            const isSelected = selectedIds.includes(service.id);
+            const Icon = service.icon;
+            const frequency = frequencies[service.id] ?? service.defaultFrequency;
+            const liveFrequencies = service.frequencies.filter(
+              (item) => servicePrice(service, item) > 0,
+            );
+            const availableNow =
+              service.availability === "fixed" && liveFrequencies.length > 0;
+            const cardPrice = serviceCardPriceLabel(service);
+
+            return (
+              <Card
+                key={service.id}
+                className={cn(
+                  "gap-0 overflow-hidden py-0 transition-all duration-200",
+                  isSelected
+                    ? "-translate-y-0.5 border-accent-border shadow-lg shadow-sage/10 ring-2 ring-accent"
+                    : "hover:border-accent-border hover:shadow-md",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onToggle(service.id)}
+                  aria-pressed={isSelected}
+                  className="w-full p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
+                >
+                  <div className="flex items-start gap-4">
+                    <span
+                      className={cn(
+                        "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors",
+                        isSelected
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-accent-soft text-sage-dark",
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="font-semibold leading-5">{service.name}</p>
+                        <span
+                          className={cn(
+                            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
+                            isSelected
+                              ? "border-accent bg-accent text-accent-foreground"
+                              : "border-border bg-background text-transparent",
+                          )}
+                        >
+                          <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                        {service.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                    <Badge
+                      variant="secondary"
+                      className={
+                        availableNow
+                          ? "border-accent-border bg-accent-soft text-sage-dark"
+                          : service.availability === "quote"
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                      }
+                    >
+                      {availableNow
+                        ? "Available now"
+                        : service.availability === "quote"
+                          ? "Quote required"
+                          : "Matching required"}
+                    </Badge>
+                    {cardPrice ? (
+                      <span className="text-sm font-semibold text-foreground">
+                        {cardPrice}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Price confirmed before booking
+                      </span>
+                    )}
+                  </div>
+
+                  {preferredProviderNames[service.id] && (
+                    <p className="mt-3 flex items-center gap-1 text-xs font-medium text-accent">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Requested provider: {preferredProviderNames[service.id]}
+                    </p>
+                  )}
+                </button>
+
+                {isSelected && availableNow && liveFrequencies.length > 0 && (
+                  <div className="border-t border-accent-border bg-accent-subtle/50 px-5 py-4">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">
+                      Choose cadence and live rate
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {liveFrequencies.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          aria-pressed={frequency === item}
+                          onClick={() => onFrequencyChange(service.id, item)}
+                          className={cn(
+                            "rounded-full border px-3 py-2 text-left text-xs transition-all",
+                            frequency === item
+                              ? "border-accent bg-accent font-semibold text-accent-foreground shadow-sm"
+                              : "border-border-strong bg-background text-muted-foreground hover:border-accent-border hover:text-foreground",
+                          )}
+                        >
+                          <span className="block">{frequencyLabel(item)}</span>
+                          <span
+                            className={cn(
+                              "mt-0.5 block text-[11px]",
+                              frequency === item
+                                ? "text-accent-foreground/80"
+                                : "text-foreground",
+                            )}
+                          >
+                            {servicePriceLabel(service, item)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {isSelected && !availableNow && (
+                  <div className="border-t border-border bg-muted/30 px-5 py-3 text-xs leading-5 text-muted-foreground">
+                    Continue with your request. Mercurius will coordinate provider
+                    matching and confirm pricing before booking.
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+
+        <RequestPlanSummary
+          items={summaryItems}
+          pricedSubtotal={estimate}
+          onContinue={onContinue}
+          onRemove={onToggle}
+        />
+      </div>
+    </div>
+  );
 }
 
-type DetailsStepProps = { streetAddress: string; city: string; stateCode: string; zipCode: string; preferredDate: string; description: string; photos: File[]; selectedServices: ServiceOption[]; packageSelections: Record<string, PackageSelection>; questionAnswers: Record<string, Record<string, string>>; onQuestionAnswer: (serviceId: string, questionKey: string, answer: string) => void; onStreetAddress: (value: string) => void; onCity: (value: string) => void; onStateCode: (value: string) => void; onZipCode: (value: string) => void; onPreferredDate: (value: string) => void; onDescription: (value: string) => void; onPhotos: (files: File[]) => void; onDrop: (event: DragEvent<HTMLLabelElement>) => void; onRemovePhoto: (index: number) => void; onBack: () => void; onContinue: () => void };
+type DetailsStepProps = {
+  streetAddress: string;
+  city: string;
+  stateCode: string;
+  zipCode: string;
+  preferredDate: string;
+  description: string;
+  selectedServices: ServiceOption[];
+  packageSelections: Record<string, PackageSelection>;
+  questionAnswers: Record<string, Record<string, string>>;
+  onQuestionAnswer: (serviceId: string, questionKey: string, answer: string) => void;
+  onStreetAddress: (value: string) => void;
+  onCity: (value: string) => void;
+  onStateCode: (value: string) => void;
+  onZipCode: (value: string) => void;
+  onPreferredDate: (value: string) => void;
+  onDescription: (value: string) => void;
+  onBack: () => void;
+  onContinue: () => void;
+};
 
 function DetailsStep(props: DetailsStepProps) {
   const minDate = new Date().toISOString().slice(0, 10);
   const questionGroups = props.selectedServices.map((service) => ({ service, questions: props.packageSelections[service.id]?.questions ?? [] })).filter((group) => group.questions.length);
-  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">Tell us about your home</h2><p className="mt-2 text-muted-foreground">Add the service location, timing, and anything our team should know.</p></div>{questionGroups.length > 0 && <Card className="mb-6 border-accent/25"><CardHeader><CardTitle>Questions from your provider</CardTitle><p className="text-sm text-muted-foreground">These details help confirm the right price level and prepare for the visit.</p></CardHeader><CardContent className="space-y-6">{questionGroups.map(({ service, questions }) => <section key={service.id} className="space-y-4"><div><p className="font-semibold">{service.name}</p><p className="text-xs text-muted-foreground">Flat service questions only—your answers do not submit anything until you confirm the request.</p></div>{questions.map((question) => <PackageQuestionInput key={question.question_key} serviceId={service.id} question={question} value={props.questionAnswers[service.id]?.[question.question_key] ?? ""} onChange={props.onQuestionAnswer} />)}</section>)}</CardContent></Card>}<Card><CardHeader><CardTitle>Service Details</CardTitle></CardHeader><CardContent className="space-y-6"><div className="space-y-2"><Label htmlFor="streetAddress">Street address</Label><Input id="streetAddress" autoComplete="address-line1" placeholder="123 Main St" className="h-12" value={props.streetAddress} onChange={(event) => props.onStreetAddress(event.target.value)} /></div><div className="grid gap-4 sm:grid-cols-6"><div className="space-y-2 sm:col-span-3"><Label htmlFor="city">City</Label><Input id="city" autoComplete="address-level2" className="h-12" value={props.city} onChange={(event) => props.onCity(event.target.value)} /></div><div className="space-y-2 sm:col-span-1"><Label htmlFor="state">State</Label><Input id="state" autoComplete="address-level1" maxLength={2} className="h-12 uppercase" value={props.stateCode} onChange={(event) => props.onStateCode(event.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="zip">ZIP code</Label><Input id="zip" autoComplete="postal-code" inputMode="numeric" maxLength={10} className="h-12" value={props.zipCode} onChange={(event) => props.onZipCode(event.target.value.replace(/[^\d-]/g, ""))} /></div></div><div className="space-y-2"><Label htmlFor="preferredDate">Preferred date</Label><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} /></div><p className="text-xs text-muted-foreground">This is a preference. We&apos;ll confirm the actual appointment with you.</p></div><div className="space-y-2"><Label htmlFor="description">Description</Label><textarea id="description" rows={5} placeholder="Describe the work, access instructions, or anything else we should know..." value={props.description} onChange={(event) => props.onDescription(event.target.value)} className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" /></div><div className="space-y-2"><Label>Photos (optional)</Label><label htmlFor="photo-upload" onDragOver={(event) => event.preventDefault()} onDrop={props.onDrop} className="block cursor-pointer rounded-xl border-2 border-dashed border-border p-7 text-center transition-colors hover:border-accent/50"><Upload className="mx-auto mb-2 h-7 w-7 text-muted-foreground" /><p className="text-sm text-muted-foreground">Drag and drop images, or click to browse</p><p className="mt-1 text-xs text-muted-foreground">Up to 6 photos; upload connection coming in a later version.</p><input id="photo-upload" type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { props.onPhotos(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></label>{props.photos.length > 0 && <div className="flex flex-wrap gap-2">{props.photos.map((file, index) => <button key={`${file.name}-${index}`} type="button" onClick={() => props.onRemovePhoto(index)} className="rounded-lg border border-border bg-muted px-3 py-2 text-xs hover:border-destructive" title="Remove photo">{file.name} ×</button>)}</div>}</div></CardContent></Card><div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row"><Button type="button" variant="outline" size="lg" onClick={props.onBack}><ArrowLeft className="h-4 w-4" /> Back</Button><Button type="button" size="lg" onClick={props.onContinue} className="bg-accent text-accent-foreground hover:bg-accent/90">Continue to Review <ArrowRight className="h-4 w-4" /></Button></div></div>;
+  return (
+    <div className="mx-auto max-w-4xl">
+      <div className="mb-8">
+        <h2 className="text-2xl font-semibold">Tell us about your home</h2>
+        <p className="mt-2 text-muted-foreground">
+          Add the service location, timing, and anything our team should know.
+        </p>
+      </div>
+
+      {questionGroups.length > 0 && (
+        <Card className="mb-6 border-accent-border">
+          <CardHeader>
+            <CardTitle>Questions from your provider</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              These details help confirm the right price level and prepare for
+              the visit.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {questionGroups.map(({ service, questions }) => (
+              <section key={service.id} className="space-y-4">
+                <div>
+                  <p className="font-semibold">{service.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Your answers are saved with this request only after you
+                    confirm it.
+                  </p>
+                </div>
+                {questions.map((question) => (
+                  <PackageQuestionInput
+                    key={question.question_key}
+                    serviceId={service.id}
+                    question={question}
+                    value={
+                      props.questionAnswers[service.id]?.[
+                        question.question_key
+                      ] ?? ""
+                    }
+                    onChange={props.onQuestionAnswer}
+                  />
+                ))}
+              </section>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle>Service details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="streetAddress">Street address</Label>
+            <Input
+              id="streetAddress"
+              autoComplete="address-line1"
+              placeholder="123 Main St"
+              className="h-12"
+              value={props.streetAddress}
+              onChange={(event) => props.onStreetAddress(event.target.value)}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-6">
+            <div className="space-y-2 sm:col-span-3">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                autoComplete="address-level2"
+                className="h-12"
+                value={props.city}
+                onChange={(event) => props.onCity(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-1">
+              <Label htmlFor="state">State</Label>
+              <Input
+                id="state"
+                autoComplete="address-level1"
+                maxLength={2}
+                className="h-12 uppercase"
+                value={props.stateCode}
+                onChange={(event) =>
+                  props.onStateCode(
+                    event.target.value.toUpperCase().replace(/[^A-Z]/g, ""),
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="zip">ZIP code</Label>
+              <Input
+                id="zip"
+                autoComplete="postal-code"
+                inputMode="numeric"
+                maxLength={10}
+                className="h-12"
+                value={props.zipCode}
+                onChange={(event) =>
+                  props.onZipCode(event.target.value.replace(/[^\d-]/g, ""))
+                }
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="preferredDate">Preferred date</Label>
+            <div className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="preferredDate"
+                type="date"
+                min={minDate}
+                className="h-12 pl-10"
+                value={props.preferredDate}
+                onChange={(event) => props.onPreferredDate(event.target.value)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This is a preference. We&apos;ll confirm the actual appointment
+              with you.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <textarea
+              id="description"
+              rows={5}
+              placeholder="Describe the work, access instructions, or anything else we should know..."
+              value={props.description}
+              onChange={(event) => props.onDescription(event.target.value)}
+              className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-dashed border-border-strong bg-muted/40 p-4">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+            <div>
+              <p className="text-sm font-medium">Photo upload is coming soon</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                No files are collected or attached in this version. For now,
+                describe any visible damage, dimensions, or access details in the
+                notes above.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row">
+        <Button type="button" variant="outline" size="lg" onClick={props.onBack}>
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Button>
+        <Button
+          type="button"
+          size="lg"
+          onClick={props.onContinue}
+          className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
+        >
+          Continue to Review <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function PackageQuestionInput({ serviceId, question, value, onChange }: { serviceId: string; question: PackageQualifyingQuestion; value: string; onChange: (serviceId: string, questionKey: string, answer: string) => void }) {
@@ -547,16 +907,192 @@ function PackageQuestionInput({ serviceId, question, value, onChange }: { servic
   return <div className="space-y-2"><Label htmlFor={id}>{question.question_label}{question.is_required !== false ? <span className="text-destructive"> *</span> : <span className="font-normal text-muted-foreground"> (optional)</span>}</Label>{question.input_type === "select" && options.length ? <select id={id} value={value} onChange={(event) => onChange(serviceId, question.question_key, event.target.value)} className="h-12 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"><option value="">Choose an answer</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <Input id={id} type={question.input_type === "number" ? "number" : "text"} inputMode={question.input_type === "number" ? "decimal" : undefined} className="h-12" placeholder={question.input_type === "number" ? `Enter a number${question.unit ? ` (${question.unit})` : ""}` : "Your answer"} value={value} onChange={(event) => onChange(serviceId, question.question_key, event.target.value)} />}{question.unit && question.input_type !== "number" && <p className="text-xs text-muted-foreground">Unit: {question.unit}</p>}</div>;
 }
 
-type ContactStepProps = { selectedServices: ServiceOption[]; frequencies: Record<string, Frequency>; preferredProviderNames: Record<string, string>; estimate: number; directCheckoutExpected: boolean; hasQuoteServices: boolean; firstName: string; lastName: string; email: string; phone: string; smsUpdates: boolean; isSubmitting: boolean; isSignedIn: boolean; onFirstName: (value: string) => void; onLastName: (value: string) => void; onEmail: (value: string) => void; onPhone: (value: string) => void; onSmsUpdates: (value: boolean) => void; onBack: () => void };
+type ContactStepProps = {
+  selectedServices: ServiceOption[];
+  frequencies: Record<string, Frequency>;
+  preferredProviderNames: Record<string, string>;
+  estimate: number;
+  directCheckoutExpected: boolean;
+  hasQuoteServices: boolean;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  smsUpdates: boolean;
+  isSubmitting: boolean;
+  isSignedIn: boolean;
+  onFirstName: (value: string) => void;
+  onLastName: (value: string) => void;
+  onEmail: (value: string) => void;
+  onPhone: (value: string) => void;
+  onSmsUpdates: (value: boolean) => void;
+  onBack: () => void;
+};
 
 function ContactStep(props: ContactStepProps) {
-  const paymentTitle = props.directCheckoutExpected ? "Secure payment is next" : props.hasQuoteServices ? "No payment today" : "Request first, then payment";
-  const paymentCopy = props.directCheckoutExpected
-    ? "We’ll verify the active provider rate, save your request, and send you to Stripe Checkout. Mercurius does not mark a payment complete until Stripe confirms it."
+  const pricedCount = props.selectedServices.filter((service) => {
+    const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
+    return service.availability === "fixed" && servicePrice(service, frequency) > 0;
+  }).length;
+  const matchingCount = props.selectedServices.length - pricedCount;
+  const paymentTitle = props.directCheckoutExpected
+    ? "This request may continue to secure checkout"
     : props.hasQuoteServices
-      ? "We’ll confirm scope, provider availability, and pricing with you before an invoice can be paid."
-      : "Multiple live-rate services are submitted together for coordination. Nothing is charged on this screen; payable invoices appear in your dashboard.";
-  return <div><div className="mb-8"><h2 className="text-2xl font-semibold">Review and confirm</h2><p className="mt-2 text-muted-foreground">Tell us how to reach you and review your service plan.</p></div><div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]"><Card><CardHeader><CardTitle>Contact Information</CardTitle></CardHeader><CardContent className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="firstName">First Name</Label><Input id="firstName" autoComplete="given-name" className="h-12" value={props.firstName} onChange={(event) => props.onFirstName(event.target.value)} required /></div><div className="space-y-2"><Label htmlFor="lastName">Last Name</Label><Input id="lastName" autoComplete="family-name" className="h-12" value={props.lastName} onChange={(event) => props.onLastName(event.target.value)} required /></div></div><div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" className="h-12" value={props.email} onChange={(event) => props.onEmail(event.target.value)} required /></div><div className="space-y-2"><Label htmlFor="phone">Phone</Label><Input id="phone" type="tel" autoComplete="tel" placeholder="(239) 555-0123" className="h-12" value={props.phone} onChange={(event) => props.onPhone(event.target.value)} required /></div><label className="flex cursor-pointer items-start gap-3 text-sm text-muted-foreground"><input type="checkbox" checked={props.smsUpdates} onChange={(event) => props.onSmsUpdates(event.target.checked)} className="mt-1 h-4 w-4 accent-accent" /><span>I agree to receive SMS updates about this service request. Standard messaging rates may apply.</span></label></CardContent></Card><Card className="h-fit border-accent/20 bg-accent/5 ring-accent/20"><CardHeader><CardTitle>Your Plan</CardTitle></CardHeader><CardContent><div className="space-y-3">{props.selectedServices.map((service) => { const frequency = props.frequencies[service.id] ?? service.defaultFrequency; return <div key={service.id} className="flex justify-between gap-4 border-b border-accent/10 pb-3 last:border-0"><div><p className="font-medium">{service.name}</p><p className="text-xs capitalize text-muted-foreground">{frequencyLabel(frequency)}</p></div><p className="font-semibold">{servicePriceLabel(service, frequency)}</p></div>; })}</div><div className="mt-5 border-t border-accent/20 pt-4"><div className="flex items-baseline justify-between"><span className="text-sm text-muted-foreground">{props.hasQuoteServices && props.estimate > 0 ? "Live-priced portion" : "Current total"}</span><span className="text-2xl font-bold">{props.estimate > 0 ? `$${props.estimate}` : "Quote"}</span></div><div className="mt-4 rounded-xl border border-accent/20 bg-card/70 p-4"><div className="flex items-start gap-3"><CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><div><p className="text-sm font-semibold">{paymentTitle}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{paymentCopy}</p></div></div></div></div></CardContent></Card></div><div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row"><Button type="button" variant="outline" size="lg" onClick={props.onBack}><ArrowLeft className="h-4 w-4" /> Back</Button><Button type="submit" size="lg" disabled={props.isSubmitting} className="bg-accent text-accent-foreground hover:bg-accent/90">{props.isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> {props.directCheckoutExpected ? "Verifying secure checkout..." : "Submitting..."}</> : props.isSignedIn ? props.directCheckoutExpected ? "Continue to Secure Payment" : "Submit Request" : "Sign In to Submit"}</Button></div></div>;
+      ? "Requests first — no payment on this screen"
+      : "Multiple services are coordinated before payment";
+  const paymentCopy = props.directCheckoutExpected
+    ? "At submit, we re-check the active package and tier. If this single fixed-price request is still eligible, you’ll continue to Stripe Checkout. No payment is complete until Stripe confirms it."
+    : props.hasQuoteServices
+      ? "Services that need matching or a quote are submitted first. Any live-priced items in this mixed plan are also coordinated as requests; we’ll confirm scope and pricing before payment."
+      : "Current secure checkout supports exactly one verified fixed-tier request. This multi-service plan is submitted for coordination first; payable invoices can appear in your dashboard later.";
+
+  return (
+    <div>
+      <div className="mb-8">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+          Final review
+        </p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Review and confirm</h2>
+        <p className="mt-2 max-w-2xl leading-6 text-muted-foreground">
+          Confirm your contact details, pricing status, and what happens after
+          you submit.
+        </p>
+      </div>
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="space-y-6">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Contact information</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                We use these details to coordinate your request and confirm the
+                appointment.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First name</Label>
+                  <Input id="firstName" autoComplete="given-name" className="h-12" value={props.firstName} onChange={(event) => props.onFirstName(event.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last name</Label>
+                  <Input id="lastName" autoComplete="family-name" className="h-12" value={props.lastName} onChange={(event) => props.onLastName(event.target.value)} required />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" autoComplete="email" className="h-12" value={props.email} onChange={(event) => props.onEmail(event.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input id="phone" type="tel" autoComplete="tel" placeholder="(239) 555-0123" className="h-12" value={props.phone} onChange={(event) => props.onPhone(event.target.value)} required />
+              </div>
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted-foreground">
+                <input type="checkbox" checked={props.smsUpdates} onChange={(event) => props.onSmsUpdates(event.target.checked)} className="mt-1 h-4 w-4 accent-accent" />
+                <span>I agree to receive SMS updates about this service request. Standard messaging rates may apply.</span>
+              </label>
+            </CardContent>
+          </Card>
+
+          <Card className="border-accent-border bg-accent-subtle/40">
+            <CardHeader>
+              <CardTitle>What happens next</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                You stay informed before a provider arrives or any payment is
+                considered complete.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ol className="space-y-4">
+                {[
+                  ["Rates are re-checked", "We verify each selected live package and tier when you submit."],
+                  ["Matching is coordinated", "Quote or matching requests go to Mercurius for provider and scope confirmation."],
+                  ["Payment follows the verified path", props.directCheckoutExpected ? "An eligible single fixed-tier request may continue to Stripe Checkout." : "This plan is submitted as requests first; any payable invoice follows after coordination."],
+                  ["Track progress", "Status updates and invoices appear in your homeowner dashboard."],
+                ].map(([title, copy], index) => (
+                  <li key={title} className="flex gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">{index + 1}</span>
+                    <div>
+                      <p className="text-sm font-semibold">{title}</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{copy}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="h-fit border-accent-border bg-card shadow-lg shadow-slate/5 lg:sticky lg:top-24">
+          <CardHeader className="border-b border-accent-border bg-accent-subtle">
+            <CardTitle>Your service plan</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-3">
+              {props.selectedServices.map((service) => {
+                const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
+                const price = servicePrice(service, frequency);
+                return (
+                  <div key={service.id} className="flex justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0">
+                    <div>
+                      <p className="text-sm font-medium">{service.name}</p>
+                      <p className="text-xs text-muted-foreground">{price > 0 ? frequencyLabel(frequency) : "Price confirmed before booking"}</p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold">{price > 0 ? servicePriceLabel(service, frequency) : service.availability === "quote" ? "Quote" : "Matching"}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="space-y-3 border-t border-accent-border pt-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Priced today</span>
+                <span className="text-2xl font-semibold tabular-nums">{formatMoney(props.estimate)}</span>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+                {matchingCount > 0
+                  ? `${matchingCount} service${matchingCount === 1 ? "" : "s"} need matching or a quote. No price for those services is included above.`
+                  : "All selected services currently have live provider-backed rates."}
+              </div>
+              <div className="rounded-xl border border-accent-border bg-accent-subtle/50 p-4">
+                <div className="flex items-start gap-3">
+                  <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+                  <div>
+                    <p className="text-sm font-semibold">{paymentTitle}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{paymentCopy}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                <p>
+                  Live rates are re-checked when you submit. If a selected rate
+                  is no longer eligible, that service becomes a quote or
+                  matching request instead.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row">
+        <Button type="button" variant="outline" size="lg" onClick={props.onBack}>
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Button>
+        <Button type="submit" size="lg" disabled={props.isSubmitting} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
+          {props.isSubmitting ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> {props.directCheckoutExpected ? "Re-checking live rate..." : "Submitting..."}</>
+          ) : props.isSignedIn ? (
+            props.directCheckoutExpected ? "Submit & Continue if Eligible" : "Submit Request"
+          ) : (
+            "Sign In to Submit"
+          )}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function SuccessState({ services, preferredProviderNames, completionKind }: { services: ServiceOption[]; preferredProviderNames: Record<string, string>; completionKind: CompletionKind }) {
@@ -609,6 +1145,32 @@ function servicePriceLabel(service: ServiceOption, frequency: Frequency) {
   if (frequency === "bi-monthly") return `$${price}/2 wks`;
   if (frequency === "quarterly") return `$${price}/qtr`;
   return `$${price}/mo`;
+}
+
+function serviceCardPriceLabel(service: ServiceOption) {
+  if (service.availability !== "fixed") return null;
+  const prices = service.frequencies
+    .map((frequency) => servicePrice(service, frequency))
+    .filter((price) => Number.isFinite(price) && price > 0);
+  if (prices.length === 0) return null;
+  const lowestPrice = Math.min(...prices);
+  if (prices.length === 1) {
+    const frequency = service.frequencies.find(
+      (item) => servicePrice(service, item) === lowestPrice,
+    );
+    return frequency
+      ? servicePriceLabel(service, frequency)
+      : formatMoney(lowestPrice);
+  }
+  return `From ${formatMoney(lowestPrice)}`;
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 function frequencyLabel(frequency: Frequency) {
