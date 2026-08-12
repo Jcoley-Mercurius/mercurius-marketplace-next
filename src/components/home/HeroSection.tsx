@@ -9,7 +9,6 @@ import {
   CreditCard,
   Lock,
   Shield,
-  Star,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -33,7 +32,7 @@ export function HeroSection() {
             >
               <span className="h-px w-8 flex-shrink-0 bg-sage" />
               <Shield className="h-3.5 w-3.5 flex-shrink-0" />
-              Trusted by 700+ homeowners across Fort Myers &amp; Cape Coral
+              Managed home services for Cape Coral &amp; Fort Myers
             </motion.div>
 
             <motion.h1
@@ -111,40 +110,6 @@ export function HeroSection() {
               </Link>
             </motion.div>
 
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.85 }}
-              className="-mt-2 text-sm text-muted-foreground"
-            >
-              Seasonal owner?{" "}
-              <Link
-                href="/snowbirds"
-                className="font-medium text-coral underline-offset-4 transition-colors hover:text-coral-dark hover:underline"
-              >
-                We manage your home while you&apos;re away → Snowbird Care
-              </Link>
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.9 }}
-              className="flex items-center gap-5 pt-2"
-            >
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star
-                    key={star}
-                    className="h-4 w-4 fill-warning text-warning"
-                  />
-                ))}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">4.9</span> from
-                500+ reviews
-              </p>
-            </motion.div>
           </div>
 
           <motion.div
@@ -174,9 +139,9 @@ export function HeroSection() {
                   <CheckCircle2 className="h-6 w-6 text-sage" />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">Job Completed</p>
+                  <p className="font-semibold text-foreground">Completion update</p>
                   <p className="text-sm text-muted-foreground">
-                    Lawn care - Just now
+                    Photo proof received
                   </p>
                 </div>
               </div>
@@ -189,20 +154,13 @@ export function HeroSection() {
               className="theme-glass absolute -right-4 -top-4 rounded-2xl border px-4 py-3 backdrop-blur-xl"
             >
               <div className="flex items-center gap-2">
-                <div className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      className="h-3.5 w-3.5 fill-warning text-warning"
-                    />
-                  ))}
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sage-light">
+                  <Shield className="h-4 w-4 text-sage" />
                 </div>
-                <span className="text-sm font-semibold text-foreground">
-                  4.9
-                </span>
+                <span className="text-sm font-semibold text-foreground">Mercurius managed</span>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Protected service
+                Protected service coordination
               </p>
             </motion.div>
           </motion.div>
