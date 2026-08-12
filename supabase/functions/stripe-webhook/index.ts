@@ -405,6 +405,9 @@ Deno.serve(async (req) => {
       // ── Refund issued ────────────────────────────────────────────────
       case "charge.refunded": {
         const charge = event.data.object as Stripe.Charge;
+        // This invoice model only supports a full-refund state. Partial refunds
+        // remain a Stripe-only/manual-review concern instead of being mislabeled.
+        if (!charge.refunded || charge.amount_refunded < charge.amount) break;
         const piId = typeof charge.payment_intent === "string"
           ? charge.payment_intent
           : charge.payment_intent?.id;
@@ -412,9 +415,8 @@ Deno.serve(async (req) => {
 
         const { data: inv } = await admin
           .from("invoices")
-          .update({ status: "refunded" })
+          .update({ status: "refunded", release_eligible_at: null })
           .eq("stripe_payment_intent_id", piId)
-          .neq("status", "refunded")
           .select("customer_id, invoice_number, service_request_id")
           .maybeSingle();
 
