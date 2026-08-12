@@ -27,9 +27,15 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
-  RequestPlanSummary,
-  type RequestPlanSummaryItem,
-} from "@/components/request/RequestPlanSummary";
+  PlanningPlanSummary,
+  PlanningServiceCard,
+  formatPlanningMoney,
+  planningFrequencyLabel,
+  planningPrice,
+  planningPriceLabel,
+  planningSummaryItem,
+  type PlanningService,
+} from "@/components/planning/ServicePlanning";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Badge } from "@/components/ui/badge";
@@ -531,16 +537,9 @@ function ServicesStep({
   onContinue: () => void;
 }) {
   const selected = services.filter((service) => selectedIds.includes(service.id));
-  const summaryItems: RequestPlanSummaryItem[] = selected.map((service) => {
+  const summaryItems = selected.map((service) => {
     const frequency = frequencies[service.id] ?? service.defaultFrequency;
-    return {
-      id: service.id,
-      name: service.name,
-      cadence: frequencyLabel(frequency),
-      price: servicePrice(service, frequency),
-      priceLabel: servicePriceLabel(service, frequency),
-      availability: service.availability ?? "sourcing",
-    };
+    return planningSummaryItem(toPlanningService(service), frequency);
   });
 
   return (
@@ -562,150 +561,28 @@ function ServicesStep({
         <div className="grid gap-4 sm:grid-cols-2">
           {services.map((service) => {
             const isSelected = selectedIds.includes(service.id);
-            const Icon = service.icon;
             const frequency = frequencies[service.id] ?? service.defaultFrequency;
-            const liveFrequencies = service.frequencies.filter(
-              (item) => servicePrice(service, item) > 0,
-            );
-            const availableNow =
-              service.availability === "fixed" && liveFrequencies.length > 0;
-            const cardPrice = serviceCardPriceLabel(service);
-
             return (
-              <Card
+              <PlanningServiceCard
                 key={service.id}
-                className={cn(
-                  "gap-0 overflow-hidden py-0 transition-all duration-200",
-                  isSelected
-                    ? "-translate-y-0.5 border-accent-border shadow-lg shadow-sage/10 ring-2 ring-accent"
-                    : "hover:border-accent-border hover:shadow-md",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => onToggle(service.id)}
-                  aria-pressed={isSelected}
-                  className="w-full p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
-                >
-                  <div className="flex items-start gap-4">
-                    <span
-                      className={cn(
-                        "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors",
-                        isSelected
-                          ? "bg-accent text-accent-foreground"
-                          : "bg-accent-soft text-sage-dark",
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="font-semibold leading-5">{service.name}</p>
-                        <span
-                          className={cn(
-                            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
-                            isSelected
-                              ? "border-accent bg-accent text-accent-foreground"
-                              : "border-border bg-background text-transparent",
-                          )}
-                        >
-                          <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                        {service.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-                    <Badge
-                      variant="secondary"
-                      className={
-                        availableNow
-                          ? "border-accent-border bg-accent-soft text-sage-dark"
-                          : service.availability === "quote"
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                      }
-                    >
-                      {availableNow
-                        ? "Available now"
-                        : service.availability === "quote"
-                          ? "Quote required"
-                          : "Matching required"}
-                    </Badge>
-                    {cardPrice ? (
-                      <span className="text-sm font-semibold text-foreground">
-                        {cardPrice}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Price confirmed before booking
-                      </span>
-                    )}
-                  </div>
-
-                  {preferredProviderNames[service.id] && (
-                    <p className="mt-3 flex items-center gap-1 text-xs font-medium text-accent">
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      Requested provider: {preferredProviderNames[service.id]}
-                    </p>
-                  )}
-                </button>
-
-                {isSelected && availableNow && liveFrequencies.length > 0 && (
-                  <div className="border-t border-accent-border bg-accent-subtle/50 px-5 py-4">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">
-                      Choose cadence and live rate
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {liveFrequencies.map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          aria-pressed={frequency === item}
-                          onClick={() => onFrequencyChange(service.id, item)}
-                          className={cn(
-                            "rounded-full border px-3 py-2 text-left text-xs transition-all",
-                            frequency === item
-                              ? "border-accent bg-accent font-semibold text-accent-foreground shadow-sm"
-                              : "border-border-strong bg-background text-muted-foreground hover:border-accent-border hover:text-foreground",
-                          )}
-                        >
-                          <span className="block">{frequencyLabel(item)}</span>
-                          <span
-                            className={cn(
-                              "mt-0.5 block text-[11px]",
-                              frequency === item
-                                ? "text-accent-foreground/80"
-                                : "text-foreground",
-                            )}
-                          >
-                            {servicePriceLabel(service, item)}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {isSelected && !availableNow && (
-                  <div className="border-t border-border bg-muted/30 px-5 py-3 text-xs leading-5 text-muted-foreground">
-                    Continue with your request. Mercurius will coordinate provider
-                    matching and confirm pricing before booking.
-                  </div>
-                )}
-              </Card>
+                service={toPlanningService(service)}
+                selected={isSelected}
+                frequency={frequency}
+                onToggle={() => onToggle(service.id)}
+                onFrequencyChange={(value) => onFrequencyChange(service.id, value)}
+                requestedProviderName={preferredProviderNames[service.id]}
+              />
             );
           })}
         </div>
 
-        <RequestPlanSummary
+        <PlanningPlanSummary
           items={summaryItems}
-          pricedSubtotal={estimate}
-          onContinue={onContinue}
+          totalRows={[{ key: "priced-today", label: "Priced today", amount: estimate, emphasis: true }]}
+          actionLabel="Continue to Your Home"
+          onAction={onContinue}
           onRemove={onToggle}
+          showMobileBar
         />
       </div>
     </div>
@@ -1265,8 +1142,7 @@ function SuccessState({ services, preferredProviderNames, completionKind }: { se
 }
 
 function servicePrice(service: ServiceOption, frequency: Frequency) {
-  if (service.availability !== "fixed" || !service.livePrices) return 0;
-  return service.livePrices[frequency] ?? 0;
+  return planningPrice(toPlanningService(service), frequency);
 }
 
 function isBuilderRequestedService(item: unknown): item is BuilderRequestedService {
@@ -1295,45 +1171,32 @@ function answerSnapshot(questions: PackageQualifyingQuestion[], answers: Record<
 }
 
 function servicePriceLabel(service: ServiceOption, frequency: Frequency) {
-  const price = servicePrice(service, frequency);
-  if (!price) return "Quote";
-  const base = service.basePrices?.[frequency];
-  if (service.promotionIds?.[frequency] && base && base > price) return `$${price} promo (was $${base})`;
-  if (frequency === "one-time") return `$${price}`;
-  if (frequency === "weekly") return `$${price}/wk`;
-  if (frequency === "bi-monthly") return `$${price}/2 wks`;
-  if (frequency === "quarterly") return `$${price}/qtr`;
-  return `$${price}/mo`;
-}
-
-function serviceCardPriceLabel(service: ServiceOption) {
-  if (service.availability !== "fixed") return null;
-  const prices = service.frequencies
-    .map((frequency) => servicePrice(service, frequency))
-    .filter((price) => Number.isFinite(price) && price > 0);
-  if (prices.length === 0) return null;
-  const lowestPrice = Math.min(...prices);
-  if (prices.length === 1) {
-    const frequency = service.frequencies.find(
-      (item) => servicePrice(service, item) === lowestPrice,
-    );
-    return frequency
-      ? servicePriceLabel(service, frequency)
-      : formatMoney(lowestPrice);
-  }
-  return `From ${formatMoney(lowestPrice)}`;
+  return planningPriceLabel(toPlanningService(service), frequency);
 }
 
 function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(value);
+  return formatPlanningMoney(value);
 }
 
 function frequencyLabel(frequency: Frequency) {
-  return frequency === "one-time" ? "One-time" : frequency.charAt(0).toUpperCase() + frequency.slice(1);
+  return planningFrequencyLabel(frequency);
+}
+
+function toPlanningService(service: ServiceOption): PlanningService {
+  return {
+    id: service.id,
+    name: service.name,
+    description: service.description,
+    icon: service.icon,
+    availability: service.availability ?? "sourcing",
+    defaultFrequency: service.defaultFrequency,
+    frequencies: service.frequencies,
+    prices: service.livePrices ?? {},
+    basePrices: service.basePrices,
+    promotionLabels: service.promotionLabels,
+    promotionIds: service.promotionIds,
+    packageSelections: service.packageSelections,
+  };
 }
 
 function formatServiceName(id: string) {
