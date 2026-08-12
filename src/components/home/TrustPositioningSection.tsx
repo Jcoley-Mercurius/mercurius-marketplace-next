@@ -30,20 +30,20 @@ const negotiatedPillars = [
   {
     icon: TrendingDown,
     title: "Volume Pricing",
-    desc: "We bring vendors steady, recurring work — so they offer rates they'd never give a one-off caller.",
-    stat: "Up to 20% less",
+    desc: "Vendors get steady, recurring work through Mercurius — which supports better package rates than one-off calls.",
+    stat: "Steady work",
   },
   {
     icon: ShieldCheck,
     title: "Vetted Network Only",
-    desc: "No bottom-feeder contractors. Our pricing reflects skilled, insured, reliable pros.",
-    stat: "Top 15%",
+    desc: "Every provider is screened, insured, and held to platform standards — no open marketplace free-for-all.",
+    stat: "Screened providers",
   },
   {
     icon: Tag,
     title: "Active Promotions",
-    desc: "Top-rated vendors offer exclusive deals to Mercurius homeowners — refreshed monthly.",
-    stat: "Always-on",
+    desc: "Featured offers and package promotions when available from participating providers.",
+    stat: "When available",
   },
 ];
 
