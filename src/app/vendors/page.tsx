@@ -13,8 +13,8 @@ import {
   DollarSign,
   GraduationCap,
   Headphones,
+  MapPin,
   Megaphone,
-  Star,
   Target,
   TrendingUp,
   Users,
@@ -30,6 +30,29 @@ const benefits = [
   { icon: DollarSign, title: "Reliable, Fast Payouts", description: "Complete jobs, get paid. Simple weekly payouts with transparent tracking." },
   { icon: Users, title: "We Handle Customers", description: "Focus on your craft. We manage all customer communication, scheduling, and support." },
   { icon: TrendingUp, title: "Grow Your Business", description: "Expand your service area and capacity with our support and operational tools." },
+];
+
+const heroBenefits = [
+  {
+    icon: Calendar,
+    title: "Steady Work Pipeline",
+    description: "Platform-matched job opportunities, so you can spend less time constantly chasing leads.",
+  },
+  {
+    icon: PackageCheck,
+    title: "Package Pricing Tools",
+    description: "Publish clear fixed rates or quote-required services and control the work you accept.",
+  },
+  {
+    icon: Users,
+    title: "Less Admin Overhead",
+    description: "Keep scheduling, job updates, and homeowner communication coordinated in the platform.",
+  },
+  {
+    icon: MapPin,
+    title: "Southwest Florida Focus",
+    description: "Built for local service businesses serving Cape Coral, Fort Myers, and nearby communities.",
+  },
 ];
 
 const aiTools = [
@@ -76,12 +99,12 @@ export default function VendorsPage() {
               <div>
                 <span className="mb-6 inline-block rounded-full bg-sage-light px-4 py-2 text-sm font-medium text-sage-dark">For Service Providers</span>
                 <h1 className="mb-6 text-4xl font-bold leading-tight text-foreground md:text-5xl lg:text-6xl">Grow Your Business <span className="text-gradient">With Us</span></h1>
-                <p className="mb-8 text-xl text-muted-foreground">Join our network of trusted professionals. Get consistent jobs, reliable payouts, and the support you need to focus on what you do best.</p>
+                <p className="mb-8 text-xl text-muted-foreground">Join a managed platform built for Southwest Florida service businesses. Mercurius helps source and coordinate work, gives you clear package-pricing tools, and reduces the lead chasing and admin between jobs.</p>
 
                 <div className="mb-8 rounded-2xl border border-border/30 bg-card p-5 shadow-sm">
-                  <div className="mb-2 flex gap-1">{[1, 2, 3, 4, 5].map((item) => <Star key={item} className="h-3.5 w-3.5 fill-warning text-warning" />)}</div>
-                  <p className="mb-2 text-sm text-foreground"><span className="font-serif text-coral">&quot;</span>Mercurius changed my business. I spend less time chasing leads and more time doing quality work. Consistent jobs, reliable payouts.<span className="font-serif text-coral">&quot;</span></p>
-                  <p className="text-xs text-muted-foreground"><span className="font-sans font-semibold text-foreground">Marcus J.</span>{" "}· Lawn Care Professional</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent">The vendor outcome</p>
+                  <p className="mb-3 text-sm leading-6 text-foreground">Spend less time chasing leads and coordinating messages—and more time delivering quality work on jobs that fit your business.</p>
+                  <p className="text-xs font-medium text-muted-foreground">Local service professional</p>
                 </div>
 
                 <div className="flex flex-col gap-4 sm:flex-row">
@@ -90,12 +113,7 @@ export default function VendorsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">{[
-                { value: "500+", label: "Active Vendors" },
-                { value: "10K+", label: "Jobs Completed" },
-                { value: "$2M+", label: "Paid to Vendors" },
-                { value: "4.9★", label: "Vendor Rating" },
-              ].map((stat) => <div key={stat.label} className="rounded-2xl border border-border/30 bg-card p-6 text-center"><p className="mb-2 text-4xl font-bold text-sage-dark">{stat.value}</p><p className="text-sm text-muted-foreground">{stat.label}</p></div>)}</div>
+              <div className="grid grid-cols-2 gap-4">{heroBenefits.map((benefit) => <div key={benefit.title} className="rounded-2xl border border-border/30 bg-card p-5 shadow-sm sm:p-6"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-sage-light"><benefit.icon className="h-5 w-5 text-sage-dark" /></div><p className="mb-2 font-semibold text-foreground">{benefit.title}</p><p className="text-sm leading-6 text-muted-foreground">{benefit.description}</p></div>)}</div>
             </div>
           </div>
         </section>
