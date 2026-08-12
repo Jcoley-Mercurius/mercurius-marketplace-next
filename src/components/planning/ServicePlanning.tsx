@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Provider logos are user-managed Supabase URLs and can be signed. */
 
 import type { ReactNode } from "react";
 import Link from "next/link";
@@ -26,6 +27,14 @@ export type PlanningService = {
   promotionLabels?: Partial<Record<PricingFrequency, string>>;
   promotionIds?: Partial<Record<PricingFrequency, string>>;
   packageSelections?: Partial<Record<PricingFrequency, PublicPackageSelection>>;
+  providerProofs?: PlanningProviderProof[];
+  providerProofsByFrequency?: Partial<Record<PricingFrequency, PlanningProviderProof[]>>;
+};
+
+export type PlanningProviderProof = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
 };
 
 export type PlanningSummaryItem = {
@@ -73,6 +82,9 @@ export function PlanningServiceCard({
   const availableNow = service.availability === "fixed" && liveFrequencies.length > 0;
   const cardPrice = planningCardPriceLabel(service);
   const selectedPackage = service.packageSelections?.[frequency];
+  const providerProofs = (selected ? service.providerProofsByFrequency?.[frequency] : service.providerProofs)
+    ?? service.providerProofs
+    ?? [];
   const teaserIncludes = selectedPackage?.tierIncludes?.filter(Boolean).slice(0, 2) ?? [];
   const packageDescription = selectedPackage?.packageDescription?.trim();
   const showPills = selected && availableNow && (showSingleFrequency || liveFrequencies.length > 1);
@@ -139,6 +151,10 @@ export function PlanningServiceCard({
         </div>
       </button>
 
+      {availableNow && providerProofs.length > 0 && (
+        <ProviderProofStrip providers={providerProofs.slice(0, 3)} variant={variant} />
+      )}
+
       {showPills && (
         <div className={cn("border-t px-5 py-4", dark ? "border-white/10 bg-white/[0.025] sm:px-6" : "border-accent-border bg-accent-subtle/50")}>
           <p className={cn("mb-2 text-xs font-medium", dark ? "uppercase tracking-wider text-white/40" : "text-muted-foreground")}>Choose cadence and live rate</p>
@@ -161,6 +177,46 @@ export function PlanningServiceCard({
       )}
     </div>
   );
+}
+
+function ProviderProofStrip({ providers, variant }: { providers: PlanningProviderProof[]; variant: PlanningVariant }) {
+  const dark = variant === "dark";
+  return (
+    <div className={cn("border-t px-5 py-3 sm:px-6", dark ? "border-white/10 bg-white/[0.025]" : "border-accent-border bg-accent-subtle/25")}>
+      <p className={cn("mb-2 text-[10px] font-semibold uppercase tracking-[0.14em]", dark ? "text-white/40" : "text-muted-foreground")}>
+        {providers.length === 1 ? "Live rate from" : "Live local providers"}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {providers.map((provider, index) => (
+          <Link
+            key={provider.id}
+            href={`/providers/${provider.id}`}
+            onClick={(event) => event.stopPropagation()}
+            className={cn(
+              "group/provider inline-flex min-w-0 items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-xs font-medium transition-colors",
+              dark ? "border-white/10 bg-white/5 text-white/70 hover:border-coral/40 hover:text-white" : "border-border bg-card text-foreground hover:border-accent-border hover:text-sage-dark",
+            )}
+            aria-label={`View ${provider.name} provider profile`}
+          >
+            <ProviderAvatar provider={provider} dark={dark} />
+            <span className="max-w-36 truncate">{provider.name}</span>
+            {index === 0 && providers.length > 1 && <span className={cn("hidden text-[9px] uppercase tracking-wide sm:inline", dark ? "text-white/30" : "text-muted-foreground")}>from rate</span>}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProviderAvatar({ provider, dark }: { provider: PlanningProviderProof; dark: boolean }) {
+  if (provider.logoUrl) {
+    return <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border p-0.5", dark ? "border-white/15 bg-white" : "border-border bg-background")}><img src={provider.logoUrl} alt="" className="h-full w-full object-contain" /></span>;
+  }
+  return <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", dark ? "bg-coral text-white" : "bg-accent text-accent-foreground")}>{providerInitials(provider.name)}</span>;
+}
+
+function providerInitials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "MP";
 }
 
 export function PlanningFrequencyPills({ service, frequency, onChange, variant = "light" }: { service: PlanningService; frequency: PricingFrequency; onChange: (frequency: PricingFrequency) => void; variant?: PlanningVariant }) {

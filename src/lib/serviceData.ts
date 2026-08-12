@@ -12,6 +12,12 @@ export interface ServiceCategory {
 
 export type ServiceFrequency = "weekly" | "monthly" | "bi-monthly" | "quarterly" | "one-time";
 
+export interface ServiceProviderProof {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+}
+
 export interface Service {
   id: string;
   name: string;
@@ -40,6 +46,10 @@ export interface Service {
   promotionIds?: Partial<Record<ServiceFrequency, string>>;
   /** Concrete live package selected for each displayed cadence. */
   packageSelections?: Partial<Record<ServiceFrequency, import("@/lib/vendorPricing").PublicPackageSelection>>;
+  /** Active providers whose eligible fixed packages support this service. */
+  providerProofs?: ServiceProviderProof[];
+  /** Provider proof ordered with the displayed cadence's price-driving provider first. */
+  providerProofsByFrequency?: Partial<Record<ServiceFrequency, ServiceProviderProof[]>>;
 }
 
 // ─────────────────────────────────────────────

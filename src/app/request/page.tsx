@@ -57,6 +57,7 @@ import {
   type RequestPhotoDraft,
 } from "@/lib/requestPhotos";
 import { createClient } from "@/lib/supabase/client";
+import type { ServiceProviderProof } from "@/lib/serviceData";
 import { cn } from "@/lib/utils";
 import {
   isPricingFrequency,
@@ -74,8 +75,9 @@ import {
 
 type Step = "services" | "details" | "contact";
 type Frequency = PricingFrequency;
-type TimingPreference = "asap" | "next-few-days" | "this-week" | "flexible";
 type TimeOfDay = "morning" | "afternoon" | "anytime";
+type AccessMethod = "someone-home" | "coordinate" | "gate" | "lockbox" | "other";
+type PetStatus = "none" | "secured" | "on-property";
 
 type ServiceOption = {
   id: string;
@@ -94,6 +96,8 @@ type ServiceOption = {
   availability?: "fixed" | "quote" | "sourcing";
   categoryId?: string;
   popular?: boolean;
+  providerProofs?: ServiceProviderProof[];
+  providerProofsByFrequency?: Partial<Record<Frequency, ServiceProviderProof[]>>;
 };
 
 type RequestCategory = { id: string; name: string; description: string };
@@ -137,10 +141,14 @@ export default function RequestServicePage() {
   const [city, setCity] = useState("Cape Coral");
   const [stateCode, setStateCode] = useState("FL");
   const [zipCode, setZipCode] = useState("");
-  const [timingPreference, setTimingPreference] = useState<TimingPreference>("flexible");
   const [preferredDate, setPreferredDate] = useState("");
+  const [preferredEndDate, setPreferredEndDate] = useState("");
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>("anytime");
   const [description, setDescription] = useState("");
+  const [accessMethod, setAccessMethod] = useState<AccessMethod>("someone-home");
+  const [petStatus, setPetStatus] = useState<PetStatus>("none");
+  const [entryInstructions, setEntryInstructions] = useState("");
+  const [parkingNotes, setParkingNotes] = useState("");
   const [otherServiceDetails, setOtherServiceDetails] = useState("");
   const [photos, setPhotos] = useState<RequestPhotoDraft[]>([]);
   const [photoUploadProgress, setPhotoUploadProgress] = useState({ completed: 0, total: 0 });
@@ -178,10 +186,14 @@ export default function RequestServicePage() {
         if (typeof value.city === "string") setCity(value.city);
         if (typeof value.stateCode === "string") setStateCode(value.stateCode);
         if (typeof value.zipCode === "string") setZipCode(value.zipCode);
-        if (isTimingPreference(value.timingPreference)) setTimingPreference(value.timingPreference);
         if (typeof value.preferredDate === "string") setPreferredDate(value.preferredDate);
+        if (typeof value.preferredEndDate === "string") setPreferredEndDate(value.preferredEndDate);
         if (isTimeOfDay(value.timeOfDay)) setTimeOfDay(value.timeOfDay);
         if (typeof value.description === "string") setDescription(value.description);
+        if (isAccessMethod(value.accessMethod)) setAccessMethod(value.accessMethod);
+        if (isPetStatus(value.petStatus)) setPetStatus(value.petStatus);
+        if (typeof value.entryInstructions === "string") setEntryInstructions(value.entryInstructions);
+        if (typeof value.parkingNotes === "string") setParkingNotes(value.parkingNotes);
         if (typeof value.otherServiceDetails === "string") setOtherServiceDetails(value.otherServiceDetails);
         if (typeof value.firstName === "string") setFirstName(value.firstName);
         if (typeof value.lastName === "string") setLastName(value.lastName);
@@ -256,6 +268,15 @@ export default function RequestServicePage() {
   }, []);
 
   useEffect(() => {
+    if (!hydrated || (preferredDate && preferredEndDate)) return;
+    const window = defaultPreferredWindow(preferredDate || undefined);
+    // The default depends on the homeowner's local calendar, so initialize it after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!preferredDate) setPreferredDate(window.start);
+    if (!preferredEndDate) setPreferredEndDate(window.end);
+  }, [hydrated, preferredDate, preferredEndDate]);
+
+  useEffect(() => {
     if (!user) return;
     const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
     const [givenName, ...familyName] = fullName.split(" ");
@@ -270,13 +291,14 @@ export default function RequestServicePage() {
     if (!hydrated || isComplete) return;
     window.sessionStorage.setItem(storageKey, JSON.stringify({
       step, selectedIds, frequencies, streetAddress, city, stateCode, zipCode,
-      timingPreference, preferredDate, timeOfDay, description, otherServiceDetails,
+      preferredDate, preferredEndDate, timeOfDay, description, otherServiceDetails,
+      accessMethod, petStatus, entryInstructions, parkingNotes,
       firstName, lastName, email, phone, smsUpdates,
       serviceOverrides, preferredProviders, preferredProviderNames,
       packageSelections,
       questionAnswers,
     }));
-  }, [city, description, email, firstName, frequencies, hydrated, isComplete, lastName, otherServiceDetails, packageSelections, phone, preferredDate, preferredProviderNames, preferredProviders, questionAnswers, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, timeOfDay, timingPreference, zipCode]);
+  }, [accessMethod, city, description, email, entryInstructions, firstName, frequencies, hydrated, isComplete, lastName, otherServiceDetails, packageSelections, parkingNotes, petStatus, phone, preferredDate, preferredEndDate, preferredProviderNames, preferredProviders, questionAnswers, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, timeOfDay, zipCode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -306,6 +328,8 @@ export default function RequestServicePage() {
         promotionLabels: service.promotionLabels,
         promotionIds: service.promotionIds,
         packageSelections: service.packageSelections,
+        providerProofs: service.providerProofs,
+        providerProofsByFrequency: service.providerProofsByFrequency,
         categoryId: service.categoryId,
         popular: service.popular,
       };
@@ -332,6 +356,8 @@ export default function RequestServicePage() {
         availability: override.availability ?? "sourcing",
         categoryId: override.categoryId,
         popular: override.popular,
+        providerProofs: override.providerProofs,
+        providerProofsByFrequency: override.providerProofsByFrequency,
       }));
     const catchAll = {
       ...serviceOptions.find((service) => service.id === otherServiceId)!,
@@ -401,6 +427,18 @@ export default function RequestServicePage() {
     }
     if (!/^\d{5}(-\d{4})?$/.test(zipCode.trim())) {
       toast.error("Invalid ZIP code", { description: "Enter a valid five-digit ZIP code." });
+      return;
+    }
+    if (!preferredDate || !preferredEndDate) {
+      toast.error("Preferred date window required", { description: "Choose a start and end date so we know what timing works for you." });
+      return;
+    }
+    if (preferredDate < localDateValue(new Date())) {
+      toast.error("Choose a future window", { description: "The preferred start date cannot be in the past." });
+      return;
+    }
+    if (preferredEndDate < preferredDate) {
+      toast.error("Check the preferred window", { description: "The end date cannot be before the start date." });
       return;
     }
     const unanswered = selectedServices.flatMap((service) =>
@@ -500,8 +538,15 @@ export default function RequestServicePage() {
           state: stateCode.trim().toUpperCase(),
           zip_code: zipCode.trim(),
           preferred_date: preferredDate || null,
-          preferred_time: schedulingPreferenceValue(timingPreference, timeOfDay),
-          description: requestDescription(service, description, otherServiceDetails),
+          preferred_time: schedulingPreferenceValue(preferredDate, preferredEndDate, timeOfDay),
+          description: requestDescription(service, {
+            projectNotes: description,
+            otherServiceDetails,
+            accessMethod,
+            petStatus,
+            entryInstructions,
+            parkingNotes,
+          }),
           status: "pending",
           frequency,
           pricing_mode: requestPricingMode,
@@ -632,8 +677,8 @@ export default function RequestServicePage() {
           <div className="container-wide max-w-6xl">
             <form onSubmit={handleSubmit}>
               {step === "services" && <ServicesStep services={requestServiceOptions} categories={catalogCategories} catalogLoading={catalogLoading} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} otherServiceDetails={otherServiceDetails} onOtherServiceDetails={setOtherServiceDetails} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} timingPreference={timingPreference} preferredDate={preferredDate} timeOfDay={timeOfDay} description={description} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onTimingPreference={setTimingPreference} onPreferredDate={setPreferredDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
-              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} timingPreference={timingPreference} preferredDate={preferredDate} timeOfDay={timeOfDay} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
+              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected} hasQuoteServices={fixedServices.length !== selectedServices.length} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onBack={() => setStep("details")} />}
             </form>
           </div>
         </section>
@@ -835,10 +880,14 @@ type DetailsStepProps = {
   city: string;
   stateCode: string;
   zipCode: string;
-  timingPreference: TimingPreference;
   preferredDate: string;
+  preferredEndDate: string;
   timeOfDay: TimeOfDay;
   description: string;
+  accessMethod: AccessMethod;
+  petStatus: PetStatus;
+  entryInstructions: string;
+  parkingNotes: string;
   photos: RequestPhotoDraft[];
   selectedServices: ServiceOption[];
   frequencies: Record<string, Frequency>;
@@ -850,10 +899,14 @@ type DetailsStepProps = {
   onCity: (value: string) => void;
   onStateCode: (value: string) => void;
   onZipCode: (value: string) => void;
-  onTimingPreference: (value: TimingPreference) => void;
   onPreferredDate: (value: string) => void;
+  onPreferredEndDate: (value: string) => void;
   onTimeOfDay: (value: TimeOfDay) => void;
   onDescription: (value: string) => void;
+  onAccessMethod: (value: AccessMethod) => void;
+  onPetStatus: (value: PetStatus) => void;
+  onEntryInstructions: (value: string) => void;
+  onParkingNotes: (value: string) => void;
   onAddPhotos: (files: File[]) => void;
   onRemovePhoto: (id: string) => void;
   onPhotoDrop: (event: DragEvent<HTMLLabelElement>) => void;
@@ -862,7 +915,7 @@ type DetailsStepProps = {
 };
 
 function DetailsStep(props: DetailsStepProps) {
-  const minDate = new Date().toISOString().slice(0, 10);
+  const minDate = localDateValue(new Date());
   const fixedServices = props.selectedServices.filter((service) => {
     const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
     return service.availability === "fixed" && servicePrice(service, frequency) > 0;
@@ -1105,30 +1158,64 @@ function DetailsStep(props: DetailsStepProps) {
               </div>
             </div>
             <div className="mt-5 space-y-5">
-              <PreferencePills<TimingPreference>
-                label="Timing"
-                value={props.timingPreference}
-                options={[
-                  ["asap", "ASAP"],
-                  ["next-few-days", "Next few days"],
-                  ["this-week", "This week"],
-                  ["flexible", "Flexible"],
-                ]}
-                onChange={props.onTimingPreference}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="preferredDate">Specific date <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                <div className="relative max-w-sm">
-                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="preferredDate">Window starts</Label>
+                  <div className="relative">
+                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="preferredEndDate">Window ends</Label>
+                  <div className="relative">
+                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="preferredEndDate" type="date" min={props.preferredDate || minDate} className="h-12 pl-10" value={props.preferredEndDate} onChange={(event) => props.onPreferredEndDate(event.target.value)} required />
+                  </div>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">Choose the date range that works best. A provider will confirm one appointment within or near this window.</p>
               <PreferencePills<TimeOfDay>
                 label="Time of day"
                 value={props.timeOfDay}
                 options={[["morning", "Morning"], ["afternoon", "Afternoon"], ["anytime", "Anytime"]]}
                 onChange={props.onTimeOfDay}
               />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border-strong bg-background p-4 sm:p-5">
+            <div>
+              <h3 className="font-semibold">Access and property details</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Keep access information separate from the project scope so the assigned pro can prepare for arrival.</p>
+            </div>
+            <div className="mt-5 space-y-5">
+              <PreferencePills<AccessMethod>
+                label="How will the provider get access?"
+                value={props.accessMethod}
+                options={[["someone-home", "Someone will be home"], ["coordinate", "Coordinate with me"], ["gate", "Gate access"], ["lockbox", "Lockbox/key"], ["other", "Other"]]}
+                onChange={props.onAccessMethod}
+              />
+              <PreferencePills<PetStatus>
+                label="Pets on the property"
+                value={props.petStatus}
+                options={[["none", "No pets"], ["secured", "Pets will be secured"], ["on-property", "Pets may be present"]]}
+                onChange={props.onPetStatus}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="entryInstructions">Gate, entry, or lockbox instructions <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                  <textarea id="entryInstructions" rows={4} value={props.entryInstructions} onChange={(event) => props.onEntryInstructions(event.target.value)} placeholder="Gate location, access method, where to meet…" className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="parkingNotes">Parking or service-location notes <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                  <textarea id="parkingNotes" rows={4} value={props.parkingNotes} onChange={(event) => props.onParkingNotes(event.target.value)} placeholder="Driveway access, guest parking, work area location…" className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
+                </div>
+              </div>
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>Do not enter alarm codes or other sensitive credentials here. Share time-sensitive access codes only after a provider is confirmed.</p>
+              </div>
             </div>
           </div>
 
@@ -1289,8 +1376,8 @@ function DescriptionField({
         </Label>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
           {prominent
-            ? "Share the scope, condition, dimensions, or access details that will help us match and quote accurately."
-            : "Add access instructions or details the provider should know before the visit."}
+            ? "Share the scope, condition, dimensions, or visible issue that will help us match and quote accurately."
+            : "Add any final scope or condition details the provider should know."}
         </p>
       </div>
       <textarea
@@ -1318,9 +1405,13 @@ type ContactStepProps = {
   estimate: number;
   directCheckoutExpected: boolean;
   hasQuoteServices: boolean;
-  timingPreference: TimingPreference;
   preferredDate: string;
+  preferredEndDate: string;
   timeOfDay: TimeOfDay;
+  accessMethod: AccessMethod;
+  petStatus: PetStatus;
+  entryInstructions: string;
+  parkingNotes: string;
   photos: RequestPhotoDraft[];
   photoUploadProgress: { completed: number; total: number };
   firstName: string;
@@ -1354,6 +1445,12 @@ function ContactStep(props: ContactStepProps) {
     : props.hasQuoteServices
       ? "Services that need matching or a quote are submitted first. Any live-priced items in this mixed plan are also coordinated as requests; we’ll confirm scope and pricing before payment."
       : "Current secure checkout supports exactly one verified fixed-tier request. This multi-service plan is submitted for coordination first; payable invoices can appear in your dashboard later.";
+  const providerProofRows = props.selectedServices.flatMap((service) => {
+    const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
+    if (service.availability !== "fixed" || servicePrice(service, frequency) <= 0) return [];
+    const providers = service.providerProofsByFrequency?.[frequency] ?? service.providerProofs ?? [];
+    return providers.length ? [{ service, providers: providers.slice(0, 3) }] : [];
+  });
 
   return (
     <div>
@@ -1377,10 +1474,35 @@ function ContactStep(props: ContactStepProps) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 text-sm sm:grid-cols-3">
-                <ReviewDetail label="Timing" value={timingPreferenceLabel(props.timingPreference)} />
-                <ReviewDetail label="Specific date" value={props.preferredDate ? formatReviewDate(props.preferredDate) : "No specific date"} />
+                <ReviewDetail label="Window starts" value={props.preferredDate ? formatReviewDate(props.preferredDate) : "Not selected"} />
+                <ReviewDetail label="Window ends" value={props.preferredEndDate ? formatReviewDate(props.preferredEndDate) : "Not selected"} />
                 <ReviewDetail label="Time of day" value={timeOfDayLabel(props.timeOfDay)} />
               </div>
+              <div className="rounded-xl border border-accent-border bg-card p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Access and arrival</p>
+                <p className="mt-1 text-sm font-medium">{accessMethodLabel(props.accessMethod)} · {petStatusLabel(props.petStatus)}</p>
+                {(props.entryInstructions.trim() || props.parkingNotes.trim()) && (
+                  <div className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                    {props.entryInstructions.trim() && <p><span className="font-medium text-foreground">Entry:</span> {props.entryInstructions.trim()}</p>}
+                    {props.parkingNotes.trim() && <p><span className="font-medium text-foreground">Parking/location:</span> {props.parkingNotes.trim()}</p>}
+                  </div>
+                )}
+              </div>
+              {providerProofRows.length > 0 && (
+                <div className="rounded-xl border border-accent-border bg-card p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Providers behind live rates</p>
+                  <div className="mt-3 space-y-3">
+                    {providerProofRows.map(({ service, providers }) => (
+                      <div key={service.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm font-medium">{service.name}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {providers.map((provider) => <ProviderProofLink key={provider.id} provider={provider} />)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="border-t border-accent-border pt-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -1550,24 +1672,49 @@ function ReviewDetail({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl border border-accent-border bg-card p-3"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>;
 }
 
-function isTimingPreference(value: unknown): value is TimingPreference {
-  return value === "asap" || value === "next-few-days" || value === "this-week" || value === "flexible";
+function ProviderProofLink({ provider }: { provider: ServiceProviderProof }) {
+  const initials = provider.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "MP";
+  return (
+    <Link href={`/providers/${provider.id}`} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-background py-1 pl-1 pr-3 text-xs font-medium transition-colors hover:border-accent-border hover:text-sage-dark">
+      {provider.logoUrl
+        ? <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-card p-0.5"><Image src={provider.logoUrl} alt="" width={28} height={28} unoptimized className="h-full w-full object-contain" /></span>
+        : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">{initials}</span>}
+      <span className="max-w-36 truncate">{provider.name}</span>
+    </Link>
+  );
 }
 
 function isTimeOfDay(value: unknown): value is TimeOfDay {
   return value === "morning" || value === "afternoon" || value === "anytime";
 }
 
-function timingPreferenceLabel(value: TimingPreference) {
-  return value === "asap" ? "ASAP" : value === "next-few-days" ? "Next few days" : value === "this-week" ? "This week" : "Flexible";
+function isAccessMethod(value: unknown): value is AccessMethod {
+  return value === "someone-home" || value === "coordinate" || value === "gate" || value === "lockbox" || value === "other";
+}
+
+function isPetStatus(value: unknown): value is PetStatus {
+  return value === "none" || value === "secured" || value === "on-property";
 }
 
 function timeOfDayLabel(value: TimeOfDay) {
   return value === "morning" ? "Morning" : value === "afternoon" ? "Afternoon" : "Anytime";
 }
 
-function schedulingPreferenceValue(timing: TimingPreference, timeOfDay: TimeOfDay) {
-  return `${timingPreferenceLabel(timing)} · ${timeOfDayLabel(timeOfDay)}`;
+function accessMethodLabel(value: AccessMethod) {
+  if (value === "someone-home") return "Someone will be home";
+  if (value === "coordinate") return "Coordinate access";
+  if (value === "gate") return "Gate access";
+  if (value === "lockbox") return "Lockbox or key access";
+  return "Other access method";
+}
+
+function petStatusLabel(value: PetStatus) {
+  return value === "none" ? "No pets" : value === "secured" ? "Pets will be secured" : "Pets may be present";
+}
+
+function schedulingPreferenceValue(start: string, end: string, timeOfDay: TimeOfDay) {
+  const endSummary = end && end !== start ? ` through ${formatReviewDate(end)}` : "";
+  return `Preferred window: ${formatReviewDate(start)}${endSummary} · ${timeOfDayLabel(timeOfDay)}`;
 }
 
 function formatReviewDate(value: string) {
@@ -1575,10 +1722,40 @@ function formatReviewDate(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function requestDescription(service: ServiceOption, notes: string, otherServiceDetails: string) {
-  const detail = notes.trim();
-  if (service.id !== otherServiceId) return detail || null;
-  return [`Requested service: ${otherServiceDetails.trim()}`, detail].filter(Boolean).join("\n\n");
+function requestDescription(service: ServiceOption, details: {
+  projectNotes: string;
+  otherServiceDetails: string;
+  accessMethod: AccessMethod;
+  petStatus: PetStatus;
+  entryInstructions: string;
+  parkingNotes: string;
+}) {
+  const projectNotes = details.projectNotes.trim();
+  const scope = service.id === otherServiceId
+    ? [`Requested service: ${details.otherServiceDetails.trim()}`, projectNotes].filter(Boolean).join("\n")
+    : projectNotes;
+  const access = [
+    `Access method: ${accessMethodLabel(details.accessMethod)}`,
+    `Pets: ${petStatusLabel(details.petStatus)}`,
+    details.entryInstructions.trim() ? `Entry instructions: ${details.entryInstructions.trim()}` : "",
+    details.parkingNotes.trim() ? `Parking/location: ${details.parkingNotes.trim()}` : "",
+  ].filter(Boolean).join("\n");
+  return [`Project details:\n${scope || "No additional project notes provided."}`, `Access and arrival:\n${access}`].join("\n\n");
+}
+
+function defaultPreferredWindow(existingStart?: string) {
+  const start = existingStart ? new Date(`${existingStart}T12:00:00`) : new Date();
+  if (!existingStart) start.setDate(start.getDate() + 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 3);
+  return { start: localDateValue(start), end: localDateValue(end) };
+}
+
+function localDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function serviceIcon(id: string, categoryId?: string) {
@@ -1663,6 +1840,8 @@ function toPlanningService(service: ServiceOption): PlanningService {
     promotionLabels: service.promotionLabels,
     promotionIds: service.promotionIds,
     packageSelections: service.packageSelections,
+    providerProofs: service.providerProofs,
+    providerProofsByFrequency: service.providerProofsByFrequency,
   };
 }
 
