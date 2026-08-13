@@ -140,7 +140,7 @@ export default function VendorsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">{heroBenefits.map((benefit) => <div key={benefit.title} className="rounded-2xl border border-border/30 bg-card p-5 shadow-sm sm:p-6"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-sage-light"><benefit.icon aria-hidden="true" className="h-5 w-5 text-sage-dark" /></div><p className="mb-2 font-semibold text-foreground">{benefit.title}</p><p className="text-sm leading-6 text-muted-foreground">{benefit.description}</p></div>)}</div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{heroBenefits.map((benefit) => <div key={benefit.title} className="rounded-2xl border border-border/30 bg-card p-5 shadow-sm sm:p-6"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-sage-light"><benefit.icon aria-hidden="true" className="h-5 w-5 text-sage-dark" /></div><p className="mb-2 font-semibold text-foreground">{benefit.title}</p><p className="text-sm leading-6 text-muted-foreground">{benefit.description}</p></div>)}</div>
             </div>
           </div>
         </section>
