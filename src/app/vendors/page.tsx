@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -88,7 +88,33 @@ const supportExamples = [
 
 export default function VendorsPage() {
   const ctaRef = useRef<HTMLElement>(null);
-  const [ctaGlow, setCtaGlow] = useState({ x: 50, y: 50 });
+  const ctaGlowFrameRef = useRef<number | null>(null);
+  const ctaPointerRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    return () => {
+      if (ctaGlowFrameRef.current !== null) {
+        cancelAnimationFrame(ctaGlowFrameRef.current);
+      }
+    };
+  }, []);
+
+  function handleCtaMouseMove(event: React.MouseEvent<HTMLElement>) {
+    ctaPointerRef.current = { x: event.clientX, y: event.clientY };
+
+    if (ctaGlowFrameRef.current !== null) return;
+
+    ctaGlowFrameRef.current = requestAnimationFrame(() => {
+      ctaGlowFrameRef.current = null;
+
+      const section = ctaRef.current;
+      if (!section) return;
+
+      const rect = section.getBoundingClientRect();
+      section.style.setProperty("--cta-glow-x", `${((ctaPointerRef.current.x - rect.left) / rect.width) * 100}%`);
+      section.style.setProperty("--cta-glow-y", `${((ctaPointerRef.current.y - rect.top) / rect.height) * 100}%`);
+    });
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -130,7 +156,7 @@ export default function VendorsPage() {
           <div className="pointer-events-none absolute left-1/4 top-0 h-96 w-96 rounded-full bg-accent/10 blur-[120px]" /><div className="pointer-events-none absolute bottom-0 right-1/4 h-80 w-80 rounded-full bg-sage/8 blur-[100px]" />
           <div className="container-wide relative">
             <div className="mx-auto mb-4 max-w-2xl text-center"><span className="mb-5 inline-flex items-center gap-2 rounded-full bg-accent/20 px-4 py-2 text-sm font-semibold text-accent"><Zap aria-hidden="true" className="h-4 w-4" />Managed Marketplace Tools</span><h2 className="mb-4 text-3xl font-bold text-primary-foreground md:text-4xl">Smart Tools for Local Pros</h2><p className="text-lg text-primary-foreground/70">Practical matching and portal guidance help you present your business clearly, stay organized, and focus on work that fits.</p></div>
-            <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{aiTools.map((tool, index) => <motion.div key={tool.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }} transition={{ duration: 0.4, delay: index * 0.08 }} className="group relative rounded-2xl border border-primary-foreground/10 p-6 shadow-sm backdrop-blur-sm transition-all duration-300 hover:border-accent/30 hover:shadow-lg" style={{ background: "linear-gradient(135deg, hsl(40 20% 98% / 0.06) 0%, hsl(40 20% 98% / 0.02) 100%)" }}><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 transition-colors group-hover:bg-accent/25"><tool.icon aria-hidden="true" className="h-5 w-5 text-accent" /></div><h3 className="mb-2 font-semibold text-primary-foreground">{tool.title}</h3><p className="text-sm leading-relaxed text-primary-foreground/60">{tool.description}</p></motion.div>)}</div>
+            <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{aiTools.map((tool, index) => <motion.div key={tool.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }} transition={{ duration: 0.4, delay: index * 0.08 }} className="group relative rounded-2xl border border-primary-foreground/10 bg-gradient-to-br from-primary-foreground/6 to-primary-foreground/2 p-6 shadow-sm backdrop-blur-sm transition-all duration-300 hover:border-accent/30 hover:shadow-lg"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 transition-colors group-hover:bg-accent/25"><tool.icon aria-hidden="true" className="h-5 w-5 text-accent" /></div><h3 className="mb-2 font-semibold text-primary-foreground">{tool.title}</h3><p className="text-sm leading-relaxed text-primary-foreground/60">{tool.description}</p></motion.div>)}</div>
           </div>
         </section>
 
@@ -148,8 +174,8 @@ export default function VendorsPage() {
           </div></div>
         </section>
 
-        <section ref={ctaRef} onMouseMove={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setCtaGlow({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 }); }} className="bg-cta-section section-sm relative overflow-hidden text-primary-foreground">
-          <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(600px circle at ${ctaGlow.x}% ${ctaGlow.y}%, hsl(150 35% 45% / 0.18) 0%, transparent 60%)` }} />
+        <section ref={ctaRef} onMouseMove={handleCtaMouseMove} className="bg-cta-section section-sm relative overflow-hidden text-primary-foreground">
+          <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(600px circle at var(--cta-glow-x, 50%) var(--cta-glow-y, 50%), color-mix(in srgb, var(--color-accent) 18%, transparent) 0%, transparent 60%)" }} />
           <div className="container-wide relative text-center"><span className="mb-4 inline-block rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90">Get started today</span><h2 className="mb-4 text-3xl font-bold text-primary-foreground md:text-4xl">Join Our Network Today</h2><p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/80">Take the first step toward consistent work, powerful tools, and a growing business.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><VendorLink href="/vendors/apply">Apply Now <ArrowRight aria-hidden="true" className="ml-2 h-5 w-5" /></VendorLink><VendorLink href="/how-it-works" darkOutline>See How It Works</VendorLink></div></div>
         </section>
       </main>
