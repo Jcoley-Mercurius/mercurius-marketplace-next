@@ -159,8 +159,8 @@ export default function ProvidersPage() {
     if (uncategorized.length > 0) {
       groups.push({
         category: {
-          id: "more-verified-providers",
-          name: "More Verified Providers",
+          id: "more-active-providers",
+          name: "More Active Providers",
           description: "Active local providers whose services are still being added to our catalog.",
           icon: "Star",
         },
@@ -201,14 +201,14 @@ export default function ProvidersPage() {
               {isLoading
                 ? "Checking local availability"
                 : totalVendors > 0
-                  ? `${totalVendors} verified ${totalVendors === 1 ? "provider" : "providers"}`
+                  ? `${totalVendors} active ${totalVendors === 1 ? "provider" : "providers"}`
                   : "Our local network is growing"}
             </Badge>
             <h1 className="mb-4 text-4xl font-bold text-foreground md:text-6xl">
-              Browse Our Verified Providers
+              Browse Our Provider Network
             </h1>
             <p className="mb-8 text-lg text-muted-foreground">
-              Every contractor is background-checked, insured, and quality-monitored. Browse by category or search for what you need.
+              Providers apply with license, insurance, and background-check documentation that Mercurius reviews before they join the network. Browse by category or search for what you need.
             </p>
             <div className="relative mx-auto max-w-xl">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
@@ -305,10 +305,10 @@ export default function ProvidersPage() {
           <div className="container-wide mx-auto max-w-2xl text-center">
             <h2 className="mb-4 text-2xl font-bold text-foreground md:text-3xl">Ready to Book a Service?</h2>
             <p className="mb-6 text-muted-foreground">
-              Skip the comparison shopping — build your plan and we&apos;ll match you with the right verified provider.
+              Build your plan and we&apos;ll work to match your request with a vetted local provider based on current service coverage.
             </p>
             <Link
-              href="/?builder=services#bundle-builder"
+              href="/#bundle-builder"
               className={cn(
                 buttonVariants({ size: "lg" }),
                 "rounded-full bg-accent px-8 text-accent-foreground hover:bg-accent-hover",
@@ -433,7 +433,7 @@ function GrowingNetwork() {
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 ring-1 ring-accent/20">
           <ShieldCheck className="h-8 w-8 text-accent" />
         </div>
-        <h2 className="mt-6 text-2xl font-bold md:text-3xl">Our vetted network is growing</h2>
+        <h2 className="mt-6 text-2xl font-bold md:text-3xl">Our provider network is growing</h2>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
           We don&apos;t have public provider profiles to show in your area yet. Tell us what you need and we&apos;ll work to source a qualified local pro—without pretending coverage is already available.
         </p>
