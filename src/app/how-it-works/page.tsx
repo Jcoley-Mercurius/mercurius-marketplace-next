@@ -35,7 +35,7 @@ const steps = [
     number: "02",
     title: "We Match & Manage",
     description: "Our team helps source a vetted local pro and coordinates service fit, scheduling, communication, and job follow-up.",
-    details: ["Background-checked, insured professionals", "Platform-managed scheduling & updates", "No more phone tag with contractors"],
+    details: ["License, insurance & background-check documents reviewed", "Platform-managed scheduling & updates", "No more phone tag with contractors"],
     icon: UserCheck,
     accent: "coral" as const,
   },

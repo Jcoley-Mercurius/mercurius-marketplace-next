@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 const steps = [
   { number: "01", title: "Choose the services you need", description: "Browse from 40+ home services across lawn care, cleaning, repairs, HVAC and more." },
-  { number: "02", title: "Select trusted local providers", description: "See ratings, pricing, and reviews. Every provider is vetted and performance-monitored." },
+  { number: "02", title: "Select trusted local providers", description: "Provider applications include license, insurance, and background-check documentation for review before joining the network." },
   { number: "03", title: "Schedule services and confirm pricing", description: "Set your preferred schedule and confirm upfront pricing on fixed packages before you book." },
   { number: "04", title: "Manage everything from your dashboard", description: "Track jobs, view photos, message providers, and manage payments in one place." },
 ];
@@ -80,7 +80,7 @@ export function HowItWorksSteps() {
             <div className="max-w-md px-8 md:px-12">
               <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary-foreground/80">Vetted, Insured, Managed</p>
               <p className="font-display text-xl font-bold leading-snug text-primary-foreground md:text-2xl">
-                Choose from a list of verified providers, compare prices, and schedule your service in minutes.
+                Browse active provider profiles, compare available package pricing, and request coordination through Mercurius.
               </p>
             </div>
           </div>

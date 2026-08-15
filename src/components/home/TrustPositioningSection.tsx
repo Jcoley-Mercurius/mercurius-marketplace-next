@@ -36,7 +36,7 @@ const negotiatedPillars = [
   {
     icon: ShieldCheck,
     title: "Vetted Network Only",
-    desc: "Every provider is screened, insured, and held to platform standards — no open marketplace free-for-all.",
+    desc: "Mercurius reviews license, insurance, and background-check documentation during provider applications, then coordinates work through a managed marketplace—not an open lead board.",
     stat: "Screened providers",
   },
   {
