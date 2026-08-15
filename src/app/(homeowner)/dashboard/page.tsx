@@ -540,7 +540,7 @@ function ListLoading({ large = false }: { large?: boolean }) {
 }
 
 function EmptyState({ icon: Icon, title, description, actionHref, actionLabel, compact = false }: { icon: ComponentType<{ className?: string }>; title: string; description: string; actionHref?: string; actionLabel?: string; compact?: boolean }) {
-  return <div className={cn("flex flex-col items-center px-4 text-center", compact ? "py-7" : "py-12")}><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-muted"><Icon className="h-6 w-6 text-muted-foreground" /></div><p className="font-medium">{title}</p><p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>{actionHref && actionLabel && <Link href={actionHref} className={cn(buttonVariants(), "mt-5 bg-accent text-accent-foreground hover:bg-accent/90")}>{actionLabel}</Link>}</div>;
+  return <div className={cn("flex flex-col items-center px-4 text-center", compact ? "py-7" : "py-12")}><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-muted"><Icon className="h-6 w-6 text-muted-foreground" /></div><p className="font-medium">{title}</p><p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>{actionHref && actionLabel && <Link href={actionHref} className={cn(buttonVariants(), "mt-5 bg-accent text-accent-foreground hover:bg-accent-hover")}>{actionLabel}</Link>}</div>;
 }
 
 function ServiceRow({ job, compact = false, onOpen }: { job: ServiceRequest; compact?: boolean; onOpen?: () => void }) {

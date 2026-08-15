@@ -44,7 +44,7 @@ export default function HomeownersPage() {
               ))}
             </div>
             <div className="mt-10 text-center">
-              <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent/90")}>Get Started <ArrowRight className="ml-2 h-5 w-5" /></Link>
+              <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Get Started <ArrowRight className="ml-2 h-5 w-5" /></Link>
             </div>
           </div>
         </section>
@@ -62,7 +62,7 @@ export default function HomeownersPage() {
             <h2 className="mb-4 text-3xl font-bold text-primary-foreground md:text-4xl">Ready to Simplify Your Home Maintenance?</h2>
             <p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/80">Join hundreds of homeowners across Fort Myers &amp; Cape Coral who&apos;ve taken back their weekends.</p>
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
-              <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent/90")}>Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" /></Link>
+              <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" /></Link>
               <Link href="/services" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-11 border-primary-foreground/30 bg-primary-foreground/10 px-8 text-primary-foreground transition-all duration-200 hover:bg-primary-foreground/20 hover:text-primary-foreground")}>Browse Services</Link>
             </div>
           </div>

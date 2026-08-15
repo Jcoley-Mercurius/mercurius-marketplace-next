@@ -39,7 +39,7 @@ export function FinalCTASection() {
       <div className="container-wide relative">
         <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
           <div className="rounded-3xl border border-primary-foreground/10 bg-primary-foreground/5 p-8 backdrop-blur-sm md:p-10">
-            <span className="mb-4 inline-block rounded-full bg-accent/20 px-3 py-1 text-xs font-medium text-accent ring-1 ring-accent/30">
+            <span className="mb-4 inline-block rounded-full bg-accent/20 px-3 py-1 text-xs font-medium text-accent-on-dark ring-1 ring-accent/30">
               For Homeowners
             </span>
             <h2 className="mb-3 text-2xl font-bold leading-tight !text-primary-foreground md:text-3xl">

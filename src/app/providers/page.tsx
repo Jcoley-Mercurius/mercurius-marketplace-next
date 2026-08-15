@@ -311,7 +311,7 @@ export default function ProvidersPage() {
               href="/?builder=services#bundle-builder"
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "rounded-full bg-accent px-8 text-accent-foreground hover:bg-accent/90",
+                "rounded-full bg-accent px-8 text-accent-foreground hover:bg-accent-hover",
               )}
             >
               Build Your Plan

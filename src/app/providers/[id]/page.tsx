@@ -458,7 +458,7 @@ export default function ProviderStorefrontPage() {
                 </div>
               </div>
               <div className="w-full shrink-0 sm:w-auto">
-                <Button size="lg" disabled={!isPublished} className="min-h-11 w-full bg-accent px-5 text-accent-foreground hover:bg-accent/90" onClick={() => startRequest(primaryPackage)}>
+                <Button size="lg" disabled={!isPublished} className="min-h-11 w-full bg-accent px-5 text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest(primaryPackage)}>
                   {heroCta}<ArrowRight />
                 </Button>
                 <p className="mt-2 max-w-64 text-xs leading-relaxed text-muted-foreground sm:text-right">
@@ -505,7 +505,7 @@ export default function ProviderStorefrontPage() {
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Mercurius will coordinate the details with you and the provider before the work is confirmed. No unpublished price is presented as bookable.</p>
                 </SectionCard>}
 
-                {packages.length === 0 && <SectionCard title="Request a Service"><p className="text-sm leading-relaxed text-muted-foreground">This provider has not published a live fixed price yet. Submit your service details and Mercurius will confirm provider availability, scope, and pricing before booking.</p><Button className="mt-4 bg-accent text-accent-foreground hover:bg-accent/90" disabled={!isPublished} onClick={() => startRequest()}>Request This Provider<ArrowRight /></Button></SectionCard>}
+                {packages.length === 0 && <SectionCard title="Request a Service"><p className="text-sm leading-relaxed text-muted-foreground">This provider has not published a live fixed price yet. Submit your service details and Mercurius will confirm provider availability, scope, and pricing before booking.</p><Button className="mt-4 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest()}>Request This Provider<ArrowRight /></Button></SectionCard>}
 
                 {(contractor.badges?.length ?? 0) > 0 && <SectionCard title="Credentials"><div className="flex flex-wrap gap-3">{contractor.badges?.map((badge) => <div key={badge} className="flex items-center gap-2 rounded-lg bg-sage-light px-3 py-2 text-sm font-medium text-sage-dark"><BadgeCheck className="h-4 w-4" />{badge}</div>)}</div></SectionCard>}
 
@@ -523,7 +523,7 @@ export default function ProviderStorefrontPage() {
               <aside className="space-y-6 md:sticky md:top-24 md:self-start">
                 <Card className="border-accent/20 shadow-sm"><CardHeader><CardTitle className="text-lg">Pricing Overview</CardTitle></CardHeader><CardContent>
                   {fixedPackages.length > 0 ? <StorefrontPriceOverview item={fixedPackages[0]} serverNow={serverNow} /> : <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Pricing depends on the scope. Mercurius will confirm availability and price before work begins.</p>}
-                  <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={!isPublished} onClick={() => startRequest(primaryPackage)}>{fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
+                  <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest(primaryPackage)}>{fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
                 </CardContent></Card>
 
                 <Card><CardHeader><CardTitle className="text-lg">Service Area</CardTitle></CardHeader><CardContent><div className="flex min-h-40 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">Southwest Florida</p><p className="mt-1 text-xs">Coverage is confirmed for your service address.</p></div></div>{contractor.location && <p className="mt-3 text-center text-sm text-muted-foreground">Based in {contractor.location}</p>}</CardContent></Card>

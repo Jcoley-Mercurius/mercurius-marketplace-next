@@ -37,7 +37,7 @@ export function MarketingCta({ title, description, primaryLabel = "Request a Ser
         <h2 className="text-3xl font-bold text-primary-foreground md:text-4xl">{title}</h2>
         <p className="mx-auto mt-4 max-w-xl text-lg text-primary-foreground/70">{description}</p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href={primaryHref} className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-7 text-accent-foreground hover:bg-accent/90")}>{primaryLabel}<ArrowRight className="ml-1 h-4 w-4" /></Link>
+          <Link href={primaryHref} className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-7 text-accent-foreground hover:bg-accent-hover")}>{primaryLabel}<ArrowRight className="ml-1 h-4 w-4" /></Link>
           {secondaryLabel && secondaryHref && <Link href={secondaryHref} className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-11 border-primary-foreground/30 bg-primary-foreground/10 px-7 text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground")}>{secondaryLabel}</Link>}
         </div>
       </div>

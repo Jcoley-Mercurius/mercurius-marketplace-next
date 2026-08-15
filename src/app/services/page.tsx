@@ -15,7 +15,7 @@ export default function ServicesPage() {
 
   return <MarketingShell>
     <MarketingHero eyebrow="Our Services" title={<>Everything Your Home Needs, <span className="hero-gradient-text">Handled</span></>} description="From routine maintenance to specialized care, we manage it all with vetted professionals and quality guarantees.">
-      <Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-7 text-accent-foreground hover:bg-accent/90")}>Request a Service<ArrowRight /></Link>
+      <Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-7 text-accent-foreground hover:bg-accent-hover")}>Request a Service<ArrowRight /></Link>
     </MarketingHero>
 
     <section className="section-sm"><div className="container-wide">
