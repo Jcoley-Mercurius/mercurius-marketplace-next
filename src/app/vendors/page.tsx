@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 const benefits = [
   { icon: Calendar, title: "Matched Job Opportunities", description: "See work matched to your services, location, and availability without chasing every lead yourself." },
-  { icon: DollarSign, title: "Clear Weekly Payout Cycle", description: "Track completed work and receive eligible payouts on a weekly cycle after jobs are completed and released." },
+  { icon: DollarSign, title: "Completed Work & Payout Visibility", description: "Track completed work in the vendor portal and see invoice and payout status when Mercurius releases it. Eligible released work is intended to follow a weekly payout cycle; timing may vary under the applicable booking or provider terms." },
   { icon: Users, title: "Coordinated Homeowner Experience", description: "Keep scheduling, job updates, and homeowner communication organized with platform support when coordination is needed." },
   { icon: TrendingUp, title: "Tools for Thoughtful Growth", description: "Use clear pricing, job records, and local marketplace visibility to support your business as opportunities fit your capacity." },
 ];
@@ -170,7 +170,7 @@ export default function VendorsPage() {
         <section className="section-sm bg-background">
           <div className="container-wide"><div className="grid items-center gap-12 lg:grid-cols-2">
             <div><h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">What We Look For</h2><p className="mb-8 text-lg text-muted-foreground">We partner with professionals who share our commitment to quality and reliability.</p><ul className="space-y-4">{requirements.map((requirement) => <li key={requirement} className="flex items-start gap-3"><CheckCircle2 aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><span className="text-foreground">{requirement}</span></li>)}</ul></div>
-            <div className="rounded-2xl border border-border/30 bg-card p-8"><h3 className="mb-4 text-xl font-semibold text-foreground">Ready to Apply?</h3><p className="mb-6 text-muted-foreground">Complete the application with your services, coverage area, experience, and business documents. We review each application against current network needs, and timing may vary.</p><Link href="/vendors/apply" className={cn(buttonVariants({ size: "lg" }), "h-11 w-full bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Start Application <ArrowRight aria-hidden="true" className="ml-2 h-5 w-5" /></Link><p className="mt-4 text-center text-sm text-muted-foreground">Questions?{" "}<Link href="/contact" className="text-accent underline underline-offset-4 hover:no-underline">Contact us</Link></p></div>
+            <div className="rounded-2xl border border-border/30 bg-card p-8"><h3 className="mb-4 text-xl font-semibold text-foreground">Ready to Apply?</h3><p className="mb-6 text-muted-foreground">The application takes about 10 minutes. Complete it with your services, coverage area, experience, and business documents. We review each application against current network needs, and timing may vary.</p><Link href="/vendors/apply" className={cn(buttonVariants({ size: "lg" }), "h-11 w-full bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Start Application <ArrowRight aria-hidden="true" className="ml-2 h-5 w-5" /></Link><p className="mt-4 text-center text-sm text-muted-foreground">Questions?{" "}<Link href="/contact" className="text-accent underline underline-offset-4 hover:no-underline">Contact us</Link></p></div>
           </div></div>
         </section>
 
