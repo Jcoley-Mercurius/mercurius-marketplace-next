@@ -19,12 +19,3 @@ export const services = [
   { id: "handyman", name: "Handyman", category: "improvements", description: "Repairs, installations, assembly, and punch-list projects.", oneTime: 99, recurring: 0, unit: "", icon: Hammer, popular: true },
   { id: "painting", name: "Painting", category: "improvements", description: "Interior and exterior painting with a clear scoped quote.", oneTime: 0, recurring: 0, unit: "", icon: Paintbrush, popular: false },
 ] as const;
-
-export const providers = [
-  { id: "coastal-lawn", name: "Coastal Lawn & Landscape", category: "outdoor", location: "Cape Coral", rating: 4.9, jobs: 286, years: 9, description: "Dependable weekly lawn care with photo-confirmed completion.", services: ["Lawn Care", "Hedge Trimming", "Yard Cleanup"] },
-  { id: "gulf-pool", name: "Gulfside Pool Professionals", category: "outdoor", location: "Fort Myers", rating: 4.8, jobs: 194, years: 12, description: "Residential pool care built around consistency and clear updates.", services: ["Pool Service", "Chemical Balancing", "Filter Cleaning"] },
-  { id: "sunshine-clean", name: "Sunshine Home Cleaning", category: "cleaning", location: "Cape Coral", rating: 5, jobs: 163, years: 6, description: "Careful, friendly home cleaning for busy households and seasonal residents.", services: ["House Cleaning", "Deep Cleaning", "Move-In Cleaning"] },
-  { id: "caloosa-air", name: "Caloosa Air & Electric", category: "systems", location: "Fort Myers", rating: 4.9, jobs: 118, years: 15, description: "Licensed home-system specialists focused on responsive service.", services: ["HVAC Maintenance", "Electrical Service", "Diagnostics"] },
-  { id: "harbor-handyman", name: "Harbor Home Solutions", category: "improvements", location: "Cape Coral", rating: 4.8, jobs: 142, years: 11, description: "A versatile, insured team for repairs and small improvement projects.", services: ["Handyman", "Fixture Installation", "Painting"] },
-  { id: "palm-paint", name: "Palm & Pine Painting", category: "improvements", location: "Fort Myers", rating: 4.9, jobs: 97, years: 8, description: "Clean prep, clear communication, and polished interior and exterior finishes.", services: ["Interior Painting", "Exterior Painting", "Touch-ups"] },
-] as const;
