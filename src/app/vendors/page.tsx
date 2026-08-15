@@ -27,16 +27,16 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const benefits = [
-  { icon: Calendar, title: "Consistent Job Flow", description: "Get a steady stream of jobs dispatched directly to you. No more chasing leads or slow seasons." },
-  { icon: DollarSign, title: "Reliable, Fast Payouts", description: "Complete jobs, get paid. Simple weekly payouts with transparent tracking." },
-  { icon: Users, title: "We Handle Customers", description: "Focus on your craft. We manage all customer communication, scheduling, and support." },
-  { icon: TrendingUp, title: "Grow Your Business", description: "Expand your service area and capacity with our support and operational tools." },
+  { icon: Calendar, title: "Matched Job Opportunities", description: "See work matched to your services, location, and availability without chasing every lead yourself." },
+  { icon: DollarSign, title: "Clear Weekly Payout Cycle", description: "Track completed work and receive eligible payouts on a weekly cycle after jobs are completed and released." },
+  { icon: Users, title: "Coordinated Homeowner Experience", description: "Keep scheduling, job updates, and homeowner communication organized with platform support when coordination is needed." },
+  { icon: TrendingUp, title: "Tools for Thoughtful Growth", description: "Use clear pricing, job records, and local marketplace visibility to support your business as opportunities fit your capacity." },
 ];
 
 const heroBenefits = [
   {
     icon: Calendar,
-    title: "Steady Work Pipeline",
+    title: "Matched Work Pipeline",
     description: "Platform-matched job opportunities, so you can spend less time constantly chasing leads.",
   },
   {
@@ -60,7 +60,7 @@ const aiTools = [
   { icon: BrainCircuit, title: "Smart Job Matching", description: "We match requests using your services, location, availability, and profile signals to surface work that fits your business." },
   { icon: Bot, title: "Built-In Business Tools", description: "Keep assigned jobs, schedules, status updates, and completion details organized in one vendor portal." },
   { icon: BarChart3, title: "Clear Job Visibility", description: "See assigned work, job status, earnings, and completion history together without piecing updates across different tools." },
-  { icon: Target, title: "Practical Profile Guidance", description: "Get clear prompts to finish your profile, publish pricing, and respond to requests so Mercurius can send better-fit work." },
+  { icon: Target, title: "Practical Profile Guidance", description: "Get clear prompts to finish your profile, publish pricing, and respond to requests so Mercurius can surface better-fit opportunities." },
   { icon: Megaphone, title: "A Managed Local Channel", description: "Reach Southwest Florida homeowners through a coordinated marketplace without managing every lead on your own." },
   { icon: Zap, title: "Tools That Grow With the Network", description: "Expect practical workflow improvements as the network grows, with deeper AI assistance added only where it is useful and trustworthy." },
 ];
@@ -77,7 +77,7 @@ const requirements = [
   "Clean background check",
   "Professional equipment and transportation",
   "Commitment to quality and reliability",
-  "Smartphone for our vendor app",
+  "Phone or computer access for the web portal, job updates, and completion photos",
 ];
 
 const supportExamples = [
@@ -126,12 +126,12 @@ export default function VendorsPage() {
               <div>
                 <span className="mb-6 inline-block rounded-full bg-sage-light px-4 py-2 text-sm font-medium text-sage-dark">For Service Providers</span>
                 <h1 className="mb-6 text-4xl font-bold leading-tight text-foreground md:text-5xl lg:text-6xl">Grow Your Business <span className="text-gradient">With Us</span></h1>
-                <p className="mb-8 text-xl text-muted-foreground">Join a managed platform built for Southwest Florida service businesses. Mercurius helps source and coordinate work, gives you clear package-pricing tools, and reduces the lead chasing and admin between jobs.</p>
+                <p className="mb-8 text-xl text-muted-foreground">Join a managed marketplace built for Southwest Florida service businesses. Mercurius helps source and coordinate work, gives you clear package-pricing tools, and reduces the lead chasing and admin between jobs.</p>
 
                 <div className="mb-8 rounded-2xl border border-border/30 bg-card p-5 shadow-sm">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent">The vendor outcome</p>
                   <p className="mb-3 text-sm leading-6 text-foreground">Spend less time chasing leads and coordinating messages—and more time delivering quality work on jobs that fit your business.</p>
-                  <p className="text-xs font-medium text-muted-foreground">Local service professional</p>
+                  <p className="text-xs font-medium text-muted-foreground">The Mercurius platform promise</p>
                 </div>
 
                 <div className="flex flex-col gap-4 sm:flex-row">
@@ -147,7 +147,7 @@ export default function VendorsPage() {
 
         <section className="section-sm bg-background">
           <div className="container-wide">
-            <div className="mx-auto mb-10 max-w-2xl text-center"><h2 className="mb-3 text-3xl font-bold text-foreground md:text-4xl">Why Work With Mercurius?</h2><p className="text-lg text-muted-foreground">We&apos;re not a marketplace. We&apos;re a managed platform that sets you up for success.</p></div>
+            <div className="mx-auto mb-10 max-w-2xl text-center"><h2 className="mb-3 text-3xl font-bold text-foreground md:text-4xl">Why Work With Mercurius?</h2><p className="text-lg text-muted-foreground">Mercurius is a managed marketplace—not an open lead board that leaves you to chase every opportunity on your own.</p></div>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{benefits.map((benefit) => <div key={benefit.title} className="card-feature"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-sage-light"><benefit.icon aria-hidden="true" className="h-6 w-6 text-sage" /></div><h3 className="mb-2 text-lg font-semibold text-foreground">{benefit.title}</h3><p className="text-sm text-muted-foreground">{benefit.description}</p></div>)}</div>
           </div>
         </section>
@@ -162,7 +162,7 @@ export default function VendorsPage() {
 
         <section className="section-sm bg-muted">
           <div className="container-wide"><div className="grid items-center gap-12 lg:grid-cols-2">
-            <div><span className="mb-5 inline-flex items-center gap-2 rounded-full bg-sage-light px-4 py-2 text-sm font-semibold text-sage-dark"><Headphones aria-hidden="true" className="h-4 w-4" />Managed Vendor Support</span><h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">We Don&apos;t Just Send You Jobs. We Help You Succeed.</h2><p className="mb-8 text-lg text-muted-foreground">Mercurius combines hands-on local support with clear pricing and job-management tools, helping you reduce admin while delivering a professional homeowner experience.</p><div className="space-y-6">{supportFeatures.map((feature) => <div key={feature.title} className="flex gap-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/10"><feature.icon aria-hidden="true" className="h-5 w-5 text-accent" /></div><div><p className="mb-1 font-semibold text-foreground">{feature.title}</p><p className="text-sm leading-relaxed text-muted-foreground">{feature.description}</p></div></div>)}</div></div>
+            <div><span className="mb-5 inline-flex items-center gap-2 rounded-full bg-sage-light px-4 py-2 text-sm font-semibold text-sage-dark"><Headphones aria-hidden="true" className="h-4 w-4" />Managed Vendor Support</span><h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">Support Beyond the Match</h2><p className="mb-8 text-lg text-muted-foreground">Mercurius combines direct local support with clear pricing and job-management tools, helping you reduce admin while delivering a professional homeowner experience.</p><div className="space-y-6">{supportFeatures.map((feature) => <div key={feature.title} className="flex gap-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/10"><feature.icon aria-hidden="true" className="h-5 w-5 text-accent" /></div><div><p className="mb-1 font-semibold text-foreground">{feature.title}</p><p className="text-sm leading-relaxed text-muted-foreground">{feature.description}</p></div></div>)}</div></div>
             <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="relative"><div className="rounded-2xl border border-border/30 bg-card p-8 shadow-sm"><div className="mb-6 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/15"><Headphones aria-hidden="true" className="h-5 w-5 text-accent" /></div><div><p className="text-sm font-semibold text-foreground">Platform Guidance</p><p className="text-xs text-muted-foreground">Examples from the vendor workflow</p></div></div><div className="space-y-4">{supportExamples.map((item) => <div key={item.label} className="rounded-xl bg-muted p-4"><p className="mb-1 text-xs font-medium text-muted-foreground">{item.label}</p><p className="text-sm leading-relaxed text-foreground">{item.text}</p></div>)}</div></div></motion.div>
           </div></div>
         </section>
@@ -170,13 +170,13 @@ export default function VendorsPage() {
         <section className="section-sm bg-background">
           <div className="container-wide"><div className="grid items-center gap-12 lg:grid-cols-2">
             <div><h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">What We Look For</h2><p className="mb-8 text-lg text-muted-foreground">We partner with professionals who share our commitment to quality and reliability.</p><ul className="space-y-4">{requirements.map((requirement) => <li key={requirement} className="flex items-start gap-3"><CheckCircle2 aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><span className="text-foreground">{requirement}</span></li>)}</ul></div>
-            <div className="rounded-2xl border border-border/30 bg-card p-8"><h3 className="mb-4 text-xl font-semibold text-foreground">Ready to Apply?</h3><p className="mb-6 text-muted-foreground">Our application takes about 10 minutes. We review all applications within 3 business days.</p><Link href="/vendors/apply" className={cn(buttonVariants({ size: "lg" }), "h-11 w-full bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Start Application <ArrowRight aria-hidden="true" className="ml-2 h-5 w-5" /></Link><p className="mt-4 text-center text-sm text-muted-foreground">Questions?{" "}<Link href="/contact" className="text-accent underline underline-offset-4 hover:no-underline">Contact us</Link></p></div>
+            <div className="rounded-2xl border border-border/30 bg-card p-8"><h3 className="mb-4 text-xl font-semibold text-foreground">Ready to Apply?</h3><p className="mb-6 text-muted-foreground">Complete the application with your services, coverage area, experience, and business documents. We review each application against current network needs, and timing may vary.</p><Link href="/vendors/apply" className={cn(buttonVariants({ size: "lg" }), "h-11 w-full bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Start Application <ArrowRight aria-hidden="true" className="ml-2 h-5 w-5" /></Link><p className="mt-4 text-center text-sm text-muted-foreground">Questions?{" "}<Link href="/contact" className="text-accent underline underline-offset-4 hover:no-underline">Contact us</Link></p></div>
           </div></div>
         </section>
 
         <section ref={ctaRef} onMouseMove={handleCtaMouseMove} className="bg-cta-section section-sm relative overflow-hidden text-primary-foreground">
           <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(600px circle at var(--cta-glow-x, 50%) var(--cta-glow-y, 50%), color-mix(in srgb, var(--color-accent) 18%, transparent) 0%, transparent 60%)" }} />
-          <div className="container-wide relative text-center"><span className="mb-4 inline-block rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90">Get started today</span><h2 className="mb-4 text-3xl font-bold text-primary-foreground md:text-4xl">Join Our Network Today</h2><p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/80">Take the first step toward consistent work, powerful tools, and a growing business.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><VendorLink href="/vendors/apply">Apply Now <ArrowRight aria-hidden="true" className="ml-2 h-5 w-5" /></VendorLink><VendorLink href="/how-it-works" darkOutline>See How It Works</VendorLink></div></div>
+          <div className="container-wide relative text-center"><span className="mb-4 inline-block rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90">Get started today</span><h2 className="mb-4 text-3xl font-bold text-primary-foreground md:text-4xl">Apply to Join Our Network</h2><p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/80">Take the first step toward matched local opportunities, practical tools, and a more coordinated way to manage marketplace work.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><VendorLink href="/vendors/apply">Apply Now <ArrowRight aria-hidden="true" className="ml-2 h-5 w-5" /></VendorLink><VendorLink href="/how-it-works" darkOutline>See How It Works</VendorLink></div></div>
         </section>
       </main>
       <Footer />
