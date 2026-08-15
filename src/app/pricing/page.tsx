@@ -32,7 +32,7 @@ export default function PricingPage() {
             <div className="flex flex-wrap justify-center gap-3 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" />No hidden fees</span>
               <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" />Quotes approved before work starts</span>
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" />One simple bill</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" />Scope agreed upfront</span>
             </div>
           </div>
         </section>
@@ -80,7 +80,7 @@ export default function PricingPage() {
             <div className="mb-12 text-center"><span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-4 py-2 text-sm font-medium text-foreground"><Info className="h-4 w-4 text-accent" />What affects your final price</span><h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">A few things can change the number</h2><p className="mx-auto max-w-2xl text-muted-foreground">Prices above are starting points. Your actual quote depends on a few common factors — we&apos;ll always confirm the total before any work begins.</p></div>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">{[
               { icon: Home, title: "Home Size", desc: "Square footage, number of bedrooms or yard size all factor in." },
-              { icon: Calendar, title: "Frequency", desc: "Recurring plans (weekly/monthly) cost less per visit than one-time work." },
+              { icon: Calendar, title: "Frequency", desc: "Recurring plans may use different per-visit rates than one-time work. Your actual rate is shown before you confirm." },
               { icon: Sparkles, title: "Add-ons", desc: "Extras like inside windows, deep cleans or specialty equipment may add cost." },
               { icon: Shield, title: "Access & Condition", desc: "Difficult access, severely overgrown areas or special equipment needs." },
             ].map((item) => <div key={item.title} className="rounded-2xl border border-border/40 bg-card p-6"><div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-sage-light"><item.icon className="h-5 w-5 text-sage" /></div><h3 className="mb-2 text-lg font-semibold text-foreground">{item.title}</h3><p className="text-sm text-muted-foreground">{item.desc}</p></div>)}</div>

@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, Phone, X, CheckCircle2, TrendingDown, Tag, Handshake, ShieldCheck, Sparkles, Award, DollarSign, Gift, Rocket } from "lucide-react";
 
 /**
- * Pre-Negotiated Rates Section
- * Positions Mercurius as having done the price-haggling work upfront —
- * homeowners get vetted-vendor pricing without calling around.
+ * Live Package Rates Section
+ * Presents current package pricing from active vendors so homeowners can
+ * review available rates without calling around.
  */
 const NegotiatedRatesSection = () => {
   return (
@@ -108,7 +108,7 @@ const NegotiatedRatesSection = () => {
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-sage-dark">Done For You</p>
-                <h3 className="text-lg font-semibold text-foreground">Pre-Negotiated Rates</h3>
+                <h3 className="text-lg font-semibold text-foreground">Live Package Rates</h3>
               </div>
             </div>
 
@@ -129,7 +129,7 @@ const NegotiatedRatesSection = () => {
           </motion.div>
         </div>
 
-        {/* How we negotiate — three pillars */}
+        {/* How live package rates work — three pillars */}
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10">
             <h3 className="text-2xl md:text-3xl font-bold text-foreground mb-3">How Launch Pricing Works</h3>
@@ -212,8 +212,8 @@ const NegotiatedRatesSection = () => {
               {
                 icon: Award,
                 label: "Top Rated",
-                tagline: "The overall best",
-                desc: "Highest trust score, most jobs completed, and rave reviews.",
+                tagline: "Strong platform record",
+                desc: "An editorial label for an active provider with a strong live platform record.",
                 gradient: "from-[hsl(40,60%,94%)] to-[hsl(35,50%,88%)]",
                 border: "border-[hsl(38,45%,78%)]",
                 iconBg: "bg-[hsl(40,55%,92%)]",
@@ -222,8 +222,8 @@ const NegotiatedRatesSection = () => {
               {
                 icon: DollarSign,
                 label: "Smart Choice",
-                tagline: "The most affordable",
-                desc: "Great quality at the most competitive rates on the platform.",
+                tagline: "Current package value",
+                desc: "An editorial label for an active provider whose current package pricing offers practical value.",
                 gradient: "from-[hsl(140,25%,93%)] to-[hsl(145,20%,87%)]",
                 border: "border-[hsl(142,22%,76%)]",
                 iconBg: "bg-[hsl(140,22%,91%)]",
@@ -232,8 +232,8 @@ const NegotiatedRatesSection = () => {
               {
                 icon: Gift,
                 label: "Extra Perks",
-                tagline: "The most bonuses",
-                desc: "Free add-ons, follow-up inspections, and exclusive seasonal deals.",
+                tagline: "Clearly listed extras",
+                desc: "An editorial label for an active provider whose current package includes clearly listed extras.",
                 gradient: "from-[hsl(15,50%,94%)] to-[hsl(12,45%,88%)]",
                 border: "border-[hsl(14,40%,78%)]",
                 iconBg: "bg-[hsl(15,45%,92%)]",
@@ -242,8 +242,8 @@ const NegotiatedRatesSection = () => {
               {
                 icon: Rocket,
                 label: "Rising Star",
-                tagline: "The fresh talent",
-                desc: "New top-rated pros eager to impress with sharp pricing.",
+                tagline: "Building a platform record",
+                desc: "An editorial label for a newer active provider building a live platform record.",
                 gradient: "from-[hsl(215,15%,92%)] to-[hsl(220,12%,85%)]",
                 border: "border-[hsl(218,12%,75%)]",
                 iconBg: "bg-[hsl(215,12%,90%)]",
@@ -272,7 +272,8 @@ const NegotiatedRatesSection = () => {
           </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
-            Provider labels are only shown when the supporting live performance and package data is available.
+            The Mercurius team assigns these editorial labels to active providers based on their live platform record;
+            they are not automatically generated rankings.
           </p>
         </div>
 
