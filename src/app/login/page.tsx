@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, EyeOff, Home } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -71,36 +71,37 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-muted">
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <Link
-            href="/"
-            className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to home
-          </Link>
+    <main className="min-h-screen bg-background">
+      <div className="grid min-h-screen md:grid-cols-[minmax(0,1fr)_minmax(28rem,0.9fr)] xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="order-1 flex items-center justify-center bg-muted/60 px-4 py-8 sm:px-8 md:order-2 md:px-10 md:py-12 xl:px-16">
+          <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl sm:p-8 lg:p-10">
+            <Link
+              href="/"
+              className="mb-7 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to home
+            </Link>
 
-          <Link href="/" className="mb-8 flex items-center space-x-2">
-            <Image
-              src="/mercurius-logo.png"
-              alt="Mercurius"
-              width={40}
-              height={40}
-              className="h-10 w-10 object-contain"
-              priority
-            />
-            <span className="text-xl font-semibold text-foreground">
-              Mercurius
-            </span>
-          </Link>
+            <Link href="/" className="mb-8 flex w-fit items-center gap-2.5">
+              <Image
+                src="/mercurius-logo.png"
+                alt="Mercurius"
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
+                priority
+              />
+              <span className="text-xl font-semibold text-foreground">
+                Mercurius
+              </span>
+            </Link>
 
-          <h1 className="mb-2 text-3xl font-semibold text-foreground">
-            Welcome back
-          </h1>
-          <p className="mb-8 text-muted-foreground">
-            Sign in to access your account
-          </p>
+            <h1 className="mb-2 text-3xl font-semibold tracking-tight text-foreground">
+              Welcome back
+            </h1>
+            <p className="mb-8 text-muted-foreground">
+              Sign in to access your account
+            </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
@@ -115,16 +116,16 @@ export default function LoginPage() {
                 onChange={(event) => setEmail(event.target.value)}
                 required
                 disabled={isLoading}
-                className="h-12"
+                className="h-12 bg-background"
               />
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <Label htmlFor="password">Password</Label>
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-accent hover:underline"
+                  className="inline-flex min-h-11 items-center text-sm text-accent hover:underline"
                 >
                   Forgot password?
                 </Link>
@@ -139,12 +140,12 @@ export default function LoginPage() {
                   onChange={(event) => setPassword(event.target.value)}
                   required
                   disabled={isLoading}
-                  className="h-12 pr-12"
+                  className="h-12 bg-background pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((visible) => !visible)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   aria-pressed={showPassword}
                 >
@@ -176,23 +177,46 @@ export default function LoginPage() {
               Create one
             </Link>
           </p>
-        </div>
-      </div>
-
-      <div className="hidden flex-1 items-center justify-center bg-primary p-12 lg:flex">
-        <div className="max-w-md text-center">
-          <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-3xl bg-accent/20">
-            <Home className="h-12 w-12 text-accent" />
           </div>
-          <h2 className="mb-4 text-3xl font-semibold !text-primary-foreground">
-            Your home, handled
-          </h2>
-          <p className="text-lg text-primary-foreground/70">
-            Access your dashboard to manage services, track jobs, and keep your
-            home perfectly maintained.
-          </p>
-        </div>
+        </section>
+
+        <section
+          className="relative order-2 hidden min-h-screen overflow-hidden md:order-1 md:flex md:items-end"
+          aria-label="Mercurius homeowner services"
+        >
+          <Image
+            src="/hero-home-duotone.jpg"
+            alt=""
+            fill
+            sizes="(min-width: 1280px) 58vw, 50vw"
+            className="object-cover object-center"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/55 to-primary/15" />
+
+          <Link href="/" className="absolute left-10 top-10 flex items-center gap-3 xl:left-14 xl:top-12">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-card shadow-md">
+              <Image
+                src="/mercurius-logo.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
+              />
+            </span>
+            <span className="text-xl font-semibold text-primary-foreground">Mercurius</span>
+          </Link>
+
+          <div className="relative max-w-xl p-10 pb-14 xl:p-14 xl:pb-16">
+            <h2 className="max-w-lg text-4xl font-semibold leading-tight tracking-tight text-primary-foreground xl:text-5xl">
+              Home care, clearly coordinated.
+            </h2>
+            <p className="mt-5 max-w-lg text-lg leading-relaxed text-primary-foreground/80">
+              Sign in to review service requests, follow job progress, and keep important home-service details in one place.
+            </p>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

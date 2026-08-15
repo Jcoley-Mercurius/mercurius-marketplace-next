@@ -8,13 +8,8 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
-  Briefcase,
-  CheckCircle2,
   Eye,
   EyeOff,
-  Inbox,
-  LayoutDashboard,
-  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -27,20 +22,6 @@ import {
 } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-
-const benefits = [
-  "Consistent job flow, no cold outreach",
-  "Platform-managed scheduling and payments",
-  "Photo documentation protects your work",
-  "A professional profile built to convert",
-];
-
-const portalFeatures = [
-  { icon: LayoutDashboard, label: "Overview Dashboard", description: "Your business at a glance" },
-  { icon: Inbox, label: "Incoming Requests", description: "Review new opportunities" },
-  { icon: Briefcase, label: "Job Management", description: "Track active and completed work" },
-  { icon: TrendingUp, label: "Growth Tools", description: "Strengthen your profile" },
-];
 
 export default function VendorLoginPage() {
   const [email, setEmail] = useState("");
@@ -112,89 +93,89 @@ export default function VendorLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <div className="relative hidden flex-1 overflow-hidden bg-cta-section p-12 lg:flex lg:items-center lg:justify-center">
-        <div className="pointer-events-none absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-accent/20 blur-[100px]" />
-        <div className="relative max-w-lg">
-          <Image src="/mercurius-logo.png" alt="Mercurius" width={56} height={56} className="mb-8 h-14 w-14 object-contain" priority />
-          <h2 className="mb-4 text-4xl font-semibold leading-tight !text-primary-foreground">
-            Focus on the Work.<br />We Handle the Business.
-          </h2>
-          <p className="mb-9 text-lg text-primary-foreground/60">
-            No cold outreach. No chasing payments. Just consistent jobs,
-            managed scheduling, and tools to grow.
-          </p>
+    <main className="min-h-screen bg-background">
+      <div className="grid min-h-screen md:grid-cols-[minmax(0,1fr)_minmax(28rem,0.9fr)] xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="order-1 flex items-center justify-center bg-muted/60 px-4 py-8 sm:px-8 md:order-2 md:px-10 md:py-12 xl:px-16">
+          <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl sm:p-8 lg:p-10">
+            <Link href="/" className="mb-7 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+              <ArrowLeft className="h-4 w-4" /> Back to home
+            </Link>
 
-          <ul className="mb-9 space-y-3">
-            {benefits.map((benefit) => (
-              <li key={benefit} className="flex items-start gap-3 text-primary-foreground/80">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-                {benefit}
-              </li>
-            ))}
-          </ul>
+            <Link href="/" className="mb-8 flex w-fit items-center gap-2.5">
+              <Image src="/mercurius-logo.png" alt="Mercurius" width={40} height={40} className="h-10 w-10 object-contain" priority />
+              <span className="text-xl font-semibold text-foreground">Mercurius</span>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Vendor</span>
+            </Link>
 
-          <div className="grid grid-cols-2 gap-3">
-            {portalFeatures.map(({ icon: Icon, label, description }) => (
-              <div key={label} className="rounded-xl border border-primary-foreground/10 bg-primary-foreground/5 p-4">
-                <Icon className="mb-2 h-5 w-5 text-accent" />
-                <p className="text-sm font-medium text-primary-foreground">{label}</p>
-                <p className="mt-0.5 text-xs text-primary-foreground/50">{description}</p>
+            <h1 className="mb-2 text-3xl font-semibold tracking-tight text-foreground">Vendor sign in</h1>
+            <p className="mb-8 text-muted-foreground">Access your vendor portal and manage your business.</p>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="vendor-email">Email</Label>
+                <Input id="vendor-email" type="email" inputMode="email" autoComplete="email" placeholder="you@yourbusiness.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={isLoading} className="h-12 bg-background" />
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <Label htmlFor="vendor-password">Password</Label>
+                  <Link href="/forgot-password" className="inline-flex min-h-11 items-center text-sm text-accent hover:underline">Forgot password?</Link>
+                </div>
+                <div className="relative">
+                  <Input id="vendor-password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={isLoading} className="h-12 bg-background pr-12" />
+                  <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}>
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+              <Button type="submit" size="lg" disabled={isLoading} className="h-12 w-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
+                {isLoading ? <><LoaderLabel /> Signing in...</> : "Sign In to Portal"}
+              </Button>
+            </form>
 
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" /> Back to home
+            <div className="mt-6 rounded-xl border border-border bg-muted/50 p-4">
+              <p className="text-sm font-medium">Not yet a vendor?</p>
+              <p className="mb-3 mt-1 text-xs text-muted-foreground">Vendor accounts are created after approval. Apply and our team will help you get set up.</p>
+              <Link href="/vendors/apply" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "min-h-11 w-full border-accent text-accent hover:bg-accent hover:text-accent-foreground")}>Apply to become a vendor <ArrowRight className="h-3 w-3" /></Link>
+            </div>
+
+            <p className="mt-6 text-center text-xs text-muted-foreground">
+              Looking for homeowner login? <Link href="/login" className="inline-flex min-h-11 items-center font-medium text-accent hover:underline">Sign in here →</Link>
+            </p>
+          </div>
+        </section>
+
+        <section
+          className="relative order-2 hidden min-h-screen overflow-hidden md:order-1 md:flex md:items-end"
+          aria-label="Mercurius vendor services"
+        >
+          <Image
+            src="/hero-home-duotone.jpg"
+            alt=""
+            fill
+            sizes="(min-width: 1280px) 58vw, 50vw"
+            className="object-cover object-center"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/55 to-primary/15" />
+
+          <Link href="/" className="absolute left-10 top-10 flex items-center gap-3 xl:left-14 xl:top-12">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-card shadow-md">
+              <Image src="/mercurius-logo.png" alt="" width={40} height={40} className="h-10 w-10 object-contain" />
+            </span>
+            <span className="text-xl font-semibold text-primary-foreground">Mercurius</span>
           </Link>
 
-          <Link href="/" className="mb-8 flex items-center gap-2">
-            <Image src="/mercurius-logo.png" alt="Mercurius" width={40} height={40} className="h-10 w-10 object-contain" />
-            <span className="text-xl font-semibold">Mercurius</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Vendor</span>
-          </Link>
-
-          <h1 className="mb-2 text-3xl font-semibold">Vendor sign in</h1>
-          <p className="mb-8 text-muted-foreground">Access your vendor portal and manage your business.</p>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="vendor-email">Email</Label>
-              <Input id="vendor-email" type="email" inputMode="email" autoComplete="email" placeholder="you@yourbusiness.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={isLoading} className="h-12" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="vendor-password">Password</Label>
-                <Link href="/forgot-password" className="text-sm text-accent hover:underline">Forgot password?</Link>
-              </div>
-              <div className="relative">
-                <Input id="vendor-password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={isLoading} className="h-12 pr-12" />
-                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}>
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-            </div>
-            <Button type="submit" size="lg" disabled={isLoading} className="h-12 w-full bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active">
-              {isLoading ? <><LoaderLabel /> Signing in...</> : "Sign In to Portal"}
-            </Button>
-          </form>
-
-          <div className="mt-6 rounded-xl border border-border bg-muted/50 p-4">
-            <p className="text-sm font-medium">Not yet a vendor?</p>
-            <p className="mb-3 mt-1 text-xs text-muted-foreground">Vendor accounts are created after approval. Apply and our team will help you get set up.</p>
-            <Link href="/vendors/apply" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full border-accent text-accent hover:bg-accent hover:text-accent-foreground")}>Apply to become a vendor <ArrowRight className="h-3 w-3" /></Link>
+          <div className="relative max-w-xl p-10 pb-14 xl:p-14 xl:pb-16">
+            <h2 className="max-w-lg text-4xl font-semibold leading-tight tracking-tight text-primary-foreground xl:text-5xl">
+              Local work, clearly coordinated.
+            </h2>
+            <p className="mt-5 max-w-lg text-lg leading-relaxed text-primary-foreground/80">
+              Sign in to review matched opportunities, manage active jobs, and keep homeowner updates organized in one managed marketplace.
+            </p>
           </div>
-
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Looking for homeowner login? <Link href="/login" className="font-medium text-accent hover:underline">Sign in here →</Link>
-          </p>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
 
