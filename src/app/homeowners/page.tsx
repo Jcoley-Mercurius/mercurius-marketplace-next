@@ -14,8 +14,8 @@ import { cn } from "@/lib/utils";
 
 const steps = [
   { step: "1", title: "Pick Your Services", desc: "Use our Plan Builder to choose lawn care, cleaning, repairs, or more." },
-  { step: "2", title: "We Match a Provider", desc: "Our team hand-picks a vetted local pro, schedules the visit, and confirms pricing before work begins." },
-  { step: "3", title: "Relax and Enjoy", desc: "Your home stays perfect. Track everything with photos and in-app updates." },
+  { step: "2", title: "We Coordinate a Match", desc: "Mercurius helps source a vetted local provider, confirms service fit and pricing, and coordinates scheduling based on availability." },
+  { step: "3", title: "Follow the Work", desc: "Track job status, service details, and completion photos in your homeowner dashboard." },
 ];
 
 export default function HomeownersPage() {
@@ -60,7 +60,7 @@ export default function HomeownersPage() {
           <div className="container-wide relative text-center">
             <span className="mb-4 inline-block rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90">Get started today</span>
             <h2 className="mb-4 text-3xl font-bold text-primary-foreground md:text-4xl">Ready to Simplify Your Home Maintenance?</h2>
-            <p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/80">Join hundreds of homeowners across Fort Myers &amp; Cape Coral who&apos;ve taken back their weekends.</p>
+            <p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/80">Built for homeowners across Fort Myers &amp; Cape Coral who want less service coordination and more of their weekends back.</p>
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
               <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" /></Link>
               <Link href="/services" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-11 border-primary-foreground/30 bg-primary-foreground/10 px-8 text-primary-foreground transition-all duration-200 hover:bg-primary-foreground/20 hover:text-primary-foreground")}>Browse Services</Link>

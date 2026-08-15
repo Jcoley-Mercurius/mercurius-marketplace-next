@@ -6,10 +6,10 @@ import { Calendar, Camera, CreditCard, Shield } from "lucide-react";
 import { MagneticCard } from "@/components/homeowners/MagneticCard";
 
 const benefits = [
-  { icon: Shield, title: "Vetted Professionals Only", description: "Every provider is background-checked, insured, and trained to our standards before they set foot in your home.", color: "150 35% 45%" },
-  { icon: Calendar, title: "Easy Scheduling", description: "Book online anytime. We handle all coordination with service providers so you don't have to.", color: "210 80% 55%" },
+  { icon: Shield, title: "Application-Reviewed Providers", description: "Provider applications include license, insurance, and background-check documentation for Mercurius to review before a provider joins the network.", color: "150 35% 45%" },
+  { icon: Calendar, title: "Request and Coordinate Online", description: "Submit a service request online. Mercurius coordinates provider fit, availability, pricing, and scheduling from there.", color: "210 80% 55%" },
   { icon: CreditCard, title: "Transparent Pricing", description: "No hidden fees. Fixed packages show the price before you book; custom jobs are quoted for your approval.", color: "15 65% 55%" },
-  { icon: Camera, title: "Photo Proof of Every Job", description: "Get before-and-after photos so you always know the work was done right.", color: "150 35% 45%" },
+  { icon: Camera, title: "Completion Photos", description: "Keep completion photos and service details together in your homeowner dashboard.", color: "150 35% 45%" },
 ];
 
 export function BenefitsStrip() {

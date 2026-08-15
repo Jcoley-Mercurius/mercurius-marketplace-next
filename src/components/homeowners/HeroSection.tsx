@@ -23,8 +23,8 @@ export function HomeownersHeroSection() {
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
           <motion.div variants={containerVariants} initial="hidden" animate="visible">
             <motion.span variants={itemVariants} className="mb-6 inline-block rounded-full bg-sage-light px-4 py-2 text-sm font-medium text-sage-dark">For Homeowners</motion.span>
-            <motion.h1 variants={itemVariants} className="mb-6 text-4xl font-bold leading-tight text-foreground sm:text-5xl md:text-6xl">Your Home, <span className="text-gradient">Perfectly Maintained</span></motion.h1>
-            <motion.p variants={itemVariants} className="mb-8 max-w-lg text-xl text-muted-foreground">Stop managing multiple contractors, chasing schedules, and worrying about quality. We handle everything so you can simply enjoy your home.</motion.p>
+            <motion.h1 variants={itemVariants} className="mb-6 text-4xl font-bold leading-tight text-foreground sm:text-5xl md:text-6xl">Your Home, <span className="text-gradient">Clearly Coordinated</span></motion.h1>
+            <motion.p variants={itemVariants} className="mb-8 max-w-lg text-xl text-muted-foreground">Spend less time managing contractors and chasing schedules. Mercurius helps coordinate requests, provider matching, scheduling, and job updates in one place.</motion.p>
             <motion.div variants={itemVariants} className="flex flex-col gap-4 sm:flex-row">
               <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" /></Link>
               <Link href="/services" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-11 border-border bg-card px-8 text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-md")}>Browse Services</Link>
