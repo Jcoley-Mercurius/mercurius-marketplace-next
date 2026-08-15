@@ -2,24 +2,21 @@
 
 import { RevealItem, ScrollReveal } from "@/components/home/ScrollReveal";
 
-const testimonials = [
+const experienceStatements = [
   {
     id: "simple-booking",
-    quote:
+    statement:
       "Choose a service without calling, texting, or negotiating. See a clear price when available, then receive updates and completion photos in one place.",
-    label: "Homeowner",
   },
   {
     id: "reliable-coordination",
-    quote:
+    statement:
       "Keep service coordination, pricing, and photo updates together—without chasing a provider across calls and texts.",
-    label: "Homeowner",
   },
   {
     id: "managed-follow-up",
-    quote:
+    statement:
       "When a job needs follow-up, have Mercurius coordinate the next steps instead of managing the issue alone.",
-    label: "Property Manager",
   },
 ];
 
@@ -46,8 +43,8 @@ export function TestimonialsSection() {
 
         <ScrollReveal staggerChildren={0.15}>
           <div className="grid gap-8 md:grid-cols-3">
-            {testimonials.map((testimonial, index) => (
-              <RevealItem key={testimonial.id} className="h-full">
+            {experienceStatements.map((experience, index) => (
+              <RevealItem key={experience.id} className="h-full">
                 <div
                   className={`h-full rounded-2xl border border-border/30 bg-card transition-shadow duration-300 ${
                     index === 0
@@ -55,17 +52,8 @@ export function TestimonialsSection() {
                       : "elev-1 hover:elev-2 p-8"
                   }`}
                 >
-                  <p className="mb-6 text-lg text-foreground">
-                    <span className="font-serif text-2xl text-coral">
-                      &quot;
-                    </span>
-                    {testimonial.quote}
-                    <span className="font-serif text-2xl text-coral">
-                      &quot;
-                    </span>
-                  </p>
-                  <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    {testimonial.label}
+                  <p className="text-lg text-foreground">
+                    {experience.statement}
                   </p>
                 </div>
               </RevealItem>

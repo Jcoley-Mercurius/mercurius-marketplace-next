@@ -69,8 +69,8 @@ export function FinalCTASection() {
               Grow Your Business With Mercurius.
             </h2>
             <p className="mb-6 text-primary-foreground/70">
-              More recurring customers, automated scheduling, secure payments.
-              Less time chasing leads.
+              Matched local opportunities, package pricing tools, and less admin
+              between you and the next job.
             </p>
             <Link
               href="/vendors/apply"

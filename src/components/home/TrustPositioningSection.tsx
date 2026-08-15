@@ -29,9 +29,9 @@ import {
 const negotiatedPillars = [
   {
     icon: TrendingDown,
-    title: "Volume Pricing",
-    desc: "Vendors get steady, recurring work through Mercurius — which supports better package rates than one-off calls.",
-    stat: "Steady work",
+    title: "Agreed Package Rates",
+    desc: "Mercurius works with vetted vendors to publish agreed package rates, so homeowners can see clear scope and pricing without calling around.",
+    stat: "Clear packages",
   },
   {
     icon: ShieldCheck,
@@ -53,12 +53,12 @@ const warrantyBullets = [
   { icon: Clock, label: "Job Records and Photos Stored on the Platform" },
   { icon: PhoneCall, label: "Raise an Issue Directly Through Mercurius" },
   { icon: Gavel, label: "Mercurius Mediates and Holds Vendors Accountable" },
-  { icon: UserCheck, label: "Resolution Tracked Until the Issue Is Fixed" },
+  { icon: UserCheck, label: "Resolution Steps Tracked in the Platform" },
 ];
 
 const homeownerPoints = [
   { icon: CreditCard, label: "Clear, Upfront Pricing on Fixed Packages" },
-  { icon: ShieldCheck, label: "We Follow Up Until the Job Is Right" },
+  { icon: ShieldCheck, label: "We Coordinate Follow-Up When Issues Arise" },
   { icon: Camera, label: "Photo Proof of Completed Work" },
   { icon: MessageCircle, label: "All Communication Through the Platform" },
   { icon: Scale, label: "Mercurius Mediates Disputes for You" },
@@ -68,8 +68,8 @@ const homeownerPoints = [
 const vendorPoints = [
   { icon: Shield, label: "Protection From False or Unfair Claims" },
   { icon: Upload, label: "Upload Job Photos as Documentation" },
-  { icon: BarChart3, label: "Performance Insights and Rankings" },
-  { icon: TrendingUp, label: "More Jobs Through Reliability" },
+  { icon: BarChart3, label: "Job Records and Performance Visibility" },
+  { icon: TrendingUp, label: "Reliability Documented in the Portal" },
   { icon: Megaphone, label: "Marketing and Growth Tools" },
   { icon: AlertTriangle, label: "Escalation and Dispute Support" },
 ];
@@ -91,11 +91,11 @@ export function TrustPositioningSection() {
               We Did the Haggling for You
             </span>
             <h2 className="headline-primary mb-3 text-foreground">
-              The Best Rates, Pre-Negotiated
+              Package Rates, Agreed Upfront
             </h2>
             <p className="mx-auto max-w-2xl text-base text-muted-foreground md:text-lg">
-              No calling around. No haggling tax. We&apos;ve already negotiated
-              industry-best rates with our vetted vendors.
+              No calling around. Package rates are agreed with vetted vendors
+              and shown clearly when available.
             </p>
           </div>
 
@@ -192,7 +192,7 @@ export function TrustPositioningSection() {
           <ProtectionCard
             title="For Homeowners"
             points={homeownerPoints}
-            quote="We don't just connect you with a provider. We make sure the job gets done right, and you have proof."
+            quote="We don't just connect you with a provider. We document the job and help coordinate follow-up when concerns arise."
           />
           <ProtectionCard
             title="For Vendors"

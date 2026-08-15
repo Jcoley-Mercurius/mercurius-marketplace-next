@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import {
   Camera,
+  Check,
   CreditCard,
   DollarSign,
   EyeOff,
@@ -41,9 +42,9 @@ const solutionBullets = [
 ];
 
 const guarantees = [
-  { label: "Clear Price", pct: 100 },
-  { label: "Managed Job", pct: 100 },
-  { label: "Photo Proof", pct: 90 },
+  "Clear Price",
+  "Managed Job",
+  "Photo Proof",
 ];
 
 export function ProblemSolutionSection() {
@@ -160,26 +161,15 @@ export function ProblemSolutionSection() {
               </div>
 
               <div className="grid grid-cols-3 gap-2.5">
-                {guarantees.map((item) => (
+                {guarantees.map((label) => (
                   <div
-                    key={item.label}
-                    className="theme-glass-subtle rounded-xl border p-3 backdrop-blur-sm"
+                    key={label}
+                    className="theme-glass-subtle flex items-center justify-center gap-2 rounded-full border px-3 py-2.5 backdrop-blur-sm"
                   >
-                    <div className="mb-2 flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-full bg-accent" />
-                      <span className="text-xs font-medium text-foreground">
-                        {item.label}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Standard
-                    </div>
-                    <div className="mt-1.5 h-1 w-full rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-accent/40"
-                        style={{ width: `${item.pct}%` }}
-                      />
-                    </div>
+                    <Check className="h-3.5 w-3.5 shrink-0 text-accent" />
+                    <span className="text-xs font-medium text-foreground">
+                      {label}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -188,26 +178,15 @@ export function ProblemSolutionSection() {
         </div>
 
         <motion.div
-          className="mx-auto grid max-w-2xl grid-cols-3 gap-4"
+          className="mx-auto max-w-2xl text-center"
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-40px" }}
           transition={{ duration: 0.5 }}
         >
-          {[
-            { value: "100%", label: "Jobs managed end to end" },
-            { value: "Upfront", label: "Pricing before you book" },
-            { value: "Every", label: "Job photo-verified" },
-          ].map((stat) => (
-            <div key={stat.label} className="text-center">
-              <div className="font-display text-xl font-extrabold text-accent md:text-2xl lg:text-3xl">
-                {stat.value}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground md:text-sm">
-                {stat.label}
-              </div>
-            </div>
-          ))}
+          <p className="font-display text-base font-semibold text-foreground md:text-lg">
+            Managed end to end · Priced before booking · Photo-documented
+          </p>
         </motion.div>
       </div>
     </section>
