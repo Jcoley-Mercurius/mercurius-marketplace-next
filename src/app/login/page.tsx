@@ -94,6 +94,7 @@ export default function LoginPage() {
               <span className="text-xl font-semibold text-foreground">
                 Mercurius
               </span>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Homeowner</span>
             </Link>
 
             <h1 className="mb-2 text-3xl font-semibold tracking-tight text-foreground">
