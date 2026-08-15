@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Search,
   Shield,
-  Star,
   UserCheck,
   Wrench,
 } from "lucide-react";
@@ -28,14 +27,14 @@ const steps = [
     number: "01",
     title: "Tell Us What You Need",
     description: "Pick from our curated service catalog — or build a custom plan. No phone calls, no awkward negotiations.",
-    details: ["Lawn care, pool cleaning, handyman & more", "Recurring plans for monthly savings", "Clear, upfront pricing before you commit"],
+    details: ["Lawn care, pool cleaning, handyman & more", "Recurring service plans when available", "Clear, upfront pricing before you commit"],
     icon: Search,
     accent: "sage" as const,
   },
   {
     number: "02",
     title: "We Match & Manage",
-    description: "Our team hand-picks a vetted, insured local pro and handles all scheduling, communication, and quality checks.",
+    description: "Our team helps source a vetted local pro and coordinates service fit, scheduling, communication, and job follow-up.",
     details: ["Background-checked, insured professionals", "Platform-managed scheduling & updates", "No more phone tag with contractors"],
     icon: UserCheck,
     accent: "coral" as const,
@@ -43,27 +42,20 @@ const steps = [
   {
     number: "03",
     title: "Verified & Followed Up",
-    description: "Every job includes photo proof and a review by our team. If it's not right, we work with the provider to make it right.",
-    details: ["Photo proof of completed work", "Our team reviews every completed job", "One-tap rebooking & rescheduling"],
+    description: "Completed jobs are photo-documented and reviewed through the platform. If something isn't right, raise it through Mercurius and we'll work with the provider on resolution.",
+    details: ["Completion photos stored with the job", "Completed work reviewed through the platform", "Rebooking & rescheduling through the platform"],
     icon: FileCheck,
     accent: "sage" as const,
   },
 ];
 
 const benefits = [
-  { icon: Shield, title: "Vetted Professionals", description: "Every provider is background-checked, insured, and trained to our standards." },
-  { icon: Calendar, title: "Easy Scheduling", description: "Book once, and we handle all coordination. No more chasing contractors." },
+  { icon: Shield, title: "Application-Reviewed Providers", description: "Provider applications include license, insurance, and background-check documentation for Mercurius to review before a provider joins the network." },
+  { icon: Calendar, title: "Easy Scheduling", description: "Submit a request, and Mercurius coordinates provider fit, availability, scheduling, and updates from there." },
   { icon: MessageSquare, title: "Single Point of Contact", description: "One platform for all your home services. One inbox. One relationship." },
-  { icon: Award, title: "Quality Follow-Up", description: "Not satisfied? We'll send someone back to fix it at no extra charge." },
-  { icon: Clock, title: "Time Saved", description: "Homeowners save an average of 5 hours per month on maintenance tasks." },
+  { icon: Award, title: "Quality Follow-Up", description: "Not satisfied? Raise it through Mercurius and we'll work with the provider on resolution." },
+  { icon: Clock, title: "Time Saved", description: "Spend less time coordinating providers, schedules, and service updates across separate channels." },
   { icon: CheckCircle2, title: "Transparent Pricing", description: "Fixed packages show the full price upfront. Custom work is quoted for your approval before we start." },
-];
-
-const trustStats = [
-  { value: "700+", label: "Homeowners served" },
-  { value: "4.9★", label: "Average rating" },
-  { value: "100%", label: "Jobs reviewed by our team" },
-  { value: "24hr", label: "Response time" },
 ];
 
 export default function HowItWorksPage() {
@@ -87,7 +79,6 @@ export default function HowItWorksPage() {
               <h1 className="mb-6 text-4xl font-bold leading-tight text-foreground md:text-5xl lg:text-6xl">Three Steps to a <span className="hero-gradient-text">Stress-Free Home</span></h1>
               <p className="mx-auto mb-8 max-w-2xl text-xl leading-relaxed text-muted-foreground">Upfront pricing on fixed packages. No arguing with contractors. No wondering if the job got done. Here&apos;s how Mercurius handles the hard parts.</p>
               <div className="flex flex-col justify-center gap-4 sm:flex-row"><ActionLink href="/#bundle-builder">Get Started <ArrowRight className="ml-2 h-5 w-5" /></ActionLink><ActionLink href="/services" outline>Browse Services</ActionLink></div>
-              <div className="mx-auto mt-12 grid max-w-2xl grid-cols-2 gap-4 md:grid-cols-4">{trustStats.map((stat) => <div key={stat.label} className="text-center"><p className="text-2xl font-bold text-foreground">{stat.value}</p><p className="mt-1 text-xs text-muted-foreground">{stat.label}</p></div>)}</div>
             </div>
           </div>
         </section>
@@ -110,7 +101,7 @@ export default function HowItWorksPage() {
                         <div className={cn("relative flex aspect-[4/3] flex-col items-center justify-center rounded-3xl border border-border/30 p-8 md:p-12", step.accent === "coral" ? "bg-coral-light/50" : "bg-sage-light/50")}>
                           <div className={cn("mb-6 flex h-20 w-20 items-center justify-center rounded-2xl", step.accent === "coral" ? "bg-coral/10" : "bg-accent/10")}><step.icon className={cn("h-10 w-10", step.accent === "coral" ? "text-coral" : "text-accent")} /></div>
                           <p className="text-6xl font-bold text-foreground/5">{step.number}</p>
-                          {index === 0 && <FloatingBadge className="-bottom-3 -right-3"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" />Instant quote</FloatingBadge>}
+                          {index === 0 && <FloatingBadge className="-bottom-3 -right-3"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" />Upfront package pricing</FloatingBadge>}
                           {index === 1 && <FloatingBadge className="-right-3 -top-3"><Shield className="h-4 w-4 text-sage" />Vetted &amp; insured</FloatingBadge>}
                           {index === 2 && <FloatingBadge className="-bottom-3 -left-3"><Camera className="h-4 w-4 text-coral" />Photo verified</FloatingBadge>}
                         </div>
@@ -125,12 +116,10 @@ export default function HowItWorksPage() {
 
         <section className="section-sm bg-muted">
           <div className="container-wide">
-            <div className="mx-auto mb-10 max-w-2xl text-center"><span className="mb-4 inline-block rounded-full bg-coral-light px-4 py-2 text-sm font-medium text-coral-dark">Why Mercurius</span><h2 className="mb-3 text-3xl font-bold text-foreground md:text-4xl">Built Different, On Purpose</h2><p className="text-lg text-muted-foreground">We&apos;re not another marketplace. We&apos;re a managed platform that puts accountability first.</p></div>
+            <div className="mx-auto mb-10 max-w-2xl text-center"><span className="mb-4 inline-block rounded-full bg-coral-light px-4 py-2 text-sm font-medium text-coral-dark">Why Mercurius</span><h2 className="mb-3 text-3xl font-bold text-foreground md:text-4xl">Built Different, On Purpose</h2><p className="text-lg text-muted-foreground">Mercurius is a managed marketplace built around coordination, documentation, and accountability.</p></div>
             <ScrollReveal staggerChildren={0.1}><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{benefits.map((benefit) => <RevealItem key={benefit.title}><div className="card-feature h-full"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-sage-light"><benefit.icon className="h-6 w-6 text-sage" /></div><h3 className="mb-2 text-lg font-semibold text-foreground">{benefit.title}</h3><p className="text-sm text-muted-foreground">{benefit.description}</p></div></RevealItem>)}</div></ScrollReveal>
           </div>
         </section>
-
-        <section className="bg-background py-12"><div className="container-wide"><div className="flex flex-col items-center gap-8 rounded-2xl border border-border/30 bg-card p-8 md:flex-row md:p-10"><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map((item) => <Star key={item} className="h-5 w-5 fill-warning text-warning" />)}</div><blockquote className="flex-1 text-center text-lg text-foreground md:text-left"><span className="font-serif text-2xl text-coral">&quot;</span>I didn&apos;t have to call, text, or negotiate with anyone. I picked a service, got a clear price, and the job was done. Photos after. That&apos;s it.<span className="font-serif text-2xl text-coral">&quot;</span></blockquote><div className="shrink-0 text-center md:text-right"><p className="font-semibold text-foreground">Sarah M.</p><p className="text-sm text-muted-foreground">Homeowner</p></div></div></div></section>
 
         <section ref={ctaRef} onMouseMove={handleCtaMouseMove} className="bg-cta-section section relative overflow-hidden text-primary-foreground">
           <div className="pointer-events-none absolute h-[500px] w-[500px] rounded-full opacity-60 blur-[120px] transition-opacity duration-500" style={{ background: "radial-gradient(circle, hsl(150 35% 45% / 0.35) 0%, transparent 70%)", left: `${ctaGlow.x}%`, top: `${ctaGlow.y}%`, transform: "translate(-50%, -50%)" }} />
