@@ -180,6 +180,7 @@ export default function RequestServicePage() {
   const { services: catalogServices, categories: catalogCategories, loading: catalogLoading } = useServiceCatalog();
 
   useEffect(() => {
+    let active = true;
     try {
       const saved = window.sessionStorage.getItem(storageKey);
       const builder = window.sessionStorage.getItem("homePlanSelection");
@@ -237,6 +238,9 @@ export default function RequestServicePage() {
           setPackageSelections(Object.fromEntries(requestedServices
             .filter((item) => item.packageId && item.pricingMode)
             .map((item) => [item.id, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions, packageName: item.packageName, packageDescription: item.packageDescription, tierName: item.tierName, tierIncludes: item.tierIncludes }])));
+          void hydrateBuilderPackageSelections(requestedServices).then((selections) => {
+            if (active && Object.keys(selections).length > 0) setPackageSelections(selections);
+          }).catch(() => undefined);
           setPreferredProviders(Object.fromEntries(requestedServices
             .filter((item) => typeof item.preferredContractorId === "string")
             .map((item) => [item.id, item.preferredContractorId!])));
@@ -281,6 +285,7 @@ export default function RequestServicePage() {
     } finally {
       setHydrated(true);
     }
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -793,7 +798,7 @@ export default function RequestServicePage() {
           <div className="container-wide max-w-6xl">
             <form onSubmit={handleSubmit}>
               {step === "services" && <ServicesStep services={requestServiceOptions} categories={catalogCategories} catalogLoading={catalogLoading} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} otherServiceDetails={otherServiceDetails} onOtherServiceDetails={setOtherServiceDetails} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} preferredProviderNames={preferredProviderNames} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
               {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected && coverageStatus === "covered"} hasQuoteServices={fixedServices.length !== selectedServices.length} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onRetryCoverage={() => void verifyCoverage()} onBack={() => setStep("details")} />}
             </form>
           </div>
@@ -1010,6 +1015,7 @@ type DetailsStepProps = {
   selectedServices: ServiceOption[];
   frequencies: Record<string, Frequency>;
   packageSelections: Record<string, PackageSelection>;
+  preferredProviderNames: Record<string, string>;
   questionAnswers: Record<string, Record<string, string>>;
   isSignedIn: boolean;
   onQuestionAnswer: (serviceId: string, questionKey: string, answer: string) => void;
@@ -1079,15 +1085,13 @@ function DetailsStep(props: DetailsStepProps) {
       questions: props.packageSelections[service.id]?.questions ?? [],
     }))
     .filter((group) => group.questions.length);
-  const packageDetails = fixedServices.flatMap((service) => {
+  const packageDetails = props.selectedServices.flatMap((service) => {
     const frequency = props.frequencies[service.id] ?? service.defaultFrequency;
     const selection = props.packageSelections[service.id];
     if (!selection) return [];
     const description = selection.packageDescription?.trim();
     const includes = selection.tierIncludes?.filter(Boolean) ?? [];
-    return description || includes.length > 0
-      ? [{ service, frequency, selection, description, includes }]
-      : [];
+    return [{ service, frequency, selection, description, includes }];
   });
   const descriptionIsProminent = selectionMix !== "fixed";
 
@@ -1109,7 +1113,7 @@ function DetailsStep(props: DetailsStepProps) {
             <div>
               <h3 className="font-semibold">What&apos;s included</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Published details from the live package and selected starting tier.
+                Package details are kept separate for every service in your plan.
               </p>
             </div>
             <Badge variant="secondary" className="hidden border-accent-border bg-accent-soft text-sage-dark sm:inline-flex">
@@ -1117,7 +1121,10 @@ function DetailsStep(props: DetailsStepProps) {
             </Badge>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {packageDetails.map(({ service, frequency, selection, description, includes }) => (
+            {packageDetails.map(({ service, frequency, selection, description, includes }) => {
+              const providerName = props.preferredProviderNames[service.id];
+              const isFixed = service.availability === "fixed" && servicePrice(service, frequency) > 0;
+              return (
               <Card key={service.id} className="border-accent-border bg-accent-subtle/30 shadow-sm">
                 <CardHeader className="gap-2 pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1129,6 +1136,7 @@ function DetailsStep(props: DetailsStepProps) {
                   {selection.packageName && selection.packageName !== service.name && (
                     <p className="text-xs font-medium text-muted-foreground">{selection.packageName}</p>
                   )}
+                  {providerName && <p className="text-xs text-sage-dark">Requested provider: {providerName}</p>}
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {description && (
@@ -1144,6 +1152,13 @@ function DetailsStep(props: DetailsStepProps) {
                       ))}
                     </ul>
                   )}
+                  {!description && includes.length === 0 && (
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {isFixed
+                        ? "This package does not include a published itemized scope. Its live price and selected tier are re-checked when you submit."
+                        : "The provider will confirm the service scope and price before booking."}
+                    </p>
+                  )}
                   {selection.tierName && (
                     <p className="border-t border-accent-border pt-2 text-[11px] text-muted-foreground">
                       Scope shown for the {selection.tierName} tier. Final tier is re-checked with your answers at submit.
@@ -1151,7 +1166,8 @@ function DetailsStep(props: DetailsStepProps) {
                   )}
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -2092,6 +2108,56 @@ function isBuilderRequestedService(item: unknown): item is BuilderRequestedServi
   if (!item || typeof item !== "object") return false;
   const value = item as Partial<BuilderRequestedService>;
   return typeof value.id === "string" && typeof value.name === "string" && ["fixed", "quote", "sourcing"].includes(String(value.availability));
+}
+
+async function hydrateBuilderPackageSelections(requestedServices: BuilderRequestedService[]) {
+  const selections = Object.fromEntries(requestedServices.flatMap((item) =>
+    item.packageId && item.pricingMode
+      ? [[item.id, {
+          packageId: item.packageId,
+          tierId: item.tierId,
+          pricingMode: item.pricingMode,
+          questions: item.questions,
+          packageName: item.packageName,
+          packageDescription: item.packageDescription,
+          tierName: item.tierName,
+          tierIncludes: item.tierIncludes,
+        } satisfies PackageSelection]]
+      : [],
+  ));
+  const packageIds = [...new Set(Object.values(selections).map((selection) => selection.packageId))];
+  if (packageIds.length === 0) return selections;
+
+  const supabase = createClient();
+  const tierIds = [...new Set(Object.values(selections).flatMap((selection) => selection.tierId ? [selection.tierId] : []))];
+  const [packageResult, tierResult, questionResult] = await Promise.all([
+    supabase.from("vendor_packages").select("id, name, description").in("id", packageIds),
+    tierIds.length
+      ? supabase.from("package_tiers").select("id, package_id, name, includes").in("id", tierIds)
+      : Promise.resolve({ data: [], error: null }),
+    supabase.from("package_qualifying_questions").select("id, package_id, question_key, question_label, input_type, unit, options, is_required, sort_order").in("package_id", packageIds).order("sort_order"),
+  ]);
+
+  const packageRows = packageResult.error ? [] : (packageResult.data ?? []) as { id: string; name: string; description: string | null }[];
+  const tierRows = tierResult.error ? [] : (tierResult.data ?? []) as { id: string; package_id: string; name: string; includes: string[] | null }[];
+  const questionRows = questionResult.error ? null : (questionResult.data ?? []) as (PackageQualifyingQuestion & { package_id: string })[];
+
+  return Object.fromEntries(Object.entries(selections).map(([serviceId, selection]) => {
+    const packageRow = packageRows.find((row) => row.id === selection.packageId);
+    const tierRow = selection.tierId
+      ? tierRows.find((row) => row.id === selection.tierId && row.package_id === selection.packageId)
+      : undefined;
+    return [serviceId, {
+      ...selection,
+      packageName: packageRow?.name ?? selection.packageName,
+      packageDescription: packageRow?.description ?? selection.packageDescription,
+      tierName: tierRow?.name ?? selection.tierName,
+      tierIncludes: tierRow?.includes?.filter((included) => typeof included === "string" && included.trim()) ?? selection.tierIncludes,
+      questions: questionRows
+        ? questionRows.filter((question) => question.package_id === selection.packageId)
+        : selection.questions,
+    }];
+  }));
 }
 
 function questionOptions(value: unknown): string[] {
