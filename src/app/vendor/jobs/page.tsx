@@ -92,6 +92,8 @@ export default function VendorJobsPage() {
     setError("");
     try {
       const supabase = createClient();
+      const expiryResult = await supabase.rpc("expire_stale_matches");
+      if (expiryResult.error) console.warn("Unable to expire stale offers", expiryResult.error.message);
       const contractorResult = await supabase.from("contractors").select("id").eq("user_id", user.id).maybeSingle();
       if (contractorResult.error) throw contractorResult.error;
       if (!contractorResult.data) {
@@ -144,8 +146,15 @@ export default function VendorJobsPage() {
       if (kind === "accept") {
         const result = await supabase.rpc("vendor_accept_job", { _job_id: job.id });
         if (result.error) throw result.error;
-        replaceStatus(job.id, "scheduled");
-        toast.success("Request accepted", { description: "The assignment is confirmed and now appears in Active Jobs. Use Messages to coordinate details before starting work." });
+        const refreshed = await supabase.from("service_requests").select("status, contractor_id").eq("id", job.id).maybeSingle();
+        if (refreshed.error) throw refreshed.error;
+        if (refreshed.data?.status === "scheduled" && refreshed.data.contractor_id) {
+          replaceStatus(job.id, "scheduled");
+          toast.success("Request accepted", { description: "The assignment is confirmed and now appears in Active Jobs. Use Messages to coordinate details before starting work." });
+        } else {
+          await load();
+          toast.info("Offer no longer available", { description: "Eligibility or the response window changed, so Mercurius continued matching the request." });
+        }
       } else if (kind === "decline") {
         const result = await supabase.rpc("vendor_decline_job", { _job_id: job.id, _reason: "Vendor declined" });
         if (result.error) throw result.error;

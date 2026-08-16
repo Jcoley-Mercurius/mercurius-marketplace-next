@@ -625,7 +625,8 @@ export default function RequestServicePage() {
         return {
           customer_id: user.id,
           service_type: service.name,
-          contractor_id: preferredProviders[service.id] ?? livePackage?.contractorId ?? null,
+          contractor_id: null,
+          preferred_contractor_id: preferredProviders[service.id] ?? livePackage?.contractorId ?? null,
           address: streetAddress.trim(),
           city: city.trim(),
           state: stateCode.trim().toUpperCase(),
@@ -685,6 +686,21 @@ export default function RequestServicePage() {
           throw new Error(`Your photos could not be uploaded, so no request was submitted. ${errorMessage(reason)}`);
         }
       }
+
+      const requestsReadyForMatching = (insertedRequests ?? []).filter(
+        (request) => request.pricing_mode !== "fixed" || request.quote_only,
+      );
+      const matchingResults = await Promise.all(
+        requestsReadyForMatching.map((request) => supabase.rpc("start_request_matching", { _request_id: request.id })),
+      );
+      matchingResults.forEach((result, index) => {
+        if (result.error) {
+          console.error("Unable to start request matching", {
+            requestId: requestsReadyForMatching[index]?.id,
+            error: result.error.message,
+          });
+        }
+      });
 
       window.sessionStorage.removeItem(storageKey);
       photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));

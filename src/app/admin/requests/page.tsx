@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, 
 import {
   AlertCircle,
   AlertTriangle,
-  Award,
+  ArrowRight,
   Calendar,
   CheckCircle2,
   DollarSign,
@@ -17,7 +17,6 @@ import {
   Save,
   Search,
   Send,
-  Star,
   User,
   UserCheck,
 } from "lucide-react";
@@ -63,6 +62,8 @@ type ServiceRequest = {
   declined_contractor_ids: string[];
   payment_status: string;
   needs_admin_review: boolean;
+  matching_status: string;
+  preferred_contractor_id: string | null;
 };
 
 type Contractor = {
@@ -85,6 +86,29 @@ type MatchAttempt = {
   responded_at: string | null;
   outcome: string;
   reason: string | null;
+};
+
+type EligibleMatch = {
+  contractor_id: string;
+  contractor_name: string;
+  package_id: string;
+  package_tier_id: string | null;
+  promotion_id: string | null;
+  frequency: string;
+  path: "fixed" | "quote";
+  base_price: number | null;
+  effective_price: number | null;
+  median_fixed_price: number | null;
+  fixed_score: number;
+  profile_score: number;
+  verification_score: number;
+  price_band_score: number;
+  response_score: number;
+  freshness_score: number;
+  total_score: number;
+  preferred: boolean;
+  score_breakdown: Record<string, number>;
+  rank_order: number;
 };
 
 type Message = {
@@ -121,6 +145,7 @@ const outcomeStyle: Record<string, string> = {
   accepted: "border-emerald-200 bg-emerald-50 text-emerald-700",
   declined: "border-amber-200 bg-amber-50 text-amber-700",
   expired: "border-red-200 bg-red-50 text-red-700",
+  withdrawn: "border-border bg-muted text-muted-foreground",
   reassigned: "border-border bg-muted text-muted-foreground",
 };
 
@@ -137,6 +162,8 @@ export default function AdminRequestsPage() {
   const [assignSearch, setAssignSearch] = useState("");
   const [attempts, setAttempts] = useState<MatchAttempt[]>([]);
   const [attemptError, setAttemptError] = useState("");
+  const [eligibleMatches, setEligibleMatches] = useState<EligibleMatch[]>([]);
+  const [eligibleError, setEligibleError] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [note, setNote] = useState("");
   const [action, setAction] = useState<Action>(null);
@@ -148,8 +175,10 @@ export default function AdminRequestsPage() {
     setError("");
     try {
       const supabase = createClient();
+      const expiryResult = await supabase.rpc("expire_stale_matches");
+      if (expiryResult.error) console.warn("Unable to expire stale offers", expiryResult.error.message);
       const [requestResult, profileResult, contractorResult] = await Promise.all([
-        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review").order("created_at", { ascending: false }),
+        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id").order("created_at", { ascending: false }),
         supabase.from("profiles").select("user_id, full_name"),
         supabase.from("contractors").select("id, name, services, location, rating, jobs_completed, badges, is_active").order("name"),
       ]);
@@ -189,6 +218,15 @@ export default function AdminRequestsPage() {
     } else setAttempts((result.data ?? []) as MatchAttempt[]);
   }, []);
 
+  const loadEligible = useCallback(async (requestId: string) => {
+    setEligibleError("");
+    const result = await createClient().rpc("find_eligible_packages", { _request_id: requestId });
+    if (result.error) {
+      setEligibleMatches([]);
+      setEligibleError(result.error.message);
+    } else setEligibleMatches((result.data ?? []) as EligibleMatch[]);
+  }, []);
+
   const openDetail = (request: ServiceRequest) => {
     setSelected(request);
     setDetailTab("details");
@@ -196,6 +234,7 @@ export default function AdminRequestsPage() {
     setQuoteAmount(String(request.quote_amount ?? request.total_amount ?? ""));
     setNote(request.notes ?? "");
     void loadAttempts(request.id);
+    void loadEligible(request.id);
   };
 
   const runAction = async (request: ServiceRequest, kind: string, operation: () => Promise<{ error: { message: string } | null }>, success: string) => {
@@ -204,7 +243,9 @@ export default function AdminRequestsPage() {
       const result = await operation();
       if (result.error) throw result.error;
       await load(false);
-      if (selected?.id === request.id) await loadAttempts(request.id);
+      if (selected?.id === request.id) {
+        await Promise.all([loadAttempts(request.id), loadEligible(request.id)]);
+      }
       toast.success(success);
     } catch (reason) {
       toast.error("Action could not be completed", { description: reason instanceof Error ? reason.message : "Please try again." });
@@ -213,11 +254,24 @@ export default function AdminRequestsPage() {
     }
   };
 
-  const assignVendor = async (request: ServiceRequest, contractor: Contractor) => {
+  const assignVendor = async (request: ServiceRequest, candidate: EligibleMatch) => {
     await runAction(request, "assign", async () => {
-      const result = await createClient().rpc("admin_assign_contractor", { _job_id: request.id, _contractor_id: contractor.id });
+      const result = await createClient().rpc("create_job_offer", {
+        _request_id: request.id,
+        _contractor_id: candidate.contractor_id,
+        _package_id: candidate.package_id,
+        _package_tier_id: candidate.package_tier_id,
+        _force: true,
+      });
       return { error: result.error };
-    }, `${contractor.name} was assigned and the response window started.`);
+    }, `${candidate.contractor_name} received an exclusive four-hour offer.`);
+  };
+
+  const offerNext = async (request: ServiceRequest) => {
+    await runAction(request, "next", async () => {
+      const result = await createClient().rpc("offer_next_for_request", { _request_id: request.id });
+      return { error: result.error };
+    }, "Matching advanced to the next eligible provider, or moved to sourcing if none remain.");
   };
 
   const releaseMatch = async (request: ServiceRequest) => {
@@ -268,17 +322,10 @@ export default function AdminRequestsPage() {
     });
   }, [contractorNames, profiles, requests, search, statusFilter]);
 
-  const matchingVendors = useMemo(() => {
-    if (!selected) return [];
-    const requestService = normalize(selected.service_type);
+  const visibleEligibleMatches = useMemo(() => {
     const query = assignSearch.trim().toLowerCase();
-    return contractors.filter((contractor) => contractor.is_active).map((contractor) => ({
-      ...contractor,
-      servicesMatch: contractor.services.some((service) => normalize(service).includes(requestService) || requestService.includes(normalize(service))),
-      declined: selected.declined_contractor_ids.includes(contractor.id),
-      trustScore: Math.min(100, Math.round(Number(contractor.rating ?? 0) * 15 + Number(contractor.jobs_completed ?? 0) * 0.3)),
-    })).filter((contractor) => !query || contractor.name.toLowerCase().includes(query) || (contractor.location ?? "").toLowerCase().includes(query)).sort((a, b) => Number(a.declined) - Number(b.declined) || Number(b.servicesMatch) - Number(a.servicesMatch) || b.trustScore - a.trustScore);
-  }, [assignSearch, contractors, selected]);
+    return eligibleMatches.filter((candidate) => !query || candidate.contractor_name.toLowerCase().includes(query));
+  }, [assignSearch, eligibleMatches]);
 
   if (mode === "loading") return <Loading />;
   if (mode === "error") return <ErrorState message={error} retry={() => void load(true)} />;
@@ -293,11 +340,9 @@ export default function AdminRequestsPage() {
 
     <Card><CardContent className="p-0">{filtered.length === 0 ? <Empty title={requests.length ? "No requests match these filters" : "No service requests yet"} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead className="border-b bg-muted/60"><tr className="text-left">{["Request", "Homeowner", "Vendor", "Location", "Preferred date", "Match", "Status", "Actions"].map((heading) => <th key={heading} className="whitespace-nowrap p-4 font-medium text-muted-foreground">{heading}</th>)}</tr></thead><tbody className="divide-y">{filtered.map((request) => { const overdue = isOverdue(request); return <tr key={request.id} className={cn("transition-colors hover:bg-muted/30", overdue && "bg-red-50/40")}><td className="p-4"><p className="font-medium">{request.service_type}</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{request.id.slice(0, 10)}</p></td><td className="p-4">{profiles[request.customer_id] ?? "Unknown"}</td><td className="p-4">{request.contractor_id ? contractorNames[request.contractor_id] ?? "Unknown vendor" : <span className="text-muted-foreground">Unassigned</span>}</td><td className="p-4 text-muted-foreground">{request.city}, {request.state}</td><td className="p-4 text-muted-foreground">{request.preferred_date ? formatDate(request.preferred_date) : "Not set"}</td><td className="p-4 text-xs text-muted-foreground"><p className={cn(overdue && "font-medium text-red-700")}>{waitingLabel(request)}</p>{request.match_attempt_count > 1 && <p>{request.match_attempt_count} vendor attempts</p>}</td><td className="p-4"><div className="flex flex-wrap items-center gap-2"><Status status={request.status} />{(overdue || request.needs_admin_review) && <Badge variant="destructive"><AlertTriangle />{overdue ? "Overdue" : "Review"}</Badge>}</div></td><td className="p-4"><Button variant="ghost" size="sm" onClick={() => openDetail(request)}><Eye />Review</Button></td></tr>; })}</tbody></table></div>}</CardContent></Card>
 
-    <RequestDialog request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} vendors={matchingVendors} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
+    <RequestDialog request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
   </div>;
 }
-
-type RankedContractor = Contractor & { servicesMatch: boolean; declined: boolean; trustScore: number };
 
 function RequestDialog(props: {
   request: ServiceRequest | null;
@@ -305,7 +350,8 @@ function RequestDialog(props: {
   setTab: (value: string) => void;
   profiles: Record<string, string>;
   contractorNames: Record<string, string>;
-  vendors: RankedContractor[];
+  candidates: EligibleMatch[];
+  eligibleError: string;
   assignSearch: string;
   setAssignSearch: (value: string) => void;
   attempts: MatchAttempt[];
@@ -316,7 +362,8 @@ function RequestDialog(props: {
   setNote: (value: string) => void;
   action: Action;
   close: () => void;
-  assign: (request: ServiceRequest, contractor: Contractor) => Promise<void>;
+  assign: (request: ServiceRequest, candidate: EligibleMatch) => Promise<void>;
+  offerNext: (request: ServiceRequest) => Promise<void>;
   release: (request: ServiceRequest) => Promise<void>;
   changeStatus: (request: ServiceRequest, status: string) => Promise<void>;
   sendQuote: (request: ServiceRequest) => Promise<void>;
@@ -329,7 +376,7 @@ function RequestDialog(props: {
     <div className="grid gap-3 text-sm sm:grid-cols-2"><Detail icon={User} label="Homeowner">{props.profiles[request.customer_id] ?? "Unknown"}</Detail><Detail icon={UserCheck} label="Vendor">{request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Unknown" : "Unassigned"}</Detail><Detail icon={MapPin} label="Address">{request.address}, {request.city}, {request.state} {request.zip_code}</Detail><Detail icon={Calendar} label="Preferred timing">{request.preferred_date ? formatDate(request.preferred_date) : "No date set"}{request.preferred_time && ` · ${request.preferred_time}`}</Detail><Detail icon={DollarSign} label="Amount">{request.total_amount === null ? "Quote required" : money(request.total_amount)}</Detail><Detail icon={CheckCircle2} label="Payment">{label(request.payment_status)}</Detail></div>
     {request.description && <section className="rounded-xl border bg-muted/30 p-4"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer scope</p><p className="whitespace-pre-wrap text-sm leading-6">{request.description}</p></section>}
 
-    {(!request.contractor_id || request.status === "pending") && <section className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4"><div className="mb-3 flex items-center gap-2"><UserCheck className="h-4 w-4 text-accent" /><h3 className="text-sm font-semibold">Assign Vendor</h3><Badge className="border-accent/20 bg-accent/10 text-[10px] text-accent">Smart Match</Badge></div><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search vendors..." value={props.assignSearch} onChange={(event) => props.setAssignSearch(event.target.value)} className="h-9 bg-card pl-9" /></div><div className="max-h-64 space-y-2 overflow-y-auto">{props.vendors.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">No eligible active vendors found.</p> : props.vendors.slice(0, 15).map((vendor) => <button key={vendor.id} type="button" disabled={busy || vendor.declined} onClick={() => void props.assign(request, vendor)} className={cn("flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-50", vendor.servicesMatch && "border-accent/30")}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted font-bold text-muted-foreground">{vendor.name.charAt(0)}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{vendor.name}</span>{vendor.servicesMatch && <Badge className="border-accent/20 bg-accent/10 text-[10px] text-accent"><CheckCircle2 />Matches</Badge>}{vendor.declined && <Badge variant="destructive">Previously declined</Badge>}</span><span className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">{vendor.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{vendor.location}</span>}<span className="flex items-center gap-1"><Star className="h-3 w-3" />{vendor.rating ?? "—"}</span><span className="flex items-center gap-1"><Award className="h-3 w-3" />Trust {vendor.trustScore}</span><span>{vendor.jobs_completed ?? 0} jobs</span></span></span>{props.action?.kind === "assign" && <Loader2 className="animate-spin" />}</button>)}</div></section>}
+    <section className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4"><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center"><div className="flex items-center gap-2"><UserCheck className="h-4 w-4 text-accent" /><h3 className="text-sm font-semibold">Eligible Provider Ranking</h3><Badge className="border-accent/20 bg-accent/10 text-[10px] text-accent">Live rules</Badge></div><Button size="sm" className="sm:ml-auto" disabled={busy} onClick={() => void props.offerNext(request)}>{props.action?.kind === "next" ? <Loader2 className="animate-spin" /> : <ArrowRight />}Offer next</Button></div><p className="mb-3 text-xs text-muted-foreground">Only active, marketing-enabled providers with matching packages and ZIP coverage appear. Raw scores are for operations only.</p><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search eligible providers..." value={props.assignSearch} onChange={(event) => props.setAssignSearch(event.target.value)} className="h-9 bg-card pl-9" /></div>{props.eligibleError ? <p className="py-4 text-center text-sm text-destructive">Eligibility unavailable: {props.eligibleError}</p> : <div className="max-h-80 space-y-2 overflow-y-auto">{props.candidates.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">No eligible providers for this service, frequency, and ZIP. Offer next will move the request to sourcing.</p> : props.candidates.slice(0, 20).map((candidate) => <div key={`${candidate.contractor_id}:${candidate.package_id}:${candidate.package_tier_id ?? "quote"}`} className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold text-muted-foreground">#{candidate.rank_order}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{candidate.contractor_name}</span><Badge variant="outline" className="text-[10px]">{candidate.path === "fixed" ? "Fixed" : "Quote"}</Badge>{candidate.preferred && <Badge className="border-accent/20 bg-accent/10 text-[10px] text-accent">Homeowner preference</Badge>}</span><span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>Score {Number(candidate.total_score).toFixed(1)}</span><span>Profile +{Number(candidate.profile_score).toFixed(1)}</span><span>Credentials +{Number(candidate.verification_score).toFixed(0)}</span><span>Price band +{Number(candidate.price_band_score).toFixed(0)}</span><span>History +{Number(candidate.response_score).toFixed(1)}</span><span>Freshness +{Number(candidate.freshness_score).toFixed(0)}</span></span></span><div className="flex items-center justify-between gap-3 sm:justify-end"><span className="text-sm font-semibold">{candidate.path === "fixed" && candidate.effective_price !== null ? money(Number(candidate.effective_price)) : "Quote"}</span><Button size="sm" variant="outline" disabled={busy} onClick={() => void props.assign(request, candidate)}>{props.action?.kind === "assign" ? <Loader2 className="animate-spin" /> : null}Force offer</Button></div></div>)}</div>}</section>
 
     {request.contractor_id && request.status !== "pending" && <section className="rounded-xl border bg-muted/30 p-4"><div className="flex items-center gap-2 text-sm"><CheckCircle2 className="h-4 w-4 text-accent" /><span className="font-medium">Assigned to {props.contractorNames[request.contractor_id] ?? "Unknown vendor"}</span></div>{request.status === "matched" && <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className={cn("text-xs text-muted-foreground", isOverdue(request) && "font-medium text-red-700")}>{waitingLabel(request)}{request.match_expires_at && ` · closes ${formatDateTime(request.match_expires_at)}`}</p><Button size="sm" variant="outline" disabled={busy} onClick={() => void props.release(request)}>{props.action?.kind === "release" && <Loader2 className="animate-spin" />}Release &amp; Rematch</Button></div>}</section>}
 
@@ -397,7 +444,6 @@ function ErrorState({ message, retry }: { message: string; retry: () => void }) 
 function Empty({ title }: { title: string }) { return <div className="py-16 text-center"><FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><p className="font-medium">{title}</p></div>; }
 function isOverdue(request: ServiceRequest) { return request.status === "matched" && Boolean(request.match_expires_at && Date.parse(request.match_expires_at) < Date.now()); }
 function waitingLabel(request: ServiceRequest) { if (request.status !== "matched" || !request.assigned_at) return "—"; const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(request.assigned_at)) / 60_000)); return minutes < 60 ? `${minutes}m waiting` : `${Math.floor(minutes / 60)}h ${minutes % 60}m waiting`; }
-function normalize(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 function label(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()); }
 function formatDate(value: string) { const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date); }
 function formatDateTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(date); }

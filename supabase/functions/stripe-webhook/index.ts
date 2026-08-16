@@ -183,14 +183,10 @@ Deno.serve(async (req) => {
         await markPaymentCaptured(inv.service_request_id);
 
         if (inv.service_request_id) {
-          // Single source of truth: the state machine validates + logs the move.
-          const { error: trErr } = await admin.rpc("transition_job_status", {
-            _job_id: inv.service_request_id,
-            _to_status: "in_progress",
-            _reason: "Payment received",
-            _metadata: { source: "stripe-webhook", event: event.type },
+          const { error: matchingError } = await admin.rpc("start_request_matching", {
+            _request_id: inv.service_request_id,
           });
-          if (trErr) console.warn("payment transition rejected:", trErr.message);
+          if (matchingError) console.warn("matching kickoff failed:", matchingError.message);
         }
 
         if (inv.customer_id) {
@@ -198,7 +194,7 @@ Deno.serve(async (req) => {
             inv.customer_id,
             "payment_received",
             "Payment Received",
-            `We've received your payment for invoice ${inv.invoice_number}. Your job is now scheduled.`,
+            `We've received your payment for invoice ${inv.invoice_number}. We'll now coordinate the provider offer.`,
             "/dashboard",
             "info",
             inv.service_request_id,
@@ -259,13 +255,10 @@ Deno.serve(async (req) => {
           .eq("id", sr.id);
         await markPaymentCaptured(sr.id);
         {
-          const { error: trErr } = await admin.rpc("transition_job_status", {
-            _job_id: sr.id,
-            _to_status: "in_progress",
-            _reason: "Recurring payment received",
-            _metadata: { source: "stripe-webhook", event: event.type },
+          const { error: matchingError } = await admin.rpc("start_request_matching", {
+            _request_id: sr.id,
           });
-          if (trErr) console.warn("recurring payment transition rejected:", trErr.message);
+          if (matchingError) console.warn("recurring matching kickoff failed:", matchingError.message);
         }
 
         if (sr.customer_id) {
