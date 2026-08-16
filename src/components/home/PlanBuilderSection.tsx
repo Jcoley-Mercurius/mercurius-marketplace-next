@@ -2,10 +2,13 @@
 
 import { Fragment, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   Bug,
   Droplets,
   Leaf,
+  MapPin,
   Plus,
   RefreshCw,
   Search,
@@ -15,6 +18,7 @@ import {
   Wind,
   Wrench,
 } from "lucide-react";
+import { EligibleProvidersRow, type EligibleProvider } from "@/components/home/EligibleProvidersRow";
 import {
   PlanningAvailabilityBadge,
   PlanningPlanSummary,
@@ -185,6 +189,8 @@ export function PlanBuilderSection() {
   const [activeCategory, setActiveCategory] = useState<Category | "all">("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [frequencies, setFrequencies] = useState<Record<string, Frequency>>({});
+  const [matchingZip, setMatchingZip] = useState("");
+  const router = useRouter();
 
   const services = useMemo<Service[]>(() => fallbackBuilderServices.map((service) => {
     const catalogService = catalogServices.find((item) => item.id === service.id);
@@ -276,30 +282,55 @@ export function PlanBuilderSection() {
     setFrequencies({});
   };
 
-  const savePlanDraft = () => {
+  const savePlanDraft = (choice?: { serviceId: string; provider: EligibleProvider }) => {
     const selectedFrequencies = Object.fromEntries(
       selectedServices.map((service) => [service.id, getFrequency(service)]),
     );
     window.sessionStorage.setItem("homePlanSelection", JSON.stringify({
       selectedServiceIds: selectedIds,
       frequencies: selectedFrequencies,
+      matchingZip: /^\d{5}$/.test(matchingZip.trim()) ? matchingZip.trim() : undefined,
       requestedServices: selectedServices.map((service) => {
         const frequency = getFrequency(service);
+        const provider = choice?.serviceId === service.id ? choice.provider : undefined;
+        const selectedPackage = service.packageSelections?.[frequency];
         return {
           id: service.id,
           name: service.name,
-          availability: service.availability,
+          availability: provider?.path ?? service.availability,
           descriptor: service.descriptor,
           defaultFrequency: service.defaultFrequency,
           frequencies: service.frequencies,
-          prices: toPlanningService(service).prices,
-          basePrices: service.basePrices,
+          prices: provider?.path === "fixed" && provider.effective_price !== null
+            ? { ...toPlanningService(service).prices, [frequency]: Number(provider.effective_price) }
+            : toPlanningService(service).prices,
+          basePrices: provider?.path === "fixed" && provider.base_price !== null
+            ? { ...service.basePrices, [frequency]: Number(provider.base_price) }
+            : service.basePrices,
           promotionLabels: service.promotionLabels,
-          promotionIds: service.promotionIds,
-          ...service.packageSelections?.[frequency],
+          promotionIds: provider?.promotion_id
+            ? { ...service.promotionIds, [frequency]: provider.promotion_id }
+            : service.promotionIds,
+          ...(provider ? {
+            packageId: provider.package_id,
+            tierId: provider.package_tier_id ?? undefined,
+            pricingMode: provider.path === "fixed" ? "fixed" : "custom_quote",
+            preferredContractorId: provider.contractor_id,
+            preferredContractorName: provider.contractor_name,
+          } : selectedPackage),
         };
       }),
     }));
+  };
+
+  const matchMe = () => {
+    savePlanDraft();
+    router.push("/request");
+  };
+
+  const chooseProvider = (serviceId: string, provider: EligibleProvider) => {
+    savePlanDraft({ serviceId, provider });
+    router.push("/request");
   };
 
   return (
@@ -421,6 +452,54 @@ export function PlanBuilderSection() {
                 </div>
               )}
             </div>
+
+            {selectedServices.length > 0 && (
+              <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] p-4 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white">Choose a pro, or let us match you</h3>
+                    <p className="mt-1 max-w-xl text-sm leading-6 text-white/55">Enter the service ZIP to see only currently eligible providers. Match me continues without requiring a provider choice.</p>
+                  </div>
+                  <Button type="button" onClick={matchMe} className="shrink-0 rounded-xl bg-coral px-5 font-semibold text-coral-foreground hover:bg-coral-dark">
+                    Match me <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <label htmlFor="plan-matching-zip" className="mt-5 block max-w-sm text-xs font-medium text-white/65">
+                  Service ZIP
+                  <span className="relative mt-2 block">
+                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent" />
+                    <Input
+                      id="plan-matching-zip"
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      maxLength={5}
+                      value={matchingZip}
+                      onChange={(event) => setMatchingZip(event.target.value.replace(/\D/g, "").slice(0, 5))}
+                      placeholder="33904"
+                      className="h-11 border-white/15 bg-[hsl(220_22%_13%)] pl-10 text-base text-white placeholder:text-white/30 focus-visible:ring-coral/50"
+                      aria-describedby="plan-matching-zip-hint"
+                    />
+                  </span>
+                </label>
+                <p id="plan-matching-zip-hint" className="mt-2 text-xs text-white/40">Provider cards appear after all five digits are entered.</p>
+
+                {/^\d{5}$/.test(matchingZip) && (
+                  <div className="mt-8 space-y-9">
+                    {selectedServices.map((service) => (
+                      <EligibleProvidersRow
+                        key={`${service.id}:${getFrequency(service)}:${matchingZip}`}
+                        serviceId={service.id}
+                        serviceName={service.name}
+                        frequency={getFrequency(service)}
+                        zipCode={matchingZip}
+                        onChoose={(provider) => chooseProvider(service.id, provider)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
 
           <div className="space-y-6 lg:col-span-4">
@@ -431,9 +510,9 @@ export function PlanBuilderSection() {
               title="Your home plan"
               emptyTitle="Select services to start your plan"
               emptyCopy="Live prices appear only where an eligible provider package is available."
-              actionLabel="Continue to Request"
+              actionLabel="Match me"
               actionHref="/request"
-              onActionBeforeNavigate={savePlanDraft}
+              onActionBeforeNavigate={() => savePlanDraft()}
               onRemove={toggleService}
               actionClassName="h-14 text-base"
               footer={selectedServices.length > 0 ? <><div className="rounded-xl border border-white/10 bg-white/5 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/40">Service area</p><p className="mt-1 text-sm text-foreground">Cape Coral &amp; Fort Myers, Florida</p></div><Button size="sm" variant="ghost" onClick={clearPlan} className="w-full text-white/40 hover:text-foreground">Clear Plan</Button><p className="text-center text-[10px] uppercase leading-relaxed tracking-wider text-white/25">Live prices come from active vendor packages. Quote and matching requests are confirmed before work begins.</p></> : null}

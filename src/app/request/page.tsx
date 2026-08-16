@@ -109,7 +109,7 @@ type ServiceOption = {
 
 type RequestCategory = { id: string; name: string; description: string };
 
-type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[]; packageName?: string; packageDescription?: string | null; tierName?: string; tierIncludes?: string[] };
+type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[]; packageName?: string; packageDescription?: string | null; tierName?: string; tierIncludes?: string[]; preferredContractorId?: string; preferredContractorName?: string };
 type PackageSelection = PublicPackageSelection;
 type ResolvedPackage = PackageSelection & { contractorId: string; price: number | null; basePrice?: number; promotionId?: string; promotionLabel?: string };
 type CompletionKind = "quote" | "payment_pending" | "multi_service" | "coverage_interest";
@@ -216,7 +216,7 @@ export default function RequestServicePage() {
         if (value.questionAnswers && typeof value.questionAnswers === "object") setQuestionAnswers(value.questionAnswers as Record<string, Record<string, string>>);
       }
       if (builder) {
-        const value = JSON.parse(builder) as { selectedServiceIds?: unknown; frequencies?: unknown; requestedServices?: unknown };
+        const value = JSON.parse(builder) as { selectedServiceIds?: unknown; frequencies?: unknown; requestedServices?: unknown; matchingZip?: unknown };
         const requestedServices = Array.isArray(value.requestedServices) ? value.requestedServices.filter(isBuilderRequestedService) : [];
         if (requestedServices.length > 0) {
           setSelectedIds(requestedServices.map((item) => item.id));
@@ -237,6 +237,12 @@ export default function RequestServicePage() {
           setPackageSelections(Object.fromEntries(requestedServices
             .filter((item) => item.packageId && item.pricingMode)
             .map((item) => [item.id, { packageId: item.packageId!, tierId: item.tierId, pricingMode: item.pricingMode!, questions: item.questions, packageName: item.packageName, packageDescription: item.packageDescription, tierName: item.tierName, tierIncludes: item.tierIncludes }])));
+          setPreferredProviders(Object.fromEntries(requestedServices
+            .filter((item) => typeof item.preferredContractorId === "string")
+            .map((item) => [item.id, item.preferredContractorId!])));
+          setPreferredProviderNames(Object.fromEntries(requestedServices
+            .filter((item) => typeof item.preferredContractorName === "string")
+            .map((item) => [item.id, item.preferredContractorName!])));
           const needsMatching = requestedServices.filter((item) => item.availability !== "fixed");
           if (needsMatching.length > 0) setDescription((current) => current || `Please help me with: ${needsMatching.map((item) => item.name).join(", ")}. I understand provider coverage and pricing still need to be confirmed.`);
         } else if (Array.isArray(value.selectedServiceIds)) {
@@ -244,6 +250,7 @@ export default function RequestServicePage() {
           setSelectedIds(knownIds);
         }
         if (value.frequencies && typeof value.frequencies === "object") setFrequencies(value.frequencies as Record<string, Frequency>);
+        if (typeof value.matchingZip === "string" && /^\d{5}$/.test(value.matchingZip)) setZipCode(value.matchingZip);
         window.sessionStorage.removeItem("homePlanSelection");
       }
 
@@ -626,7 +633,7 @@ export default function RequestServicePage() {
           customer_id: user.id,
           service_type: service.name,
           contractor_id: null,
-          preferred_contractor_id: preferredProviders[service.id] ?? livePackage?.contractorId ?? null,
+          preferred_contractor_id: preferredProviders[service.id] ?? null,
           address: streetAddress.trim(),
           city: city.trim(),
           state: stateCode.trim().toUpperCase(),
