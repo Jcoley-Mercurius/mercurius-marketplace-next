@@ -65,6 +65,8 @@ Work:
 
 ### Phase 1 — Deterministic developer platform
 
+**Status:** IMPLEMENTED LOCALLY — awaiting/recording remote CI evidence on the Phase 1 branch
+
 **Outcome:** a clean clone installs, validates, and runs predictably.
 
 Work:

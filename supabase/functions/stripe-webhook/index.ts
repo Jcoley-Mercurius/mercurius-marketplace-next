@@ -16,15 +16,16 @@
 
 import Stripe from "npm:stripe@17.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
+import { requireEdgeEnvironment } from "../_shared/env.ts";
 import { platformFeeFromAmount, vendorPayoutFromAmount } from "../_shared/platformFee.ts";
 
-const stripeKey = Deno.env.get("STRIPE_SECRET_KEY")!;
-const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
+const stripeKey = requireEdgeEnvironment("STRIPE_SECRET_KEY", { minLength: 10 });
+const webhookSecret = requireEdgeEnvironment("STRIPE_WEBHOOK_SECRET", { minLength: 10 });
 const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
 
 const admin = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  requireEdgeEnvironment("SUPABASE_URL"),
+  requireEdgeEnvironment("SUPABASE_SERVICE_ROLE_KEY", { minLength: 20 }),
 );
 
 async function notify(

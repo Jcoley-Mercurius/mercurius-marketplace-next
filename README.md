@@ -48,11 +48,14 @@ Open `http://localhost:3000`.
 ```powershell
 npm run lint
 npm run typecheck
+npm run test:unit
+npm run scan:secrets
+npm run audit:prod
 npm run build
 npm run check
 ```
 
-The test, database, accessibility, and E2E commands will be added with their corresponding roadmap slices. A successful build is not a substitute for those acceptance gates.
+`npm run test:unit` and the repository secret scan are active Phase 1 gates. Database/RLS, accessibility, visual-regression, and E2E commands will be added only when their corresponding roadmap slices supply real tests; no empty passing scripts are used. A successful build is not a substitute for those acceptance gates.
 
 ## Environments
 
@@ -63,6 +66,29 @@ The test, database, accessibility, and E2E commands will be added with their cor
 | Production | Approved Lee County service | Real data; owner-controlled promotion only |
 
 Production schema, data, billing, domains, secrets, and webhooks must not be changed from routine development commands.
+
+### Environment ownership
+
+| Variable | Boundary | Local/preview owner | Production owner |
+|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Browser-safe | Local `.env.local` / Vercel preview | Vercel production |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser-safe | Local `.env.local` / Vercel preview | Vercel production |
+| `NEXT_PUBLIC_SITE_URL` | Browser-safe | Local `.env.local` / Vercel preview | Vercel production |
+| `SUPABASE_SERVICE_ROLE_KEY` | Next.js server and Edge secret | Local secret store / isolated preview | Vercel or Supabase function secrets, according to consumer |
+| `VENDOR_UPLOAD_HMAC_SECRET` | Next.js server secret | Local secret store / Vercel preview | Vercel production |
+| `VENDOR_UPLOAD_HMAC_VERSION` | Next.js server configuration | Local `.env.local` / Vercel preview | Vercel production |
+| `OWNER_NOTIFICATION_EMAIL` | Next.js server configuration | Local `.env.local` / Vercel preview | Vercel production |
+| `RESEND_API_KEY` | Next.js server secret | Local secret store / Vercel preview | Vercel production |
+| `RESEND_FROM_EMAIL` | Next.js server configuration | Local `.env.local` / Vercel preview | Vercel production |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Supabase Edge Function | Supabase local/preview | Supabase production |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Supabase Edge Function secrets | Stripe test + Supabase preview | Stripe live + Supabase production |
+| `SITE_URL`, `VERCEL_URL` | Supabase Edge Function configuration | Local/preview platform | Production platform |
+
+Copy `.env.example` locally and enter values directly in the relevant local or provider secret store. Never commit `.env.local` or paste values into issues or chat.
+
+Secret rotation is versioned and environment-specific. Rotate preview before production, update every dependent runtime, verify the affected workflow, and then revoke the old value. Rotating `VENDOR_UPLOAD_HMAC_SECRET` also requires incrementing `VENDOR_UPLOAD_HMAC_VERSION`; this deliberately invalidates outstanding upload grants.
+
+Geist Sans and Geist Mono are supplied by the pinned `geist` package. Production builds do not download fonts from Google.
 
 ## Current implementation order
 

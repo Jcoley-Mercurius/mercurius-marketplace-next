@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getOwnerNotificationEnvironment } from "@/lib/env/server";
+
 const DEFAULT_OWNER_EMAIL = "j.coley@mercuriusmarketplace.com";
 
 type OwnerNotification = {
@@ -15,16 +17,20 @@ type NotificationResult =
 export async function sendOwnerNotification(
   notification: OwnerNotification,
 ): Promise<NotificationResult> {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.RESEND_FROM_EMAIL?.trim();
-  const to = process.env.OWNER_NOTIFICATION_EMAIL?.trim() || DEFAULT_OWNER_EMAIL;
-
-  if (!apiKey || !from) {
+  let environment: ReturnType<typeof getOwnerNotificationEnvironment>;
+  try {
+    environment = getOwnerNotificationEnvironment();
+  } catch (error) {
     return {
       ok: false,
-      error: "RESEND_API_KEY and RESEND_FROM_EMAIL must be configured.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Owner notifications are not configured.",
     };
   }
+  const { apiKey, from } = environment;
+  const to = environment.to || DEFAULT_OWNER_EMAIL;
 
   try {
     const response = await fetch("https://api.resend.com/emails", {

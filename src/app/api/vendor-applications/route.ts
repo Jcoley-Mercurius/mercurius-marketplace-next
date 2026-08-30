@@ -11,6 +11,7 @@ import {
 } from "@/lib/vendorApplicationDocuments";
 import { signVendorDocumentUploadGrant } from "@/lib/vendorApplicationUploadToken";
 import { sendOwnerNotification } from "@/lib/ownerNotifications";
+import { getServiceSupabaseEnvironment } from "@/lib/env/server";
 
 export const runtime = "nodejs";
 
@@ -40,13 +41,8 @@ type ApplicationInput = {
 class RequestValidationError extends Error {}
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    throw new Error("Vendor application uploads are not configured.");
-  }
-
-  return createClient(url, serviceRoleKey, {
+  const env = getServiceSupabaseEnvironment();
+  return createClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

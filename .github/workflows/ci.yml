@@ -3,8 +3,6 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -37,8 +35,17 @@ jobs:
       - name: Lint owned application code
         run: npm run lint
 
+      - name: Scan tracked files for committed credentials
+        run: npm run scan:secrets
+
       - name: Type check
         run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Audit production dependencies
+        run: npm run audit:prod
 
       - name: Build
         run: npm run build

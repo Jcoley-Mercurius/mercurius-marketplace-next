@@ -53,13 +53,9 @@ The first sandboxed build could not reach Google Fonts. The same build passed wi
 - Added decision-log and traceability templates.
 - Added the initial GitHub CI workflow.
 
-## Open Phase 1 work
+## Phase 1 follow-up
 
-1. Run the new CI workflow on GitHub after this branch is pushed.
-2. Add a dedicated secret-scanning gate.
-3. Add typed environment validation and separate browser/server/Edge contracts.
-4. Add test tooling with the database and MDS slices rather than a misleading empty test command.
-5. Decide whether to self-host Geist to remove build-time Google Fonts dependency.
+The five open items recorded at this checkpoint were completed in the subsequent Phase 1 implementation commit. See `governance/PHASE-1-VALIDATION.md` for the current evidence, including the GitHub CI run.
 
 ## Next roadmap gate
 
