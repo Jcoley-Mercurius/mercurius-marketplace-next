@@ -15,7 +15,7 @@ Database/RLS, component accessibility, visual-regression, and E2E suites remain 
 
 | Item | Result | Evidence |
 |---:|---|---|
-| 1. Run GitHub CI | PENDING BRANCH PUSH | Workflow now runs on every branch push and pull request; remote run evidence will be added after push. |
+| 1. Run GitHub CI | COMPLETE | [CI run 33284705667](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/33284705667) passed on implementation commit `6f59dcb`. |
 | 2. Dedicated secret scan | COMPLETE | `scripts/scan-secrets.mjs`, two scanner tests, `npm run scan:secrets`, and a dedicated CI step. Findings report location/type without printing the credential. |
 | 3. Typed browser/server/Edge environment contracts | COMPLETE | `src/lib/env/*` and `supabase/functions/_shared/env.ts`; direct environment reads were removed from application and payment-function consumers. |
 | 4. Test tooling | COMPLETE | Vitest is pinned; five substantive tests pass. Database, accessibility, and E2E commands remain deferred until their real suites exist. |
@@ -40,7 +40,8 @@ Database/RLS, component accessibility, visual-regression, and E2E suites remain 
 | Strict TypeScript | PASS |
 | Unit tests | PASS — 2 files, 5 tests |
 | Production build | PASS — all 56 routes; no external font download |
+| GitHub CI | PASS — run `33284705667` on commit `6f59dcb` |
 
 ## Phase gate
 
-Phase 1 is complete when the branch GitHub CI run passes and its URL/conclusion are recorded here. Phase 2 still requires owner confirmation of a current Supabase backup and authorization for a sanitized, read-only schema export before any live schema inventory.
+Phase 1 is complete. Phase 2 still requires owner confirmation of a current Supabase backup and authorization for a sanitized, read-only schema export before any live schema inventory.

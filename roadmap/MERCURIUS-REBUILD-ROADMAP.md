@@ -65,7 +65,7 @@ Work:
 
 ### Phase 1 — Deterministic developer platform
 
-**Status:** IMPLEMENTED LOCALLY — awaiting/recording remote CI evidence on the Phase 1 branch
+**Status:** COMPLETE — local and GitHub CI gates passed on 2026-08-29
 
 **Outcome:** a clean clone installs, validates, and runs predictably.
 
