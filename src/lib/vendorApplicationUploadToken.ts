@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { getVendorUploadSigningEnvironment } from "@/lib/env/server";
 
 export type VendorDocumentUploadGrant = {
   applicationId: string;
@@ -8,31 +9,27 @@ export type VendorDocumentUploadGrant = {
   expiresAt: number;
 };
 
-function uploadSecret() {
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!secret) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured.");
-  }
-  return secret;
-}
-
 export function signVendorDocumentUploadGrant(
   grant: VendorDocumentUploadGrant,
 ) {
+  const { secret, version } = getVendorUploadSigningEnvironment();
   const payload = Buffer.from(JSON.stringify(grant)).toString("base64url");
-  const signature = createHmac("sha256", uploadSecret())
+  const signature = createHmac("sha256", secret)
     .update(payload)
     .digest("base64url");
-  return `${payload}.${signature}`;
+  return `${version}.${payload}.${signature}`;
 }
 
 export function verifyVendorDocumentUploadGrant(
   token: string,
 ): VendorDocumentUploadGrant | null {
-  const [payload, suppliedSignature, extra] = token.split(".");
-  if (!payload || !suppliedSignature || extra) return null;
+  const [version, payload, suppliedSignature, extra] = token.split(".");
+  if (!version || !payload || !suppliedSignature || extra) return null;
 
-  const expectedSignature = createHmac("sha256", uploadSecret())
+  const environment = getVendorUploadSigningEnvironment();
+  if (version !== environment.version) return null;
+
+  const expectedSignature = createHmac("sha256", environment.secret)
     .update(payload)
     .digest();
 

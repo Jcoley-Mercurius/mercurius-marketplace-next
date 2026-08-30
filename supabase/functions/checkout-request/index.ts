@@ -5,6 +5,7 @@
 import Stripe from "npm:stripe@17.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import { findCatalogEntry, catalogPriceFor } from "../_shared/catalogPricing.ts";
+import { optionalEdgeEnvironment, requireEdgeEnvironment } from "../_shared/env.ts";
 import { platformFeeFromAmount, vendorPayoutFromAmount } from "../_shared/platformFee.ts";
 import { SOFT_LAUNCH_FIXED_PACKAGES_ONLY, SOFT_LAUNCH_MESSAGE } from "../_shared/softLaunch.ts";
 
@@ -38,9 +39,9 @@ function normalizedOrigin(value: string | undefined | null) {
 }
 
 function configuredOrigins() {
-  const siteUrl = normalizedOrigin(Deno.env.get("SITE_URL"));
-  const publicSiteUrl = normalizedOrigin(Deno.env.get("NEXT_PUBLIC_SITE_URL"));
-  const vercelUrl = normalizedOrigin(Deno.env.get("VERCEL_URL"));
+  const siteUrl = normalizedOrigin(optionalEdgeEnvironment("SITE_URL"));
+  const publicSiteUrl = normalizedOrigin(optionalEdgeEnvironment("NEXT_PUBLIC_SITE_URL"));
+  const vercelUrl = normalizedOrigin(optionalEdgeEnvironment("VERCEL_URL"));
   const primary = siteUrl ?? publicSiteUrl ?? vercelUrl ?? PRODUCTION_ORIGIN;
 
   return {
@@ -159,15 +160,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");
+    const stripeKey = requireEdgeEnvironment("STRIPE_SECRET_KEY", { minLength: 10 });
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing Authorization header");
 
     const supa = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      requireEdgeEnvironment("SUPABASE_URL"),
+      requireEdgeEnvironment("SUPABASE_ANON_KEY", { minLength: 16 }),
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: userData, error: userErr } = await supa.auth.getUser();
@@ -182,8 +182,8 @@ Deno.serve(async (req) => {
     // every charged figure below is resolved server-side.
 
     const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      requireEdgeEnvironment("SUPABASE_URL"),
+      requireEdgeEnvironment("SUPABASE_SERVICE_ROLE_KEY", { minLength: 20 }),
     );
 
     const { data: sr, error: srErr } = await admin

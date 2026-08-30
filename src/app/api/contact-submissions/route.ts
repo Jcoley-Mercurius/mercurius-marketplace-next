@@ -5,6 +5,7 @@ import {
   appendRequestContext,
   normalizeRequestId,
 } from "@/lib/requestContext";
+import { getAnonymousSupabaseEnvironment } from "@/lib/env/server";
 
 export const runtime = "nodejs";
 
@@ -61,12 +62,8 @@ function parseSubmission(value: unknown): ContactSubmission {
 }
 
 function anonymousClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    throw new Error("Contact submissions are not configured.");
-  }
-  return createClient(url, anonKey, {
+  const env = getAnonymousSupabaseEnvironment();
+  return createClient(env.supabaseUrl, env.supabaseAnonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

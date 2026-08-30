@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getBrowserEnvironment } from "@/lib/env/browser";
 
 type ProtectedRole = "admin" | "vendor";
 
@@ -32,10 +33,11 @@ function redirectWithSession(
  */
 export async function proxy(request: NextRequest) {
   let sessionResponse = NextResponse.next({ request });
+  const env = getBrowserEnvironment();
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    env.supabaseUrl,
+    env.supabaseAnonKey,
     {
       cookies: {
         getAll() {

@@ -1,5 +1,6 @@
 import Stripe from "npm:stripe@17.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
+import { requireEdgeEnvironment } from "../_shared/env.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,12 +51,9 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED", message: "Method not allowed." }, 405);
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!supabaseUrl || !serviceRoleKey || !stripeKey) {
-      throw new RefundError("SERVER_MISCONFIGURED", "Refund processing is not configured.", 500);
-    }
+    const supabaseUrl = requireEdgeEnvironment("SUPABASE_URL");
+    const serviceRoleKey = requireEdgeEnvironment("SUPABASE_SERVICE_ROLE_KEY", { minLength: 20 });
+    const stripeKey = requireEdgeEnvironment("STRIPE_SECRET_KEY", { minLength: 10 });
 
     const authorization = request.headers.get("Authorization") ?? "";
     const token = authorization.replace(/^Bearer\s+/i, "");
