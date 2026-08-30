@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mercurius Marketplace
 
-## Getting Started
+Mercurius is an owner-operated, managed home-services marketplace for Lee County, Florida. The application includes public discovery and request intake, homeowner and vendor portals, an operational admin console, Supabase-backed marketplace workflows, and customer payment handling.
 
-First, run the development server:
+The repository is undergoing an evidence-driven rebuild. Do not treat inherited behavior as approved product truth.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Governing documents
+
+Read these before changing product behavior or architecture:
+
+- [Owner approvals](./governance/OWNER-APPROVALS.md)
+- [Launch configuration](./governance/CONFIGURATION-DECISIONS.md)
+- [Approved product system](./mps/PROPOSED-MPS.md)
+- [Approved design system](./mds/DESIGN-SYSTEM-BLUEPRINT.md)
+- [Approved technology blueprint](./mts/TECHNOLOGY-BLUEPRINT.md)
+- [Combined rebuild roadmap](./roadmap/MERCURIUS-REBUILD-ROADMAP.md)
+- [Implementation agent rules](./AGENTS.md)
+
+## Requirements
+
+- Node.js 24 LTS (`.nvmrc`)
+- npm 11
+- A non-production Supabase environment or local Supabase stack
+- Stripe test-mode configuration for customer-payment work
+- Supabase CLI and Stripe CLI when their roadmap phases begin
+
+Node 24 is the pinned LTS line. The repository currently accepts Node `>=24.11 <25` and npm `>=11 <12`.
+
+## Local setup
+
+```powershell
+npm ci
+Copy-Item .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Replace placeholders in `.env.local` with development-only values. Never paste secrets into chat, commits, fixtures, screenshots, or command history.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Run the application:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+npm run dev
+```
 
-## Learn More
+Open `http://localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Quality commands
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```powershell
+npm run lint
+npm run typecheck
+npm run build
+npm run check
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The test, database, accessibility, and E2E commands will be added with their corresponding roadmap slices. A successful build is not a substitute for those acceptance gates.
 
-## Deploy on Vercel
+## Environments
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Environment | Purpose | Data rule |
+|---|---|---|
+| Local | Development and database reconstruction | Synthetic/reference data only |
+| Preview | Pull-request and integrated acceptance | Isolated, sanitized test data only |
+| Production | Approved Lee County service | Real data; owner-controlled promotion only |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Production schema, data, billing, domains, secrets, and webhooks must not be changed from routine development commands.
+
+## Current implementation order
+
+1. Deterministic toolchain and quality signal.
+2. Reconstructible Supabase backend.
+3. Accessible MDS component foundation.
+4. Canonical product lifecycle.
+5. Customer payment and direct-ACH vendor payout integrity.
+6. Role workflow rebuild.
+7. Communications, analytics, and operations.
+8. Security, recovery, and release automation.
+9. Private beta and production evidence gates.
+
+See the combined roadmap for dependencies and completion criteria.
+
+## Safety
+
+- Work on a bounded branch and preserve unrelated changes.
+- Use additive database migrations and forward fixes.
+- Export schema only after backup confirmation and owner authorization.
+- Never export production customer rows as fixtures or seeds.
+- Payment work stays in test mode until a separately approved activation gate.
+- Every manual provider-dashboard change must be reflected in configuration documentation or a runbook.

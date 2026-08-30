@@ -1,0 +1,254 @@
+# Mercurius Rebuild and Implementation Roadmap
+
+**Status:** READY TO START
+**Baseline:** `main` at `94d608a`
+**Authority:** owner-approved MPS, MDS, and MTS
+**Delivery model:** stabilize and rebuild in vertical slices; do not perform a blind rewrite
+
+## 1. Objective
+
+Turn the inherited Mercurius application into a reproducible, accessible, payment-safe, operationally measurable Southwest Florida soft launch while preserving working value and replacing undocumented behavior with approved contracts and automated evidence.
+
+This roadmap supersedes the technology-only sequencing in `mts/MERCURIUS-BUILD-ROADMAP.md` as the combined program plan. That file remains the detailed technical source for its individual controls.
+
+## 2. Governing chain
+
+```text
+Approved MPS
+  → approved MDS
+    → approved MTS
+      → roadmap slice
+        → code + migration + tests + documentation
+          → automated and manual acceptance evidence
+```
+
+Implementation may not silently redefine a product rule, state, role, commercial amount, policy, design token, accessibility requirement, or technology boundary.
+
+## 3. What is approved versus still configurable
+
+### Approved
+
+- Product purpose, audience baseline, managed-marketplace model, roles, lifecycle direction, and honesty rules.
+- Geist typography, sage commitment actions, SWFL editorial identity, dark-mode support, responsive scope, and WCAG 2.2 AA.
+- Modular-monolith architecture, Next.js/Supabase direction, reproducible infrastructure, payment integrity, testing, CI/CD, observability, and recovery requirements.
+
+### Configuration status
+
+The pre-build owner configuration is approved in `governance/CONFIGURATION-DECISIONS.md`:
+
+- all Lee County ZIPs; no beta household cap;
+- every catalog service remains visible, with honest unavailable behavior where supply is absent;
+- every approved and otherwise eligible vendor participates;
+- customers pay Mercurius; Mercurius retains 15% of final service subtotal excluding tax/tips;
+- weekly direct ACH provider payout, eligible 48 hours after homeowner-confirmed completion, with disputes held;
+- approved cancellation, rescheduling, provider cancellation, weather/emergency, matching, and support rules;
+- eight-hour RTO, 24-hour RPO, and approved retention periods;
+- owner control of required platform accounts, with scoped APIs/keys to be configured during implementation.
+
+Only evidence-based beta activation, production activation, expansion, and material policy changes require later owner decisions.
+
+## 4. Delivery phases
+
+### Phase 0 — Establish the implementation baseline
+
+**Outcome:** one clean implementation branch, one authority chain, one issue register, and no accidental production mutation.
+
+Work:
+
+1. Commit the MPS, MDS, MTS, approvals, and this roadmap as the documentation baseline.
+2. Add a project-level `AGENTS.md` that points implementation work to the approved systems and prohibits silent product/design changes.
+3. Create a decision log and traceability matrix: requirement → implementation → test → metric → release gate.
+4. Convert every P0/P1 finding into a trackable item with dependency, owner, and acceptance evidence.
+5. Capture repository, live-environment, schema, payment, and deployment unknowns without changing production.
+
+**Gate:** documentation baseline reviewed; no application behavior changed; blocking work is traceable.
+
+### Phase 1 — Deterministic developer platform
+
+**Outcome:** a clean clone installs, validates, and runs predictably.
+
+Work:
+
+- Pin Node/npm and enforce the lockfile.
+- Add `typecheck`, test, database, E2E, accessibility, and combined `check` scripts.
+- Remove build-time type-check bypasses.
+- Scope linting to owned code and resolve production dependency advisories.
+- Add secret-free environment templates and typed validation.
+- Replace the generic README with setup, architecture, safety, and workflow guidance.
+- Establish CI for install, lint, type check, and build immediately; expand gates as tests arrive.
+
+**Gate:** `npm ci`, lint, type check, build, secret scan, and production dependency audit pass in CI.
+
+### Phase 2 — Reconstruct the real backend
+
+**Outcome:** a blank environment recreates every required table, policy, RPC, trigger, bucket, seed, and Edge Function.
+
+Work:
+
+- Obtain a sanitized read-only live schema inventory after backup confirmation.
+- Reconcile committed migrations with live objects.
+- Commit the missing payment, onboarding, matching, transition, review, and metrics functions.
+- Generate typed database bindings.
+- Add deterministic reference seed data.
+- Add RLS and role-negative tests for anonymous, homeowner, vendor, admin, and service roles.
+- Prove two consecutive clean local resets.
+
+**Gate:** the application no longer depends on undocumented live-only backend behavior.
+
+### Phase 3 — MDS foundation and accessibility repair
+
+**Outcome:** critical journeys use an accessible, documented component foundation before large workflow changes.
+
+Work:
+
+- Fix sheet trigger composition, titles/descriptions, mobile menu naming, skip navigation, and focus targets.
+- Implement 44px customer and 40px compact portal control contracts.
+- Adopt accessible semantic colors and remove failing small-text combinations.
+- Complete dark-mode tokens and light/dark logo assets.
+- Approve Geist in `DESIGN.md` and align metadata/content identity.
+- Add commitment Button, FormField, Select, Textarea, Checkbox, Switch, Status, PageHeader, state patterns, and ConfirmAction.
+- Create the component catalog with light/dark, density, responsive, and accessibility examples.
+
+**Gate:** primitives pass axe, keyboard, focus, contrast, 320px reflow, dark-mode, and screenshot baselines.
+
+### Phase 4 — Canonical product lifecycle
+
+**Outcome:** request, match, quote, job, payment, payout, dispute, and review states follow the approved MPS.
+
+Work:
+
+- Version canonical state machines and actor permissions.
+- Migrate existing statuses without losing history.
+- Define transition side effects, notifications, timeouts, reversals, and audit events.
+- Reconcile the matching specification with the approved lifecycle.
+- Implement deterministic offer expiry, provider selection, supply-exhaustion/unavailable behavior, quote expiry/revision, completion, and review eligibility.
+- Build role-specific status and next-action UI from the shared Status pattern.
+
+**Gate:** transition matrix and cross-role acceptance tests pass; no record can be stranded in an unmapped state.
+
+### Phase 5 — Money and vendor onboarding integrity
+
+**Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
+
+Work:
+
+- Choose and implement one canonical customer checkout flow while preserving the approved Mercurius-direct collection model.
+- Persist immutable commercial snapshots and idempotent checkout attempts.
+- Make Stripe webhooks durable, replayable, and reconciled.
+- Implement fee, tax, deposit, discount, refund, chargeback, and provider-payable ledger rules.
+- Implement direct ACH vendor payout, weekly batching, 48-hour post-confirmation eligibility, dispute holds, statements, and failure recovery without Stripe Connect.
+- Version provider application, vetting, compliance, activation, invitation, suspension, and renewal evidence.
+- Use ConfirmAction and MoneySummary for financial operations.
+
+**Gate:** concurrent checkout, duplicate webhook, partial/full refund, dispute, chargeback, payout, and invite tests pass in non-production environments.
+
+### Phase 6 — Customer, vendor, and admin workflow rebuild
+
+**Outcome:** each role can complete its core job using the approved lifecycle and design patterns.
+
+Order:
+
+1. Coverage and request intake.
+2. Matching and provider offers.
+3. Quotes and scheduling.
+4. Job start, evidence, completion, confirmation, and review.
+5. Cancellation, rescheduling, support, dispute, and refund.
+6. Vendor profile, packages, coverage, compliance, and earnings.
+7. Admin operational queues, responsive data lists, audit history, and controlled overrides.
+
+Remove or hide the public Admin link, premature Vendor Plans, and Smart Picks unless an approved purpose is added. Resolve `reviews` versus `quality_feedback` and support-ticket intake.
+
+**Gate:** critical journeys pass desktop/mobile, light/dark, keyboard, screen-reader, role, database, and visual acceptance.
+
+### Phase 7 — Communications, analytics, and operations
+
+**Outcome:** the team can see, measure, and recover every important marketplace outcome.
+
+Work:
+
+- Implement the approved notification matrix and consent distinctions.
+- Add funnel, liquidity, quote, checkout, fulfillment, dispute, refund, payout, quality, and admin-override events.
+- Create owned operational queues with age, priority, SLA, alert, and next action.
+- Add error reporting, uptime/synthetic checks, PII-safe structured logs, and correlation IDs.
+- Implement email delivery/retry evidence and domain authentication.
+- Create operator runbooks and audit logs.
+
+**Gate:** staged failures and SLA breaches create the correct alert, queue item, audit event, and user communication.
+
+### Phase 8 — Security, recovery, and release automation
+
+**Outcome:** deployment, abuse protection, recovery, and promotion are evidence-driven.
+
+Work:
+
+- Add public abuse protection, rate limits, Turnstile, upload constraints, cleanup, and malware/quarantine policy.
+- Add security headers and CSP rollout.
+- Complete CI gates for unit, integration, RLS, E2E, axe, visual regression, dependency, secret, migration, and drift checks.
+- Isolate preview data and provider configuration.
+- Test database and storage restoration separately.
+- Record RPO/RTO and exercise payment replay, rollback, and incident runbooks.
+
+**Gate:** security suite, CI, restore drill, alert drill, and rollback drill pass.
+
+### Phase 9 — Private beta
+
+**Outcome:** a controlled cohort proves the complete business loop without uncontrolled expansion.
+
+Work:
+
+- Load only approved ZIPs, services, providers, prices, policies, and support coverage.
+- Run real-world request → provider → service → payment → payout → review scenarios with controlled limits.
+- Review funnel, liquidity, timing, exception, reconciliation, accessibility, and support results daily.
+- Fix P0/P1 issues before adding users or services.
+
+**Gate:** owner signs the beta activation record after all critical evidence is green. There is no household cap; the Lee County boundary and provider availability control exposure.
+
+### Phase 10 — Production activation and measured expansion
+
+**Outcome:** real users and money operate under verified controls.
+
+Work:
+
+- Promote reviewed environment configuration.
+- Apply migrations and deploy functions under the approved procedure.
+- Run production-safe smoke and controlled payment/refund/payout checks.
+- Confirm alerts, backups, reconciliation, policies, support coverage, and rollback readiness.
+- Expand by ZIP/service only when supply and outcome thresholds remain green.
+
+**Gate:** owner production go/no-go; pause or rollback automatically when approved stop conditions are met.
+
+## 5. Dependency model
+
+```text
+Phase 0 → Phase 1 → Phase 2
+                    ├─→ Phase 3
+                    └─→ Phase 4
+Phase 3 + Phase 4 → Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 → Phase 10
+```
+
+Phase 3 component work and Phase 4 lifecycle work can proceed in parallel after the backend contract is known. Money work must not precede the schema authority. Broad UI route migration must not precede stable components and lifecycle semantics.
+
+## 6. First implementation increment
+
+The first implementation task should be **Phase 0 plus the smallest safe portion of Phase 1**:
+
+1. Create an implementation branch using the `codex/` prefix.
+2. Commit the approved audit/governance baseline.
+3. Add the project-level implementation `AGENTS.md` and traceability/decision templates.
+4. Pin the supported Node runtime.
+5. Repair install reliability and add the initial CI quality gate.
+6. Add environment documentation without secrets.
+7. Produce a baseline validation report; do not touch production or business workflows yet.
+
+This increment is low-risk, unlocks every later slice, and gives the owner a clean checkpoint before schema reconstruction.
+
+## 7. Working agreement
+
+- One bounded concern per branch/checkpoint.
+- Preserve unrelated owner changes.
+- Characterize behavior before replacing it.
+- Use additive database migrations and forward fixes.
+- Never use production data as development seed data.
+- Never put secrets into chat, commits, fixtures, screenshots, or command history.
+- Every completed slice reports repository changes, external changes, tests, manual evidence, risks, rollback status, owner action, and next slice.
+- A phase is complete only when its gate has evidence, not when its code is written.
