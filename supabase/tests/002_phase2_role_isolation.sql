@@ -41,6 +41,13 @@ select is((select count(*) from public.profiles where user_id in ('10000000-0000
 select is((select count(*) from public.service_requests where id in ('30000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002')), 1::bigint, 'homeowner sees only their own request');
 with changed as (update public.service_requests set description = 'unauthorized' where id = '30000000-0000-4000-8000-000000000002' returning id)
 select is((select count(*) from changed), 0::bigint, 'homeowner cannot update another homeowner request');
+-- TRACE-009: trigger helpers must enforce the invoking browser role even though
+-- the trigger functions themselves run as SECURITY DEFINER.
+select throws_ok(
+  $$update public.service_requests set status = 'matched' where id = '30000000-0000-4000-8000-000000000001'$$,
+  '42501', 'Homeowners are not allowed to modify "status" on a service request',
+  'homeowner cannot update protected service request columns'
+);
 select throws_ok(
   $$insert into public.user_roles (user_id, role) values ('10000000-0000-4000-8000-000000000001', 'admin')$$,
   '42501', 'new row violates row-level security policy for table "user_roles"',
@@ -54,6 +61,11 @@ select is((select count(*) from public.service_requests where id in ('30000000-0
 select is((select count(*) from public.profiles where user_id = '10000000-0000-4000-8000-000000000001'), 0::bigint, 'vendor cannot directly read the homeowner profile');
 with changed as (update public.service_requests set description = 'unauthorized' where id = '30000000-0000-4000-8000-000000000002' returning id)
 select is((select count(*) from changed), 0::bigint, 'vendor cannot update an unassigned request');
+select throws_ok(
+  $$update public.contractors set is_active = true where id = '20000000-0000-4000-8000-000000000001'$$,
+  '42501', 'Vendors are not allowed to modify "is_active" on a provider profile',
+  'vendor cannot update protected provider profile columns'
+);
 select throws_ok('select token from public.internal_worker_tokens', '42501', 'permission denied for table internal_worker_tokens', 'vendor cannot read worker credentials');
 reset role;
 

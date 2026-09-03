@@ -13,8 +13,8 @@ DECLARE
   new_j jsonb := to_jsonb(NEW);
   k text;
 BEGIN
-  -- Bypass for service_role / superuser / SECURITY DEFINER platform functions
-  IF current_user <> 'authenticated' THEN
+  -- Bypass unless the invoking PostgREST role is authenticated.
+  IF current_setting('role', true) <> 'authenticated' THEN
     RETURN NEW;
   END IF;
 

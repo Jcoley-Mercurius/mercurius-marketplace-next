@@ -8,7 +8,6 @@ DECLARE
   j record;
   actor text;
   vendor_user uuid;
-  photos int;
   paid boolean;
   rework_ok boolean;
   quote_ok boolean;
@@ -87,9 +86,6 @@ BEGIN
 
   -- Guard: completion proof is mandatory
   IF _to_status = 'vendor_completed' THEN
-    photos := COALESCE(array_length(
-      COALESCE((_metadata->>'photo_count')::int, array_length(j.photo_proof_urls, 1)) ::int
-      , 1), 0);
     IF COALESCE(array_length(j.photo_proof_urls, 1), 0) = 0
        AND COALESCE((_metadata->>'photo_count')::int, 0) = 0 THEN
       PERFORM public.log_status_rejection(_job_id, j.status::text, _to_status::text,

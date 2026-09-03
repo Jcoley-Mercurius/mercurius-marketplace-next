@@ -8,6 +8,9 @@ ALTER TABLE public.service_requests
 CREATE INDEX IF NOT EXISTS idx_service_requests_disputed
   ON public.service_requests (disputed)
   WHERE disputed = true;
+REVOKE UPDATE ON TABLE public.service_requests FROM authenticated;
+GRANT UPDATE (disputed, dispute_reason, disputed_at)
+  ON TABLE public.service_requests TO authenticated;
 -- Add payout pause fields to contractors
 ALTER TABLE public.contractors
   ADD COLUMN IF NOT EXISTS payouts_paused boolean NOT NULL DEFAULT false,
