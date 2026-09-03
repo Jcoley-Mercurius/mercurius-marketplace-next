@@ -26,6 +26,7 @@ type Job = {
   service_type: string;
   description: string | null;
   status: string;
+  matching_status?: string;
   pricing_mode: string | null;
   quote_only: boolean | null;
   payment_status: string | null;
@@ -49,6 +50,7 @@ type Mode = "loading" | "live" | "unlinked" | "error";
 type Action = { id: string; kind: string } | null;
 
 const incoming = new Set(["matched", "pending"]);
+const isIncoming = (job: Job) => incoming.has(job.status) || (job.status === "quoted" && job.matching_status === "offered");
 const finished = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed", "cancelled"]);
 const statusConfig: Record<string, [string, string]> = {
   matched: ["New request", "border-status-info bg-status-info-bg text-status-info"],
@@ -103,7 +105,7 @@ export default function VendorJobsPage() {
       }
       const result = await supabase
         .from("service_requests")
-        .select("id, customer_id, service_type, description, status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers")
+        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers")
         .eq("contractor_id", contractorResult.data.id)
         .order("created_at", { ascending: false });
       if (result.error) throw result.error;
@@ -134,8 +136,8 @@ export default function VendorJobsPage() {
   }, [load]);
 
   const queues = useMemo(() => ({
-    requests: jobs.filter((job) => incoming.has(job.status)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
-    active: jobs.filter((job) => !incoming.has(job.status) && !finished.has(job.status)).sort(sortBySchedule),
+    requests: jobs.filter((job) => isIncoming(job)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
+    active: jobs.filter((job) => !isIncoming(job) && !finished.has(job.status)).sort(sortBySchedule),
     completed: jobs.filter((job) => finished.has(job.status)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)),
   }), [jobs]);
 
@@ -160,7 +162,7 @@ export default function VendorJobsPage() {
         if (result.error) throw result.error;
         setJobs((current) => current.filter((item) => item.id !== job.id));
         requestAnimationFrame(() => document.getElementById("vendor-jobs-heading")?.focus());
-        toast.success("Request declined", { description: "We will match the homeowner with another pro." });
+        toast.success("Request declined", { description: "Mercurius will check the next eligible provider and report if service is unavailable." });
       } else {
         const result = await supabase.rpc("transition_job_status", { _job_id: job.id, _to_status: "in_progress" });
         if (result.error) throw result.error;
@@ -242,7 +244,7 @@ function RequestCard({ job, now, action, view, accept, decline }: {
   const deadline = matchDeadline(job);
   const expired = Boolean(now && deadline && deadline <= now);
   const busy = action?.id === job.id;
-  const canAccept = job.status === "matched" && !expired;
+  const canAccept = (job.status === "matched" || (job.status === "quoted" && job.matching_status === "offered")) && !expired;
   const price = priceContext(job);
   const note = customerNote(job);
   return (
@@ -324,7 +326,7 @@ function Details({ job, close }: { job: Job | null; close: () => void }) {
     </div>
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
     <QuestionAnswers job={job} />
-    {!incoming.has(job.status) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} onClick={close} className={cn(buttonVariants({ variant: "outline" }), "w-full")}><MessageSquare />Open Messages</Link>}
+    {!isIncoming(job) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} onClick={close} className={cn(buttonVariants({ variant: "outline" }), "w-full")}><MessageSquare />Open Messages</Link>}
   </DialogContent></Dialog>;
 }
 

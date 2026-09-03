@@ -103,6 +103,8 @@ Work:
 
 ### Phase 3 — MDS foundation and accessibility repair
 
+**Owner acceptance:** COMPLETE on 2026-09-03 (DEC-2026-005); manual follow-ups remain separately tracked.
+
 **Status:** IN PROGRESS — component/navigation foundation and critical request/portal slices on `codex/mds-foundation`. See `governance/PHASE-3-VALIDATION.md`; full phase acceptance remains open.
 
 **Outcome:** critical journeys use an accessible, documented component foundation before large workflow changes.
@@ -120,6 +122,8 @@ Work:
 **Gate:** primitives pass axe, keyboard, focus, contrast, 320px reflow, dark-mode, and screenshot baselines.
 
 ### Phase 4 — Canonical product lifecycle
+
+**Status:** IN PROGRESS — DEC-2026-005/006; see governance/PHASE-4-RECONCILIATION.md.
 
 **Phase 2 handoff (TRACE-010):** replace inherited automatic completion
 confirmation with admin review; define its deadline separately from the four-hour

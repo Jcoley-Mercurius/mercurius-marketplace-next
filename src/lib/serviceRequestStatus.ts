@@ -48,11 +48,11 @@ export const serviceRequestStatusStyles = {
 
 const serviceRequestStatusLabels = {
   pending: "Request received",
-  matched: "Provider matched",
+  matched: "Provider offer pending",
   quoted: "Quote ready",
   scheduled: "Scheduled",
   in_progress: "In progress",
-  pending_review: "Awaiting confirmation",
+  pending_review: "Completion pending",
   vendor_completed: "Ready to confirm",
   homeowner_confirmed: "Completion confirmed",
   completed: "Completed",

@@ -4,7 +4,17 @@ Status: Soft-launch baseline
 Last updated: 2026-08-15  
 Scope: Who is eligible for a request, how they are ranked, how offers are made, and how Plan Builder presents choices.
 
-This document is the source of truth for matching behavior. Implementation should follow it; change this file before changing production logic.
+The approved MPS and CONFIGURATION-DECISIONS.md supersede conflicting legacy
+sourcing, fallback and parallel-mode guidance below. Phase 4 reconciliation:
+- no eligible supply/exhaustion means “Not available yet in your area”;
+- fallback from an ineligible homeowner selection requires consent;
+- one exclusive offer is actionable; parallel mode is not approved for beta;
+- expiry occurs at or after the four-hour deadline;
+- vendor acceptance immediately schedules (DEC-2026-007).
+The full fallback/override acceptance matrix remains a Phase 4 gate. Historical
+sections below are retained as implementation evidence, not competing authority.
+
+This document records the matching baseline. Implementation should follow it; change this file before changing production logic.
 
 ---
 

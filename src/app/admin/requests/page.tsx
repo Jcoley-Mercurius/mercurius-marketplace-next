@@ -37,6 +37,8 @@ import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
 import { FormField } from "@/components/ui/form-field";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Status as LifecycleStatus } from "@/components/ui/status";
+import { canonicalRequestState, adminTransitionTargets } from "@/lib/lifecycle";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -172,6 +174,7 @@ export default function AdminRequestsPage() {
   const [quoteError, setQuoteError] = useState("");
   const [actionError, setActionError] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
+  const [quoteReason, setQuoteReason] = useState("");
   const [note, setNote] = useState("");
   const [action, setAction] = useState<Action>(null);
 
@@ -240,6 +243,7 @@ export default function AdminRequestsPage() {
     setSelected(request);
     setDetailTab("details");
     setAssignSearch("");
+    setQuoteReason("");
     setQuoteAmount(String(request.quote_amount ?? request.total_amount ?? ""));
     setNote(request.notes ?? "");
     void loadAttempts(request.id);
@@ -283,7 +287,7 @@ export default function AdminRequestsPage() {
     await runAction(request, "next", async () => {
       const result = await createClient().rpc("offer_next_for_request", { _request_id: request.id });
       return { error: result.error };
-    }, "Matching advanced to the next eligible provider, or moved to sourcing if none remain.");
+    }, "Matching checked for another eligible provider. If none remain, service is not available yet in your area.");
   };
 
   const releaseMatch = async (request: ServiceRequest) => {
@@ -294,12 +298,13 @@ export default function AdminRequestsPage() {
     if (!released) throw new Error("The match could not be released. Please try again.");
   };
 
-  const changeStatus = async (request: ServiceRequest, status: string) => {
+  const changeStatus = async (request: ServiceRequest, status: string, reason: string) => {
     if (status === request.status) return;
-    await runAction(request, `status:${status}`, async () => {
-      const result = await createClient().rpc("transition_job_status", { _job_id: request.id, _to_status: status });
+    const changed = await runAction(request, `status:${status}`, async () => {
+      const result = await createClient().rpc("transition_job_status", { _job_id: request.id, _to_status: status, _reason: reason });
       return { error: result.error };
     }, `Status changed to ${label(status)}.`);
+    if (!changed) throw new Error("The status change was not saved.");
   };
 
   const sendQuote = async (request: ServiceRequest) => {
@@ -315,8 +320,13 @@ export default function AdminRequestsPage() {
       document.getElementById("quote-amount")?.focus();
       return;
     }
+    if (!quoteReason.trim()) {
+      setQuoteError("Explain why this quote is being sent.");
+      document.getElementById("quote-reason")?.focus();
+      return;
+    }
     await runAction(request, "quote", async () => {
-      const result = await createClient().rpc("admin_send_quote", { _job_id: request.id, _amount: amount });
+      const result = await createClient().rpc("admin_send_quote", { _job_id: request.id, _amount: amount, _reason: quoteReason.trim() });
       return { error: result.error };
     }, "The quote was recorded and sent into the homeowner approval workflow.");
   };
@@ -360,11 +370,11 @@ export default function AdminRequestsPage() {
       { key: "location", label: "Location", render: request => `${request.city}, ${request.state}` },
       { key: "date", label: "Preferred date", render: request => request.preferred_date ? formatDate(request.preferred_date) : "Not set" },
       { key: "match", label: "Match", render: request => <><p className={cn(isOverdue(request) && "font-medium text-status-danger")}>{waitingLabel(request)}</p>{request.match_attempt_count > 1 && <p>{request.match_attempt_count} vendor attempts</p>}</> },
-      { key: "status", label: "Status", render: request => <div className="flex flex-wrap gap-2"><Status status={request.status} />{(isOverdue(request) || request.needs_admin_review) && <Badge variant="destructive">{isOverdue(request) ? "Overdue" : "Review"}</Badge>}</div> },
+      { key: "status", label: "Status", render: request => <div className="flex flex-wrap gap-2"><Status status={request.status} matchingStatus={request.matching_status} />{(isOverdue(request) || request.needs_admin_review) && <Badge variant="destructive">{isOverdue(request) ? "Overdue" : "Review"}</Badge>}</div> },
       { key: "actions", label: "Actions", render: request => <Button variant="outline" size="sm" aria-label={`Review ${request.service_type} ${request.id.slice(0, 10)}`} onClick={() => openDetail(request)}><Eye />Review</Button> },
     ]} />}</CardContent></Card>
 
-    <RequestDialog quoteError={quoteError} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
+    <RequestDialog quoteReason={quoteReason} setQuoteReason={setQuoteReason} quoteError={quoteError} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
   </div>;
 }
 
@@ -382,6 +392,8 @@ function RequestDialog(props: {
   setAssignSearch: (value: string) => void;
   attempts: MatchAttempt[];
   attemptError: string;
+  quoteReason: string;
+  setQuoteReason: (value: string) => void;
   quoteAmount: string;
   setQuoteAmount: (value: string) => void;
   note: string;
@@ -391,16 +403,16 @@ function RequestDialog(props: {
   assign: (request: ServiceRequest, candidate: EligibleMatch) => Promise<void>;
   offerNext: (request: ServiceRequest) => Promise<void>;
   release: (request: ServiceRequest) => Promise<void>;
-  changeStatus: (request: ServiceRequest, status: string) => Promise<void>;
+  changeStatus: (request: ServiceRequest, status: string, reason: string) => Promise<void>;
   sendQuote: (request: ServiceRequest) => Promise<void>;
   saveNote: (request: ServiceRequest) => Promise<void>;
 }) {
   const errorRef = useRef<HTMLParagraphElement>(null);
-  useEffect(() => { if (props.actionError) errorRef.current?.focus(); }, [props.actionError]);
+  useEffect(() => { if (props.actionError && !document.querySelector('[role=alertdialog]')) errorRef.current?.focus(); }, [props.actionError]);
   const request = props.request;
   if (!request) return null;
   const busy = props.action?.id === request.id;
-  return <Dialog open onOpenChange={(open) => !open && props.close()}><DialogContent showCloseButton={!busy} className="flex max-h-[92dvh] flex-col overflow-hidden sm:max-w-3xl"><DialogHeader><div className="flex flex-wrap items-center gap-2 pr-8"><DialogTitle>{request.service_type}</DialogTitle><Status status={request.status} /></div><DialogDescription>Request {request.id.slice(0, 8)} · submitted {formatDateTime(request.created_at)}</DialogDescription></DialogHeader><Tabs value={props.tab} onValueChange={props.setTab} className="min-h-0 flex-1 gap-0 overflow-hidden"><TabsList className="shrink-0 self-start"><TabsTrigger value="details"><Eye />Details</TabsTrigger><TabsTrigger value="chat"><MessageSquare />Chat</TabsTrigger></TabsList><TabsContent value="details" className="min-h-0 flex-1 space-y-4 overflow-y-auto pt-4">
+  return <Dialog open onOpenChange={(open) => !open && props.close()}><DialogContent showCloseButton={!busy} className="flex max-h-[92dvh] flex-col overflow-hidden sm:max-w-3xl"><DialogHeader><div className="flex flex-wrap items-center gap-2 pr-8"><DialogTitle>{request.service_type}</DialogTitle><Status status={request.status} matchingStatus={request.matching_status} /></div><DialogDescription>Request {request.id.slice(0, 8)} · submitted {formatDateTime(request.created_at)}</DialogDescription></DialogHeader><Tabs value={props.tab} onValueChange={props.setTab} className="min-h-0 flex-1 gap-0 overflow-hidden"><TabsList className="shrink-0 self-start"><TabsTrigger value="details"><Eye />Details</TabsTrigger><TabsTrigger value="chat"><MessageSquare />Chat</TabsTrigger></TabsList><TabsContent value="details" className="min-h-0 flex-1 space-y-4 overflow-y-auto pt-4">
     {props.actionError && <p ref={errorRef} tabIndex={-1} role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">{props.actionError}</p>}
     <div className="grid gap-3 text-sm sm:grid-cols-2"><Detail icon={User} label="Homeowner">{props.profiles[request.customer_id] ?? "Unknown"}</Detail><Detail icon={UserCheck} label="Vendor">{request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Unknown" : "Unassigned"}</Detail><Detail icon={MapPin} label="Address">{request.address}, {request.city}, {request.state} {request.zip_code}</Detail><Detail icon={Calendar} label="Preferred timing">{request.preferred_date ? formatDate(request.preferred_date) : "No date set"}{request.preferred_time && ` · ${request.preferred_time}`}</Detail><Detail icon={DollarSign} label="Amount">{request.total_amount === null ? "Quote required" : money(request.total_amount)}</Detail><Detail icon={CheckCircle2} label="Payment">{label(request.payment_status)}</Detail></div>
     {request.description && <section className="rounded-xl border bg-muted/30 p-4"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer scope</p><p className="whitespace-pre-wrap text-sm leading-6">{request.description}</p></section>}
@@ -411,9 +423,9 @@ function RequestDialog(props: {
 
     {(props.attempts.length > 0 || props.attemptError) && <section className="rounded-xl border bg-muted/30 p-4"><div className="mb-2 flex justify-between"><h3 className="text-sm font-medium">Match History</h3><span className="text-xs text-muted-foreground">{props.attempts.length} attempt{props.attempts.length === 1 ? "" : "s"}</span></div>{props.attemptError ? <p className="text-xs text-destructive">History unavailable: {props.attemptError}</p> : <div className="space-y-2">{props.attempts.map((attempt) => <div key={attempt.id} className="flex items-center justify-between gap-3 text-xs"><div><p className="font-medium">#{attempt.attempt_number} {props.contractorNames[attempt.contractor_id] ?? "Vendor"}</p><p className="text-muted-foreground">Offered {formatDateTime(attempt.offered_at)}{attempt.reason ? ` · ${attempt.reason}` : ""}</p></div><Badge className={cn("border", outcomeStyle[attempt.outcome] ?? "bg-muted text-muted-foreground")}>{attempt.outcome}</Badge></div>)}</div>}</section>}
 
-    <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{statuses.map((status) => <Button key={status} size="sm" variant={request.status === status ? "default" : "outline"} disabled={busy || request.status === status} onClick={() => void props.changeStatus(request, status)}>{props.action?.kind === `status:${status}` && <Loader2 className="animate-spin" />}{label(status)}</Button>)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
+    <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
 
-    <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="min-w-0 flex-1"><FormField id="quote-amount" label="Total amount ($)" error={props.quoteError} required>{control => <Input {...control} type="number" min="0" step="0.01" value={props.quoteAmount} onChange={(event) => props.setQuoteAmount(event.target.value)} className="bg-card" />}</FormField></div><Button className="bg-commitment text-commitment-foreground hover:bg-commitment-hover" disabled={busy || !props.quoteAmount} onClick={() => void props.sendQuote(request)}>{props.action?.kind === "quote" && <Loader2 className="animate-spin" />}Send Quote</Button></div>{request.status === "quoted" && <p className="mt-2 text-xs text-status-info">Current quote: {money(request.quote_amount ?? request.total_amount ?? 0)} · awaiting homeowner action.</p>}</section>
+    <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><FormField id="quote-reason" label="Quote reason" required>{control => <Textarea {...control} value={props.quoteReason} onChange={event => props.setQuoteReason(event.target.value)} maxLength={1000} />}</FormField><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="min-w-0 flex-1"><FormField id="quote-amount" label="Total amount ($)" error={props.quoteError} required>{control => <Input {...control} type="number" min="0" step="0.01" value={props.quoteAmount} onChange={(event) => props.setQuoteAmount(event.target.value)} className="bg-card" />}</FormField></div><Button className="bg-commitment text-commitment-foreground hover:bg-commitment-hover" disabled={busy || !props.quoteAmount} onClick={() => void props.sendQuote(request)}>{props.action?.kind === "quote" && <Loader2 className="animate-spin" />}Send Quote</Button></div>{request.status === "quoted" && <p className="mt-2 text-xs text-status-info">Current quote: {money(request.quote_amount ?? request.total_amount ?? 0)} · awaiting homeowner action.</p>}</section>
 
     <section><label htmlFor="admin-note" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Internal Notes</label><Textarea id="admin-note" rows={4} value={props.note} onChange={(event) => props.setNote(event.target.value)} placeholder="Add internal operations notes..." className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /><Button size="sm" className="mt-2" disabled={busy} onClick={() => void props.saveNote(request)}>{props.action?.kind === "note" ? <Loader2 className="animate-spin" /> : <Save />}Save Note</Button></section>
   </TabsContent><TabsContent value="chat" className="min-h-[460px] flex-1 overflow-hidden data-active:flex data-active:flex-col"><AdminChat key={request.id} requestId={request.id} homeowner={props.profiles[request.customer_id] ?? "Homeowner"} vendor={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Vendor" : "Vendor"} /></TabsContent></Tabs><DialogFooter><Button variant="outline" disabled={busy} onClick={props.close}>Close</Button></DialogFooter></DialogContent></Dialog>;
@@ -466,7 +478,7 @@ function AdminChat({ requestId, homeowner, vendor }: { requestId: string; homeow
   return <div className="flex min-h-0 flex-1 flex-col"><div className="min-h-0 flex-1 overflow-y-auto p-4"><div className="mx-auto max-w-2xl space-y-3">{messages.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No messages on this request.</p>}{messages.map((message) => { const mine = message.sender_id === user?.id; const sender = mine ? "You" : message.sender_role === "admin" ? "Mercurius Support" : message.sender_role === "vendor" ? vendor : homeowner; return <div key={message.id} className={cn("max-w-[82%] rounded-2xl px-4 py-3 text-sm", mine ? "ml-auto rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted")}><p className="mb-1 text-xs font-medium opacity-65">{sender}</p><p className="whitespace-pre-wrap break-words">{message.content}</p><p className="mt-1 text-right text-xs opacity-50">{formatDateTime(message.created_at)}</p></div>; })}<div ref={bottomRef} /></div></div><div className="flex gap-2 border-t p-4"><Input aria-label="Message the homeowner and vendor" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void send(); } }} placeholder="Message the homeowner and vendor..." className="h-11" maxLength={2000} /><Button className="h-11" disabled={sending || !text.trim()} onClick={() => void send()}>{sending ? <Loader2 className="animate-spin" /> : <Send />}<span className="sr-only">Send</span></Button></div></div>;
 }
 
-function Status({ status }: { status: string }) { return <Badge className={cn("border capitalize", statusStyle[status] ?? "border-border bg-muted text-muted-foreground")}>{label(status)}</Badge>; }
+function Status({ status, matchingStatus }: { status: string; matchingStatus?: string }) { if (statuses.includes(status)) return <LifecycleStatus state={canonicalRequestState(status as Parameters<typeof canonicalRequestState>[0], matchingStatus)} />; return <Badge className={cn("border capitalize", statusStyle[status] ?? "border-border bg-muted text-muted-foreground")}>{label(status)}</Badge>; }
 function Detail({ icon: Icon, label: title, children }: { icon: ComponentType<{ className?: string }>; label: string; children: ReactNode }) { return <div className="rounded-lg border p-3"><p className="mb-1.5 flex items-center gap-2 text-xs font-medium text-muted-foreground"><Icon className="h-4 w-4 text-accent" />{title}</p><div className="leading-5">{children}</div></div>; }
 function Loading() { return <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" />Loading service requests...</div>; }
 function ErrorState({ message, retry }: { message: string; retry: () => void }) { return <div className="mx-auto max-w-3xl p-6"><Card className="border-destructive/20 bg-destructive/5"><CardContent className="py-14 text-center"><AlertCircle className="mx-auto mb-4 h-10 w-10 text-destructive" /><h1 className="text-xl font-semibold">Requests could not be loaded</h1><p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">No sample requests have been substituted. {message}</p><Button variant="outline" className="mt-5" onClick={retry}><RefreshCw />Try again</Button></CardContent></Card></div>; }

@@ -12,7 +12,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - name: Locked Edge checks and isolated handler tests
+        run: sh scripts/check-edge.sh && sh scripts/test-edge.sh
+      - name: Isolated database reconstruction and lifecycle tests
+        run: |
+          mkdir -p supabase/.audit
+          npx supabase start -x studio,imgproxy,mailpit,storage-api,realtime,postgres-meta,logflare,vector,supavisor > supabase/.audit/ci-start.log 2>&1
+          sh scripts/test-phase4-db.sh
+      - name: Authenticated local worker and pg_net transport, Cron inactive
+        run: |
+          printf '%s\n' 'JOB_LIFECYCLE_ENABLED=true' 'JOB_WORKER_SECRET=synthetic-phase4-worker-only' > supabase/.audit/worker.env
+          npx supabase functions serve job-lifecycle-worker --env-file supabase/.audit/worker.env > supabase/.audit/worker.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          node scripts/test-lifecycle-integration.mjs
+      - name: Stop only the isolated CI stack
+        if: always()
+        run: npx supabase stop --project-id vugqqyemuptlvcieihww
+
   application:
+    needs: lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

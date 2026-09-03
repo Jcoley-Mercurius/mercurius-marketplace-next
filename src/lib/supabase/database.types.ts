@@ -815,6 +815,27 @@ export type Database = {
           },
         ]
       }
+      lifecycle_worker_runs: {
+        Row: {
+          actor_id: string | null
+          completed_at: string
+          id: string
+          summary: Json
+        }
+        Insert: {
+          actor_id?: string | null
+          completed_at?: string
+          id: string
+          summary: Json
+        }
+        Update: {
+          actor_id?: string | null
+          completed_at?: string
+          id?: string
+          summary?: Json
+        }
+        Relationships: []
+      }
       loyalty_accounts: {
         Row: {
           created_at: string
@@ -1715,6 +1736,7 @@ export type Database = {
           promotion_id: string | null
           quote_amount: number | null
           quote_approved_at: string | null
+          quote_declined_at: string | null
           quote_only: boolean
           resolved_price: number | null
           review_request_due_at: string | null
@@ -1775,6 +1797,7 @@ export type Database = {
           promotion_id?: string | null
           quote_amount?: number | null
           quote_approved_at?: string | null
+          quote_declined_at?: string | null
           quote_only?: boolean
           resolved_price?: number | null
           review_request_due_at?: string | null
@@ -1835,6 +1858,7 @@ export type Database = {
           promotion_id?: string | null
           quote_amount?: number | null
           quote_approved_at?: string | null
+          quote_declined_at?: string | null
           quote_only?: boolean
           resolved_price?: number | null
           review_request_due_at?: string | null
@@ -2303,7 +2327,7 @@ export type Database = {
         Returns: undefined
       }
       admin_send_quote: {
-        Args: { _amount: number; _job_id: string }
+        Args: { _amount: number; _job_id: string; _reason?: string }
         Returns: undefined
       }
       admin_unlink_contractor: {
@@ -2502,6 +2526,10 @@ export type Database = {
           promotion_label: string
         }[]
       }
+      run_lifecycle_batch: {
+        Args: { _actor_id?: string; _run_id: string }
+        Returns: Json
+      }
       start_request_matching: { Args: { _request_id: string }; Returns: string }
       submit_job_review: {
         Args: { _comment: string; _job_id: string; _rating: number }
@@ -2572,6 +2600,7 @@ export type Database = {
         | "match_declined"
         | "match_expired"
         | "match_reassigned"
+        | "status_changed"
       job_payment_status: "pending" | "captured" | "released" | "refunded"
       loyalty_source_type:
         | "review"
@@ -2766,6 +2795,7 @@ export const Constants = {
         "match_declined",
         "match_expired",
         "match_reassigned",
+        "status_changed",
       ],
       job_payment_status: ["pending", "captured", "released", "refunded"],
       loyalty_source_type: [

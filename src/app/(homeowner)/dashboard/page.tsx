@@ -143,7 +143,7 @@ export default function DashboardPage() {
       const [requestResult, invoiceResult] = await Promise.all([
         supabase
           .from("service_requests")
-          .select("id, service_type, status, preferred_date, preferred_time, address, city, state, contractor_id, description, photo_proof_urls, total_amount, created_at")
+          .select("id, service_type, status, preferred_date, preferred_time, address, city, state, contractor_id, description, photo_proof_urls, total_amount, created_at, quote_declined_at, quote_approved_at")
           .eq("customer_id", user.id)
           .order("created_at", { ascending: false }),
         supabase

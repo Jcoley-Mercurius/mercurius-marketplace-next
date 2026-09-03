@@ -80,3 +80,22 @@ test("service dialog failures, cancellation confirmation and keyboard review", a
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
   expect(await review.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 });
+
+test("completion concern records a reason without claiming vendor work started", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await dashboard(page, "upcoming");
+  await page.getByRole("button", { name: "Open Synthetic Completed Service details" }).click();
+  const detail = page.getByRole("dialog", { name: "Synthetic Completed Service" });
+  await expect(detail.getByText(/after 72 hours/)).toBeVisible();
+  await detail.getByRole("button", { name: "Report an issue", exact: true }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Report an issue with this service?" });
+  await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await expect(confirm.getByRole("button", { name: "Report issue", exact: true })).toBeDisabled();
+  await confirm.getByLabel("Reason (required)").fill("Synthetic completion concern");
+  const request = page.waitForRequest(request => request.url().includes("/rpc/homeowner_raise_dispute"));
+  await confirm.getByRole("button", { name: "Report issue", exact: true }).click();
+  expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic completion concern" });
+  await expect(confirm.getByRole("alert")).toBeFocused();
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: "test-results/phase4-homeowner-issue.png", fullPage: true });
+});

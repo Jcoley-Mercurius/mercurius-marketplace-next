@@ -66,3 +66,20 @@ specified and tested. The inherited behavior has not yet been changed.
 - No authenticated production worker call or production scheduling change made.
 
 Reference: [Supabase scheduling documentation](https://supabase.com/docs/guides/functions/schedule-functions).
+
+## Phase 4 forward implementation — 2026-09-03
+
+The earlier recovered-source discussion above is historical. DEC-006 approves
+72 hours after notice for admin escalation, never automatic confirmation. The
+current Edge handler is disabled unless JOB_LIFECYCLE_ENABLED is exactly true.
+Its one SQL batch owns expiry, in-app notice, review flags, audit and run results.
+The recovered worker is retained under supabase/recovered and hash-verified.
+
+Local authenticated gateway and one-off pg_net transport tests passed with
+synthetic fixtures and zero Cron jobs. This proves transport, not recurring Cron
+execution. scripts/install-inactive-lifecycle.sql is an unexecuted review template
+with required cadence/job-name inputs, Vault lookups and transactional inactive
+installation. It contains no activation statement. Cadence, target provisioning,
+notification delivery/fallback, retention and production activation remain gates.
+
+Use PHASE-4-VALIDATION.md for the current acceptance boundary.

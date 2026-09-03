@@ -117,3 +117,39 @@ under DEC-2026-004; they are not claimed as passing at Phase 2 closeout.
 **Required evidence:** Sanitized schema artifact; object inventory; live-to-repository drift report; secret scan; confirmation that no customer rows were committed.
 
 **Supersedes:** Nothing.
+
+### DEC-2026-005 — Accept Phase 3 and authorize Phase 4
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner accepted Phase 3 as closed at PR #3 and authorized lifecycle/scheduler
+reconciliation, tests, governance updates and a draft PR. Phase 3 manual
+accessibility, brand and cross-platform follow-ups remain recorded separately.
+PR #3 was verified open/unmerged at 91379e9; Phase 4 branches from that head.
+No merge, deploy, production change, Cron activation or Homeschool Haven operation
+is authorized. Heavy checks remain sequential, with MERCURIUS_BUILD_WORKERS=1.
+
+### DEC-2026-006 — Completion escalation deadline
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+Asked how long after the homeowner completion-confirmation notice an unanswered
+job should escalate to admin review, the owner answered: “72 hours is approved.”
+The clock begins with the recorded notice, not provider offer creation. At 72h
+the job stays completion-pending and gains an auditable admin-review flag. Silence
+never creates homeowner confirmation or payout eligibility. The four-hour vendor
+offer deadline is separate. No other inherited reminder/quiet-hour timer is
+approved by this decision. Required evidence: boundary, retry, cross-role, failure
+and concurrency tests; no confirmation or financial effects on escalation.
+
+### DEC-2026-007 — Vendor acceptance schedules service
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner clarified that the four-hour window is the vendor's time to accept the
+homeowner's offer, not a quote-validity period. A request becomes scheduled
+immediately when the vendor accepts. Do not add payment, separate homeowner quote
+approval or mutual appointment confirmation as prerequisites to that scheduling
+transition. The four-hour quote-expiry interpretation was discarded before any
+quote-expiry migration was applied. Quote validity/revision remains an open
+specification, separate from the approved offer window and 72-hour completion review.
