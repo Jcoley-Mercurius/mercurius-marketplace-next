@@ -78,7 +78,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           alt="Mercurius"
           width={44}
           height={44}
-          className="h-11 w-11 object-contain"
+          className="h-11 w-11 object-contain dark:invert"
           priority
         />
         <div>
@@ -87,7 +87,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </Link>
 
-      <nav className="flex-1 overflow-y-auto p-3">
+      <nav aria-label="homeowner navigation" className="min-h-0 flex-1 overflow-y-auto p-3">
         <Link
           href="/request"
           onClick={onNavigate}
@@ -97,7 +97,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           Request Service
         </Link>
 
-        <p className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Services
         </p>
         <div className="space-y-1">
@@ -124,7 +124,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           })}
         </div>
 
-        <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="px-3 pb-2 pt-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Account
         </p>
         <div className="space-y-1">

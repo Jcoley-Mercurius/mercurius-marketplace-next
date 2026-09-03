@@ -374,7 +374,7 @@ export default function VendorApplyPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="bg-hero py-12 text-center md:py-16">
           <div className="container-narrow">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Provider Application</p>
@@ -731,7 +731,7 @@ function ApplicationSuccess({
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="py-16 md:py-24">
+      <main id="main-content" tabIndex={-1} className="py-16 md:py-24">
         <div className="container-narrow mx-auto max-w-xl text-center">
           <span className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
             <CheckCircle2 className="h-10 w-10 text-primary" />

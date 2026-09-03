@@ -42,7 +42,7 @@ export function Footer() {
                 alt="Mercurius"
                 width={36}
                 height={36}
-                className="h-9 w-9 object-contain"
+                className="h-9 w-9 object-contain dark:invert"
               />
               <span className="text-xl font-semibold text-slate-dark">Mercurius</span>
             </Link>

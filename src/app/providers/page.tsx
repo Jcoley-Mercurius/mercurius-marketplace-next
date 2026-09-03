@@ -194,7 +194,7 @@ export default function ProvidersPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="bg-gradient-to-br from-accent/10 via-background to-primary/5 py-16 md:py-24">
           <div className="container-wide mx-auto max-w-3xl text-center">
             <Badge className="mb-4 border-0 bg-accent/10 text-accent">

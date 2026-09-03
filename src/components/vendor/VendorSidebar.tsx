@@ -41,12 +41,12 @@ export function VendorSidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col border-r border-border-strong bg-warm-white text-foreground shadow-sm">
       <Link href="/vendor" onClick={onNavigate} className="flex h-20 items-center gap-3 border-b border-border-strong px-5">
-        <Image src="/mercurius-logo.png" alt="Mercurius" width={44} height={44} className="h-11 w-11 object-contain" priority />
+        <Image src="/mercurius-logo.png" alt="Mercurius" width={44} height={44} className="h-11 w-11 object-contain dark:invert" priority />
         <div><p className="font-semibold text-slate-dark">Vendor Portal</p><p className="text-xs text-muted-foreground">Mercurius</p></div>
       </Link>
 
-      <nav className="flex-1 space-y-1 p-3">
-        <p className="px-3 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Navigation</p>
+      <nav aria-label="vendor navigation" className="min-h-0 overflow-y-auto flex-1 space-y-1 p-3">
+        <p className="px-3 pb-2 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Navigation</p>
         {navigation.map((item) => {
           const active = item.href === "/vendor"
             ? pathname === item.href
@@ -54,7 +54,7 @@ export function VendorSidebar({ onNavigate }: { onNavigate?: () => void }) {
               ? pathname.startsWith("/vendor/packages") || pathname.startsWith("/vendor/pricing")
               : pathname.startsWith(item.href);
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm transition-colors", active ? "border-accent-border bg-accent-soft font-medium text-sage-dark shadow-sm" : "text-slate hover:bg-surface-hover hover:text-slate-dark")}><Icon className={cn("h-5 w-5", active ? "text-sage-dark" : "text-muted-foreground")} /><span className="min-w-0 flex-1">{item.label}</span>{item.note && <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide", active ? "border-accent-border bg-background text-sage-dark" : "border-border-strong bg-muted/50 text-muted-foreground")}>{item.note}</span>}</Link>;
+          return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm transition-colors", active ? "border-accent-border bg-accent-soft font-medium text-sage-dark shadow-sm" : "text-slate hover:bg-surface-hover hover:text-slate-dark")}><Icon className={cn("h-5 w-5", active ? "text-sage-dark" : "text-muted-foreground")} /><span className="min-w-0 flex-1">{item.label}</span>{item.note && <span className={cn("rounded-full border px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide", active ? "border-accent-border bg-background text-sage-dark" : "border-border-strong bg-muted/50 text-muted-foreground")}>{item.note}</span>}</Link>;
         })}
       </nav>
 

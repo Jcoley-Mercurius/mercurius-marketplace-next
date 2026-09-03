@@ -103,6 +103,8 @@ Work:
 
 ### Phase 3 — MDS foundation and accessibility repair
 
+**Status:** IN PROGRESS — initial component/navigation foundation on `codex/mds-foundation`. See `governance/PHASE-3-VALIDATION.md`; full phase acceptance remains open.
+
 **Outcome:** critical journeys use an accessible, documented component foundation before large workflow changes.
 
 Work:

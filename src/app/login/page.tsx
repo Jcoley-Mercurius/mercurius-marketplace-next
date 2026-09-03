@@ -71,7 +71,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-background">
       <div className="grid min-h-screen md:grid-cols-[minmax(0,1fr)_minmax(28rem,0.9fr)] xl:grid-cols-[1.15fr_0.85fr]">
         <section className="order-1 flex items-center justify-center bg-muted/60 px-4 py-8 sm:px-8 md:order-2 md:px-10 md:py-12 xl:px-16">
           <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl sm:p-8 lg:p-10">
@@ -88,7 +88,7 @@ export default function LoginPage() {
                 alt="Mercurius"
                 width={40}
                 height={40}
-                className="h-10 w-10 object-contain"
+                className="h-10 w-10 object-contain dark:invert"
                 priority
               />
               <span className="text-xl font-semibold text-foreground">
@@ -202,7 +202,7 @@ export default function LoginPage() {
                 alt=""
                 width={40}
                 height={40}
-                className="h-10 w-10 object-contain"
+                className="h-10 w-10 object-contain dark:invert"
               />
             </span>
             <span className="text-xl font-semibold text-primary-foreground">Mercurius</span>

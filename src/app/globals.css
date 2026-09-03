@@ -748,3 +748,106 @@
     background: none;
   }
 }
+
+/* Phase 3 semantic foundation. Fixed pairs intentionally override mixed legacy shades. */
+@theme {
+  --color-commitment: #256346;
+  --color-commitment-foreground: #ffffff;
+  --color-commitment-hover: #1d5038;
+  --color-commitment-active: #163e2b;
+  --color-status-neutral: #374151;
+  --color-status-neutral-bg: #f3f4f6;
+  --color-status-info: #1e40af;
+  --color-status-info-bg: #eff6ff;
+  --color-status-success: #166534;
+  --color-status-success-bg: #f0fdf4;
+  --color-status-warning: #854d0e;
+  --color-status-warning-bg: #fefce8;
+  --color-status-danger: #991b1b;
+  --color-status-danger-bg: #fef2f2;
+}
+:root {
+  --color-accent: #256346;
+  --color-accent-hover: #1d5038;
+  --color-accent-active: #163e2b;
+  --color-focus-ring: #256346;
+  --color-input: #737b77;
+  --color-destructive: #b91c1c;
+  --color-coral-dark: #a63e22;
+}
+.dark {
+  --color-commitment: #91d5b0;
+  --color-commitment-foreground: #10271c;
+  --color-commitment-hover: #ace3c4;
+  --color-commitment-active: #c6eed7;
+  --color-accent: #91d5b0;
+  --color-accent-hover: #ace3c4;
+  --color-accent-active: #c6eed7;
+  --color-focus-ring: #91d5b0;
+  --color-input: #87968e;
+  --color-destructive: #fca5a5;
+  --color-coral-dark: #ffb49f;
+  --color-status-neutral: #e5e7eb;
+  --color-status-neutral-bg: #1f2937;
+  --color-status-info: #bfdbfe;
+  --color-status-info-bg: #172554;
+  --color-status-success: #bbf7d0;
+  --color-status-success-bg: #143322;
+  --color-status-warning: #fef08a;
+  --color-status-warning-bg: #422006;
+  --color-status-danger: #fecaca;
+  --color-status-danger-bg: #450a0a;
+}
+@layer base {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid var(--color-focus-ring);
+    outline-offset: 3px;
+  }
+  #main-content { scroll-margin-top: 5rem; }
+}
+@layer components {
+  .skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 100;
+    padding: 0.75rem 1rem;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    transform: translateY(-200%);
+  }
+  .skip-link:focus { transform: translateY(0); }
+  .mds-control {
+    width: 100%; min-width: 0; min-height: 44px; scroll-margin-top: 6rem;
+    border: 1px solid var(--color-input); border-radius: var(--radius-md);
+    background: var(--color-card); color: var(--color-foreground);
+    padding: 0.625rem 0.75rem; font-size: 1rem;
+  }
+  .mds-control[aria-invalid=true] { border-color: var(--color-destructive); }
+  .mds-control:disabled { opacity: 0.6; cursor: not-allowed; }
+  .mds-control::placeholder { color: var(--color-muted-foreground); }
+  .mds-control[data-density=compact] { min-height: 40px; padding-block: 0.5rem; }
+  [data-slot=button] { min-height: 44px; }
+  [data-slot=button][data-density=compact] { min-height: 40px; }
+  [data-slot=dropdown-menu-item] { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible { outline-color: Highlight; }
+}
+
+/* Keep focus visible even when an inherited utility removes the default outline. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible { outline-color: Highlight; }
+}

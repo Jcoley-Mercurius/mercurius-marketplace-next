@@ -22,7 +22,9 @@
     "inventory:backend": "node scripts/inventory-backend-references.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
-    "check": "npm run scan:secrets && npm run lint && npm run typecheck && npm run test:unit && npm run build"
+    "check": "npm run scan:secrets && npm run lint && npm run typecheck && npm run test:unit && npm run build",
+    "test:a11y": "playwright test --grep-invert @visual",
+    "test:visual": "playwright test --grep @visual"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -43,6 +45,8 @@
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

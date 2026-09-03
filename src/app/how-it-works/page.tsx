@@ -69,7 +69,7 @@ export default function HowItWorksPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         <section className="bg-hero relative overflow-hidden">
           <div className="bg-pattern absolute inset-0 opacity-30" />
           <div className="pointer-events-none absolute right-1/4 top-0 h-[400px] w-[500px] rounded-full bg-accent/8 blur-3xl" />

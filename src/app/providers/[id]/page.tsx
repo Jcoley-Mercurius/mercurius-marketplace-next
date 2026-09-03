@@ -437,7 +437,7 @@ export default function ProviderStorefrontPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="bg-hero border-b border-border/50 py-10 md:py-14">
           <div className="container-narrow">
             <Link href="/providers" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mb-6 -ml-2 text-muted-foreground")}>
@@ -559,7 +559,7 @@ function ProviderVideo({ url }: { url: string }) {
 }
 
 function StorefrontLoading() {
-  return <div className="min-h-screen bg-background"><Header /><main><section className="bg-hero py-14"><div className="container-narrow animate-pulse"><div className="h-7 w-36 rounded bg-muted" /><div className="mt-7 flex gap-5"><div className="h-20 w-20 rounded-2xl bg-muted" /><div className="flex-1 space-y-3"><div className="h-8 w-2/3 rounded bg-muted" /><div className="h-4 w-1/2 rounded bg-muted" /><div className="h-7 w-36 rounded-full bg-muted" /></div></div></div></section><section className="section-sm"><div className="container-narrow grid gap-8 md:grid-cols-3"><div className="space-y-5 md:col-span-2">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-48 animate-pulse rounded-xl bg-muted" />)}</div><div className="h-72 animate-pulse rounded-xl bg-muted" /></div></section></main><Footer /></div>;
+  return <div className="min-h-screen bg-background"><Header /><main id="main-content" tabIndex={-1}><section className="bg-hero py-14"><div className="container-narrow animate-pulse"><div className="h-7 w-36 rounded bg-muted" /><div className="mt-7 flex gap-5"><div className="h-20 w-20 rounded-2xl bg-muted" /><div className="flex-1 space-y-3"><div className="h-8 w-2/3 rounded bg-muted" /><div className="h-4 w-1/2 rounded bg-muted" /><div className="h-7 w-36 rounded-full bg-muted" /></div></div></div></section><section className="section-sm"><div className="container-narrow grid gap-8 md:grid-cols-3"><div className="space-y-5 md:col-span-2">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-48 animate-pulse rounded-xl bg-muted" />)}</div><div className="h-72 animate-pulse rounded-xl bg-muted" /></div></section></main><Footer /></div>;
 }
 
 function StorefrontMissing() {
@@ -571,7 +571,7 @@ function StorefrontError({ message, retry }: { message: string; retry: () => voi
 }
 
 function StorefrontState({ icon: Icon, title, copy, action }: { icon: typeof AlertCircle; title: string; copy: string; action: React.ReactNode }) {
-  return <div className="min-h-screen bg-background"><Header /><main className="flex min-h-[65vh] items-center justify-center bg-hero px-4 py-16"><Card className="w-full max-w-xl border-border/70 shadow-lg"><CardContent className="py-12 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10"><Icon className="h-7 w-7 text-accent" /></div><h1 className="mt-5 font-heading text-2xl font-semibold">{title}</h1><p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">{copy}</p><div className="mt-6">{action}</div></CardContent></Card></main><Footer /></div>;
+  return <div className="min-h-screen bg-background"><Header /><main id="main-content" tabIndex={-1} className="flex min-h-[65vh] items-center justify-center bg-hero px-4 py-16"><Card className="w-full max-w-xl border-border/70 shadow-lg"><CardContent className="py-12 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10"><Icon className="h-7 w-7 text-accent" /></div><h1 className="mt-5 font-heading text-2xl font-semibold">{title}</h1><p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">{copy}</p><div className="mt-6">{action}</div></CardContent></Card></main><Footer /></div>;
 }
 
 function isPricingMode(value: string): value is PricingMode {

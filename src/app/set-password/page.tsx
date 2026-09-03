@@ -241,19 +241,19 @@ export default function SetPasswordPage() {
 
   if (pageState === "checking") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted">
+      <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-muted">
         <div className="text-center" aria-live="polite">
           <Loader2 className="mx-auto h-7 w-7 animate-spin text-accent" />
           <p className="mt-3 text-sm text-muted-foreground">
             Verifying your secure link...
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted p-8">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-muted p-8">
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex items-center space-x-2">
           <Image
@@ -261,7 +261,7 @@ export default function SetPasswordPage() {
             alt="Mercurius"
             width={40}
             height={40}
-            className="h-10 w-10 object-contain"
+            className="h-10 w-10 object-contain dark:invert"
             priority
           />
           <span className="text-xl font-semibold text-foreground">
@@ -404,7 +404,7 @@ export default function SetPasswordPage() {
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 

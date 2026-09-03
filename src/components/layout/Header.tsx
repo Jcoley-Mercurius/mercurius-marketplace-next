@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,7 +118,7 @@ export function Header() {
     { name: "For Vendors", href: "/vendors" },
   ];
 
-  const isActive = (path: string) => pathname === path;
+  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
 
   async function handleSignOut() {
     if (isSigningOut) return;
@@ -143,18 +143,19 @@ export function Header() {
             alt="Mercurius"
             width={64}
             height={64}
-            className="h-14 w-14 md:h-16 md:w-16 object-contain"
+            className="h-14 w-14 md:h-16 md:w-16 object-contain dark:invert"
           />
           <span className="text-xl font-semibold text-foreground">Mercurius</span>
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-1 absolute left-1/2 -translate-x-1/2">
+        <nav className="hidden xl:flex items-center space-x-1 mx-auto">
           {navigation.map((item) => (
             <Link
               key={item.name}
               href={item.href}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              aria-current={isActive(item.href) ? "page" : undefined}
+              className={`min-h-11 inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 isActive(item.href)
                   ? "bg-slate-soft text-foreground"
                   : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
@@ -165,31 +166,21 @@ export function Header() {
           ))}
 
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground">
+            <DropdownMenuTrigger className="min-h-11 flex items-center rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground">
               More <ChevronDown className="ml-1 h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
-                <Link href="/how-it-works" className="w-full">How It Works</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/services" className="w-full">Services</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/pricing" className="w-full">Pricing</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/faq" className="w-full">FAQ</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/contact" className="w-full">Contact</Link>
-              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/how-it-works" />} className="w-full">How It Works</DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/services" />} className="w-full">Services</DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/pricing" />} className="w-full">Pricing</DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/faq" />} className="w-full">FAQ</DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/contact" />} className="w-full">Contact</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </nav>
 
         {/* Desktop CTA */}
-        <div className="hidden md:flex items-center space-x-3 ml-auto">
+        <div className="hidden xl:flex items-center space-x-3 ml-auto">
           {isHomeowner && (
             <NotificationBell
               unreadCount={unreadCount}
@@ -231,7 +222,7 @@ export function Header() {
                       portalLinks.map(({ role, roleLabel }) => (
                         <span
                           key={role}
-                          className="rounded-full border border-accent-border bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-sage-dark"
+                          className="rounded-full border border-accent-border bg-accent-soft px-2 py-0.5 text-xs font-medium text-sage-dark"
                         >
                           {roleLabel}
                         </span>
@@ -297,39 +288,33 @@ export function Header() {
                 Sign In <ChevronDown className="h-4 w-4 ml-1" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem>
-                  <Link href="/login" className="w-full flex items-center gap-2">
+                <DropdownMenuItem render={<Link href="/login" />} className="w-full flex items-center gap-2">
                     <div className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-soft">
                       <Home className="h-3.5 w-3.5 text-foreground" />
                     </div>
                     Homeowner Sign In
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/login/vendor" className="w-full flex items-center gap-2">
+                  </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/login/vendor" />} className="w-full flex items-center gap-2">
                     <div className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-soft">
                       <Wrench className="h-3.5 w-3.5 text-foreground" />
                     </div>
                     Vendor Sign In
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/register" className="w-full flex items-center gap-2 font-medium text-accent">
+                  </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/register" />} className="w-full flex items-center gap-2 font-medium text-sage-dark">
                     <div className="flex h-6 w-6 items-center justify-center rounded-md border border-accent-border bg-accent-soft">
-                      <UserPlus className="h-3.5 w-3.5 text-accent" />
+                      <UserPlus className="h-3.5 w-3.5 text-sage-dark" />
                     </div>
                     Create Homeowner Account
-                  </Link>
-                </DropdownMenuItem>
+                  </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
 
-          <Link href="/request" className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Get Started</Link>
+          <Link href="/request" className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Request service</Link>
         </div>
 
         {/* Mobile Menu */}
-        <div className="ml-auto flex items-center gap-1 md:hidden">
+        <div className="ml-auto flex items-center gap-1 xl:hidden">
           {isHomeowner && (
             <NotificationBell
               unreadCount={unreadCount}
@@ -338,18 +323,15 @@ export function Header() {
             />
           )}
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
-            <SheetTrigger>
-              <Button variant="ghost" size="icon">
-                <Menu className="h-6 w-6" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-80">
-              <div className="flex flex-col space-y-6 mt-8">
+            <SheetTrigger render={<Button variant="ghost" size="icon" />} aria-label="Open main menu"><Menu className="h-6 w-6" /></SheetTrigger>
+            <SheetContent side="right" className="w-80 p-4"><SheetTitle className="pr-12">Main menu</SheetTitle><SheetDescription>Explore services and access your account.</SheetDescription>
+              <div className="flex flex-col space-y-6">
                 <nav className="flex flex-col space-y-1">
                   {navigation.map((item) => (
                     <Link
                       key={item.name}
                       href={item.href}
+              aria-current={isActive(item.href) ? "page" : undefined}
                       onClick={() => setIsOpen(false)}
                       className={`px-4 py-3 text-base font-medium rounded-lg transition-colors ${
                         isActive(item.href)
@@ -403,7 +385,7 @@ export function Header() {
                             portalLinks.map(({ role, roleLabel }) => (
                               <span
                                 key={role}
-                                className="rounded-full border border-accent-border bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-sage-dark"
+                                className="rounded-full border border-accent-border bg-accent-soft px-2 py-0.5 text-xs font-medium text-sage-dark"
                               >
                                 {roleLabel}
                               </span>
@@ -480,7 +462,7 @@ export function Header() {
                       <Link
                         href="/register"
                         onClick={() => setIsOpen(false)}
-                        className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover active:bg-accent-active"
+                        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover active:bg-accent-active"
                       >
                         <UserPlus className="h-4 w-4" />
                         Create Homeowner Account
@@ -492,7 +474,7 @@ export function Header() {
                       Loading Account...
                     </Button>
                   )}
-                  <Link href="/request" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Request Service</Link>
+                  <Link href="/request" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Request service</Link>
                 </div>
               </div>
             </SheetContent>
