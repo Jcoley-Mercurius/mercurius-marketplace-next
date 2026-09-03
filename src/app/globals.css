@@ -752,6 +752,8 @@
 /* Phase 3 semantic foundation. Fixed pairs intentionally override mixed legacy shades. */
 @theme {
   --color-commitment: #256346;
+  --color-brand-paper: #ffffff;
+  --color-brand-ink: #10141b;
   --color-commitment-foreground: #ffffff;
   --color-commitment-hover: #1d5038;
   --color-commitment-active: #163e2b;

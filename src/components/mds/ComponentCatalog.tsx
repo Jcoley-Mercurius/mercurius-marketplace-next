@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export function ComponentCatalog() {
     <Header />
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-6xl space-y-10 px-4 py-8 sm:px-8">
       <PageHeader eyebrow="Mercurius Design System · Beta" title="Component foundation" description="Shared controls, feedback, and navigation. All examples use synthetic data and perform no marketplace operations." actions={<ThemeToggle showLabel />} />
+      <Link href="/mds/brand" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">Review brand asset variants</Link>
       <section aria-labelledby="actions-heading" className="space-y-4">
         <h2 id="actions-heading" className="text-xl font-semibold">Actions and density</h2>
         <div className="flex flex-wrap gap-3">
