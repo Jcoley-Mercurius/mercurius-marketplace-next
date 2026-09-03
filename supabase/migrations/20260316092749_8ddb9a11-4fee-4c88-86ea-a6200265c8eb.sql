@@ -1,0 +1,4 @@
+-- INSERT INTO public.featured_providers (contractor_id, tier, headline, is_active) VALUES
+-- ('60c90056-06a7-41ae-901b-98a08496576f', 'spotlight', 'Award-winning lawn care serving Fort Myers for 12+ years', true),
+-- ('e0689fa3-ef8f-4d0a-9f17-4a004830392e', 'spotlight', 'Crystal clear pools, guaranteed. Licensed and insured.', true),
+-- ('e0e644e2-d6d9-47b7-ab01-7054bda1d853', 'spotlight', 'Deep cleaning specialists with eco-friendly products', true);

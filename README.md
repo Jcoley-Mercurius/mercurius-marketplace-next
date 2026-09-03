@@ -43,6 +43,35 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+### Local backend reconstruction
+
+Use the same environment for Docker and the Supabase CLI. If Docker and CLI login
+are in WSL, run the backend commands in a WSL terminal from this repository root;
+Windows and WSL do not automatically share CLI credentials. Local reconstruction
+does not require production credentials.
+
+```sh
+supabase start
+supabase db reset --local
+supabase test db
+```
+
+The isolated Mercurius stack uses API port `55421`, database port `55422`, Studio
+port `55423`, and local mail port `55424`, avoiding the default ports used by other
+local projects. `supabase/config.toml` pins PostgreSQL 17. Never add `--linked` or
+a production `--db-url` to reset commands.
+
+`npm run db:seed:generate` rebuilds `supabase/seed.sql` from repository catalog
+metadata. It adds no customer accounts, live prices, coverage claims, or active
+sample-provider proof. `npm run db:types` regenerates the TypeScript schema from
+the local database. See the [Phase 2 checkpoint](./governance/PHASE-2-VALIDATION.md)
+for recovered history, deployed-function source drift, and verification.
+
+On memory-constrained machines running WSL/Docker, set
+`MERCURIUS_BUILD_WORKERS=1` for a low-concurrency `npm run build`. This opt-in
+uses the worker-count control verified in the pinned Next.js version and leaves
+the default unchanged. It does not skip routes or TypeScript validation.
+
 ## Quality commands
 
 ```powershell
@@ -55,7 +84,11 @@ npm run build
 npm run check
 ```
 
-`npm run test:unit` and the repository secret scan are active Phase 1 gates. Database/RLS, accessibility, visual-regression, and E2E commands will be added only when their corresponding roadmap slices supply real tests; no empty passing scripts are used. A successful build is not a substitute for those acceptance gates.
+`npm run test:unit` and the repository secret scan are active Phase 1 gates.
+`npm run test:db` now runs the real database privilege and role-isolation suites
+against a running local Supabase stack. Accessibility, visual-regression, and E2E
+gates remain assigned to later roadmap slices. A successful build is not a
+substitute for those acceptance gates.
 
 ## Environments
 
@@ -112,3 +145,23 @@ See the combined roadmap for dependencies and completion criteria.
 - Never export production customer rows as fixtures or seeds.
 - Payment work stays in test mode until a separately approved activation gate.
 - Every manual provider-dashboard change must be reflected in configuration documentation or a runbook.
+
+## Isolated Edge verification
+
+From the repository directory in WSL, use Deno 2.9.6:
+
+```sh
+npm exec --prefix supabase/.audit/tooling --yes --package=deno@2.9.6 -- sh scripts/check-edge.sh
+npm exec --prefix supabase/.audit/tooling --yes --package=deno@2.9.6 -- sh scripts/test-edge.sh
+```
+
+Both use frozen per-function dependency lockfiles. Tests use synthetic fixtures
+without network/process permissions; they do not invoke deployed functions or
+prove gateway/provider integration. Package resolution may download dependencies.
+Keep heavy checks sequential on memory-constrained machines. Close unused apps
+and stop only development stacks you are not using; do not delete Docker volumes
+or run cleanup/prune commands to address RAM pressure.
+
+With the isolated local Supabase gateway running on port 55421,
+`node scripts/test-edge-gateway.mjs` verifies missing-JWT rejection on all 10
+protected functions. It uses no credentials and never targets production.

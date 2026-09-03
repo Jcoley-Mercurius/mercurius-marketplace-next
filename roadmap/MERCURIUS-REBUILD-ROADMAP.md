@@ -83,6 +83,10 @@ Work:
 
 ### Phase 2 — Reconstruct the real backend
 
+**Status:** COMPLETE — owner accepted the verified reconstruction and documented
+live/local differences on 2026-09-03 (DEC-2026-004). See
+`governance/PHASE-2-VALIDATION.md`. Production deployment is not authorized.
+
 **Outcome:** a blank environment recreates every required table, policy, RPC, trigger, bucket, seed, and Edge Function.
 
 Work:
@@ -114,6 +118,12 @@ Work:
 **Gate:** primitives pass axe, keyboard, focus, contrast, 320px reflow, dark-mode, and screenshot baselines.
 
 ### Phase 4 — Canonical product lifecycle
+
+**Phase 2 handoff (TRACE-010):** replace inherited automatic completion
+confirmation with admin review; define its deadline separately from the four-hour
+vendor offer window. Implement and verify authenticated Supabase Cron-to-worker
+execution, concurrency, failure handling, and notification deduplication in an
+isolated environment. Keep production scheduling inactive until reviewed activation.
 
 **Outcome:** request, match, quote, job, payment, payout, dispute, and review states follow the approved MPS.
 

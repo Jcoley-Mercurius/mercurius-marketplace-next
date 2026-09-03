@@ -15,6 +15,11 @@
     "typecheck": "tsc --noEmit --pretty false",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
+    "test:db": "supabase test db",
+    "db:reset": "supabase db reset --local",
+    "db:seed:generate": "node scripts/generate-reference-seed.mjs",
+    "db:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
+    "inventory:backend": "node scripts/inventory-backend-references.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "check": "npm run scan:secrets && npm run lint && npm run typecheck && npm run test:unit && npm run build"
@@ -44,6 +49,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "supabase": "2.116.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.11"
