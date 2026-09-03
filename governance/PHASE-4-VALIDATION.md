@@ -47,8 +47,8 @@ verify the forward implementation separately.
 
 | Check | Evidence |
 |---|---|
-| Clean replay | Two successful local resets during this work; the later replay included the first six Phase 4 migrations. The final quote-decision migration was subsequently applied and tested locally. Final-head clean replay is a CI gate. |
-| Database contracts | 96 assertions passed across five rollback-only suites after the quote-decision change. Two additional start/scheduling authorization assertions were then added; their final-head result must be recorded from CI. |
+| Clean replay | Two successful local resets during this work; the later replay included the first six Phase 4 migrations. The final quote-decision migration was subsequently applied and tested locally. CI run 33816965540 reconstructed all migrations successfully at implementation commit 2d74f81. |
+| Database contracts | 96 assertions passed locally; CI run 33816965540 passed all 98 assertions across five rollback-only suites, including the additional vendor-start and homeowner-scheduling authorization checks. |
 | Unit/contract | 62 passed, including every stored status, terminal/admin action restrictions, cancellation/rescheduling boundaries, accepted exceptions and Eastern DST elapsed time. |
 | Edge check | All 11 functions passed frozen Deno 2.9.6 checks. |
 | Edge runtime | All 31 synthetic handler tests passed, including nine current worker cases. No network/process permission. |
@@ -57,6 +57,21 @@ verify the forward implementation separately.
 | Application lint/build/browser | Lint passed without warnings; typecheck and one-worker build passed (56 routes). Initial full browser run passed all 48 existing checks and exposed three new nested-dialog focus failures. Parent error focus was corrected; all three new cases then passed, including axe. Full final-head regression remains the CI gate. |
 | Screenshot inspection | Inspected new synthetic 320px admin light/dark and homeowner concern-dialog captures. No clipped controls observed. This is not human screen-reader, true zoom or owner brand approval. |
 | Credential scan | Staged-file credential scan passed. No ignored local worker environment is committed. |
+
+## CI implementation checkpoint
+
+[CI run 33816965540](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/33816965540)
+passed both sequential jobs at implementation commit `2d74f81`: clean reconstruction,
+98 SQL assertions, 11 frozen Edge checks, 31 handler tests, authenticated concurrent
+worker/retry/pg_net integration with zero Cron jobs, lint, credential scan, types,
+62 unit/contract tests, production dependency audit, one-worker build and all 51
+browser checks. The subsequent evidence/CI-coordination commit changes no application
+or database behavior. Its current-head run remains a draft acceptance check.
+
+Push and pull-request events now share a branch concurrency key so future pushes
+cannot duplicate heavy CI runs. The initial duplicate push run was cancelled;
+the passing evidence above is the PR run. Git status reported only CodeRabbit,
+with success; the Phase 4 branch's Vercel Git deployments are disabled.
 
 The first test against the restored local volume found a provider-role assertion
 failure; a clean replay from committed migrations passed it. That restored-volume

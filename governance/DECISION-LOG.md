@@ -125,7 +125,9 @@ under DEC-2026-004; they are not claimed as passing at Phase 2 closeout.
 The owner accepted Phase 3 as closed at PR #3 and authorized lifecycle/scheduler
 reconciliation, tests, governance updates and a draft PR. Phase 3 manual
 accessibility, brand and cross-platform follow-ups remain recorded separately.
-PR #3 was verified open/unmerged at 91379e9; Phase 4 branches from that head.
+PR #3 was verified open/unmerged at 91379e9; Phase 4 initially branched from that
+head. Its later merge at db3f406 was independently verified as tree-identical;
+the Phase 4 branch was rebased onto that merged main without changing Phase 3.
 No merge, deploy, production change, Cron activation or Homeschool Haven operation
 is authorized. Heavy checks remain sequential, with MERCURIUS_BUILD_WORKERS=1.
 

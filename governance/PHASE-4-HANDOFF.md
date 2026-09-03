@@ -1,5 +1,8 @@
 # Phase 4 handoff
 
+Draft review: https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/4
+Branch: `codex/lifecycle-reconciliation`; target: `main`.
+
 Phase 3 is owner-accepted under DEC-2026-005. PR #3 was open/unmerged when Phase 4
 started at its complete head `91379e9`. A later read-only check verified its merge
 at 22:24:42 UTC into `main` as `db3f4061f65f84ccd8bbb08e9c71301167bd6250`.
