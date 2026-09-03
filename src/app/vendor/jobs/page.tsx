@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,20 +51,20 @@ type Action = { id: string; kind: string } | null;
 const incoming = new Set(["matched", "pending"]);
 const finished = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed", "cancelled"]);
 const statusConfig: Record<string, [string, string]> = {
-  matched: ["New request", "border-blue-200 bg-blue-50 text-blue-700"],
-  pending: ["Preparing match", "border-blue-200 bg-blue-50 text-blue-700"],
-  quoted: ["Quote pending", "border-violet-200 bg-violet-50 text-violet-700"],
-  scheduled: ["Scheduled", "border-blue-200 bg-blue-50 text-blue-700"],
+  matched: ["New request", "border-status-info bg-status-info-bg text-status-info"],
+  pending: ["Preparing match", "border-status-info bg-status-info-bg text-status-info"],
+  quoted: ["Quote pending", "border-status-info bg-status-info-bg text-status-info"],
+  scheduled: ["Scheduled", "border-status-info bg-status-info-bg text-status-info"],
   in_progress: ["In Progress", "border-accent/20 bg-accent/10 text-accent"],
-  pending_review: ["Pending Confirmation", "border-amber-200 bg-amber-50 text-amber-700"],
-  vendor_completed: ["Awaiting Homeowner", "border-amber-200 bg-amber-50 text-amber-700"],
-  homeowner_confirmed: ["Confirmed", "border-emerald-200 bg-emerald-50 text-emerald-700"],
-  disputed: ["Issue Reported", "border-red-200 bg-red-50 text-red-700"],
-  resolved: ["Resolved", "border-emerald-200 bg-emerald-50 text-emerald-700"],
-  review_requested: ["Review Requested", "border-violet-200 bg-violet-50 text-violet-700"],
-  reviewed: ["Reviewed", "border-emerald-200 bg-emerald-50 text-emerald-700"],
+  pending_review: ["Pending Confirmation", "border-status-warning bg-status-warning-bg text-status-warning"],
+  vendor_completed: ["Awaiting Homeowner", "border-status-warning bg-status-warning-bg text-status-warning"],
+  homeowner_confirmed: ["Confirmed", "border-status-success bg-status-success-bg text-status-success"],
+  disputed: ["Issue Reported", "border-status-danger bg-status-danger-bg text-status-danger"],
+  resolved: ["Resolved", "border-status-success bg-status-success-bg text-status-success"],
+  review_requested: ["Review Requested", "border-status-info bg-status-info-bg text-status-info"],
+  reviewed: ["Reviewed", "border-status-success bg-status-success-bg text-status-success"],
   closed: ["Closed", "border-border bg-muted text-muted-foreground"],
-  completed: ["Completed", "border-emerald-200 bg-emerald-50 text-emerald-700"],
+  completed: ["Completed", "border-status-success bg-status-success-bg text-status-success"],
   cancelled: ["Cancelled", "border-border bg-muted text-muted-foreground"],
 };
 
@@ -74,7 +75,6 @@ export default function VendorJobsPage() {
   const [error, setError] = useState("");
   const [action, setAction] = useState<Action>(null);
   const [selected, setSelected] = useState<Job | null>(null);
-  const [declining, setDeclining] = useState<Job | null>(null);
   const [completing, setCompleting] = useState<Job | null>(null);
   const [now, setNow] = useState(0);
 
@@ -159,7 +159,7 @@ export default function VendorJobsPage() {
         const result = await supabase.rpc("vendor_decline_job", { _job_id: job.id, _reason: "Vendor declined" });
         if (result.error) throw result.error;
         setJobs((current) => current.filter((item) => item.id !== job.id));
-        setDeclining(null);
+        requestAnimationFrame(() => document.getElementById("vendor-jobs-heading")?.focus());
         toast.success("Request declined", { description: "We will match the homeowner with another pro." });
       } else {
         const result = await supabase.rpc("transition_job_status", { _job_id: job.id, _to_status: "in_progress" });
@@ -167,6 +167,7 @@ export default function VendorJobsPage() {
         replaceStatus(job.id, "in_progress");
         toast.success("Job started");
       }
+      return true;
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Please try again.";
       const expired = message.toLowerCase().includes("expired");
@@ -174,6 +175,7 @@ export default function VendorJobsPage() {
         description: expired ? "This request returned to matching and is no longer available." : message,
       });
       if (expired) void load();
+      return false;
     } finally {
       setAction(null);
     }
@@ -191,7 +193,7 @@ export default function VendorJobsPage() {
     <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 md:p-8">
       <header className="mb-8">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Work management</p>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">Jobs &amp; Requests</h1>
+        <h1 id="vendor-jobs-heading" tabIndex={-1} className="font-heading text-3xl font-semibold tracking-tight">Jobs &amp; Requests</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Respond to new homeowner requests and manage every job from scheduling through completion.</p>
       </header>
 
@@ -202,7 +204,7 @@ export default function VendorJobsPage() {
       ) : (
         <Tabs defaultValue="requests">
           <div className="mb-6 overflow-x-auto border-b border-border">
-            <TabsList variant="line" className="h-11 min-w-max gap-5 p-0">
+            <TabsList variant="line" className="min-h-11 w-full flex-wrap gap-2 p-0 sm:w-auto sm:gap-5">
               <TabsTrigger value="requests" className="px-1">Requests <Count n={queues.requests.length} /></TabsTrigger>
               <TabsTrigger value="active" className="px-1">Active Jobs <Count n={queues.active.length} /></TabsTrigger>
               <TabsTrigger value="completed" className="px-1">Completed <Count n={queues.completed.length} /></TabsTrigger>
@@ -211,7 +213,7 @@ export default function VendorJobsPage() {
           <TabsContent value="requests">
             <Heading title="Incoming Requests" copy="Accept before the response window closes, or decline so we can promptly rematch the homeowner." />
             {queues.requests.length ? <div className="space-y-4">{queues.requests.map((job) => (
-              <RequestCard key={job.id} job={job} now={now} action={action} view={() => setSelected(job)} accept={() => void update(job, "accept")} decline={() => setDeclining(job)} />
+              <RequestCard key={job.id} job={job} now={now} action={action} view={() => setSelected(job)} accept={() => void update(job, "accept")} decline={async () => { if (!await update(job, "decline")) throw new Error("Decline failed"); }} />
             ))}</div> : <Empty icon={Inbox} title="No incoming requests" copy="New service matches will appear here when assigned to your business." />}
           </TabsContent>
           <TabsContent value="active">
@@ -229,14 +231,13 @@ export default function VendorJobsPage() {
         </Tabs>
       )}
       <Details job={selected} close={() => setSelected(null)} />
-      <Decline job={declining} busy={Boolean(declining && action?.id === declining.id)} close={() => setDeclining(null)} confirm={() => declining && void update(declining, "decline")} />
       <Complete job={completing} close={() => setCompleting(null)} done={(id) => { replaceStatus(id, "vendor_completed"); setCompleting(null); }} />
     </div>
   );
 }
 
 function RequestCard({ job, now, action, view, accept, decline }: {
-  job: Job; now: number; action: Action; view: () => void; accept: () => void; decline: () => void;
+  job: Job; now: number; action: Action; view: () => void; accept: () => void; decline: () => Promise<void>;
 }) {
   const deadline = matchDeadline(job);
   const expired = Boolean(now && deadline && deadline <= now);
@@ -249,7 +250,7 @@ function RequestCard({ job, now, action, view, accept, decline }: {
       <CardHeader className="border-b bg-muted/20 pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Service request</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Service request</p>
             <div className="flex flex-wrap items-center gap-2"><CardTitle className="font-heading text-xl">{job.service_type}</CardTitle><Status status={job.status} /></div>
             <p className="mt-1.5 text-xs text-muted-foreground">Received {relative(job.created_at, now)}<span aria-hidden="true"> · </span>{formatDateTime(job.created_at)}</p>
           </div>
@@ -269,7 +270,7 @@ function RequestCard({ job, now, action, view, accept, decline }: {
       <CardFooter className="flex flex-col gap-4 border-t bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex max-w-xl items-start gap-2 text-xs leading-5 text-muted-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span>{job.status === "matched" ? "Accept confirms the assignment and moves it to Active Jobs. Coordinate through Messages before using Start Job when work begins." : "Mercurius is still preparing this match. Accept becomes available when the request is actively matched to you."}</span></div>
         <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-          <Button className="min-h-11 flex-1 sm:min-w-28" variant="outline" disabled={busy || expired} onClick={decline}>{busy && action?.kind === "decline" ? <Loader2 className="animate-spin" /> : null}Decline</Button>
+          <ConfirmAction triggerLabel="Decline" title="Decline this request?" entity={`${job.service_type} · ${job.id.slice(0, 8)}`} consequence="The request will return to Mercurius for another provider match." confirmLabel="Decline request" disabled={busy || expired} onConfirm={decline} />
           <Button className="min-h-11 flex-1 bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active sm:min-w-40" disabled={busy || !canAccept} onClick={accept}>{busy && action?.kind === "accept" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Accept request</Button>
         </div>
       </CardFooter>
@@ -327,23 +328,20 @@ function Details({ job, close }: { job: Job | null; close: () => void }) {
   </DialogContent></Dialog>;
 }
 
-function Decline({ job, busy, close, confirm }: { job: Job | null; busy: boolean; close: () => void; confirm: () => void }) {
-  return <Dialog open={Boolean(job)} onOpenChange={(open) => !open && !busy && close()}><DialogContent className="sm:max-w-md">
-    <DialogHeader><DialogTitle>Decline this request?</DialogTitle><DialogDescription>{job ? "The " + job.service_type + " request will return to Mercurius for another provider match." : ""}</DialogDescription></DialogHeader>
-    <DialogFooter><Button variant="outline" disabled={busy} onClick={close}>Keep request</Button><Button variant="destructive" disabled={busy} onClick={confirm}>{busy && <Loader2 className="animate-spin" />}Decline request</Button></DialogFooter>
-  </DialogContent></Dialog>;
-}
-
 type Photo = { path: string; preview: string };
 function Complete({ job, close, done }: { job: Job | null; close: () => void; done: (id: string) => void }) {
   const { user } = useAuth();
   const input = useRef<HTMLInputElement>(null);
+  const [photoError, setPhotoError] = useState("");
+  const photoErrorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (photoError) photoErrorRef.current?.focus(); }, [photoError]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const reset = () => { if (!uploading && !saving) { setPhotos([]); close(); } };
+  const reset = () => { if (!uploading && !saving) { setPhotoError(""); setPhotos([]); close(); } };
   async function add(files: FileList | null) {
     if (!files?.length || !user || !job) return;
+    setPhotoError("");
     setUploading(true);
     const supabase = createClient();
     const added: Photo[] = [];
@@ -352,7 +350,7 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
       const extension = file.name.split(".").pop() || "jpg";
       const path = user.id + "/" + job.id + "/" + crypto.randomUUID() + "." + extension;
       const uploaded = await supabase.storage.from("job-photos").upload(path, file, { upsert: false });
-      if (uploaded.error) { toast.error("Photo upload failed", { description: uploaded.error.message }); continue; }
+      if (uploaded.error) { setPhotoError("Photo upload failed. " + uploaded.error.message); continue; }
       const signed = await supabase.storage.from("job-photos").createSignedUrl(path, 3600);
       added.push({ path, preview: signed.data?.signedUrl ?? "" });
     }
@@ -362,7 +360,7 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
   }
   async function remove(path: string) {
     const result = await createClient().storage.from("job-photos").remove([path]);
-    if (result.error) { toast.error("Could not remove photo", { description: result.error.message }); return; }
+    if (result.error) { setPhotoError("Could not remove photo. " + result.error.message); return; }
     setPhotos((current) => current.filter((photo) => photo.path !== path));
   }
   async function submit() {
@@ -370,16 +368,17 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
     setSaving(true);
     const result = await createClient().rpc("vendor_complete_job", { _job_id: job.id, _photo_urls: photos.map((photo) => photo.path) });
     setSaving(false);
-    if (result.error) { toast.error("Could not complete job", { description: result.error.message }); return; }
+    if (result.error) { setPhotoError("Could not complete job. " + result.error.message); return; }
     toast.success("Job marked complete", { description: "The homeowner will be asked to confirm the work." });
     setPhotos([]);
     done(job.id);
   }
-  return <Dialog open={Boolean(job)} onOpenChange={(open) => !open && reset()}><DialogContent className="sm:max-w-lg">
+  return <Dialog open={Boolean(job)} onOpenChange={(open) => !open && reset()}><DialogContent showCloseButton={!saving && !uploading} className="sm:max-w-lg">
     <DialogHeader><DialogTitle>Complete {job?.service_type ?? "job"}</DialogTitle><DialogDescription>Attach at least one photo of the finished work. The homeowner sees this proof when confirming completion.</DialogDescription></DialogHeader>
-    <div className="space-y-4 py-2">
-      {photos.length > 0 && <div className="grid grid-cols-3 gap-2">{photos.map((photo) => <div key={photo.path} className="relative"><img src={photo.preview} alt="Completion proof" className="h-24 w-full rounded-lg border object-cover" /><button type="button" aria-label="Remove photo" onClick={() => void remove(photo.path)} className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border bg-background shadow"><X className="h-3.5 w-3.5" /></button></div>)}</div>}
-      <input ref={input} type="file" accept="image/*" multiple className="hidden" onChange={(event) => void add(event.target.files)} />
+    <div className="space-y-4 py-2" aria-busy={uploading || saving}>
+      {photoError && <p ref={photoErrorRef} tabIndex={-1} role="alert" className="text-sm text-destructive">{photoError}</p>}
+      {photos.length > 0 && <div className="grid grid-cols-3 gap-2">{photos.map((photo, index) => <div key={photo.path} className="relative"><img src={photo.preview} alt="Completion proof" className="h-24 w-full rounded-lg border object-cover" /><button type="button" aria-label={`Remove completion photo ${index + 1}`} disabled={uploading || saving} onClick={() => void remove(photo.path)} className="absolute -right-2 -top-2 flex h-11 w-11 items-center justify-center rounded-full border bg-background shadow"><X className="h-3.5 w-3.5" /></button></div>)}</div>}
+      <input aria-label="Completion photos" ref={input} type="file" accept="image/*" multiple className="hidden" onChange={(event) => void add(event.target.files)} />
       <Button variant="outline" className="w-full" disabled={uploading || saving} onClick={() => input.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Camera />}{uploading ? "Uploading…" : "Add completion photos"}</Button>
     </div>
     <DialogFooter><Button variant="outline" disabled={saving || uploading} onClick={reset}>Cancel</Button><Button className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active" disabled={!photos.length || saving || uploading} onClick={() => void submit()}>{saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Mark complete</Button></DialogFooter>
@@ -390,9 +389,9 @@ function Status({ status }: { status: string }) {
   const config = statusConfig[status] ?? [status.replaceAll("_", " "), "border-border bg-muted text-muted-foreground"];
   return <Badge className={cn("border capitalize", config[1])}>{config[0]}</Badge>;
 }
-function Count({ n }: { n: number }) { return <span className="rounded-full bg-background px-1.5 py-0.5 text-[11px] leading-none ring-1 ring-border">{n}</span>; }
+function Count({ n }: { n: number }) { return <span className="rounded-full bg-background px-1.5 py-0.5 text-xs leading-none ring-1 ring-border">{n}</span>; }
 function Heading({ title, copy }: { title: string; copy: string }) { return <div className="mb-4"><h2 className="font-heading text-lg font-semibold">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{copy}</p></div>; }
-function DecisionField({ icon: Icon, label, children }: { icon: typeof MapPin; label: string; children: ReactNode }) { return <div className="rounded-xl border bg-background p-3.5"><span className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-sage-dark"><Icon className="h-4 w-4" /></span><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><div className="mt-1 text-sm font-medium leading-5 text-foreground">{children}</div></div>; }
+function DecisionField({ icon: Icon, label, children }: { icon: typeof MapPin; label: string; children: ReactNode }) { return <div className="rounded-xl border bg-background p-3.5"><span className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-sage-dark"><Icon className="h-4 w-4" /></span><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><div className="mt-1 text-sm font-medium leading-5 text-foreground">{children}</div></div>; }
 function Block({ icon: Icon, title, children }: { icon: typeof MapPin; title: string; children: ReactNode }) { return <div className="rounded-lg border p-4"><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Icon className="h-4 w-4 text-accent" />{title}</p><div className="text-sm leading-6">{children}</div></div>; }
 function Empty({ icon: Icon, title, copy }: { icon: typeof MapPin; title: string; copy: string }) { return <Card className="border-dashed bg-card/70"><CardContent className="py-16 text-center"><span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted"><Icon className="h-7 w-7 text-muted-foreground" /></span><p className="font-heading font-semibold">{title}</p><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted-foreground">{copy}</p></CardContent></Card>; }
 function ErrorState({ message, retry }: { message: string; retry: () => void }) { return <Card className="border-destructive/20 bg-destructive/5"><CardContent className="py-14 text-center"><AlertCircle className="mx-auto mb-4 h-10 w-10 text-destructive" /><p className="font-heading text-lg font-semibold">We could not load your jobs</p><p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">No preview jobs have been substituted. {message}</p><Button className="mt-5" variant="outline" onClick={retry}><RefreshCw />Try again</Button></CardContent></Card>; }

@@ -17,7 +17,7 @@ export default function ReschedulePolicyPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="bg-hero relative overflow-hidden py-16 md:py-20 lg:py-24">
           <div className="bg-pattern absolute inset-0 opacity-30" />
           <div className="pointer-events-none absolute -left-24 top-10 h-80 w-80 rounded-full bg-sage/10 blur-3xl" />

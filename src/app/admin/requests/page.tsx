@@ -33,6 +33,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
+import { FormField } from "@/components/ui/form-field";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
@@ -124,27 +129,27 @@ type Mode = "loading" | "live" | "error";
 
 const statuses = ["pending", "matched", "quoted", "scheduled", "in_progress", "pending_review", "vendor_completed", "homeowner_confirmed", "completed", "review_requested", "reviewed", "disputed", "resolved", "closed", "cancelled"];
 const statusStyle: Record<string, string> = {
-  pending: "border-amber-200 bg-amber-50 text-amber-700",
-  matched: "border-blue-200 bg-blue-50 text-blue-700",
-  quoted: "border-violet-200 bg-violet-50 text-violet-700",
-  scheduled: "border-blue-200 bg-blue-50 text-blue-700",
+  pending: "border-status-warning bg-status-warning-bg text-status-warning",
+  matched: "border-status-info bg-status-info-bg text-status-info",
+  quoted: "border-status-info bg-status-info-bg text-status-info",
+  scheduled: "border-status-info bg-status-info-bg text-status-info",
   in_progress: "border-accent/20 bg-accent/10 text-accent",
-  pending_review: "border-amber-200 bg-amber-50 text-amber-700",
-  vendor_completed: "border-amber-200 bg-amber-50 text-amber-700",
-  homeowner_confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  review_requested: "border-violet-200 bg-violet-50 text-violet-700",
-  reviewed: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  disputed: "border-red-200 bg-red-50 text-red-700",
-  resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  pending_review: "border-status-warning bg-status-warning-bg text-status-warning",
+  vendor_completed: "border-status-warning bg-status-warning-bg text-status-warning",
+  homeowner_confirmed: "border-status-success bg-status-success-bg text-status-success",
+  completed: "border-status-success bg-status-success-bg text-status-success",
+  review_requested: "border-status-info bg-status-info-bg text-status-info",
+  reviewed: "border-status-success bg-status-success-bg text-status-success",
+  disputed: "border-status-danger bg-status-danger-bg text-status-danger",
+  resolved: "border-status-success bg-status-success-bg text-status-success",
   closed: "border-border bg-muted text-muted-foreground",
   cancelled: "border-border bg-muted text-muted-foreground",
 };
 const outcomeStyle: Record<string, string> = {
-  pending: "border-blue-200 bg-blue-50 text-blue-700",
-  accepted: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  declined: "border-amber-200 bg-amber-50 text-amber-700",
-  expired: "border-red-200 bg-red-50 text-red-700",
+  pending: "border-status-info bg-status-info-bg text-status-info",
+  accepted: "border-status-success bg-status-success-bg text-status-success",
+  declined: "border-status-warning bg-status-warning-bg text-status-warning",
+  expired: "border-status-danger bg-status-danger-bg text-status-danger",
   withdrawn: "border-border bg-muted text-muted-foreground",
   reassigned: "border-border bg-muted text-muted-foreground",
 };
@@ -164,6 +169,8 @@ export default function AdminRequestsPage() {
   const [attemptError, setAttemptError] = useState("");
   const [eligibleMatches, setEligibleMatches] = useState<EligibleMatch[]>([]);
   const [eligibleError, setEligibleError] = useState("");
+  const [quoteError, setQuoteError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [note, setNote] = useState("");
   const [action, setAction] = useState<Action>(null);
@@ -228,6 +235,8 @@ export default function AdminRequestsPage() {
   }, []);
 
   const openDetail = (request: ServiceRequest) => {
+    setQuoteError("");
+    setActionError("");
     setSelected(request);
     setDetailTab("details");
     setAssignSearch("");
@@ -238,6 +247,7 @@ export default function AdminRequestsPage() {
   };
 
   const runAction = async (request: ServiceRequest, kind: string, operation: () => Promise<{ error: { message: string } | null }>, success: string) => {
+    setActionError("");
     setAction({ id: request.id, kind });
     try {
       const result = await operation();
@@ -247,8 +257,10 @@ export default function AdminRequestsPage() {
         await Promise.all([loadAttempts(request.id), loadEligible(request.id)]);
       }
       toast.success(success);
+      return true;
     } catch (reason) {
-      toast.error("Action could not be completed", { description: reason instanceof Error ? reason.message : "Please try again." });
+      setActionError(reason instanceof Error ? reason.message : "Action could not be completed. Please try again.");
+      return false;
     } finally {
       setAction(null);
     }
@@ -275,11 +287,11 @@ export default function AdminRequestsPage() {
   };
 
   const releaseMatch = async (request: ServiceRequest) => {
-    if (!window.confirm("Release this vendor and return the request to matching?")) return;
-    await runAction(request, "release", async () => {
+    const released = await runAction(request, "release", async () => {
       const result = await createClient().rpc("vendor_decline_job", { _job_id: request.id, _reason: "Released by admin for rematching" });
       return { error: result.error };
     }, "The match was released and the request returned to the unmatched queue.");
+    if (!released) throw new Error("The match could not be released. Please try again.");
   };
 
   const changeStatus = async (request: ServiceRequest, status: string) => {
@@ -291,13 +303,16 @@ export default function AdminRequestsPage() {
   };
 
   const sendQuote = async (request: ServiceRequest) => {
+    setQuoteError("");
     const amount = Number(quoteAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error("Enter a quote amount greater than $0.");
+      setQuoteError("Enter a quote amount greater than $0.");
+      document.getElementById("quote-amount")?.focus();
       return;
     }
     if (!request.contractor_id) {
-      toast.error("Assign a vendor before sending a quote.");
+      setQuoteError("Assign a vendor before sending a quote.");
+      document.getElementById("quote-amount")?.focus();
       return;
     }
     await runAction(request, "quote", async () => {
@@ -334,17 +349,28 @@ export default function AdminRequestsPage() {
   return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
     <header><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Service operations</p><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-heading text-3xl font-semibold tracking-tight">Service Requests</h1><p className="mt-2 text-sm text-muted-foreground">{requests.length} live request{requests.length === 1 ? "" : "s"} across the platform</p></div><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button></div></header>
 
-    {overdueCount > 0 && <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0" /><div><p className="text-sm font-medium">{overdueCount} matched request{overdueCount === 1 ? " is" : "s are"} overdue</p><p className="mt-0.5 text-xs text-red-700">Release the match for reassignment or coordinate directly with the vendor.</p></div><Button size="sm" variant="outline" className="sm:ml-auto" onClick={() => setStatusFilter("matched")}>View matched</Button></div>}
+    {overdueCount > 0 && <div className="flex flex-col gap-3 rounded-xl border border-status-danger bg-status-danger-bg p-4 text-status-danger sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0" /><div><p className="text-sm font-medium">{overdueCount} matched request{overdueCount === 1 ? " is" : "s are"} overdue</p><p className="mt-0.5 text-xs text-status-danger">Release the match for reassignment or coordinate directly with the vendor.</p></div><Button size="sm" variant="outline" className="sm:ml-auto" onClick={() => setStatusFilter("matched")}>View matched</Button></div>}
 
-    <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search service, homeowner, vendor, city, or ID..." className="bg-card pl-9" /></div><select aria-label="Filter requests by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-52"><option value="all">All statuses</option>{statuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</select></div>
+    <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search requests" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search service, homeowner, vendor, city, or ID..." className="bg-card pl-9" /></div><Select aria-label="Filter requests by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-52"><option value="all">All statuses</option>{statuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</Select></div>
 
-    <Card><CardContent className="p-0">{filtered.length === 0 ? <Empty title={requests.length ? "No requests match these filters" : "No service requests yet"} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead className="border-b bg-muted/60"><tr className="text-left">{["Request", "Homeowner", "Vendor", "Location", "Preferred date", "Match", "Status", "Actions"].map((heading) => <th key={heading} className="whitespace-nowrap p-4 font-medium text-muted-foreground">{heading}</th>)}</tr></thead><tbody className="divide-y">{filtered.map((request) => { const overdue = isOverdue(request); return <tr key={request.id} className={cn("transition-colors hover:bg-muted/30", overdue && "bg-red-50/40")}><td className="p-4"><p className="font-medium">{request.service_type}</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{request.id.slice(0, 10)}</p></td><td className="p-4">{profiles[request.customer_id] ?? "Unknown"}</td><td className="p-4">{request.contractor_id ? contractorNames[request.contractor_id] ?? "Unknown vendor" : <span className="text-muted-foreground">Unassigned</span>}</td><td className="p-4 text-muted-foreground">{request.city}, {request.state}</td><td className="p-4 text-muted-foreground">{request.preferred_date ? formatDate(request.preferred_date) : "Not set"}</td><td className="p-4 text-xs text-muted-foreground"><p className={cn(overdue && "font-medium text-red-700")}>{waitingLabel(request)}</p>{request.match_attempt_count > 1 && <p>{request.match_attempt_count} vendor attempts</p>}</td><td className="p-4"><div className="flex flex-wrap items-center gap-2"><Status status={request.status} />{(overdue || request.needs_admin_review) && <Badge variant="destructive"><AlertTriangle />{overdue ? "Overdue" : "Review"}</Badge>}</div></td><td className="p-4"><Button variant="ghost" size="sm" onClick={() => openDetail(request)}><Eye />Review</Button></td></tr>; })}</tbody></table></div>}</CardContent></Card>
+    <Card><CardContent className="p-0">{filtered.length === 0 ? <Empty title={requests.length ? "No requests match these filters" : "No service requests yet"} /> : <ResponsiveDataList label="Service requests" rows={filtered} rowKey={request => request.id} rowLabel={request => `${request.service_type} · ${request.id.slice(0, 10)}`} columns={[
+      { key: "request", label: "Request", render: request => <><p className="font-medium">{request.service_type}</p><p className="mt-1 font-mono text-xs text-muted-foreground">{request.id.slice(0, 10)}</p></> },
+      { key: "homeowner", label: "Homeowner", render: request => profiles[request.customer_id] ?? "Unknown" },
+      { key: "vendor", label: "Vendor", render: request => request.contractor_id ? contractorNames[request.contractor_id] ?? "Unknown vendor" : "Unassigned" },
+      { key: "location", label: "Location", render: request => `${request.city}, ${request.state}` },
+      { key: "date", label: "Preferred date", render: request => request.preferred_date ? formatDate(request.preferred_date) : "Not set" },
+      { key: "match", label: "Match", render: request => <><p className={cn(isOverdue(request) && "font-medium text-status-danger")}>{waitingLabel(request)}</p>{request.match_attempt_count > 1 && <p>{request.match_attempt_count} vendor attempts</p>}</> },
+      { key: "status", label: "Status", render: request => <div className="flex flex-wrap gap-2"><Status status={request.status} />{(isOverdue(request) || request.needs_admin_review) && <Badge variant="destructive">{isOverdue(request) ? "Overdue" : "Review"}</Badge>}</div> },
+      { key: "actions", label: "Actions", render: request => <Button variant="outline" size="sm" aria-label={`Review ${request.service_type} ${request.id.slice(0, 10)}`} onClick={() => openDetail(request)}><Eye />Review</Button> },
+    ]} />}</CardContent></Card>
 
-    <RequestDialog request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
+    <RequestDialog quoteError={quoteError} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
   </div>;
 }
 
 function RequestDialog(props: {
+  quoteError: string;
+  actionError: string;
   request: ServiceRequest | null;
   tab: string;
   setTab: (value: string) => void;
@@ -369,24 +395,27 @@ function RequestDialog(props: {
   sendQuote: (request: ServiceRequest) => Promise<void>;
   saveNote: (request: ServiceRequest) => Promise<void>;
 }) {
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (props.actionError) errorRef.current?.focus(); }, [props.actionError]);
   const request = props.request;
   if (!request) return null;
   const busy = props.action?.id === request.id;
-  return <Dialog open onOpenChange={(open) => !open && props.close()}><DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden sm:max-w-3xl"><DialogHeader><div className="flex flex-wrap items-center gap-2 pr-8"><DialogTitle>{request.service_type}</DialogTitle><Status status={request.status} /></div><DialogDescription>Request {request.id.slice(0, 8)} · submitted {formatDateTime(request.created_at)}</DialogDescription></DialogHeader><Tabs value={props.tab} onValueChange={props.setTab} className="min-h-0 flex-1 gap-0 overflow-hidden"><TabsList className="shrink-0 self-start"><TabsTrigger value="details"><Eye />Details</TabsTrigger><TabsTrigger value="chat"><MessageSquare />Chat</TabsTrigger></TabsList><TabsContent value="details" className="min-h-0 flex-1 space-y-4 overflow-y-auto pt-4">
+  return <Dialog open onOpenChange={(open) => !open && props.close()}><DialogContent showCloseButton={!busy} className="flex max-h-[92dvh] flex-col overflow-hidden sm:max-w-3xl"><DialogHeader><div className="flex flex-wrap items-center gap-2 pr-8"><DialogTitle>{request.service_type}</DialogTitle><Status status={request.status} /></div><DialogDescription>Request {request.id.slice(0, 8)} · submitted {formatDateTime(request.created_at)}</DialogDescription></DialogHeader><Tabs value={props.tab} onValueChange={props.setTab} className="min-h-0 flex-1 gap-0 overflow-hidden"><TabsList className="shrink-0 self-start"><TabsTrigger value="details"><Eye />Details</TabsTrigger><TabsTrigger value="chat"><MessageSquare />Chat</TabsTrigger></TabsList><TabsContent value="details" className="min-h-0 flex-1 space-y-4 overflow-y-auto pt-4">
+    {props.actionError && <p ref={errorRef} tabIndex={-1} role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">{props.actionError}</p>}
     <div className="grid gap-3 text-sm sm:grid-cols-2"><Detail icon={User} label="Homeowner">{props.profiles[request.customer_id] ?? "Unknown"}</Detail><Detail icon={UserCheck} label="Vendor">{request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Unknown" : "Unassigned"}</Detail><Detail icon={MapPin} label="Address">{request.address}, {request.city}, {request.state} {request.zip_code}</Detail><Detail icon={Calendar} label="Preferred timing">{request.preferred_date ? formatDate(request.preferred_date) : "No date set"}{request.preferred_time && ` · ${request.preferred_time}`}</Detail><Detail icon={DollarSign} label="Amount">{request.total_amount === null ? "Quote required" : money(request.total_amount)}</Detail><Detail icon={CheckCircle2} label="Payment">{label(request.payment_status)}</Detail></div>
     {request.description && <section className="rounded-xl border bg-muted/30 p-4"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer scope</p><p className="whitespace-pre-wrap text-sm leading-6">{request.description}</p></section>}
 
-    <section className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4"><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center"><div className="flex items-center gap-2"><UserCheck className="h-4 w-4 text-accent" /><h3 className="text-sm font-semibold">Eligible Provider Ranking</h3><Badge className="border-accent/20 bg-accent/10 text-[10px] text-accent">Live rules</Badge></div><Button size="sm" className="sm:ml-auto" disabled={busy} onClick={() => void props.offerNext(request)}>{props.action?.kind === "next" ? <Loader2 className="animate-spin" /> : <ArrowRight />}Offer next</Button></div><p className="mb-3 text-xs text-muted-foreground">Only active, marketing-enabled providers with matching packages and ZIP coverage appear. Raw scores are for operations only.</p><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search eligible providers..." value={props.assignSearch} onChange={(event) => props.setAssignSearch(event.target.value)} className="h-9 bg-card pl-9" /></div>{props.eligibleError ? <p className="py-4 text-center text-sm text-destructive">Eligibility unavailable: {props.eligibleError}</p> : <div className="max-h-80 space-y-2 overflow-y-auto">{props.candidates.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">No eligible providers for this service, frequency, and ZIP. Offer next will move the request to sourcing.</p> : props.candidates.slice(0, 20).map((candidate) => <div key={`${candidate.contractor_id}:${candidate.package_id}:${candidate.package_tier_id ?? "quote"}`} className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold text-muted-foreground">#{candidate.rank_order}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{candidate.contractor_name}</span><Badge variant="outline" className="text-[10px]">{candidate.path === "fixed" ? "Fixed" : "Quote"}</Badge>{candidate.preferred && <Badge className="border-accent/20 bg-accent/10 text-[10px] text-accent">Homeowner preference</Badge>}</span><span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>Score {Number(candidate.total_score).toFixed(1)}</span><span>Profile +{Number(candidate.profile_score).toFixed(1)}</span><span>Credentials +{Number(candidate.verification_score).toFixed(0)}</span><span>Price band +{Number(candidate.price_band_score).toFixed(0)}</span><span>History +{Number(candidate.response_score).toFixed(1)}</span><span>Freshness +{Number(candidate.freshness_score).toFixed(0)}</span></span></span><div className="flex items-center justify-between gap-3 sm:justify-end"><span className="text-sm font-semibold">{candidate.path === "fixed" && candidate.effective_price !== null ? money(Number(candidate.effective_price)) : "Quote"}</span><Button size="sm" variant="outline" disabled={busy} onClick={() => void props.assign(request, candidate)}>{props.action?.kind === "assign" ? <Loader2 className="animate-spin" /> : null}Force offer</Button></div></div>)}</div>}</section>
+    <section className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4"><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center"><div className="flex flex-wrap items-center gap-2"><UserCheck className="h-4 w-4 text-accent" /><h3 className="text-sm font-semibold">Eligible Provider Ranking</h3><Badge className="border-accent/20 bg-accent/10 text-xs text-accent">Live rules</Badge></div><Button size="sm" className="sm:ml-auto" disabled={busy} onClick={() => void props.offerNext(request)}>{props.action?.kind === "next" ? <Loader2 className="animate-spin" /> : <ArrowRight />}Offer next</Button></div><p className="mb-3 text-xs text-muted-foreground">Only active, marketing-enabled providers with matching packages and ZIP coverage appear. Raw scores are for operations only.</p><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search eligible providers" placeholder="Search eligible providers..." value={props.assignSearch} onChange={(event) => props.setAssignSearch(event.target.value)} className="h-9 bg-card pl-9" /></div>{props.eligibleError ? <p className="py-4 text-center text-sm text-destructive">Eligibility unavailable: {props.eligibleError}</p> : <div className="max-h-80 space-y-2 overflow-y-auto">{props.candidates.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">No eligible providers for this service, frequency, and ZIP. Offer next will move the request to sourcing.</p> : props.candidates.slice(0, 20).map((candidate) => <div key={`${candidate.contractor_id}:${candidate.package_id}:${candidate.package_tier_id ?? "quote"}`} className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold text-muted-foreground">#{candidate.rank_order}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{candidate.contractor_name}</span><Badge variant="outline" className="text-xs">{candidate.path === "fixed" ? "Fixed" : "Quote"}</Badge>{candidate.preferred && <Badge className="border-accent/20 bg-accent/10 text-xs text-accent">Homeowner preference</Badge>}</span><span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>Score {Number(candidate.total_score).toFixed(1)}</span><span>Profile +{Number(candidate.profile_score).toFixed(1)}</span><span>Credentials +{Number(candidate.verification_score).toFixed(0)}</span><span>Price band +{Number(candidate.price_band_score).toFixed(0)}</span><span>History +{Number(candidate.response_score).toFixed(1)}</span><span>Freshness +{Number(candidate.freshness_score).toFixed(0)}</span></span></span><div className="flex items-center justify-between gap-3 sm:justify-end"><span className="text-sm font-semibold">{candidate.path === "fixed" && candidate.effective_price !== null ? money(Number(candidate.effective_price)) : "Quote"}</span><Button size="sm" variant="outline" disabled={busy} onClick={() => void props.assign(request, candidate)}>{props.action?.kind === "assign" ? <Loader2 className="animate-spin" /> : null}Force offer</Button></div></div>)}</div>}</section>
 
-    {request.contractor_id && request.status !== "pending" && <section className="rounded-xl border bg-muted/30 p-4"><div className="flex items-center gap-2 text-sm"><CheckCircle2 className="h-4 w-4 text-accent" /><span className="font-medium">Assigned to {props.contractorNames[request.contractor_id] ?? "Unknown vendor"}</span></div>{request.status === "matched" && <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className={cn("text-xs text-muted-foreground", isOverdue(request) && "font-medium text-red-700")}>{waitingLabel(request)}{request.match_expires_at && ` · closes ${formatDateTime(request.match_expires_at)}`}</p><Button size="sm" variant="outline" disabled={busy} onClick={() => void props.release(request)}>{props.action?.kind === "release" && <Loader2 className="animate-spin" />}Release &amp; Rematch</Button></div>}</section>}
+    {request.contractor_id && request.status !== "pending" && <section className="rounded-xl border bg-muted/30 p-4"><div className="flex items-center gap-2 text-sm"><CheckCircle2 className="h-4 w-4 text-accent" /><span className="font-medium">Assigned to {props.contractorNames[request.contractor_id] ?? "Unknown vendor"}</span></div>{request.status === "matched" && <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className={cn("text-xs text-muted-foreground", isOverdue(request) && "font-medium text-status-danger")}>{waitingLabel(request)}{request.match_expires_at && ` · closes ${formatDateTime(request.match_expires_at)}`}</p><ConfirmAction disabled={busy} triggerLabel="Release match" title="Release this vendor?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence="The vendor assignment will be released and the request returned to matching." confirmLabel="Release match" onConfirm={() => props.release(request)} /></div>}</section>}
 
     {(props.attempts.length > 0 || props.attemptError) && <section className="rounded-xl border bg-muted/30 p-4"><div className="mb-2 flex justify-between"><h3 className="text-sm font-medium">Match History</h3><span className="text-xs text-muted-foreground">{props.attempts.length} attempt{props.attempts.length === 1 ? "" : "s"}</span></div>{props.attemptError ? <p className="text-xs text-destructive">History unavailable: {props.attemptError}</p> : <div className="space-y-2">{props.attempts.map((attempt) => <div key={attempt.id} className="flex items-center justify-between gap-3 text-xs"><div><p className="font-medium">#{attempt.attempt_number} {props.contractorNames[attempt.contractor_id] ?? "Vendor"}</p><p className="text-muted-foreground">Offered {formatDateTime(attempt.offered_at)}{attempt.reason ? ` · ${attempt.reason}` : ""}</p></div><Badge className={cn("border", outcomeStyle[attempt.outcome] ?? "bg-muted text-muted-foreground")}>{attempt.outcome}</Badge></div>)}</div>}</section>}
 
     <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{statuses.map((status) => <Button key={status} size="sm" variant={request.status === status ? "default" : "outline"} disabled={busy || request.status === status} onClick={() => void props.changeStatus(request, status)}>{props.action?.kind === `status:${status}` && <Loader2 className="animate-spin" />}{label(status)}</Button>)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
 
-    <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><label className="flex-1 text-xs text-muted-foreground">Total amount ($)<Input type="number" min="0" step="0.01" value={props.quoteAmount} onChange={(event) => props.setQuoteAmount(event.target.value)} className="mt-1 bg-card" /></label><Button className="bg-violet-600 text-white hover:bg-violet-700" disabled={busy || !props.quoteAmount} onClick={() => void props.sendQuote(request)}>{props.action?.kind === "quote" && <Loader2 className="animate-spin" />}Send Quote</Button></div>{request.status === "quoted" && <p className="mt-2 text-xs text-violet-700">Current quote: {money(request.quote_amount ?? request.total_amount ?? 0)} · awaiting homeowner action.</p>}</section>
+    <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="min-w-0 flex-1"><FormField id="quote-amount" label="Total amount ($)" error={props.quoteError} required>{control => <Input {...control} type="number" min="0" step="0.01" value={props.quoteAmount} onChange={(event) => props.setQuoteAmount(event.target.value)} className="bg-card" />}</FormField></div><Button className="bg-commitment text-commitment-foreground hover:bg-commitment-hover" disabled={busy || !props.quoteAmount} onClick={() => void props.sendQuote(request)}>{props.action?.kind === "quote" && <Loader2 className="animate-spin" />}Send Quote</Button></div>{request.status === "quoted" && <p className="mt-2 text-xs text-status-info">Current quote: {money(request.quote_amount ?? request.total_amount ?? 0)} · awaiting homeowner action.</p>}</section>
 
-    <section><label htmlFor="admin-note" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Internal Notes</label><textarea id="admin-note" rows={4} value={props.note} onChange={(event) => props.setNote(event.target.value)} placeholder="Add internal operations notes..." className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /><Button size="sm" className="mt-2" disabled={busy} onClick={() => void props.saveNote(request)}>{props.action?.kind === "note" ? <Loader2 className="animate-spin" /> : <Save />}Save Note</Button></section>
+    <section><label htmlFor="admin-note" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Internal Notes</label><Textarea id="admin-note" rows={4} value={props.note} onChange={(event) => props.setNote(event.target.value)} placeholder="Add internal operations notes..." className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /><Button size="sm" className="mt-2" disabled={busy} onClick={() => void props.saveNote(request)}>{props.action?.kind === "note" ? <Loader2 className="animate-spin" /> : <Save />}Save Note</Button></section>
   </TabsContent><TabsContent value="chat" className="min-h-[460px] flex-1 overflow-hidden data-active:flex data-active:flex-col"><AdminChat key={request.id} requestId={request.id} homeowner={props.profiles[request.customer_id] ?? "Homeowner"} vendor={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Vendor" : "Vendor"} /></TabsContent></Tabs><DialogFooter><Button variant="outline" disabled={busy} onClick={props.close}>Close</Button></DialogFooter></DialogContent></Dialog>;
 }
 
@@ -434,7 +463,7 @@ function AdminChat({ requestId, homeowner, vendor }: { requestId: string; homeow
 
   if (loading) return <div className="flex flex-1 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>;
   if (error) return <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-destructive">Chat unavailable: {error}</div>;
-  return <div className="flex min-h-0 flex-1 flex-col"><div className="min-h-0 flex-1 overflow-y-auto p-4"><div className="mx-auto max-w-2xl space-y-3">{messages.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No messages on this request.</p>}{messages.map((message) => { const mine = message.sender_id === user?.id; const sender = mine ? "You" : message.sender_role === "admin" ? "Mercurius Support" : message.sender_role === "vendor" ? vendor : homeowner; return <div key={message.id} className={cn("max-w-[82%] rounded-2xl px-4 py-3 text-sm", mine ? "ml-auto rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted")}><p className="mb-1 text-xs font-medium opacity-65">{sender}</p><p className="whitespace-pre-wrap break-words">{message.content}</p><p className="mt-1 text-right text-[11px] opacity-50">{formatDateTime(message.created_at)}</p></div>; })}<div ref={bottomRef} /></div></div><div className="flex gap-2 border-t p-4"><Input value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void send(); } }} placeholder="Message the homeowner and vendor..." className="h-11" maxLength={2000} /><Button className="h-11" disabled={sending || !text.trim()} onClick={() => void send()}>{sending ? <Loader2 className="animate-spin" /> : <Send />}<span className="sr-only">Send</span></Button></div></div>;
+  return <div className="flex min-h-0 flex-1 flex-col"><div className="min-h-0 flex-1 overflow-y-auto p-4"><div className="mx-auto max-w-2xl space-y-3">{messages.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">No messages on this request.</p>}{messages.map((message) => { const mine = message.sender_id === user?.id; const sender = mine ? "You" : message.sender_role === "admin" ? "Mercurius Support" : message.sender_role === "vendor" ? vendor : homeowner; return <div key={message.id} className={cn("max-w-[82%] rounded-2xl px-4 py-3 text-sm", mine ? "ml-auto rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted")}><p className="mb-1 text-xs font-medium opacity-65">{sender}</p><p className="whitespace-pre-wrap break-words">{message.content}</p><p className="mt-1 text-right text-xs opacity-50">{formatDateTime(message.created_at)}</p></div>; })}<div ref={bottomRef} /></div></div><div className="flex gap-2 border-t p-4"><Input aria-label="Message the homeowner and vendor" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void send(); } }} placeholder="Message the homeowner and vendor..." className="h-11" maxLength={2000} /><Button className="h-11" disabled={sending || !text.trim()} onClick={() => void send()}>{sending ? <Loader2 className="animate-spin" /> : <Send />}<span className="sr-only">Send</span></Button></div></div>;
 }
 
 function Status({ status }: { status: string }) { return <Badge className={cn("border capitalize", statusStyle[status] ?? "border-border bg-muted text-muted-foreground")}>{label(status)}</Badge>; }

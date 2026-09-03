@@ -9,7 +9,7 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Mercurius Marketplace",
-  description: "AI-powered home services marketplace for Southwest Florida",
+  description: "Managed home services with local providers throughout Lee County, Florida",
 };
 
 export default function RootLayout({
@@ -20,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}>
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         <MotionProvider>
           <ThemeProvider>
             <AuthProvider>

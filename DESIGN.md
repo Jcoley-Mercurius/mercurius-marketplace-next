@@ -53,7 +53,7 @@ Tokens are expressed to match the live Next.js theme (HSL-style values used in g
 - Maintain WCAG AA contrast minimums
 
 ## 3. Typography
-Primary stack: **Inter** (or system-ui / -apple-system fallbacks) — intentional for product legibility.
+Primary stack: **Geist** (or system-ui / -apple-system fallbacks) — intentional for product legibility.
 
 - **Display / Hero** — large, tight tracking, strong weight; marketing only
 - **Headline** — section titles

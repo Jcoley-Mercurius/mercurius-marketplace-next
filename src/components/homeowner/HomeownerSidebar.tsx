@@ -78,7 +78,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           alt="Mercurius"
           width={44}
           height={44}
-          className="h-11 w-11 object-contain"
+          className="h-11 w-11 object-contain dark:invert"
           priority
         />
         <div>
@@ -87,7 +87,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </Link>
 
-      <nav className="flex-1 overflow-y-auto p-3">
+      <nav aria-label="homeowner navigation" className="min-h-0 flex-1 overflow-y-auto p-3">
         <Link
           href="/request"
           onClick={onNavigate}
@@ -97,7 +97,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           Request Service
         </Link>
 
-        <p className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Services
         </p>
         <div className="space-y-1">
@@ -110,12 +110,13 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.section}
                 href={dashboardSectionHref(item.section)}
                 onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
                 className={navItemClass(active)}
               >
                 <Icon
                   className={cn(
                     "h-5 w-5",
-                    active ? "text-sage-dark" : "text-muted-foreground",
+                    active ? "text-commitment" : "text-muted-foreground",
                   )}
                 />
                 <span>{item.label}</span>
@@ -124,7 +125,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           })}
         </div>
 
-        <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="px-3 pb-2 pt-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Account
         </p>
         <div className="space-y-1">
@@ -136,12 +137,13 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
                 className={navItemClass(active)}
               >
                 <Icon
                   className={cn(
                     "h-5 w-5",
-                    active ? "text-sage-dark" : "text-muted-foreground",
+                    active ? "text-commitment" : "text-muted-foreground",
                   )}
                 />
                 <span>{item.label}</span>
@@ -182,7 +184,7 @@ function navItemClass(active: boolean) {
   return cn(
     "flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm transition-colors",
     active
-      ? "border-accent-border bg-accent-soft font-medium text-sage-dark shadow-sm"
+      ? "border-accent-border bg-accent-soft font-medium text-commitment shadow-sm"
       : "text-slate hover:bg-surface-hover hover:text-slate-dark",
   );
 }

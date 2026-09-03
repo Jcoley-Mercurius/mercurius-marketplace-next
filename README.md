@@ -165,3 +165,30 @@ or run cleanup/prune commands to address RAM pressure.
 With the isolated local Supabase gateway running on port 55421,
 `node scripts/test-edge-gateway.mjs` verifies missing-JWT rejection on all 10
 protected functions. It uses no credentials and never targets production.
+
+## MDS catalog checks
+
+The local-only component catalog is documented in [COMPONENT-CATALOG.md](./mds/COMPONENT-CATALOG.md).
+For isolated UI testing without a database, use placeholders and Mercurius's own
+local backend port (55421), then run these checks sequentially:
+
+```powershell
+$env:NEXT_PUBLIC_SUPABASE_URL='http://127.0.0.1:55831'
+$env:NEXT_PUBLIC_SUPABASE_ANON_KEY='mds-synthetic-anon-key'
+$env:MERCURIUS_BUILD_WORKERS='1'
+npm run build
+npx playwright install chromium
+npm run test:a11y
+npm run test:visual
+```
+
+Playwright starts and stops its own server on port 3103, enables the synthetic
+catalog, and blocks requests outside that server. Run the same build with the
+catalog disabled for normal app use. Windows screenshot baselines are included;
+other operating systems need separately reviewed platform baselines.
+
+The Phase 3 browser suite starts an isolated HTTP fixture on `127.0.0.1:55831`
+and the app on `127.0.0.1:3103`. Build with the fixture public URL before running
+`npm run test:a11y`. No local Supabase stack is started or reused. The fixture
+never forwards requests; its mutation responses are synthetic failures.
+Brand export review is available at `/mds/brand` when the catalog is enabled.

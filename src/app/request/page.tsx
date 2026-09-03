@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -49,6 +49,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/ui/form-field";
+import { FormErrorSummary, FormErrorsContext, type FormErrors } from "@/components/ui/form-errors";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { paymentFunctionError } from "@/lib/payments";
@@ -141,6 +146,9 @@ const featuredServiceIds = [
 ];
 
 export default function RequestServicePage() {
+  const [errors, setErrors] = useState<FormErrors>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  const focusNextStep = useRef(false);
   const [step, setStep] = useState<Step>("services");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [frequencies, setFrequencies] = useState<Record<string, Frequency>>({});
@@ -454,16 +462,29 @@ export default function RequestServicePage() {
     setQuestionAnswers((current) => withoutKey(current, id));
   }
 
+  function changeStep(next: Step) {
+    setErrors({});
+    focusNextStep.current = true;
+    setStep(next);
+  }
+
+  useEffect(() => {
+    if (focusNextStep.current) {
+      formRef.current?.querySelector<HTMLElement>("[data-step-heading]")?.focus();
+      focusNextStep.current = false;
+    }
+  }, [step]);
+
   function continueFromServices() {
     if (selectedServices.length === 0) {
-      toast.error("Choose at least one service", { description: "Select what your home needs before continuing." });
+      setErrors({ "request-step": "Choose at least one service before continuing." });
       return;
     }
     if (selectedIds.includes(otherServiceId) && !otherServiceDetails.trim()) {
-      toast.error("Tell us what you need", { description: "Add a short description for Something Else before continuing." });
+      setErrors({ otherServiceDetails: "Describe the work you need for Something Else." });
       return;
     }
-    setStep("details");
+    changeStep("details");
   }
 
   async function verifyCoverage() {
@@ -479,28 +500,17 @@ export default function RequestServicePage() {
   }
 
   async function continueFromDetails() {
-    if (!streetAddress.trim() || !city.trim()) {
-      toast.error("Service address required", { description: "Enter the address where service is needed." });
-      return;
-    }
-    if (!/^[A-Za-z]{2}$/.test(stateCode.trim())) {
-      toast.error("Invalid state", { description: "Use a two-letter state code, such as FL." });
-      return;
-    }
-    if (!/^\d{5}(-\d{4})?$/.test(zipCode.trim())) {
-      toast.error("Invalid ZIP code", { description: "Enter a valid five-digit ZIP code." });
-      return;
-    }
-    if (!preferredDate || !preferredEndDate) {
-      toast.error("Preferred date window required", { description: "Choose a start and end date so we know what timing works for you." });
-      return;
-    }
-    if (preferredDate < localDateValue(new Date())) {
-      toast.error("Choose a future window", { description: "The preferred start date cannot be in the past." });
-      return;
-    }
-    if (preferredEndDate < preferredDate) {
-      toast.error("Check the preferred window", { description: "The end date cannot be before the start date." });
+    const nextErrors: FormErrors = {};
+    if (!streetAddress.trim()) nextErrors.streetAddress = "Enter the service street address.";
+    if (!city.trim()) nextErrors.city = "Enter the service city.";
+    if (!/^[A-Za-z]{2}$/.test(stateCode.trim())) nextErrors.state = "Use a two-letter state code, such as FL.";
+    if (!/^\d{5}(-\d{4})?$/.test(zipCode.trim())) nextErrors.zip = "Enter a valid five-digit ZIP code.";
+    if (!preferredDate) nextErrors.preferredDate = "Choose the start of your preferred date window.";
+    else if (preferredDate < localDateValue(new Date())) nextErrors.preferredDate = "The preferred start date cannot be in the past.";
+    if (!preferredEndDate) nextErrors.preferredEndDate = "Choose the end of your preferred date window.";
+    else if (preferredEndDate < preferredDate) nextErrors.preferredEndDate = "The end date cannot be before the start date.";
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors);
       return;
     }
     const currentCoverage = await verifyCoverage();
@@ -508,14 +518,14 @@ export default function RequestServicePage() {
       const unanswered = selectedServices.flatMap((service) =>
         (packageSelections[service.id]?.questions ?? [])
           .filter((question) => question.is_required !== false && !questionAnswers[service.id]?.[question.question_key]?.trim())
-          .map((question) => question.question_label),
+          .map((question) => [`question-${service.id}-${question.question_key}`, `Answer ${question.question_label}.`]),
       );
       if (unanswered.length) {
-        toast.error("Answer the required service questions", { description: unanswered[0] });
+        setErrors(Object.fromEntries(unanswered));
         return;
       }
     }
-    setStep("contact");
+    changeStep("contact");
   }
 
   function addPhotos(files: File[]) {
@@ -553,10 +563,17 @@ export default function RequestServicePage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim()) {
-      toast.error("Contact information required", { description: "Complete all contact fields before submitting." });
-      return;
+    // Enter validates the current step rather than hidden contact fields.
+    if (step === "services") { continueFromServices(); return; }
+    if (step === "details") { await continueFromDetails(); return; }
+    const nextErrors: FormErrors = {};
+    for (const [id, value, label] of [["firstName", firstName, "first name"], ["lastName", lastName, "last name"], ["email", email, "email"], ["phone", phone, "phone number"]]) {
+      if (!value.trim()) nextErrors[id] = `Enter your ${label}.`;
     }
+    const emailInput = formRef.current?.querySelector<HTMLInputElement>("#email");
+    if (email.trim() && emailInput?.validity.typeMismatch) nextErrors.email = "Enter a valid email address.";
+    if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
+    setErrors({});
     setIsSubmitting(true);
     try {
       const currentCoverage = await verifyCoverage();
@@ -744,7 +761,7 @@ export default function RequestServicePage() {
       setIsComplete(true);
       toast.success("Request submitted", { description: "No payment was collected. We’ll confirm pricing and next steps." });
     } catch (error) {
-      toast.error("Submission failed", { description: error instanceof Error ? error.message : "Please try again." });
+      setErrors({ "request-step": error instanceof Error ? error.message : "Submission failed. Please try again." });
     } finally {
       setIsSubmitting(false);
       setPhotoUploadProgress({ completed: 0, total: 0 });
@@ -758,7 +775,7 @@ export default function RequestServicePage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="bg-hero py-12 text-center md:py-16">
           <div className="container-wide max-w-6xl">
             <Badge variant="secondary" className="mb-4">Homeowner Service Request</Badge>
@@ -772,7 +789,7 @@ export default function RequestServicePage() {
             <div className="container-narrow flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
               <div className="flex flex-1 items-start gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15"><Info className="h-4 w-4 text-accent" /></span>
-                <div className="text-sm"><p className="font-semibold">You&apos;ll need a free account to confirm your request</p><p className="text-muted-foreground">Build your request now—your progress is saved in this browser.</p></div>
+                <div className="text-sm"><p className="font-semibold">You&apos;ll need a free account to confirm your request</p><p className="text-foreground">Build your request now—your progress is saved in this browser.</p></div>
               </div>
               <Link href="/login?redirect=/request" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-accent/30 text-accent")}><LogIn className="h-4 w-4" /> Sign in now</Link>
             </div>
@@ -781,11 +798,11 @@ export default function RequestServicePage() {
 
         <div className="border-b border-border bg-card">
           <div className="container-narrow py-5">
-            <div className="mb-2 flex justify-between text-xs text-muted-foreground"><span>Step {stepIndex + 1} of 3</span><span>{Math.round(((stepIndex + 1) / 3) * 100)}% complete</span></div>
+            <div className="mb-2 flex justify-between text-xs text-muted-foreground"><span role="status">Step {stepIndex + 1} of 3: {stepLabels[step]}</span><span>{Math.round(((stepIndex + 1) / 3) * 100)}% complete</span></div>
             <div className="mb-4 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${((stepIndex + 1) / 3) * 100}%` }} /></div>
             <div className="flex items-center justify-center">
               {stepOrder.map((item, index) => (
-                <div key={item} className="flex items-center">
+                <div key={item} aria-current={item === step ? "step" : undefined} className="flex items-center">
                   <div className="flex items-center gap-2"><span className={cn("flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold", index <= stepIndex ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{index < stepIndex ? <Check className="h-4 w-4" /> : index + 1}</span><span className={cn("hidden text-xs sm:block", index === stepIndex ? "font-medium text-foreground" : "text-muted-foreground")}>{stepLabels[item]}</span></div>
                   {index < stepOrder.length - 1 && <div className="mx-3 h-px w-8 bg-border sm:w-16" />}
                 </div>
@@ -796,11 +813,14 @@ export default function RequestServicePage() {
 
         <section className="py-12 md:py-16">
           <div className="container-wide max-w-6xl">
-            <form onSubmit={handleSubmit}>
+            <FormErrorsContext value={errors}>
+            <form ref={formRef} noValidate onSubmit={handleSubmit}>
+              <FormErrorSummary errors={errors} />
               {step === "services" && <ServicesStep services={requestServiceOptions} categories={catalogCategories} catalogLoading={catalogLoading} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} otherServiceDetails={otherServiceDetails} onOtherServiceDetails={setOtherServiceDetails} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
-              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} preferredProviderNames={preferredProviderNames} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onBack={() => setStep("services")} onContinue={continueFromDetails} />}
-              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected && coverageStatus === "covered"} hasQuoteServices={fixedServices.length !== selectedServices.length} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onRetryCoverage={() => void verifyCoverage()} onBack={() => setStep("details")} />}
+              {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} preferredProviderNames={preferredProviderNames} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onBack={() => changeStep("services")} onContinue={continueFromDetails} />}
+              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected && coverageStatus === "covered"} hasQuoteServices={fixedServices.length !== selectedServices.length} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onRetryCoverage={() => void verifyCoverage()} onBack={() => changeStep("details")} />}
             </form>
+            </FormErrorsContext>
           </div>
         </section>
       </main>
@@ -884,7 +904,7 @@ function ServicesStep({
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
           Build your request
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">
+        <h2 id="request-step" data-step-heading tabIndex={-1} className="scroll-mt-24 text-2xl font-semibold sm:text-3xl">
           What does your home need?
         </h2>
         <p className="mt-2 max-w-2xl leading-6 text-muted-foreground">
@@ -901,7 +921,7 @@ function ServicesStep({
                 <h3 className="text-lg font-semibold">Popular home services</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Start with the services homeowners request most often.</p>
               </div>
-              {catalogLoading && <Loader2 className="h-5 w-5 animate-spin text-accent" aria-label="Loading live catalog" />}
+              {catalogLoading && <span className="flex size-8 shrink-0 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-accent" aria-label="Loading live catalog" /></span>}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {featuredServices.map((service) => renderServiceCard(service))}
@@ -922,7 +942,7 @@ function ServicesStep({
                     aria-pressed={activeCategory === category.id}
                     onClick={() => setActiveCategory((current) => current === category.id ? null : category.id)}
                     className={cn(
-                      "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+                      "min-h-11 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
                       activeCategory === category.id
                         ? "border-accent bg-accent text-accent-foreground"
                         : "border-border-strong bg-card text-muted-foreground hover:border-accent-border hover:text-foreground",
@@ -943,7 +963,7 @@ function ServicesStep({
           )}
 
           <section className="rounded-3xl border border-border bg-muted/20 p-5 sm:p-6">
-            <button type="button" onClick={() => setBrowseAll((current) => !current)} className="flex w-full items-center justify-between gap-4 text-left">
+            <button type="button" aria-expanded={browseAll} onClick={() => setBrowseAll((current) => !current)} className="flex w-full items-center justify-between gap-4 text-left">
               <div>
                 <h3 className="text-lg font-semibold">Browse all services</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Search the full live catalog for a more specific need.</p>
@@ -954,7 +974,7 @@ function ServicesStep({
               <div className="mt-5 space-y-4">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search lawn, cleaning, plumbing…" className="h-11 bg-background pl-10" />
+                  <Input aria-label="Search services" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search lawn, cleaning, plumbing…" className="h-11 bg-background pl-10" />
                 </div>
                 <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-1">
                   {browsableServices.length > 0
@@ -974,8 +994,7 @@ function ServicesStep({
               {renderServiceCard(catchAll, "row")}
               {selectedIds.includes(otherServiceId) && (
                 <div className="mt-3 rounded-2xl border border-accent-border bg-accent-subtle/35 p-4">
-                  <Label htmlFor="otherServiceDetails">What service do you need?</Label>
-                  <textarea id="otherServiceDetails" rows={3} value={otherServiceDetails} onChange={(event) => onOtherServiceDetails(event.target.value)} placeholder="Describe the work or issue in a sentence or two…" className="mt-2 w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
+                  <FormField id="otherServiceDetails" label="What service do you need?" required>{control => <Textarea {...control} rows={3} value={otherServiceDetails} onChange={(event) => onOtherServiceDetails(event.target.value)} placeholder="Describe the work or issue in a sentence or two…" className="mt-2 w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />}</FormField>
                   <p className="mt-2 text-xs text-muted-foreground">We&apos;ll review the request, source a suitable pro where possible, and confirm pricing before booking.</p>
                 </div>
               )}
@@ -1101,7 +1120,7 @@ function DetailsStep(props: DetailsStepProps) {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
           {framing.eyebrow}
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">{framing.title}</h2>
+        <h2 id="request-step" data-step-heading tabIndex={-1} className="scroll-mt-24 text-2xl font-semibold sm:text-3xl">{framing.title}</h2>
         <p className="mt-2 max-w-3xl leading-6 text-muted-foreground">
           {framing.helper}
         </p>
@@ -1160,7 +1179,7 @@ function DetailsStep(props: DetailsStepProps) {
                     </p>
                   )}
                   {selection.tierName && (
-                    <p className="border-t border-accent-border pt-2 text-[11px] text-muted-foreground">
+                    <p className="border-t border-accent-border pt-2 text-xs text-muted-foreground">
                       Scope shown for the {selection.tierName} tier. Final tier is re-checked with your answers at submit.
                     </p>
                   )}
@@ -1223,31 +1242,28 @@ function DetailsStep(props: DetailsStepProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="streetAddress">Street address</Label>
-            <Input
-              id="streetAddress"
+            <FormField id="streetAddress" label="Street address" required>{control => <Input
+              {...control}
               autoComplete="address-line1"
               placeholder="123 Main St"
               className="h-12"
               value={props.streetAddress}
               onChange={(event) => props.onStreetAddress(event.target.value)}
-            />
+            />}</FormField>
           </div>
           <div className="grid gap-4 sm:grid-cols-6">
             <div className="space-y-2 sm:col-span-3">
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
+              <FormField id="city" label="City" required>{control => <Input
+                {...control}
                 autoComplete="address-level2"
                 className="h-12"
                 value={props.city}
                 onChange={(event) => props.onCity(event.target.value)}
-              />
+              />}</FormField>
             </div>
             <div className="space-y-2 sm:col-span-1">
-              <Label htmlFor="state">State</Label>
-              <Input
-                id="state"
+              <FormField id="state" label="State" required>{control => <Input
+                {...control}
                 autoComplete="address-level1"
                 maxLength={2}
                 className="h-12 uppercase"
@@ -1257,12 +1273,11 @@ function DetailsStep(props: DetailsStepProps) {
                     event.target.value.toUpperCase().replace(/[^A-Z]/g, ""),
                   )
                 }
-              />
+              />}</FormField>
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="zip">ZIP code</Label>
-              <Input
-                id="zip"
+              <FormField id="zip" label="ZIP code" required>{control => <Input
+                {...control}
                 autoComplete="postal-code"
                 inputMode="numeric"
                 maxLength={10}
@@ -1271,7 +1286,7 @@ function DetailsStep(props: DetailsStepProps) {
                 onChange={(event) =>
                   props.onZipCode(event.target.value.replace(/[^\d-]/g, ""))
                 }
-              />
+              />}</FormField>
             </div>
           </div>
 
@@ -1296,18 +1311,14 @@ function DetailsStep(props: DetailsStepProps) {
             <div className="mt-5 space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="preferredDate">Window starts</Label>
-                  <div className="relative">
+                  <FormField id="preferredDate" label="Window starts" required>{control => <div className="relative">
                     <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input id="preferredDate" type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} required />
-                  </div>
+                    <Input {...control} type="date" min={minDate} className="h-12 pl-10" value={props.preferredDate} onChange={(event) => props.onPreferredDate(event.target.value)} /></div>}</FormField>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="preferredEndDate">Window ends</Label>
-                  <div className="relative">
+                  <FormField id="preferredEndDate" label="Window ends" required>{control => <div className="relative">
                     <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input id="preferredEndDate" type="date" min={props.preferredDate || minDate} className="h-12 pl-10" value={props.preferredEndDate} onChange={(event) => props.onPreferredEndDate(event.target.value)} required />
-                  </div>
+                    <Input {...control} type="date" min={props.preferredDate || minDate} className="h-12 pl-10" value={props.preferredEndDate} onChange={(event) => props.onPreferredEndDate(event.target.value)} /></div>}</FormField>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">Choose the date range that works best. A provider will confirm one appointment within or near this window.</p>
@@ -1341,11 +1352,11 @@ function DetailsStep(props: DetailsStepProps) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="entryInstructions">Gate, entry, or lockbox instructions <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                  <textarea id="entryInstructions" rows={4} value={props.entryInstructions} onChange={(event) => props.onEntryInstructions(event.target.value)} placeholder="Gate location, access method, where to meet…" className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
+                  <Textarea id="entryInstructions" rows={4} value={props.entryInstructions} onChange={(event) => props.onEntryInstructions(event.target.value)} placeholder="Gate location, access method, where to meet…" className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="parkingNotes">Parking or service-location notes <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                  <textarea id="parkingNotes" rows={4} value={props.parkingNotes} onChange={(event) => props.onParkingNotes(event.target.value)} placeholder="Driveway access, guest parking, work area location…" className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
+                  <Textarea id="parkingNotes" rows={4} value={props.parkingNotes} onChange={(event) => props.onParkingNotes(event.target.value)} placeholder="Driveway access, guest parking, work area location…" className="w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring" />
                 </div>
               </div>
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
@@ -1391,9 +1402,9 @@ function DetailsStep(props: DetailsStepProps) {
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
         <Button
-          type="button"
+          type="submit"
           size="lg"
-          onClick={props.onContinue}
+          loading={props.coverageStatus === "checking"}
           className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
         >
           Continue to Review <ArrowRight className="h-4 w-4" />
@@ -1473,7 +1484,7 @@ function PreferencePills<T extends string>({
             aria-pressed={value === option}
             onClick={() => onChange(option)}
             className={cn(
-              "rounded-full border px-4 py-2 text-sm transition-all",
+              "min-h-11 rounded-full border px-4 py-2 text-sm transition-colors",
               value === option
                 ? "border-accent bg-accent font-semibold text-accent-foreground shadow-sm"
                 : "border-border-strong bg-background text-muted-foreground hover:border-accent-border hover:text-foreground",
@@ -1514,7 +1525,7 @@ function RequestPhotoPicker({
         htmlFor="requestPhotos"
         onDrop={onDrop}
         onDragOver={(event) => event.preventDefault()}
-        className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-accent-border bg-background px-5 py-7 text-center transition-colors hover:bg-accent-subtle/30"
+        className="mt-4 flex cursor-pointer has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-3 has-[:focus-visible]:outline-focus-ring flex-col items-center justify-center rounded-xl border border-dashed border-accent-border bg-background px-5 py-7 text-center transition-colors hover:bg-accent-subtle/30"
       >
         <ImagePlus className="mb-2 h-6 w-6 text-accent" />
         <span className="text-sm font-semibold">Choose photos or drop them here</span>
@@ -1544,10 +1555,10 @@ function RequestPhotoPicker({
           {photos.map((photo, index) => (
             <div key={photo.id} className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-border bg-muted">
               <Image src={photo.previewUrl} alt={`Request photo preview ${index + 1}`} fill unoptimized className="object-cover" />
-              <button type="button" onClick={() => onRemove(photo.id)} aria-label={`Remove photo ${index + 1}`} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-background/95 text-foreground shadow-md transition-colors hover:bg-destructive hover:text-destructive-foreground">
+              <button type="button" onClick={() => onRemove(photo.id)} aria-label={`Remove photo ${index + 1}`} className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-background/95 text-foreground shadow-md transition-colors hover:bg-destructive hover:text-destructive-foreground">
                 <X className="h-4 w-4" />
               </button>
-              <span className="absolute bottom-2 left-2 rounded-full bg-slate/80 px-2 py-1 text-[10px] font-medium text-white">{index + 1} of {photos.length}</span>
+              <span className="absolute bottom-2 left-2 rounded-full bg-slate/80 px-2 py-1 text-xs font-medium text-white">{index + 1} of {photos.length}</span>
             </div>
           ))}
         </div>
@@ -1578,7 +1589,7 @@ function DescriptionField({
             : "Add any final scope or condition details the provider should know."}
         </p>
       </div>
-      <textarea
+      <Textarea
         id="description"
         rows={prominent ? 6 : 3}
         placeholder={prominent ? "Describe the work you need, what you’re seeing, and any important home details..." : "Anything else we should know?"}
@@ -1593,7 +1604,12 @@ function DescriptionField({
 function PackageQuestionInput({ serviceId, question, value, onChange }: { serviceId: string; question: PackageQualifyingQuestion; value: string; onChange: (serviceId: string, questionKey: string, answer: string) => void }) {
   const id = `question-${serviceId}-${question.question_key}`;
   const options = questionOptions(question.options);
-  return <div className="space-y-2"><Label htmlFor={id}>{question.question_label}{question.is_required !== false ? <span className="text-destructive"> *</span> : <span className="font-normal text-muted-foreground"> (optional)</span>}</Label>{question.input_type === "select" && options.length ? <select id={id} value={value} onChange={(event) => onChange(serviceId, question.question_key, event.target.value)} className="h-12 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"><option value="">Choose an answer</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <Input id={id} type={question.input_type === "number" ? "number" : "text"} inputMode={question.input_type === "number" ? "decimal" : undefined} className="h-12" placeholder={question.input_type === "number" ? `Enter a number${question.unit ? ` (${question.unit})` : ""}` : "Your answer"} value={value} onChange={(event) => onChange(serviceId, question.question_key, event.target.value)} />}{question.unit && question.input_type !== "number" && <p className="text-xs text-muted-foreground">Unit: {question.unit}</p>}</div>;
+  return <FormField id={id} label={question.question_label} required={question.is_required !== false} help={question.unit ? `Unit: ${question.unit}` : undefined}>
+    {control => question.input_type === "select" && options.length ? <Select {...control} value={value} onChange={event => onChange(serviceId, question.question_key, event.target.value)}>
+      <option value="">Choose an answer</option>
+      {options.map(option => <option key={option} value={option}>{option}</option>)}
+    </Select> : <Input {...control} type={question.input_type === "number" ? "number" : "text"} inputMode={question.input_type === "number" ? "decimal" : undefined} value={value} onChange={event => onChange(serviceId, question.question_key, event.target.value)} />}
+  </FormField>;
 }
 
 type ContactStepProps = {
@@ -1676,7 +1692,7 @@ function ContactStep(props: ContactStepProps) {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
           Final review
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Review and confirm</h2>
+        <h2 id="request-step" data-step-heading tabIndex={-1} className="scroll-mt-24 text-2xl font-semibold sm:text-3xl">Review and confirm</h2>
         <p className="mt-2 max-w-2xl leading-6 text-muted-foreground">
           Confirm your contact details, pricing status, and what happens after
           you submit.
@@ -1699,7 +1715,7 @@ function ContactStep(props: ContactStepProps) {
                 <ReviewDetail label="Time of day" value={timeOfDayLabel(props.timeOfDay)} />
               </div>
               <div className="rounded-xl border border-accent-border bg-card p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Access and arrival</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Access and arrival</p>
                 <p className="mt-1 text-sm font-medium">{accessMethodLabel(props.accessMethod)} · {petStatusLabel(props.petStatus)}</p>
                 {(props.entryInstructions.trim() || props.parkingNotes.trim()) && (
                   <div className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
@@ -1710,7 +1726,7 @@ function ContactStep(props: ContactStepProps) {
               </div>
               {providerProofRows.length > 0 && (
                 <div className="rounded-xl border border-accent-border bg-card p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Providers behind live rates</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Providers behind live rates</p>
                   <div className="mt-3 space-y-3">
                     {providerProofRows.map(({ service, providers }) => (
                       <div key={service.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1756,27 +1772,20 @@ function ContactStep(props: ContactStepProps) {
             <CardContent className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First name</Label>
-                  <Input id="firstName" autoComplete="given-name" className="h-12" value={props.firstName} onChange={(event) => props.onFirstName(event.target.value)} required />
+                  <FormField id="firstName" label="First name" required>{control => <Input {...control} autoComplete="given-name" className="h-12" value={props.firstName} onChange={(event) => props.onFirstName(event.target.value)} />}</FormField>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last name</Label>
-                  <Input id="lastName" autoComplete="family-name" className="h-12" value={props.lastName} onChange={(event) => props.onLastName(event.target.value)} required />
+                  <FormField id="lastName" label="Last name" required>{control => <Input {...control} autoComplete="family-name" className="h-12" value={props.lastName} onChange={(event) => props.onLastName(event.target.value)} />}</FormField>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" autoComplete="email" className="h-12" value={props.email} onChange={(event) => props.onEmail(event.target.value)} required />
+                <FormField id="email" label="Email" required>{control => <Input {...control} type="email" autoComplete="email" className="h-12" value={props.email} onChange={(event) => props.onEmail(event.target.value)} />}</FormField>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" type="tel" autoComplete="tel" placeholder="(239) 555-0123" className="h-12" value={props.phone} onChange={(event) => props.onPhone(event.target.value)} required />
+                <FormField id="phone" label="Phone" required>{control => <Input {...control} type="tel" autoComplete="tel" placeholder="(239) 555-0123" className="h-12" value={props.phone} onChange={(event) => props.onPhone(event.target.value)} />}</FormField>
               </div>
               {coverageAllowsRequest && (
-                <label className="flex cursor-pointer items-start gap-3 text-sm text-muted-foreground">
-                  <input type="checkbox" checked={props.smsUpdates} onChange={(event) => props.onSmsUpdates(event.target.checked)} className="mt-1 h-4 w-4 accent-accent" />
-                  <span>I agree to receive SMS updates about this service request. Standard messaging rates may apply.</span>
-                </label>
+                <Checkbox checked={props.smsUpdates} onChange={(event) => props.onSmsUpdates(event.target.checked)} label="I agree to receive SMS updates about this service request. Standard messaging rates may apply." />
               )}
             </CardContent>
           </Card>
@@ -1864,7 +1873,7 @@ function ContactStep(props: ContactStepProps) {
         <Button type="button" variant="outline" size="lg" onClick={props.onBack}>
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        <Button type="submit" size="lg" disabled={props.isSubmitting || props.coverageStatus === "checking" || props.coverageStatus === "idle"} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
+        <Button type="submit" size="lg" aria-busy={props.isSubmitting} disabled={props.isSubmitting || props.coverageStatus === "checking" || props.coverageStatus === "idle"} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
           {props.isSubmitting ? (
             <><Loader2 className="h-4 w-4 animate-spin" /> {coverageAllowsRequest && props.photoUploadProgress.total > 0 ? `Uploading photos ${props.photoUploadProgress.completed}/${props.photoUploadProgress.total}` : coverageAllowsRequest && props.directCheckoutExpected ? "Re-checking live rate..." : coverageAllowsRequest ? "Submitting..." : "Saving coverage interest..."}</>
           ) : props.coverageStatus === "checking" || props.coverageStatus === "idle" ? (
@@ -1887,7 +1896,7 @@ function SuccessState({ services, preferredProviderNames, completionKind }: { se
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="py-16 md:py-24">
+        <main id="main-content" tabIndex={-1} className="py-16 md:py-24">
           <div className="container-narrow">
             <div className="mb-10 text-center">
               <span className="mx-auto mb-7 flex h-20 w-20 items-center justify-center rounded-full bg-accent-soft">
@@ -1937,11 +1946,11 @@ function SuccessState({ services, preferredProviderNames, completionKind }: { se
     : completionKind === "multi_service"
       ? "Nothing was charged today. We’ll coordinate the selected services and place any payable invoices in your dashboard."
       : "No payment was collected. We’ll confirm scope, availability, and pricing before asking you to approve or pay anything.";
-  return <div className="min-h-screen bg-background"><Header /><main className="py-16 md:py-24"><div className="container-narrow"><div className="mb-10 text-center"><span className="mx-auto mb-7 flex h-20 w-20 items-center justify-center rounded-full bg-sage-light"><CheckCircle2 className="h-10 w-10 text-sage-dark" /></span><h1 className="mb-4 text-3xl font-semibold">Request Submitted!</h1><p className="mx-auto max-w-xl text-lg text-muted-foreground">Thank you for your request. Our team will review the details and contact you to confirm next steps.</p></div><Card className="mx-auto mb-8 max-w-xl"><CardHeader><CardTitle>Request Summary</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="flex justify-between gap-4"><span className="text-muted-foreground">Services</span><span className="text-right font-medium">{services.map((service) => service.name).join(", ")}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Provider</span><span className="text-right font-medium">{providerNames.length ? providerNames.join(", ") : "Matching in progress"}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Request status</span><span className="font-semibold text-sage-dark">Received</span></div><div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"><CreditCard className="mt-0.5 h-4 w-4 shrink-0" /><p className="text-xs leading-relaxed">{paymentMessage}</p></div></CardContent></Card><div className="mx-auto mb-8 max-w-xl"><h2 className="mb-5 text-center font-semibold">What happens next</h2>{["Request received", "Pricing and provider confirmed", "Payment confirmed when required", "Service completed", "Leave a review"].map((label, index, items) => <div key={label} className="flex items-start gap-4"><div className="flex flex-col items-center"><span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium", index === 0 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{index === 0 ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>{index < items.length - 1 && <span className="h-6 w-0.5 bg-border" />}</div><p className={cn("pt-1.5 text-sm", index === 0 ? "font-medium" : "text-muted-foreground")}>{label}</p></div>)}</div><div className="flex justify-center gap-3"><Link href="/dashboard?tab=invoices" className={buttonVariants({ variant: "outline", size: "lg" })}>View Dashboard</Link><Link href="/" className={buttonVariants({ size: "lg" })}>Return Home</Link></div></div></main></div>;
+  return <div className="min-h-screen bg-background"><Header /><main id="main-content" tabIndex={-1} className="py-16 md:py-24"><div className="container-narrow"><div className="mb-10 text-center"><span className="mx-auto mb-7 flex h-20 w-20 items-center justify-center rounded-full bg-sage-light"><CheckCircle2 className="h-10 w-10 text-sage-dark" /></span><h1 className="mb-4 text-3xl font-semibold">Request Submitted!</h1><p className="mx-auto max-w-xl text-lg text-muted-foreground">Thank you for your request. Our team will review the details and contact you to confirm next steps.</p></div><Card className="mx-auto mb-8 max-w-xl"><CardHeader><CardTitle>Request Summary</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><div className="flex justify-between gap-4"><span className="text-muted-foreground">Services</span><span className="text-right font-medium">{services.map((service) => service.name).join(", ")}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Provider</span><span className="text-right font-medium">{providerNames.length ? providerNames.join(", ") : "Matching in progress"}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Request status</span><span className="font-semibold text-sage-dark">Received</span></div><div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"><CreditCard className="mt-0.5 h-4 w-4 shrink-0" /><p className="text-xs leading-relaxed">{paymentMessage}</p></div></CardContent></Card><div className="mx-auto mb-8 max-w-xl"><h2 className="mb-5 text-center font-semibold">What happens next</h2>{["Request received", "Pricing and provider confirmed", "Payment confirmed when required", "Service completed", "Leave a review"].map((label, index, items) => <div key={label} className="flex items-start gap-4"><div className="flex flex-col items-center"><span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium", index === 0 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground")}>{index === 0 ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>{index < items.length - 1 && <span className="h-6 w-0.5 bg-border" />}</div><p className={cn("pt-1.5 text-sm", index === 0 ? "font-medium" : "text-muted-foreground")}>{label}</p></div>)}</div><div className="flex justify-center gap-3"><Link href="/dashboard?tab=invoices" className={buttonVariants({ variant: "outline", size: "lg" })}>View Dashboard</Link><Link href="/" className={buttonVariants({ size: "lg" })}>Return Home</Link></div></div></main></div>;
 }
 
 function ReviewDetail({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl border border-accent-border bg-card p-3"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>;
+  return <div className="rounded-xl border border-accent-border bg-card p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>;
 }
 
 function ProviderProofLink({ provider }: { provider: ServiceProviderProof }) {
@@ -1950,7 +1959,7 @@ function ProviderProofLink({ provider }: { provider: ServiceProviderProof }) {
     <Link href={`/providers/${provider.id}`} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-background py-1 pl-1 pr-3 text-xs font-medium transition-colors hover:border-accent-border hover:text-sage-dark">
       {provider.logoUrl
         ? <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-card p-0.5"><Image src={provider.logoUrl} alt="" width={28} height={28} unoptimized className="h-full w-full object-contain" /></span>
-        : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">{initials}</span>}
+        : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">{initials}</span>}
       <span className="max-w-36 truncate">{provider.name}</span>
     </Link>
   );

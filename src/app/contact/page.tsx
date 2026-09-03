@@ -71,7 +71,7 @@ function ContactPageContent() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         <section className="bg-hero relative overflow-hidden pb-28 pt-16 md:pb-36 md:pt-20 lg:pt-24">
           <div className="bg-pattern absolute inset-0 opacity-30" />
           <div className="pointer-events-none absolute -left-32 top-16 h-80 w-80 rounded-full bg-sage/10 blur-3xl" />
@@ -280,7 +280,7 @@ function ContactPageLoading() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      <main className="flex flex-1 items-center justify-center">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-accent" />
         <span className="sr-only">Loading contact form</span>
       </main>

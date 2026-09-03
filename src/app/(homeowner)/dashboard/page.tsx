@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -69,11 +69,11 @@ const payableStatuses = new Set(["draft", "pending"]);
 
 const invoiceStatusColor: Record<string, string> = {
   paid: "bg-sage-light text-sage-dark",
-  pending: "bg-blue-100 text-blue-800",
-  sent: "bg-blue-100 text-blue-800",
+  pending: "bg-status-info-bg text-status-info",
+  sent: "bg-status-info-bg text-status-info",
   draft: "bg-muted text-muted-foreground",
-  overdue: "bg-red-100 text-red-800",
-  pending_release: "bg-amber-100 text-amber-800",
+  overdue: "bg-status-danger-bg text-status-danger",
+  pending_release: "bg-status-warning-bg text-status-warning",
   released: "bg-sage-light text-sage-dark",
 };
 
@@ -84,6 +84,10 @@ export default function DashboardPage() {
   const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
   const [dataMode, setDataMode] = useState<DataMode>("loading");
   const [dashboardError, setDashboardError] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+  const paymentErrorRef = useRef<HTMLDivElement>(null);
+  const paymentInFlight = useRef(false);
+  useEffect(() => { if (paymentError) paymentErrorRef.current?.focus(); }, [paymentError]);
   const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
@@ -218,7 +222,9 @@ export default function DashboardPage() {
   }, [activeTab, dataMode, user]);
 
   async function startInvoiceCheckout(invoiceId: string) {
-    if (dataMode !== "live") return;
+    if (dataMode !== "live" || paymentInFlight.current) return;
+    paymentInFlight.current = true;
+    setPaymentError("");
     setPayingInvoiceId(invoiceId);
     try {
       const { data, error } = await createClient().functions.invoke("create-checkout", { body: { invoice_id: invoiceId } });
@@ -229,13 +235,16 @@ export default function DashboardPage() {
       if (typeof data?.url !== "string") throw new Error("Secure checkout did not return a payment link.");
       window.location.assign(data.url);
     } catch (reason) {
-      toast.error("Payment could not be started", { description: reason instanceof Error ? reason.message : "Please try again or contact support." });
+      setPaymentError("Payment could not be started. " + (reason instanceof Error ? reason.message : "Please try again or contact support."));
+      paymentInFlight.current = false;
       setPayingInvoiceId(null);
     }
   }
 
   async function openPaymentPortal() {
-    if (dataMode !== "live") return;
+    if (dataMode !== "live" || paymentInFlight.current) return;
+    paymentInFlight.current = true;
+    setPaymentError("");
     setOpeningPortal(true);
     try {
       const { data, error } = await createClient().functions.invoke("customer-portal", { body: {} });
@@ -246,7 +255,8 @@ export default function DashboardPage() {
       if (typeof data?.url !== "string") throw new Error("Card management did not return a secure link.");
       window.location.assign(data.url);
     } catch (reason) {
-      toast.error("Card management could not be opened", { description: reason instanceof Error ? reason.message : "Please try again later." });
+      setPaymentError("Card management could not be opened. " + (reason instanceof Error ? reason.message : "Please try again later."));
+      paymentInFlight.current = false;
       setOpeningPortal(false);
     }
   }
@@ -307,7 +317,7 @@ export default function DashboardPage() {
             <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
               <Home className="h-4 w-4" /> Homeowner overview
             </p>
-            <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h1 id="homeowner-dashboard-heading" tabIndex={-1} className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
               Welcome back, {firstName}!
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -325,6 +335,7 @@ export default function DashboardPage() {
             <Plus className="h-4 w-4" /> Request Service
           </Link>
         </header>
+        {paymentError && <div ref={paymentErrorRef} role="alert" tabIndex={-1} className="mb-6 scroll-mt-24 rounded-xl border border-status-danger bg-status-danger-bg p-4 text-sm text-status-danger">{paymentError}</div>}
 
             {dataMode === "error" ? (
               <DashboardLoadError
@@ -334,7 +345,7 @@ export default function DashboardPage() {
             ) : (
               <>
               {paymentNotice && (
-              <div className={cn("mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", paymentNotice.tone === "success" ? "border-sage/30 bg-sage-light/60 text-sage-dark" : "border-amber-200 bg-amber-50 text-amber-950")}>
+              <div role="status" className={cn("mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm", paymentNotice.tone === "success" ? "border-sage/30 bg-sage-light/60 text-sage-dark" : "border-status-warning bg-status-warning-bg text-status-warning")}>
                 {paymentNotice.tone === "success" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
                 <div><p className="font-semibold">{paymentNotice.title}</p><p className="mt-0.5 text-current/80">{paymentNotice.description}</p></div>
               </div>
@@ -372,9 +383,9 @@ export default function DashboardPage() {
                 </div>
 
                 {quoted.length > 0 && (
-                  <Card className="border-violet-200 bg-violet-50 ring-violet-200">
+                  <Card className="border-status-info bg-status-info-bg ring-status-info">
                     <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3 text-violet-800">
+                      <div className="flex items-center gap-3 text-status-info">
                         <CreditCard className="h-5 w-5" />
                         <p className="font-medium">{quoted.length} quote{quoted.length === 1 ? "" : "s"} awaiting your approval</p>
                       </div>
@@ -443,7 +454,7 @@ export default function DashboardPage() {
                   <CardHeader><CardTitle>Invoices &amp; Payments</CardTitle><CardDescription>Review charges and track payment status.</CardDescription></CardHeader>
                   <CardContent>
                     {dataMode === "loading" ? <ListLoading large /> : invoices.length === 0 ? <EmptyState icon={CreditCard} title="No invoices yet" description="Invoices will appear after a provider bills completed work." /> : (
-                      <div className="divide-y divide-border">{invoices.map((invoice) => <InvoiceRow key={invoice.id} invoice={invoice} paying={payingInvoiceId === invoice.id} paymentsEnabled={dataMode === "live"} onPay={startInvoiceCheckout} />)}</div>
+                      <div className="divide-y divide-border">{invoices.map((invoice) => <InvoiceRow key={invoice.id} invoice={invoice} paying={payingInvoiceId === invoice.id} paymentsEnabled={dataMode === "live" && !payingInvoiceId && !openingPortal} onPay={startInvoiceCheckout} />)}</div>
                     )}
                     <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Card details are entered on Stripe Checkout. Mercurius shows an invoice as paid only after server-side confirmation.</p></div>
                   </CardContent>
@@ -456,8 +467,8 @@ export default function DashboardPage() {
                 <Card>
                   <CardHeader><CardTitle className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-accent" /> Payment Methods</CardTitle><CardDescription>Manage how you pay for Mercurius services.</CardDescription></CardHeader>
                   <CardContent className="space-y-4">
-                    {paymentMethodsLoading ? <ListLoading large /> : paymentMethodsError ? <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-6 text-center"><p className="font-medium text-red-900">Payment methods could not be loaded</p><p className="mt-1 text-sm text-red-800">{paymentMethodsError}</p></div> : paymentMethods.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center"><CreditCard className="mx-auto mb-4 h-9 w-9 text-muted-foreground" /><p className="font-medium">No saved cards yet</p><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Cards saved through Stripe can make future invoice checkout faster.</p></div> : <div className="space-y-3">{paymentMethods.map((method) => <div key={method.id} className="flex items-center justify-between rounded-xl border border-border p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-12 items-center justify-center rounded-lg bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></span><div><p className="font-medium capitalize">{cardBrand(method.brand)} •••• {method.last4}</p>{method.exp_month && method.exp_year && <p className="text-sm text-muted-foreground">Expires {String(method.exp_month).padStart(2, "0")}/{String(method.exp_year).slice(-2)}</p>}</div></div>{method.is_default && <Badge className="bg-sage-light text-sage-dark">Default</Badge>}</div>)}</div>}
-                    <div className="flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-2 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Cards are stored and managed by Stripe, not in the Mercurius app.</p></div><Button variant="outline" disabled={openingPortal || dataMode !== "live"} onClick={() => void openPaymentPortal()}>{openingPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}Manage Cards</Button></div>
+                    {paymentMethodsLoading ? <ListLoading large /> : paymentMethodsError ? <div className="rounded-xl border border-status-danger bg-status-danger-bg px-5 py-6 text-center"><p className="font-medium text-status-danger">Payment methods could not be loaded</p><p className="mt-1 text-sm text-status-danger">{paymentMethodsError}</p></div> : paymentMethods.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center"><CreditCard className="mx-auto mb-4 h-9 w-9 text-muted-foreground" /><p className="font-medium">No saved cards yet</p><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Cards saved through Stripe can make future invoice checkout faster.</p></div> : <div className="space-y-3">{paymentMethods.map((method) => <div key={method.id} className="flex items-center justify-between rounded-xl border border-border p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-12 items-center justify-center rounded-lg bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></span><div><p className="font-medium capitalize">{cardBrand(method.brand)} •••• {method.last4}</p>{method.exp_month && method.exp_year && <p className="text-sm text-muted-foreground">Expires {String(method.exp_month).padStart(2, "0")}/{String(method.exp_year).slice(-2)}</p>}</div></div>{method.is_default && <Badge className="bg-sage-light text-sage-dark">Default</Badge>}</div>)}</div>}
+                    <div className="flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-2 text-xs text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><p>Cards are stored and managed by Stripe, not in the Mercurius app.</p></div><Button variant="outline" aria-busy={openingPortal} disabled={openingPortal || Boolean(payingInvoiceId) || dataMode !== "live"} onClick={() => void openPaymentPortal()}>{openingPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}Manage Cards</Button></div>
                   </CardContent>
                 </Card>
               </div>
@@ -488,19 +499,19 @@ function FullPageLoading({ label }: { label: string }) {
 
 function DashboardLoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <Card className="mx-auto max-w-2xl border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20">
+    <Card className="mx-auto max-w-2xl border-status-danger bg-status-danger-bg border-status-danger bg-status-danger-bg">
       <CardContent className="flex flex-col items-center px-6 py-10 text-center sm:px-10">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 dark:bg-red-950/50">
-          <AlertTriangle className="h-6 w-6 text-red-700 dark:text-red-300" />
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-status-danger-bg bg-status-danger-bg">
+          <AlertTriangle className="h-6 w-6 text-status-danger text-status-danger" />
         </div>
-        <h2 className="text-xl font-semibold text-red-950 dark:text-red-100">
+        <h2 className="text-xl font-semibold text-status-danger text-status-danger">
           We couldn’t load your dashboard
         </h2>
-        <p className="mt-2 max-w-lg text-sm leading-6 text-red-900/80 dark:text-red-200/80">
+        <p className="mt-2 max-w-lg text-sm leading-6 text-status-danger text-status-danger">
           Your live services and invoices are temporarily unavailable. No sample records have been substituted.
         </p>
         {message && (
-          <p className="mt-3 max-w-lg text-xs text-red-800/80 dark:text-red-300/80">
+          <p className="mt-3 max-w-lg text-xs text-status-danger text-status-danger">
             {message}
           </p>
         )}
@@ -527,11 +538,11 @@ function QuickAction({ href, icon: Icon, label }: { href: string; icon: Componen
 
 function ActionBanner({ icon: Icon, title, description, action, onClick, tone }: { icon: ComponentType<{ className?: string }>; title: string; description: string; action: string; onClick: () => void; tone: "amber" | "sage" | "violet" }) {
   const toneClasses = tone === "amber"
-    ? "border-amber-200 bg-amber-50 ring-amber-200 dark:bg-amber-950/20"
+    ? "border-status-warning bg-status-warning-bg ring-status-warning bg-status-warning-bg"
     : tone === "violet"
-      ? "border-violet-200 bg-violet-50 ring-violet-200 dark:bg-violet-950/20"
+      ? "border-status-info bg-status-info-bg ring-status-info bg-status-info-bg"
       : "border-sage/30 bg-sage-light/40 ring-sage/30";
-  const iconClasses = tone === "amber" ? "text-amber-700" : tone === "violet" ? "text-violet-700" : "text-sage-dark";
+  const iconClasses = tone === "amber" ? "text-status-warning" : tone === "violet" ? "text-status-info" : "text-sage-dark";
   return <Card className={toneClasses}><CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Icon className={cn("mt-0.5 h-5 w-5", iconClasses)} /><div><p className="font-medium">{title}</p><p className="text-sm text-muted-foreground">{description}</p></div></div><Button onClick={onClick} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">{action}</Button></CardContent></Card>;
 }
 
@@ -549,13 +560,13 @@ function ServiceRow({ job, compact = false, onOpen }: { job: ServiceRequest; com
   const className = cn("flex w-full flex-col justify-between gap-4 rounded-xl bg-muted p-4 text-left sm:flex-row sm:items-center", !compact && "border border-border bg-card p-5", onOpen && "cursor-pointer transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring");
   const isPast = isPastServiceRequestStatus(job.status);
   const needsAttention = job.status === "disputed" || job.status === "cancelled";
-  const content = <><div className="flex min-w-0 items-start gap-4"><div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", isPast ? "bg-sage-light" : "bg-background", needsAttention && "bg-red-100 dark:bg-red-950/30")} >{needsAttention ? <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-300" /> : isPast ? <CheckCircle2 className="h-5 w-5 text-sage-dark" /> : <Calendar className="h-5 w-5 text-accent" />}</div><div className="min-w-0"><p className="font-semibold">{job.service_type}</p><p className="text-sm text-muted-foreground">{job.contractor_id ? "Provider assigned" : "Awaiting assignment"}</p>{!compact && location && <p className="truncate text-sm text-muted-foreground">{location}</p>}<p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" />{displayDate}{job.preferred_time ? ` • ${job.preferred_time}` : ""}</p></div></div><div className="flex items-center gap-2"><Badge className={cn("w-fit border", serviceRequestStatusStyle(job.status))}>{serviceRequestStatusLabel(job.status)}</Badge>{onOpen && <ArrowRight className="h-4 w-4 text-muted-foreground" />}</div></>;
+  const content = <><div className="flex min-w-0 items-start gap-4"><div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", isPast ? "bg-sage-light" : "bg-background", needsAttention && "bg-status-danger-bg bg-status-danger-bg")} >{needsAttention ? <AlertTriangle className="h-5 w-5 text-status-danger text-status-danger" /> : isPast ? <CheckCircle2 className="h-5 w-5 text-sage-dark" /> : <Calendar className="h-5 w-5 text-accent" />}</div><div className="min-w-0"><p className="font-semibold">{job.service_type}</p><p className="text-sm text-muted-foreground">{job.contractor_id ? "Provider assigned" : "Awaiting assignment"}</p>{!compact && location && <p className="truncate text-sm text-muted-foreground">{location}</p>}<p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" />{displayDate}{job.preferred_time ? ` • ${job.preferred_time}` : ""}</p></div></div><div className="flex items-center gap-2"><Badge className={cn("w-fit border", serviceRequestStatusStyle(job.status))}>{serviceRequestStatusLabel(job.status)}</Badge>{onOpen && <ArrowRight className="h-4 w-4 text-muted-foreground" />}</div></>;
   return onOpen ? <button type="button" className={className} onClick={onOpen} aria-label={`Open ${job.service_type} details`}>{content}</button> : <div className={className}>{content}</div>;
 }
 
 function InvoiceRow({ invoice, compact = false, paying = false, paymentsEnabled = false, onPay }: { invoice: Invoice; compact?: boolean; paying?: boolean; paymentsEnabled?: boolean; onPay?: (invoiceId: string) => Promise<void> }) {
   const payable = payableStatuses.has(invoice.status);
-  return <div className={cn("flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center", compact && "first:pt-0 last:pb-0", !compact && "sm:py-5")}><div className="flex items-center gap-4">{!compact && <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></div>}<div><p className="font-semibold">{invoice.invoice_number}</p><p className="text-sm text-muted-foreground">{formatDate(invoice.created_at)}</p>{invoice.paid_at && <p className="mt-1 text-xs text-sage-dark">Confirmed {formatDate(invoice.paid_at)}</p>}</div></div><div className="flex items-center justify-between gap-4 sm:justify-end"><div className="text-right"><p className="font-semibold">${Number(invoice.amount).toFixed(2)}</p><Badge variant="secondary" className={cn("capitalize", invoiceStatusColor[invoice.status] ?? "bg-muted text-muted-foreground")}>{formatStatus(invoice.status)}</Badge></div>{!compact && payable && <Button variant="outline" disabled={!paymentsEnabled || paying} onClick={() => void onPay?.(invoice.id)}>{paying ? <><Loader2 className="h-4 w-4 animate-spin" />Opening Stripe...</> : "Pay Securely"}</Button>}{!compact && !payable && ["sent", "overdue"].includes(invoice.status) && <Link href="/contact" className={buttonVariants({ variant: "outline", size: "sm" })}>Contact Support</Link>}</div></div>;
+  return <div className={cn("flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center", compact && "first:pt-0 last:pb-0", !compact && "sm:py-5")}><div className="flex items-center gap-4">{!compact && <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted"><CreditCard className="h-5 w-5 text-muted-foreground" /></div>}<div><p className="font-semibold">{invoice.invoice_number}</p><p className="text-sm text-muted-foreground">{formatDate(invoice.created_at)}</p>{invoice.paid_at && <p className="mt-1 text-xs text-sage-dark">Confirmed {formatDate(invoice.paid_at)}</p>}</div></div><div className="flex items-center justify-between gap-4 sm:justify-end"><div className="text-right"><p className="font-semibold">${Number(invoice.amount).toFixed(2)}</p><Badge variant="secondary" className={cn("capitalize", invoiceStatusColor[invoice.status] ?? "bg-muted text-muted-foreground")}>{formatStatus(invoice.status)}</Badge></div>{!compact && payable && <Button variant="outline" aria-label={`Pay invoice ${invoice.invoice_number} securely`} aria-busy={paying} disabled={!paymentsEnabled || paying} onClick={() => void onPay?.(invoice.id)}>{paying ? <><Loader2 className="h-4 w-4 animate-spin" />Opening Stripe...</> : "Pay Securely"}</Button>}{!compact && !payable && ["sent", "overdue"].includes(invoice.status) && <Link href="/contact" className={buttonVariants({ variant: "outline", size: "sm" })}>Contact Support</Link>}</div></div>;
 }
 
 function cardBrand(value: string) {

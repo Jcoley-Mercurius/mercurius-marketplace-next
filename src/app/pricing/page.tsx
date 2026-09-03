@@ -23,7 +23,7 @@ export default function PricingPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         <section className="bg-hero py-16 md:py-24">
           <div className="container-wide text-center">
             <span className="mb-6 inline-block rounded-full bg-sage-light px-4 py-2 text-sm font-medium text-sage-dark">Transparent Pricing</span>

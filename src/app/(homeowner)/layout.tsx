@@ -8,7 +8,7 @@ import { AlertCircle, Loader2, Menu } from "lucide-react";
 import { HomeownerSidebar } from "@/components/homeowner/HomeownerSidebar";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { defaultPathForRoles, fetchRoles } from "@/lib/auth/roles";
 
 type AccessState = "checking" | "allowed" | "denied" | "error";
@@ -100,12 +100,8 @@ export default function HomeownerPortalLayout({ children }: { children: ReactNod
       <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
         <header className="sticky top-0 z-20 flex h-16 items-center border-b border-border bg-background/95 px-4 backdrop-blur sm:px-6">
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-            <SheetTrigger className="lg:hidden">
-              <Button variant="ghost" size="icon" aria-label="Open homeowner menu">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0">
+            <SheetTrigger className="lg:hidden" render={<Button variant="ghost" size="icon" />} aria-label="Open homeowner menu"><Menu className="h-5 w-5" /></SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0"><SheetTitle className="sr-only">Homeowner navigation</SheetTitle><SheetDescription className="sr-only">Navigate your Mercurius homeowner account.</SheetDescription>
               <Suspense fallback={<SidebarLoading />}>
                 <HomeownerSidebar onNavigate={() => setMenuOpen(false)} />
               </Suspense>
@@ -119,7 +115,7 @@ export default function HomeownerPortalLayout({ children }: { children: ReactNod
           </div>
         </header>
 
-        <main className="min-w-0 flex-1">
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">
           <Suspense fallback={<PortalContentLoading />}>
             {children}
           </Suspense>
@@ -131,10 +127,10 @@ export default function HomeownerPortalLayout({ children }: { children: ReactNod
 
 function PortalLoading({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-background">
       <Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" />
       <span className="text-muted-foreground">{label}</span>
-    </div>
+    </main>
   );
 }
 
@@ -161,7 +157,7 @@ function AccessStatePage({
   action: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted p-6">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-muted p-6">
       <div className="w-full max-w-md text-center">
         <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
           <AlertCircle className="h-7 w-7 text-amber-700 dark:text-amber-300" />
@@ -170,6 +166,6 @@ function AccessStatePage({
         <p className="mt-2 text-muted-foreground">{description}</p>
         <div className="mt-6 flex justify-center">{action}</div>
       </div>
-    </div>
+    </main>
   );
 }

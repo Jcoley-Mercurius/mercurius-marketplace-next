@@ -119,7 +119,7 @@ export default function VendorsPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         <section className="bg-hero py-12 md:py-16 lg:py-20">
           <div className="container-wide">
             <div className="grid items-center gap-12 lg:grid-cols-2">
