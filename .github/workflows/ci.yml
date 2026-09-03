@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:55421
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:55831
       NEXT_PUBLIC_SUPABASE_ANON_KEY: mds-synthetic-anon-key
       MERCURIUS_BUILD_WORKERS: 1
 

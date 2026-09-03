@@ -13,14 +13,18 @@ export default defineConfig({
     reducedMotion: "reduce",
     trace: "retain-on-failure",
   },
-  webServer: {
+  webServer: [{
+    command: "node tests/fixtures/portal-server.mjs",
+    url: "http://127.0.0.1:55831/health",
+    reuseExistingServer: false,
+  }, {
     command: "node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3103",
     url: "http://127.0.0.1:3103/mds",
     reuseExistingServer: false,
     env: {
       MDS_CATALOG_ENABLED: "1",
-      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:55421",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:55831",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "mds-synthetic-anon-key",
     },
-  },
+  }],
 });

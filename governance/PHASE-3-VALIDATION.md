@@ -133,3 +133,30 @@ container reflow checks passed. Screenshots of light details/services and dark
 review were visually inspected. This is not evidence of real authentication,
 payment processing, booking, or screen-reader acceptance. Lint and one-worker
 56-page build passed. Portal migration and the remaining manual gates stay open.
+
+## Portal list and action slice — 2026-09-03
+
+TRACE-011. Foundation/request checkpoint: `b5a61ef` (local).
+Admin requests now share a responsive data-list pattern: labelled mobile records
+and a native desktop table with column/row headers and keyboard scrolling.
+Admin quote validation is associated with its field; operation failures persist
+and receive focus. Admin release and vendor decline use ConfirmAction with
+explicit entity/consequence, initial Cancel focus and focus restoration.
+Vendor tabs reflow, active navigation announces the current page, status colors
+use semantic light/dark pairs, and completion upload errors persist with focus.
+Backend operation names, arguments, timing and state labels were preserved.
+
+The dedicated fixture HTTP service binds only 127.0.0.1:55831, fails if that port
+is occupied, and does not forward requests or access any database. Synthetic
+sessions exercise the existing server proxy and client role gates. Mutation
+requests return controlled errors; these tests do not establish real backend
+authorization, storage, lifecycle or payment correctness. The app remains on
+3103. CI browser-build public URL is now the same dedicated fixture port.
+
+All 11 portal cases passed (10 in the combined run; the final vendor case passed
+on its focused rerun after correcting the test's button name). Includes
+admin/vendor light/dark at 320/1440px, axe, reflow, nested dialogs, error focus,
+upload failure, and absent/wrong-role rejection. Mobile admin and vendor
+screenshots were visually inspected. Tests exposed and repaired vendor active
+navigation contrast and a confirmation-error focus timing race. Lint and the
+one-worker production build passed. No real Supabase stack was started/stopped.
