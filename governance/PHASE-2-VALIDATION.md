@@ -87,7 +87,7 @@ active supply. Historical migrations themselves remain intact.
 | Unit, Edge source/JWT, and worker-limit tests | PASS — 4 files, 48 assertions |
 | Reference seed regeneration | PASS — byte-identical output |
 | Repository credential-pattern scan | PASS; not a guarantee that all possible secrets can be detected |
-| Tracked-file whitespace check | PASS |
+| Whitespace check | Existing tracked changes passed; final full checkpoint reports 3 retained source/generated formatting warnings (see below) |
 | Edge dependency resolution and Deno type checks | PASS — all 11 functions, Deno 2.9.6; per-function configs and lockfiles |
 | Isolated Edge handler runtime tests | PASS — 26 tests across all 11 functions; synthetic fixtures, no network/process permission |
 | Read-only production scheduler metadata | OBSERVED — zero rows in `cron.job`; external scheduler not yet identified |
@@ -147,6 +147,15 @@ for the checkpoint, not for production deployment (DEC-2026-004).
 
 This report accompanies the owner-authorized Phase 2 commit and pull request.
 Production remains unchanged; PR creation does not authorize merge or deployment.
+
+Final full-checkpoint whitespace inspection reports an extra trailing blank line
+in generated `database.types.ts` and trailing spaces in recovered migrations
+`20260218122158` and `20260330115632`. These are retained to preserve the generated
+fingerprint and recovered historical SQL, not runtime failures. The earlier
+tracked-only whitespace check did not include these then-untracked additions.
+Closeout reran all 48 unit/contract tests, TypeScript, lint, secret scanning,
+11 frozen Deno checks, 26 isolated handler tests, and the successful 56-page
+single-worker build. SQL reset and gateway evidence remain the prior recorded runs.
 
 ## Edge runtime and scheduler follow-up
 
