@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
-  Ban,
   Calendar,
   CheckCircle2,
   Clock,
@@ -28,7 +27,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/ui/form-field";
+import { Textarea } from "@/components/ui/textarea";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
 import { contactHrefForRequest } from "@/lib/requestContext";
 import {
@@ -99,7 +100,9 @@ export function HomeownerJobDetailDialog({
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState("");
   const [signedPhotos, setSignedPhotos] = useState<string[]>([]);
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (actionError) errorRef.current?.focus(); }, [actionError]);
   const [provider, setProvider] = useState<ProviderSummary | null>(null);
   const [providerMode, setProviderMode] = useState<ProviderMode>(
     job?.contractor_id ? "loading" : "idle",
@@ -229,13 +232,14 @@ export function HomeownerJobDetailDialog({
     setHoveredRating(0);
     setComment("");
     setSignedPhotos([]);
-    setConfirmingCancel(false);
+    setActionError("");
     onOpenChange(false);
   }
 
   async function cancelPendingRequest() {
     if (!actionsEnabled || busyAction || !isPending) return;
 
+    setActionError("");
     setBusyAction("cancel-request");
     try {
       const { data, error } = await createClient()
@@ -254,7 +258,8 @@ export function HomeownerJobDetailDialog({
       }
 
       onRemoveJob(currentJob.id);
-      setConfirmingCancel(false);
+      requestAnimationFrame(() => document.getElementById("homeowner-dashboard-heading")?.focus());
+      setActionError("");
       onOpenChange(false);
       toast.success("Request cancelled", {
         description: "Your pending request has been removed.",
@@ -271,10 +276,8 @@ export function HomeownerJobDetailDialog({
         });
       }
     } catch (error) {
-      toast.error("We couldn’t cancel this request", {
-        description:
-          error instanceof Error ? error.message : "Please try again.",
-      });
+      setActionError(error instanceof Error ? error.message : "We couldn’t cancel this request. Please try again.");
+      throw error;
     } finally {
       setBusyAction(null);
     }
@@ -290,6 +293,7 @@ export function HomeownerJobDetailDialog({
     if (!actionsEnabled || busyAction) return;
 
     const previousStatus = currentJob.status;
+    setActionError("");
     setBusyAction(action);
     onOptimisticStatus(currentJob.id, optimisticStatus);
 
@@ -315,10 +319,7 @@ export function HomeownerJobDetailDialog({
       }
     } catch (error) {
       onOptimisticStatus(currentJob.id, previousStatus);
-      toast.error("We couldn’t update this service", {
-        description:
-          error instanceof Error ? error.message : "Please try again.",
-      });
+      setActionError(error instanceof Error ? error.message : "We couldn’t update this service. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -383,7 +384,7 @@ export function HomeownerJobDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && close()}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
+      <DialogContent showCloseButton={!busyAction} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <DialogTitle>{job.service_type}</DialogTitle>
@@ -402,6 +403,7 @@ export function HomeownerJobDetailDialog({
             waiting on you.
           </DialogDescription>
         </DialogHeader>
+        {actionError && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg border border-status-danger bg-status-danger-bg p-3 text-sm text-status-danger">{actionError}</p>}
 
         <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2">
           <Detail icon={Calendar} label="Preferred date">
@@ -443,73 +445,17 @@ export function HomeownerJobDetailDialog({
           />
         )}
 
-        {isPending && (
-          <div className="rounded-xl border border-border bg-muted/30 p-4">
-            {!confirmingCancel ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-medium">Manage this request</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    You can cancel while the request is still waiting for a provider.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!actionsEnabled || Boolean(busyAction)}
-                  className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/30"
-                  onClick={() => setConfirmingCancel(true)}
-                >
-                  <Ban className="h-4 w-4" />
-                  Cancel request
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <p className="font-medium text-red-950 dark:text-red-100">
-                    Cancel this pending request?
-                  </p>
-                  <p className="mt-1 text-sm leading-5 text-red-900/80 dark:text-red-200/80">
-                    This removes the request before a provider is matched. You can
-                    submit a new request later, but this action can’t be undone.
-                  </p>
-                </div>
-                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={Boolean(busyAction)}
-                    onClick={() => setConfirmingCancel(false)}
-                  >
-                    Keep request
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={!actionsEnabled || Boolean(busyAction)}
-                    className="bg-red-700 text-white hover:bg-red-800 dark:bg-red-700 dark:hover:bg-red-600"
-                    onClick={() => void cancelPendingRequest()}
-                  >
-                    {busyAction === "cancel-request" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Ban className="h-4 w-4" />
-                    )}
-                    Yes, cancel request
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {isPending && <div className="rounded-xl border border-border p-4">
+          <ConfirmAction triggerLabel="Cancel request" title="Cancel this pending request?" entity={`${job.service_type} · ${job.id.slice(0, 8)}`} consequence="This removes the request before a provider is matched. You can submit a new request later, but this action can’t be undone." confirmLabel="Yes, cancel request" disabled={!actionsEnabled || Boolean(busyAction)} onConfirm={cancelPendingRequest} />
+        </div>}
 
         {needsConfirmation && (
-          <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:bg-amber-950/20">
+          <div className="space-y-4 rounded-xl border border-status-warning bg-status-warning-bg p-4 bg-status-warning-bg">
             <div>
-              <p className="font-medium text-amber-950 dark:text-amber-100">
+              <p className="font-medium text-status-warning text-status-warning">
                 Confirm the completed work
               </p>
-              <p className="mt-1 text-sm leading-5 text-amber-900/80 dark:text-amber-200/80">
+              <p className="mt-1 text-sm leading-5 text-status-warning text-status-warning">
                 Confirm only after you’ve reviewed the result. “Needs rework”
                 returns the service to in progress.
               </p>
@@ -525,12 +471,12 @@ export function HomeownerJobDetailDialog({
                     key={src}
                     src={src}
                     alt={`Completion photo ${index + 1} for ${job.service_type}`}
-                    className="h-32 w-full rounded-lg border border-amber-200 object-cover"
+                    className="h-32 w-full rounded-lg border border-status-warning object-cover"
                   />
                 ))}
               </div>
             ) : (
-              <p className="rounded-lg border border-dashed border-amber-300 px-3 py-4 text-center text-xs text-amber-900 dark:text-amber-200">
+              <p className="rounded-lg border border-dashed border-status-warning px-3 py-4 text-center text-xs text-status-warning text-status-warning">
                 No completion photos are available to display.
               </p>
             )}
@@ -565,12 +511,12 @@ export function HomeownerJobDetailDialog({
         )}
 
         {isQuoted && (
-          <div className="space-y-4 rounded-xl border border-violet-200 bg-violet-50 p-4 dark:bg-violet-950/20">
+          <div className="space-y-4 rounded-xl border border-status-info bg-status-info-bg p-4 bg-status-info-bg">
             <div>
-              <p className="font-medium text-violet-950 dark:text-violet-100">
+              <p className="font-medium text-status-info text-status-info">
                 Respond to this quote
               </p>
-              <p className="mt-1 text-sm leading-5 text-violet-900/80 dark:text-violet-200/80">
+              <p className="mt-1 text-sm leading-5 text-status-info text-status-info">
                 Approving moves the request into scheduling. Declining cancels
                 this quoted service.
               </p>
@@ -608,13 +554,13 @@ export function HomeownerJobDetailDialog({
           <div className="space-y-5 rounded-xl border border-accent-border bg-accent-subtle p-4">
             <div>
               <p className="font-medium">How did the service go?</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-foreground">
                 Your rating helps Mercurius maintain service quality.
               </p>
             </div>
 
             <div className="flex flex-col items-center gap-2">
-              <div className="flex gap-1">
+              <div className="flex flex-wrap justify-center gap-0">
                 {[1, 2, 3, 4, 5].map((stars) => (
                   <button
                     key={stars}
@@ -625,14 +571,14 @@ export function HomeownerJobDetailDialog({
                     onClick={() => setRating(stars)}
                     onMouseEnter={() => setHoveredRating(stars)}
                     onMouseLeave={() => setHoveredRating(0)}
-                    className="rounded-md p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-not-allowed"
+                    className="flex size-11 items-center justify-center rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-not-allowed"
                   >
                     <Star
                       className={cn(
                         "h-9 w-9 transition-colors",
                         stars <= displayRating
-                          ? "fill-amber-400 text-amber-400"
-                          : "text-muted-foreground/30",
+                          ? "fill-status-warning text-status-warning"
+                          : "text-muted-foreground",
                       )}
                     />
                   </button>
@@ -646,9 +592,8 @@ export function HomeownerJobDetailDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="job-review-comment">Comments (optional)</Label>
-              <textarea
-                id="job-review-comment"
+              <FormField id="job-review-comment" label="Comments (optional)">{control => <Textarea
+                {...control}
                 rows={4}
                 maxLength={1000}
                 value={comment}
@@ -656,7 +601,7 @@ export function HomeownerJobDetailDialog({
                 onChange={(event) => setComment(event.target.value)}
                 placeholder="Tell us about your experience..."
                 className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-focus-ring focus-visible:ring-2 focus-visible:ring-focus-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
-              />
+              />}</FormField>
             </div>
 
             <div className="flex justify-end">
@@ -819,7 +764,7 @@ function AssignedProviderCard({
         <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-accent-border/70 pt-3 text-xs text-muted-foreground">
           {publicRating !== null && (
             <span className="flex items-center gap-1.5">
-              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-status-warning" />
               <strong className="font-semibold text-foreground">
                 {publicRating.toFixed(1)}
               </strong>

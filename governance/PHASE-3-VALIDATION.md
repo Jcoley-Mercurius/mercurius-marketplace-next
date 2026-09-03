@@ -160,3 +160,23 @@ upload failure, and absent/wrong-role rejection. Mobile admin and vendor
 screenshots were visually inspected. Tests exposed and repaired vendor active
 navigation contrast and a confirmation-error focus timing race. Lint and the
 one-worker production build passed. No real Supabase stack was started/stopped.
+
+## Homeowner payment and service-action slice — 2026-09-03
+
+TRACE-011. Portal checkpoint: `25f8dba` (local). Payment-launch and card-management
+failures persist and receive focus; a UI in-flight guard prevents duplicate
+checkout launches. Buttons preserve caller-provided busy state. Cancellation
+uses the shared named confirmation with initial Cancel focus. Service-action
+failures remain visible after the existing optimistic rollback. Review controls
+have 44px targets and labelled native multiline input. Homeowner status styles
+and action surfaces use semantic color pairs; status names and backend calls
+are unchanged. No payment, cancellation, completion or review policy was changed.
+
+All six homeowner browser cases passed: 16 route/theme/viewport combinations
+(overview, upcoming, invoices, cards; light/dark; 320/1440px), checkout/card launch
+failures and retry availability, quote failure, cancellation focus, and keyboard
+review submission failure. axe/reflow passed in the tested states. Existing
+application role checks run against isolated synthetic accounts; all writes fail
+in the fixture service. No Stripe navigation, real payment or data mutation occurs.
+Lint and the one-worker 56-page build passed. The rendered checks found and
+repaired a dark-mode quote surface and low-contrast review helper text.

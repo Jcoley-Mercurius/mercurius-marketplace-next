@@ -51,9 +51,13 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/has_role") return send(body._user_id === user.sub && body._role === user.testRole);
   if (url.pathname === "/rest/v1/rpc/expire_stale_matches") return send(null);
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
+  if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {
     const table = url.pathname.split("/").pop();
-    if (table === "service_requests") return send(jobs);
+    if (table === "user_roles") return send([{ role: user.testRole }]);
+    if (table === "invoices") return send([{ id: "00000000-0000-4000-8000-000000000020", invoice_number: "MDS-INV-001", amount: 125, status: "pending", created_at: now.toISOString(), paid_at: null }]);
+    if (table === "reviews") return send([]);
+    if (table === "service_requests") return send(user.testRole === "homeowner" ? [...jobs, job("12", "Synthetic Quote Service", "quoted"), job("13", "Synthetic Pending Service", "pending"), job("14", "Synthetic Review Service", "review_requested")] : jobs);
     if (table === "profiles") return send([{ user_id: homeowner, full_name: "Synthetic Homeowner" }]);
     if (table === "contractors") {
       const rows = [{ id: contractor, user_id: users.vendor, name: "Synthetic Vendor", services: [], is_active: true }];

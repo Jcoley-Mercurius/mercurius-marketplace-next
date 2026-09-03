@@ -29,21 +29,21 @@ export const pastServiceRequestStatuses = new Set<string>([
 ]);
 
 export const serviceRequestStatusStyles = {
-  pending: "border-amber-200 bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200",
-  matched: "border-blue-200 bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200",
-  quoted: "border-violet-200 bg-violet-100 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200",
+  pending: "border-status-warning bg-status-warning-bg text-status-warning",
+  matched: "border-status-info bg-status-info-bg text-status-info",
+  quoted: "border-status-info bg-status-info-bg text-status-info",
   scheduled: "border-sage/20 bg-sage-light text-sage-dark",
   in_progress: "border-accent/20 bg-accent/10 text-accent",
-  pending_review: "border-amber-200 bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200",
-  vendor_completed: "border-amber-200 bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200",
-  homeowner_confirmed: "border-emerald-200 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200",
-  completed: "border-emerald-200 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200",
-  review_requested: "border-violet-200 bg-violet-100 text-violet-700 dark:bg-violet-950/30 dark:text-violet-200",
-  reviewed: "border-emerald-200 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200",
-  disputed: "border-red-200 bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-200",
-  resolved: "border-emerald-200 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200",
+  pending_review: "border-status-warning bg-status-warning-bg text-status-warning",
+  vendor_completed: "border-status-warning bg-status-warning-bg text-status-warning",
+  homeowner_confirmed: "border-status-success bg-status-success-bg text-status-success",
+  completed: "border-status-success bg-status-success-bg text-status-success",
+  review_requested: "border-status-info bg-status-info-bg text-status-info",
+  reviewed: "border-status-success bg-status-success-bg text-status-success",
+  disputed: "border-status-danger bg-status-danger-bg text-status-danger",
+  resolved: "border-status-success bg-status-success-bg text-status-success",
   closed: "border-border bg-muted text-muted-foreground",
-  cancelled: "border-red-200 bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-200",
+  cancelled: "border-status-danger bg-status-danger-bg text-status-danger",
 } satisfies Record<ServiceRequestStatus, string>;
 
 const serviceRequestStatusLabels = {

@@ -110,12 +110,13 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.section}
                 href={dashboardSectionHref(item.section)}
                 onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
                 className={navItemClass(active)}
               >
                 <Icon
                   className={cn(
                     "h-5 w-5",
-                    active ? "text-sage-dark" : "text-muted-foreground",
+                    active ? "text-commitment" : "text-muted-foreground",
                   )}
                 />
                 <span>{item.label}</span>
@@ -136,12 +137,13 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
                 className={navItemClass(active)}
               >
                 <Icon
                   className={cn(
                     "h-5 w-5",
-                    active ? "text-sage-dark" : "text-muted-foreground",
+                    active ? "text-commitment" : "text-muted-foreground",
                   )}
                 />
                 <span>{item.label}</span>
@@ -182,7 +184,7 @@ function navItemClass(active: boolean) {
   return cn(
     "flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm transition-colors",
     active
-      ? "border-accent-border bg-accent-soft font-medium text-sage-dark shadow-sm"
+      ? "border-accent-border bg-accent-soft font-medium text-commitment shadow-sm"
       : "text-slate hover:bg-surface-hover hover:text-slate-dark",
   );
 }

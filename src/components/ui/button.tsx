@@ -58,7 +58,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
       disabled={disabled || loading}
-      aria-busy={loading || undefined}
+      aria-busy={loading || props["aria-busy"]}
     />
   )
 }
