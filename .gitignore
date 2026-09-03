@@ -23,6 +23,13 @@
 # misc
 .DS_Store
 *.pem
+/supabase/.temp/cli-latest
+/supabase/.branches/
+/supabase/.audit/
+/supabase/.temp/start-secrets/
+/supabase/live-schema-audit.sql
+/supabase/live-public-schema-audit.sql
+/supabase/local-schema-audit.sql
 
 # debug
 npm-debug.log*

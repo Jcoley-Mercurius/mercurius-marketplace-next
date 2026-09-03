@@ -1,1 +1,56 @@
 project_id = "vugqqyemuptlvcieihww"
+
+[api]
+port = 55421
+
+[db]
+port = 55422
+shadow_port = 55420
+major_version = 17
+
+[studio]
+port = 55423
+
+[local_smtp]
+port = 55424
+
+[analytics]
+port = 55427
+
+[edge_runtime]
+inspector_port = 55426
+
+[functions.checkout-request]
+verify_jwt = true
+
+[functions.refund-invoice]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Recovered from deployed metadata under DEC-2026-002. These preserve the
+# current gateway settings; internal actor/worker checks remain in the source.
+[functions.beta-access]
+verify_jwt = true
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.customer-portal]
+verify_jwt = true
+
+[functions.job-lifecycle-worker]
+verify_jwt = true
+
+[functions.list-payment-methods]
+verify_jwt = true
+
+[functions.loyalty-recommend]
+verify_jwt = true
+
+[functions.vendor-application-notify]
+verify_jwt = true
+
+[functions.vendor-invite]
+verify_jwt = true

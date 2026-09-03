@@ -1,0 +1,8 @@
+{
+  "nodeModulesDir": "none",
+  "lock": "./deno.lock",
+  "imports": {
+    "npm:@supabase/supabase-js@2": "npm:@supabase/supabase-js@2.112.0",
+    "npm:@supabase/supabase-js@2/cors": "npm:@supabase/supabase-js@2.112.0/cors"
+  }
+}

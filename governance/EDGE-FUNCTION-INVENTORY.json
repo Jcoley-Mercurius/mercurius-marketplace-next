@@ -1,0 +1,263 @@
+{
+  "capturedDate": "2026-09-03",
+  "authority": "DEC-2026-002",
+  "functions": [
+    {
+      "slug": "beta-access",
+      "name": "beta-access",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "checkout-request",
+      "name": "checkout-request",
+      "version": 16,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "create-checkout",
+      "name": "create-checkout",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "customer-portal",
+      "name": "customer-portal",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "job-lifecycle-worker",
+      "name": "job-lifecycle-worker",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "list-payment-methods",
+      "name": "list-payment-methods",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "loyalty-recommend",
+      "name": "loyalty-recommend",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "stripe-webhook",
+      "name": "stripe-webhook",
+      "version": 13,
+      "status": "ACTIVE",
+      "verify_jwt": false
+    },
+    {
+      "slug": "vendor-application-notify",
+      "name": "vendor-application-notify",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "vendor-invite",
+      "name": "vendor-invite",
+      "version": 11,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    },
+    {
+      "slug": "refund-invoice",
+      "name": "refund-invoice",
+      "version": 1,
+      "status": "ACTIVE",
+      "verify_jwt": true
+    }
+  ],
+  "files": [
+    {
+      "file": "beta-access/index.ts",
+      "bytes": 3317,
+      "sha256": "79bbf85b23994752ad924df29c6a0e2198b855c34f364bbce7510aebd54e685a",
+      "normalizedSha256": "79bbf85b23994752ad924df29c6a0e2198b855c34f364bbce7510aebd54e685a",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "BETA_ACCESS_CODE",
+        "BETA_TOKEN_SECRET"
+      ]
+    },
+    {
+      "file": "checkout-request/index.ts",
+      "bytes": 21359,
+      "sha256": "cc0f8f21827554db04591949031aa16deff3198881371ec4db9526aefe4bcbe4",
+      "normalizedSha256": "cc0f8f21827554db04591949031aa16deff3198881371ec4db9526aefe4bcbe4",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "NEXT_PUBLIC_SITE_URL",
+        "SITE_URL",
+        "STRIPE_SECRET_KEY",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL",
+        "VERCEL_URL"
+      ]
+    },
+    {
+      "file": "create-checkout/index.ts",
+      "bytes": 7322,
+      "sha256": "91492b699f9bf7db920848a1f656122ec89714fde84924dc149bc77ba5ecb032",
+      "normalizedSha256": "91492b699f9bf7db920848a1f656122ec89714fde84924dc149bc77ba5ecb032",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "STRIPE_SECRET_KEY",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "customer-portal/index.ts",
+      "bytes": 3081,
+      "sha256": "9f5c18a35688b9c714e3bfc05f0edf84804590c180cd87957807fefd8b7e1fa9",
+      "normalizedSha256": "9f5c18a35688b9c714e3bfc05f0edf84804590c180cd87957807fefd8b7e1fa9",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "STRIPE_SECRET_KEY",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "job-lifecycle-worker/index.ts",
+      "bytes": 11813,
+      "sha256": "fca28aa2f96970129fb27fcae8d3772721d8adf94ffe4df3fc5d7502520a64ad",
+      "normalizedSha256": "fca28aa2f96970129fb27fcae8d3772721d8adf94ffe4df3fc5d7502520a64ad",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "JOB_WORKER_SECRET",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "list-payment-methods/index.ts",
+      "bytes": 2914,
+      "sha256": "cb10b4cd0543c8cd0c82d330abb7a1d57d8a0e72386a20b30016d3a5262ef6a7",
+      "normalizedSha256": "cb10b4cd0543c8cd0c82d330abb7a1d57d8a0e72386a20b30016d3a5262ef6a7",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "STRIPE_SECRET_KEY",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "loyalty-recommend/index.ts",
+      "bytes": 4025,
+      "sha256": "955baa90ac369d5d91c3e825013cb7d4bda09e030839113b07ccfda0dc9ad1f6",
+      "normalizedSha256": "955baa90ac369d5d91c3e825013cb7d4bda09e030839113b07ccfda0dc9ad1f6",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "LOVABLE_API_KEY",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "refund-invoice/index.ts",
+      "bytes": 8069,
+      "sha256": "146b9166637d3b00f0ae5b888607b7cf2ec6972b39a8b8d4e0b5c9a40c198a32",
+      "normalizedSha256": "146b9166637d3b00f0ae5b888607b7cf2ec6972b39a8b8d4e0b5c9a40c198a32",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "STRIPE_SECRET_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "stripe-webhook/index.ts",
+      "bytes": 21681,
+      "sha256": "8abb1ed72b3ba24a97bc47353e41827b4b407cf58c81cf460144c3acc4e120c0",
+      "normalizedSha256": "8abb1ed72b3ba24a97bc47353e41827b4b407cf58c81cf460144c3acc4e120c0",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "vendor-application-notify/index.ts",
+      "bytes": 4242,
+      "sha256": "8f527680290d733c1cab8b0709c90ed4912046f2a3c06ecdc6704b33ef62eba9",
+      "normalizedSha256": "8f527680290d733c1cab8b0709c90ed4912046f2a3c06ecdc6704b33ef62eba9",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "LOVABLE_API_KEY",
+        "RESEND_API_KEY",
+        "TEAM_NOTIFICATION_EMAIL",
+        "TEAM_NOTIFICATION_FROM"
+      ]
+    },
+    {
+      "file": "vendor-invite/index.ts",
+      "bytes": 9097,
+      "sha256": "5945bc817db16a90f3e22e9e77deed49e47f9a3b6ced138d1c376f3d4d5159ed",
+      "normalizedSha256": "5945bc817db16a90f3e22e9e77deed49e47f9a3b6ced138d1c376f3d4d5159ed",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": [
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_URL"
+      ]
+    },
+    {
+      "file": "_shared/catalogPricing.ts",
+      "bytes": 7188,
+      "sha256": "5a60370b4c8655b0f90fa3329eaafef7e77ca76e237b5a23c5b1c6fed0c13433",
+      "normalizedSha256": "5a60370b4c8655b0f90fa3329eaafef7e77ca76e237b5a23c5b1c6fed0c13433",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": []
+    },
+    {
+      "file": "_shared/platformFee.ts",
+      "bytes": 457,
+      "sha256": "38f92b587a8bba61e40eafe8570910239e0de59b72d476109a5ce826c5448786",
+      "normalizedSha256": "38f92b587a8bba61e40eafe8570910239e0de59b72d476109a5ce826c5448786",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": []
+    },
+    {
+      "file": "_shared/softLaunch.ts",
+      "bytes": 361,
+      "sha256": "ad68a1582cccb30fb4b399514bd2c77ac120f2061a234edbb28a197b9d02f378",
+      "normalizedSha256": "ad68a1582cccb30fb4b399514bd2c77ac120f2061a234edbb28a197b9d02f378",
+      "credentialFindings": [],
+      "literalCredentialCandidates": [],
+      "environmentNames": []
+    }
+  ]
+}

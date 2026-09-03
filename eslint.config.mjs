@@ -17,6 +17,10 @@ const eslintConfig = defineConfig([
     ".agents/**",
     ".codex/**",
     "supabase/functions/**",
+    "supabase/runtime-tests/**", // Checked separately by Deno.
+    "supabase/.temp/**",
+    "supabase/.audit/**",
+    "supabase/.branches/**",
   ]),
 ]);
 
