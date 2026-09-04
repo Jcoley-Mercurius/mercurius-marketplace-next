@@ -1,12 +1,18 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
-## Current follow-ups: commercial sources and direct ACH eligibility
+## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
 PRs #4–7 are merged. TRACE-054 binds checkout to accepted quote revisions and
 eligible fixed offerings, while TRACE-055 binds payout eligibility to authenticated
 lifecycle confirmation receipts and current dispute/appeal evidence. See
 PHASE-5-QUOTE-CHECKOUT.md and PHASE-5-COMPLETION-PAYOUT.md for exact behavior,
 measured evidence and limitations.
+
+TRACE-056 binds the canonical customer-cancellation assessment to deterministic
+per-payment refund allocations and the existing dual-reviewed refund kernel. See
+PHASE-5-CANCELLATION-REFUNDS.md. Zero-refund outcomes create no provider work;
+provider cancellations remain blocked until acceptable-replacement exhaustion is
+recorded.
 
 The quote/checkout slice implements accepted
 quote/eligible fixed-offering source capture, source-bound snapshot publication,
@@ -25,9 +31,10 @@ after statement preparation blocks submission, while an already submitted bank
 outcome remains recordable under a later hold so the ledger stays truthful. No bank
 transfer, deployment or scheduler is initiated.
 
-Remaining work includes cancellation/refund linkage, recurring identities, vendor
-matching/private onboarding evidence, tax and promotion configuration, finance
-tooling, recovery and cutover, authorized provider checks, and manual acceptance.
+Remaining work includes provider-cancellation/no-replacement linkage, recurring
+identities, vendor matching/private onboarding evidence, tax and promotion
+configuration, finance tooling, recovery and cutover, authorized provider checks,
+and manual acceptance.
 
 ## Original independent checkpoint
 
