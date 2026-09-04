@@ -38,6 +38,8 @@ jobs:
         run: sh scripts/phase5-db.sh test
       - name: Concurrent checkout, webhook and refund reservations
         run: node scripts/phase5-concurrency.mjs
+      - name: Concurrent lifecycle appeals and ACH preparation
+        run: node scripts/phase5-payout-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay

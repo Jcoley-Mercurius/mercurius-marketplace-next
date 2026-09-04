@@ -146,6 +146,11 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
+**Completion/payout follow-up:** TRACE-055 connects the merged lifecycle to direct
+ACH using authenticated confirmation receipts and live dispute/appeal gates.
+See PHASE-5-COMPLETION-PAYOUT.md. This starts independently from main 9aeed8f while
+quote/checkout PR #7 remains draft. Phase 5 acceptance and Phase 6 remain pending.
+
 **Checkpoint 2026-09-04:** Independent bounded slices are implemented for review on
 `codex/phase5-money-integrity`, now combined with main `735df91` after PRs #4 and #5
 merged. Lifecycle code is included; functional adapters remain open. DEC-2026-011 records

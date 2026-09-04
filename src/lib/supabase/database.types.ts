@@ -1804,6 +1804,48 @@ export type Database = {
           },
         ]
       }
+      money_lifecycle_confirmations: {
+        Row: {
+          confirmed_at: string
+          contractor_id: string
+          created_at: string
+          homeowner_id: string
+          id: string
+          request_id: string
+        }
+        Insert: {
+          confirmed_at: string
+          contractor_id: string
+          created_at?: string
+          homeowner_id: string
+          id?: string
+          request_id: string
+        }
+        Update: {
+          confirmed_at?: string
+          contractor_id?: string
+          created_at?: string
+          homeowner_id?: string
+          id?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_lifecycle_confirmations_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_lifecycle_confirmations_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_obligations: {
         Row: {
           captured: number

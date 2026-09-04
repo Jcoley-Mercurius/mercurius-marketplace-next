@@ -26,7 +26,11 @@ Every material rebuild item must connect approved intent to implementation and e
 | TRACE-052 | Owner-operated weekly direct ACH, 48-hour confirmation eligibility, holds and statements | MPS §6.5; CFG-005; DEC-2026-011 | 5 | Confirmation integration port, seven-day batches, immutable statements, transfer outcome and retry evidence | SQL eligibility, bank failure/unknown/return/retry and dispute hold cases | Phase 4 confirmation/dispute adapter, reviewed bank forms and actual bank statement reconciliation remain | IN PROGRESS |
 | TRACE-053 | Versioned vendor vetting, licensing/insurance, activation, invitations and renewal | MPS §§5.3–5.5; CFG-011; DEC-2026-011 | 5 | Application revisions, version-bound compliance, guarded activation/suspension/renewal, invitation evidence | SQL actor/checklist/expiry/reapplication cases; invitation handler role-negative tests | Document sufficiency, private bank collection, Auth/delivery, matching and retention integration remain | IN PROGRESS |
 
+| TRACE-055 | Authoritative homeowner completion and live dispute/appeal gates for weekly direct ACH | MPS �6.5; CFG-008; DEC-006/009/011 | 5 | Immutable lifecycle receipts; source-bound completion; lifecycle locks before ACH preparation/submission/retry | SQL 024 and existing 020; two-order appeal/batch concurrency; PHASE-5-COMPLETION-PAYOUT.md | Final-head CI/review, bank operations acceptance, receipt/reconfirmation and already-paid recovery remain; no runtime dependency on unmerged PR #7 | IN PROGRESS |
+
 Phase 5 IDs start at 050 to avoid the unmerged Phase 4 traceability range.
 See PHASE-5-HANDOFF.md for acceptance gates and dependencies. No Phase 5 phase-complete claim.
 
 Status values: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `COMPLETE`, `DEPRECATED`.
+
+| TRACE-055 | Authoritative homeowner completion and live dispute/appeal gates for weekly direct ACH | MPS §6.5; CFG-008; DEC-006/009/011 | 5 | Immutable lifecycle receipts; source-bound completion; lifecycle locks before ACH preparation/submission/retry | SQL 024 and existing 020; two-order appeal/batch concurrency; PHASE-5-COMPLETION-PAYOUT.md | Final-head CI/review, bank operations acceptance, receipt/reconfirmation and already-paid recovery remain; no runtime dependency on unmerged PR #7 | IN PROGRESS |

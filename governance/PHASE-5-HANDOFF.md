@@ -1,5 +1,22 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
+## Current follow-up: completion and direct ACH
+
+PRs #4–6 are merged. PR #7 (quotes/checkout) was verified draft and unmerged;
+`codex/phase5-completion-payout` starts independently from main 9aeed8f. TRACE-055
+binds payout eligibility to authenticated lifecycle confirmation receipts and
+current dispute/appeal evidence, with transaction locks at preparation, submission
+and retry. See PHASE-5-COMPLETION-PAYOUT.md for characterization and validation.
+
+The 48-hour clock uses homeowner confirmation; resolved disputes do not restart it.
+Bank settlement already in flight remains recordable under a new hold. No bank
+transfer, deployment or scheduler is initiated. Phase 5 remains open, including
+PR #7 acceptance, cancellation/refund linkage, recurring identities, onboarding
+integration, finance tooling, recovery/cutover and authorized provider/manual gates.
+
+The original independent checkpoint and dependencies below are historical; the
+current follow-up evidence supersedes the still-unconnected completion port.
+
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
 at fetched main d8cceee30a934c17804a0f507cb41c289dc8e417 in a separate worktree.
 PR #4 was rechecked OPEN, draft, unmerged at 91bc94f. Its branch and worktree were
