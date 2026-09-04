@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(19);
 
 select is(
   (select count(*)
@@ -128,10 +128,18 @@ select is(
    cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE']) as permission(name)
    where n.nspname = 'public'
      and c.relkind in ('r', 'p')
+     and c.relname not like 'money\_%' escape '\'
+     and c.relname not in ('vendor_application_versions','vendor_onboarding','vendor_compliance_evidence','vendor_onboarding_events','vendor_invitation_attempts','vendor_invitation_events')
      and not has_table_privilege('service_role', c.oid, permission.name)),
   0::bigint,
-  'service role retains complete database access for trusted server workflows'
+  'service role retains recovered access outside the Phase 5 RPC-only boundary'
 );
+
+select is((select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relkind in ('r','p') and (c.relname like 'money\_%' escape '\'
+    or c.relname in ('vendor_application_versions','vendor_onboarding','vendor_compliance_evidence','vendor_onboarding_events','vendor_invitation_attempts','vendor_invitation_events'))
+    and has_table_privilege('service_role',c.oid,'INSERT,UPDATE,DELETE')),0::bigint,
+  'Phase 5 service writes require invariant-enforcing RPCs');
 
 select * from finish();
 rollback;

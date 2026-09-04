@@ -80,4 +80,3 @@ BEGIN
   RETURN result;
 END;
 $$;
-

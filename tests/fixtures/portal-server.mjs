@@ -57,6 +57,14 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {
     const table = url.pathname.split("/").pop();
+    if (table === "money_snapshots") {
+      if (user.testRole !== 'homeowner') return send({ message: 'Synthetic owner mismatch' }, 404);
+      const id = url.searchParams.get('id')?.replace('eq.', '') ?? '00000000-0000-4000-8000-000000000030';
+      return send({ id, obligation_id: '00000000-0000-4000-8000-000000000031', invoice_number: 'M5-SYNTHETIC-001',
+        service: 10000, addons: 2000, discount: 1000, adjustment: -1000, tax: 700, tip: 1000, deposit: 3000, total: 11700,
+        policy_version: 'CFG-005 / synthetic-v1', expires_at: new Date(Date.now() + (id.endsWith('32') ? -3600000 : 3600000)).toISOString() });
+    }
+    if (table === "money_obligations") return send({ current_snapshot_id: '00000000-0000-4000-8000-000000000030', captured: 0, refunded_service: 0, refunded_tax: 0, refunded_tip: 0 });
     if (table === "user_roles") return send([{ role: user.testRole }]);
     if (table === "invoices") return send([{ id: "00000000-0000-4000-8000-000000000020", invoice_number: "MDS-INV-001", amount: 125, status: "pending", created_at: now.toISOString(), paid_at: null }]);
     if (table === "reviews") return send([]);

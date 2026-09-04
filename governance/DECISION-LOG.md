@@ -23,6 +23,53 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-011 — Phase 5 independent contracts and bank-operated ACH
+
+**Status:** APPROVED owner direction; implementation choices below use the owner's delegated chargeback discretion.
+**Date:** 2026-09-04 UTC.
+
+The owner authorized a clean Phase 5 branch from current remote main in a separate
+worktree, without taking unmerged PR #4 code. Main was fetched at d8cceee; PR #4
+was OPEN and unmerged at 91bc94f. Phase 4 schema integration and owner acceptance
+remain dependencies, not assumptions or duplicated implementations.
+
+The owner will initiate weekly ACH directly from Mercurius's bank account and
+collect the relevant authorization forms during onboarding. There is no ACH API
+processor selection to make and no Stripe Connect integration. Store private
+form/evidence references, statements and bank outcomes; never bank credentials or
+full account details in events, fixtures, logs or exports. Weekly reporting
+periods span seven days and do not overlap; no bank submission weekday is invented.
+
+Every vendor must have reviewed, current licensing and insurance evidence.
+Category/jurisdiction-specific document sufficiency is reviewed against an explicit
+requirement version; uploading a file or accepting an invitation is not activation.
+No arbitrary licence exemption, insurance limit or bank-form expiry is inferred.
+
+The owner delegated chargeback treatment. Selected policy: hold disputed funds;
+Mercurius absorbs processor and dispute fees; allocate lost unpaid principal to
+reviewed service/tax/tip components and recompute the fee on retained service.
+Scheduled or already-paid funds require a separate recovery review. No automatic
+vendor bank debit, clawback, or netting of future unrelated earnings is authorized.
+Chargebacks are not labelled customer refunds. Fee rounding follows the recovered
+nearest-cent convention; provider proceeds receive the remainder so totals balance.
+
+MPS §6.5 second-person review is enforced for the new reviewed financial commands
+by a separately authenticated approval of the exact command. No finance members
+or real approvals are seeded. Release must establish the two authorized operators.
+
+Tax calculation/remittance evidence and complete promotion terms remain required
+configuration. Test fixtures are not approved real tax or promotion policy.
+No live charges/refunds/payouts/emails, production changes, deployment, merge,
+Cron activation, or Homeschool Haven changes are authorized.
+
+### September 4 repository merge authorization
+
+After the independent checkpoints above, the owner authorized merging PRs #4 and
+#5, then resolving PR #6's conflicts, requesting CodeRabbit review and merging its
+repository checkpoint. This later instruction supersedes earlier no-merge wording
+for these PRs only. Production changes, deployment, money/email execution and Cron
+activation remain outside that authorization. See PR-6-MERGE-RECONCILIATION.md.
+
 ### DEC-2026-004 — Approve Phase 2 checkpoint and defer lifecycle activation
 
 **Status:** APPROVED

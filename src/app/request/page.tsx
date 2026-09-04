@@ -56,7 +56,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
-import { paymentFunctionError } from "@/lib/payments";
+import { paymentFunctionError, sameOriginReviewUrl } from "@/lib/payments";
 import {
   resolveRequestCoverage,
   type RequestCoverageResult,
@@ -741,6 +741,11 @@ export default function RequestServicePage() {
         const { data: checkout, error: checkoutError } = await supabase.functions.invoke("checkout-request", {
           body: { request_id: payable.id },
         });
+        const reviewUrl = checkoutError ? null : sameOriginReviewUrl(checkout?.review_url, window.location.origin);
+        if (reviewUrl) {
+          window.location.assign(reviewUrl);
+          return;
+        }
         if (!checkoutError && typeof checkout?.url === "string") {
           toast.success("Request saved", { description: "Taking you to Stripe to complete secure payment." });
           window.location.assign(checkout.url);

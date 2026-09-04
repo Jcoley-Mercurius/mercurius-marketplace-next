@@ -1190,6 +1190,1077 @@ export type Database = {
           },
         ]
       }
+      money_ach_attempts: {
+        Row: {
+          approved_by: string
+          attempt_number: number
+          bank_reference: string | null
+          created_at: string
+          created_by: string
+          id: string
+          item_id: string
+          status: string
+        }
+        Insert: {
+          approved_by: string
+          attempt_number: number
+          bank_reference?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          item_id: string
+          status?: string
+        }
+        Update: {
+          approved_by?: string
+          attempt_number?: number
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          item_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_ach_attempts_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "money_ach_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_ach_batches: {
+        Row: {
+          approved_by: string
+          bank_authorization_ref: string
+          created_at: string
+          created_by: string
+          id: string
+          period_end: string
+          period_start: string
+          reason: string
+        }
+        Insert: {
+          approved_by: string
+          bank_authorization_ref: string
+          created_at?: string
+          created_by: string
+          id?: string
+          period_end: string
+          period_start: string
+          reason: string
+        }
+        Update: {
+          approved_by?: string
+          bank_authorization_ref?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+          reason?: string
+        }
+        Relationships: []
+      }
+      money_ach_events: {
+        Row: {
+          actor: string
+          attempt_id: string
+          business_key: string
+          created_at: string
+          evidence: string
+          id: string
+          previous_status: string
+          status: string
+        }
+        Insert: {
+          actor: string
+          attempt_id: string
+          business_key: string
+          created_at?: string
+          evidence: string
+          id?: string
+          previous_status: string
+          status: string
+        }
+        Update: {
+          actor?: string
+          attempt_id?: string
+          business_key?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          previous_status?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_ach_events_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "money_ach_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_ach_items: {
+        Row: {
+          amount: number
+          bank_evidence_id: string
+          batch_id: string
+          confirmation_ref: string
+          contractor_id: string
+          created_at: string
+          id: string
+          obligation_id: string
+          platform_fee: number
+          service_retained: number
+          snapshot_id: string
+          tip_retained: number
+        }
+        Insert: {
+          amount: number
+          bank_evidence_id: string
+          batch_id: string
+          confirmation_ref: string
+          contractor_id: string
+          created_at?: string
+          id?: string
+          obligation_id: string
+          platform_fee: number
+          service_retained: number
+          snapshot_id: string
+          tip_retained: number
+        }
+        Update: {
+          amount?: number
+          bank_evidence_id?: string
+          batch_id?: string
+          confirmation_ref?: string
+          contractor_id?: string
+          created_at?: string
+          id?: string
+          obligation_id?: string
+          platform_fee?: number
+          service_retained?: number
+          snapshot_id?: string
+          tip_retained?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_ach_items_bank_evidence_id_fkey"
+            columns: ["bank_evidence_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_compliance_evidence"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "money_ach_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_items_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_items_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: true
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_items_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_authorities: {
+        Row: {
+          created_at: string
+          granted_by: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted_by: string
+          reason: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      money_chargeback_resolutions: {
+        Row: {
+          actor: string
+          approver: string
+          created_at: string
+          dispute_id: string
+          reason: string
+          service: number
+          tax: number
+          tip: number
+        }
+        Insert: {
+          actor: string
+          approver: string
+          created_at?: string
+          dispute_id: string
+          reason: string
+          service: number
+          tax: number
+          tip: number
+        }
+        Update: {
+          actor?: string
+          approver?: string
+          created_at?: string
+          dispute_id?: string
+          reason?: string
+          service?: number
+          tax?: number
+          tip?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_chargeback_resolutions_dispute_id_fkey"
+            columns: ["dispute_id"]
+            isOneToOne: true
+            referencedRelation: "money_disputes"
+            referencedColumns: ["provider_id"]
+          },
+        ]
+      }
+      money_checkout_attempts: {
+        Row: {
+          amount: number
+          attempt_number: number
+          business_key: string
+          checkout_url: string | null
+          completed_at: string | null
+          created_at: string
+          currency: string
+          customer_id: string
+          expires_at: string
+          failure_code: string | null
+          id: string
+          mode: string
+          obligation_id: string
+          snapshot_id: string
+          status: string
+          stripe_idempotency_key: string
+          stripe_payment_id: string | null
+          stripe_session_id: string | null
+        }
+        Insert: {
+          amount: number
+          attempt_number?: number
+          business_key: string
+          checkout_url?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency: string
+          customer_id: string
+          expires_at: string
+          failure_code?: string | null
+          id?: string
+          mode: string
+          obligation_id: string
+          snapshot_id: string
+          status?: string
+          stripe_idempotency_key: string
+          stripe_payment_id?: string | null
+          stripe_session_id?: string | null
+        }
+        Update: {
+          amount?: number
+          attempt_number?: number
+          business_key?: string
+          checkout_url?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency?: string
+          customer_id?: string
+          expires_at?: string
+          failure_code?: string | null
+          id?: string
+          mode?: string
+          obligation_id?: string
+          snapshot_id?: string
+          status?: string
+          stripe_idempotency_key?: string
+          stripe_payment_id?: string | null
+          stripe_session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_checkout_attempts_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_checkout_attempts_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_completion_evidence: {
+        Row: {
+          confirmed_at: string
+          created_at: string
+          homeowner_id: string
+          obligation_id: string
+          source_ref: string
+        }
+        Insert: {
+          confirmed_at: string
+          created_at?: string
+          homeowner_id: string
+          obligation_id: string
+          source_ref: string
+        }
+        Update: {
+          confirmed_at?: string
+          created_at?: string
+          homeowner_id?: string
+          obligation_id?: string
+          source_ref?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_completion_evidence_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: true
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_dispute_events: {
+        Row: {
+          created_at: string
+          dispute_id: string
+          event_id: string
+          state: string
+        }
+        Insert: {
+          created_at?: string
+          dispute_id: string
+          event_id: string
+          state: string
+        }
+        Update: {
+          created_at?: string
+          dispute_id?: string
+          event_id?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_dispute_events_dispute_id_fkey"
+            columns: ["dispute_id"]
+            isOneToOne: false
+            referencedRelation: "money_disputes"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "money_dispute_events_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "money_webhook_events"
+            referencedColumns: ["event_id"]
+          },
+        ]
+      }
+      money_disputes: {
+        Row: {
+          amount: number
+          created_at: string
+          obligation_id: string
+          payment_id: string
+          provider_id: string
+          status: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          obligation_id: string
+          payment_id: string
+          provider_id: string
+          status: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          obligation_id?: string
+          payment_id?: string
+          provider_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_disputes_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_event_exclusions: {
+        Row: {
+          actor: string
+          approver: string
+          created_at: string
+          event_id: string
+          evidence: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          approver: string
+          created_at?: string
+          event_id: string
+          evidence: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          approver?: string
+          created_at?: string
+          event_id?: string
+          evidence?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_event_exclusions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "money_webhook_events"
+            referencedColumns: ["event_id"]
+          },
+        ]
+      }
+      money_event_replays: {
+        Row: {
+          actor: string
+          created_at: string
+          event_id: string
+          id: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          created_at?: string
+          event_id: string
+          id?: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_event_replays_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "money_webhook_events"
+            referencedColumns: ["event_id"]
+          },
+        ]
+      }
+      money_hold_resolutions: {
+        Row: {
+          actor: string
+          created_at: string
+          evidence: string
+          hold_id: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          created_at?: string
+          evidence: string
+          hold_id: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          evidence?: string
+          hold_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_hold_resolutions_hold_id_fkey"
+            columns: ["hold_id"]
+            isOneToOne: true
+            referencedRelation: "money_holds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_holds: {
+        Row: {
+          actor: string
+          business_key: string
+          created_at: string
+          evidence: string
+          id: string
+          obligation_id: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          business_key: string
+          created_at?: string
+          evidence: string
+          id?: string
+          obligation_id: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          business_key?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          obligation_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_holds_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_journals: {
+        Row: {
+          business_key: string
+          created_at: string
+          evidence: string
+          id: string
+          kind: string
+          lines: Json
+          obligation_id: string
+        }
+        Insert: {
+          business_key: string
+          created_at?: string
+          evidence: string
+          id?: string
+          kind: string
+          lines: Json
+          obligation_id: string
+        }
+        Update: {
+          business_key?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          kind?: string
+          lines?: Json
+          obligation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_journals_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_obligations: {
+        Row: {
+          captured: number
+          contractor_id: string
+          created_at: string
+          current_snapshot_id: string | null
+          customer_id: string
+          dispute_open: boolean
+          id: string
+          reconciliation_open: boolean
+          refunded_service: number
+          refunded_tax: number
+          refunded_tip: number
+          service_request_id: string
+        }
+        Insert: {
+          captured?: number
+          contractor_id: string
+          created_at?: string
+          current_snapshot_id?: string | null
+          customer_id: string
+          dispute_open?: boolean
+          id?: string
+          reconciliation_open?: boolean
+          refunded_service?: number
+          refunded_tax?: number
+          refunded_tip?: number
+          service_request_id: string
+        }
+        Update: {
+          captured?: number
+          contractor_id?: string
+          created_at?: string
+          current_snapshot_id?: string | null
+          customer_id?: string
+          dispute_open?: boolean
+          id?: string
+          reconciliation_open?: boolean
+          refunded_service?: number
+          refunded_tax?: number
+          refunded_tip?: number
+          service_request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_current_snapshot_fk"
+            columns: ["current_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_obligations_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_obligations_service_request_id_fkey"
+            columns: ["service_request_id"]
+            isOneToOne: true
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_reconciliation: {
+        Row: {
+          created_at: string
+          currency: string
+          evidence: string
+          expected: number
+          id: string
+          obligation_id: string
+          observation_key: string
+          observation_sequence: number
+          observed: number
+        }
+        Insert: {
+          created_at?: string
+          currency: string
+          evidence: string
+          expected: number
+          id?: string
+          obligation_id: string
+          observation_key: string
+          observation_sequence?: never
+          observed: number
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          evidence?: string
+          expected?: number
+          id?: string
+          obligation_id?: string
+          observation_key?: string
+          observation_sequence?: never
+          observed?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_reconciliation_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_reconciliation_resolutions: {
+        Row: {
+          actor: string
+          approver: string
+          created_at: string
+          id: string
+          observation_id: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          approver: string
+          created_at?: string
+          id?: string
+          observation_id: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          approver?: string
+          created_at?: string
+          id?: string
+          observation_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_reconciliation_resolutions_observation_id_fkey"
+            columns: ["observation_id"]
+            isOneToOne: true
+            referencedRelation: "money_reconciliation"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_refund_attempt_events: {
+        Row: {
+          amount: number
+          authorization_id: string
+          created_at: string
+          id: string
+          provider_reference: string
+          status: string
+        }
+        Insert: {
+          amount: number
+          authorization_id: string
+          created_at?: string
+          id?: string
+          provider_reference: string
+          status: string
+        }
+        Update: {
+          amount?: number
+          authorization_id?: string
+          created_at?: string
+          id?: string
+          provider_reference?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_attempt_events_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_attempts"
+            referencedColumns: ["authorization_id"]
+          },
+        ]
+      }
+      money_refund_attempts: {
+        Row: {
+          amount: number
+          authorization_id: string
+          created_at: string
+          idempotency_key: string
+          payment_id: string
+          provider_reference: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          authorization_id: string
+          created_at?: string
+          idempotency_key: string
+          payment_id: string
+          provider_reference?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          authorization_id?: string
+          created_at?: string
+          idempotency_key?: string
+          payment_id?: string
+          provider_reference?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_attempts_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: true
+            referencedRelation: "money_refund_authorizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_refund_authorizations: {
+        Row: {
+          approved_by: string
+          business_key: string
+          created_at: string
+          created_by: string
+          id: string
+          obligation_id: string
+          payment_id: string
+          policy_evidence: string
+          reason: string
+          service: number
+          tax: number
+          tip: number
+        }
+        Insert: {
+          approved_by: string
+          business_key: string
+          created_at?: string
+          created_by: string
+          id?: string
+          obligation_id: string
+          payment_id: string
+          policy_evidence: string
+          reason: string
+          service: number
+          tax: number
+          tip: number
+        }
+        Update: {
+          approved_by?: string
+          business_key?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          obligation_id?: string
+          payment_id?: string
+          policy_evidence?: string
+          reason?: string
+          service?: number
+          tax?: number
+          tip?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_authorizations_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_refunds: {
+        Row: {
+          authorization_id: string
+          created_at: string
+          event_id: string
+          provider_ref: string
+        }
+        Insert: {
+          authorization_id: string
+          created_at?: string
+          event_id: string
+          provider_ref: string
+        }
+        Update: {
+          authorization_id?: string
+          created_at?: string
+          event_id?: string
+          provider_ref?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refunds_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: true
+            referencedRelation: "money_refund_authorizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_refunds_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "money_webhook_events"
+            referencedColumns: ["event_id"]
+          },
+        ]
+      }
+      money_review_approvals: {
+        Row: {
+          approved_by: string
+          command_hash: string
+          created_at: string
+          id: string
+          reason: string
+          requested_by: string
+        }
+        Insert: {
+          approved_by: string
+          command_hash: string
+          created_at?: string
+          id?: string
+          reason: string
+          requested_by: string
+        }
+        Update: {
+          approved_by?: string
+          command_hash?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          requested_by?: string
+        }
+        Relationships: []
+      }
+      money_snapshots: {
+        Row: {
+          addons: number
+          adjustment: number
+          approved_by: string
+          created_at: string
+          created_by: string
+          currency: string
+          deposit: number
+          discount: number
+          expires_at: string
+          id: string
+          invoice_number: string
+          obligation_id: string
+          policy_version: string
+          promotion_terms: string | null
+          reason: string
+          revision: number
+          service: number
+          source_version: string
+          subtotal: number
+          tax: number
+          tax_evidence: string
+          tip: number
+          total: number
+        }
+        Insert: {
+          addons: number
+          adjustment: number
+          approved_by: string
+          created_at?: string
+          created_by: string
+          currency: string
+          deposit: number
+          discount: number
+          expires_at: string
+          id?: string
+          invoice_number?: string
+          obligation_id: string
+          policy_version: string
+          promotion_terms?: string | null
+          reason: string
+          revision: number
+          service: number
+          source_version: string
+          subtotal: number
+          tax: number
+          tax_evidence: string
+          tip: number
+          total: number
+        }
+        Update: {
+          addons?: number
+          adjustment?: number
+          approved_by?: string
+          created_at?: string
+          created_by?: string
+          currency?: string
+          deposit?: number
+          discount?: number
+          expires_at?: string
+          id?: string
+          invoice_number?: string
+          obligation_id?: string
+          policy_version?: string
+          promotion_terms?: string | null
+          reason?: string
+          revision?: number
+          service?: number
+          source_version?: string
+          subtotal?: number
+          tax?: number
+          tax_evidence?: string
+          tip?: number
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_snapshots_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_webhook_events: {
+        Row: {
+          attempt_count: number
+          event_id: string
+          event_type: string
+          last_error: string | null
+          next_retry_at: string | null
+          payload: Json
+          processed_at: string | null
+          received_at: string
+          status: string
+        }
+        Insert: {
+          attempt_count?: number
+          event_id: string
+          event_type: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          payload: Json
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          attempt_count?: number
+          event_id?: string
+          event_type?: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          payload?: Json
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
@@ -2428,6 +3499,38 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_application_versions: {
+        Row: {
+          application: Json
+          application_id: string
+          created_at: string
+          id: string
+          revision: number
+        }
+        Insert: {
+          application: Json
+          application_id: string
+          created_at?: string
+          id?: string
+          revision: number
+        }
+        Update: {
+          application?: Json
+          application_id?: string
+          created_at?: string
+          id?: string
+          revision?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_application_versions_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_applications: {
         Row: {
           activated_at: string | null
@@ -2538,6 +3641,248 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contractors"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_compliance_evidence: {
+        Row: {
+          accepted_at: string
+          application_version_id: string
+          contractor_id: string
+          created_at: string
+          evidence_ref: string
+          expires_at: string | null
+          id: string
+          kind: string
+          requirement_version: string
+          reviewed_by: string
+          supersedes: string | null
+        }
+        Insert: {
+          accepted_at: string
+          application_version_id: string
+          contractor_id: string
+          created_at?: string
+          evidence_ref: string
+          expires_at?: string | null
+          id?: string
+          kind: string
+          requirement_version: string
+          reviewed_by: string
+          supersedes?: string | null
+        }
+        Update: {
+          accepted_at?: string
+          application_version_id?: string
+          contractor_id?: string
+          created_at?: string
+          evidence_ref?: string
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          requirement_version?: string
+          reviewed_by?: string
+          supersedes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_compliance_evidence_application_version_id_fkey"
+            columns: ["application_version_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_application_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_compliance_evidence_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+          {
+            foreignKeyName: "vendor_compliance_evidence_supersedes_fkey"
+            columns: ["supersedes"]
+            isOneToOne: true
+            referencedRelation: "vendor_compliance_evidence"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_invitation_attempts: {
+        Row: {
+          application_version_id: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          provider_reference: string | null
+          status: string
+        }
+        Insert: {
+          application_version_id: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          created_by: string
+          expires_at: string
+          id?: string
+          provider_reference?: string | null
+          status?: string
+        }
+        Update: {
+          application_version_id?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          provider_reference?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_invitation_attempts_application_version_id_fkey"
+            columns: ["application_version_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_application_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_invitation_attempts_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+        ]
+      }
+      vendor_invitation_events: {
+        Row: {
+          actor: string
+          attempt_id: string
+          created_at: string
+          evidence: string
+          id: string
+          previous_status: string
+          status: string
+        }
+        Insert: {
+          actor: string
+          attempt_id: string
+          created_at?: string
+          evidence: string
+          id?: string
+          previous_status: string
+          status: string
+        }
+        Update: {
+          actor?: string
+          attempt_id?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          previous_status?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_invitation_events_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_invitation_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_onboarding: {
+        Row: {
+          application_version_id: string
+          contractor_id: string
+          created_at: string
+          revision: number
+          status: string
+        }
+        Insert: {
+          application_version_id: string
+          contractor_id: string
+          created_at?: string
+          revision?: number
+          status?: string
+        }
+        Update: {
+          application_version_id?: string
+          contractor_id?: string
+          created_at?: string
+          revision?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_onboarding_application_version_id_fkey"
+            columns: ["application_version_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_application_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_onboarding_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: true
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_onboarding_events: {
+        Row: {
+          action: string
+          actor: string
+          after_status: string
+          before_status: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          evidence_ids: string[]
+          id: string
+          reason: string
+          revision: number
+        }
+        Insert: {
+          action: string
+          actor: string
+          after_status: string
+          before_status: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          evidence_ids?: string[]
+          id?: string
+          reason: string
+          revision: number
+        }
+        Update: {
+          action?: string
+          actor?: string
+          after_status?: string
+          before_status?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          evidence_ids?: string[]
+          id?: string
+          reason?: string
+          revision?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_onboarding_events_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
           },
         ]
       }
@@ -2848,6 +4193,229 @@ export type Database = {
         Args: { _reason: string; _review_id: string; _state: string }
         Returns: undefined
       }
+      money_approve_review: {
+        Args: { p_command: Json; p_reason: string; p_requested_by: string }
+        Returns: string
+      }
+      money_attach_checkout: {
+        Args: { p_attempt: string; p_session: string; p_url: string }
+        Returns: undefined
+      }
+      money_authorize_refund: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_key: string
+          p_obligation: string
+          p_payment: string
+          p_policy: string
+          p_reason: string
+          p_service: number
+          p_tax: number
+          p_tip: number
+        }
+        Returns: string
+      }
+      money_exclude_event: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_event: string
+          p_evidence: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
+      money_flag_checkout: {
+        Args: { p_attempt: string; p_code: string }
+        Returns: undefined
+      }
+      money_payable: { Args: { p_obligation: string }; Returns: number }
+      money_place_hold: {
+        Args: {
+          p_actor: string
+          p_evidence: string
+          p_key: string
+          p_obligation: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      money_prepare_ach: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_bank_ref: string
+          p_obligations: string[]
+          p_period: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      money_prepare_checkout: {
+        Args: { p_mode: string; p_snapshot: string }
+        Returns: {
+          amount: number
+          attempt_number: number
+          business_key: string
+          checkout_url: string | null
+          completed_at: string | null
+          created_at: string
+          currency: string
+          customer_id: string
+          expires_at: string
+          failure_code: string | null
+          id: string
+          mode: string
+          obligation_id: string
+          snapshot_id: string
+          status: string
+          stripe_idempotency_key: string
+          stripe_payment_id: string | null
+          stripe_session_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "money_checkout_attempts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      money_prepare_refund: {
+        Args: { p_actor: string; p_authorization: string }
+        Returns: {
+          amount: number
+          authorization_id: string
+          created_at: string
+          idempotency_key: string
+          payment_id: string
+          provider_reference: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "money_refund_attempts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      money_process_event: { Args: { p_event: string }; Returns: string }
+      money_process_payment_event: {
+        Args: { p_event: string }
+        Returns: string
+      }
+      money_publish_snapshot: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_request: string
+          p_terms: Json
+        }
+        Returns: string
+      }
+      money_receive_event: {
+        Args: { p_id: string; p_payload: Json; p_type: string }
+        Returns: undefined
+      }
+      money_record_ach: {
+        Args: {
+          p_actor: string
+          p_attempt: string
+          p_bank_ref: string
+          p_evidence: string
+          p_key: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      money_record_completion: {
+        Args: {
+          p_confirmed: string
+          p_homeowner: string
+          p_obligation: string
+          p_source: string
+        }
+        Returns: undefined
+      }
+      money_record_processor_cost: {
+        Args: {
+          p_amount: number
+          p_evidence: string
+          p_obligation: string
+          p_reference: string
+        }
+        Returns: undefined
+      }
+      money_record_reconciliation: {
+        Args: {
+          p_currency: string
+          p_evidence: string
+          p_key: string
+          p_obligation: string
+          p_observed: number
+        }
+        Returns: boolean
+      }
+      money_record_refund_result: {
+        Args: {
+          p_amount: number
+          p_authorization: string
+          p_reference: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      money_replay_event: {
+        Args: { p_actor: string; p_event: string; p_reason: string }
+        Returns: string
+      }
+      money_require_finance: { Args: { p_actor: string }; Returns: undefined }
+      money_require_review: {
+        Args: { p_actor: string; p_approver: string; p_command: Json }
+        Returns: undefined
+      }
+      money_resolve_chargeback_loss: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_dispute: string
+          p_reason: string
+          p_service: number
+          p_tax: number
+          p_tip: number
+        }
+        Returns: undefined
+      }
+      money_resolve_hold: {
+        Args: {
+          p_actor: string
+          p_evidence: string
+          p_hold: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
+      money_resolve_reconciliation: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_observation: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
+      money_retained_parts: {
+        Args: { p_obligation: string }
+        Returns: {
+          service: number
+          tax: number
+          tip: number
+        }[]
+      }
+      money_retry_ach: {
+        Args: { p_actor: string; p_approver: string; p_item: string }
+        Returns: string
+      }
       notify_user: {
         Args: {
           _body: string
@@ -2935,14 +4503,59 @@ export type Database = {
         Returns: Database["public"]["Enums"]["request_status"]
       }
       vendor_accept_job: { Args: { _job_id: string }; Returns: undefined }
+      vendor_begin_review: {
+        Args: { p_contractor: string; p_version: string }
+        Returns: undefined
+      }
       vendor_complete_job: {
         Args: { _job_id: string; _photo_urls: string[] }
         Returns: undefined
+      }
+      vendor_decide_onboarding: {
+        Args: {
+          p_action: string
+          p_contractor: string
+          p_expected_revision: number
+          p_key: string
+          p_reason: string
+        }
+        Returns: number
       }
       vendor_decline_job: {
         Args: { _job_id: string; _reason?: string }
         Returns: undefined
       }
+      vendor_evidence_current: {
+        Args: { p_at: string; p_contractor: string }
+        Returns: boolean
+      }
+      vendor_is_eligible: { Args: { p_contractor: string }; Returns: boolean }
+      vendor_prepare_invitation: {
+        Args: { p_contractor: string; p_expires: string; p_key: string }
+        Returns: string
+      }
+      vendor_record_evidence: {
+        Args: {
+          p_accepted: string
+          p_contractor: string
+          p_expires: string
+          p_kind: string
+          p_ref: string
+          p_requirement: string
+          p_supersedes?: string
+        }
+        Returns: string
+      }
+      vendor_record_invitation: {
+        Args: {
+          p_attempt: string
+          p_evidence: string
+          p_ref: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      vendor_require_operator: { Args: never; Returns: string }
     }
     Enums: {
       app_role:

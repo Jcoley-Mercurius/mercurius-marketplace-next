@@ -1,8 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
-    "deploymentEnabled": {
-      "coderabbit/tighten-worker-workflow-matching-safety/031ff3bf": false
-    }
+    "deploymentEnabled": false
   }
 }
