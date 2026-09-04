@@ -62,6 +62,14 @@ configuration. Test fixtures are not approved real tax or promotion policy.
 No live charges/refunds/payouts/emails, production changes, deployment, merge,
 Cron activation, or Homeschool Haven changes are authorized.
 
+### September 4 repository merge authorization
+
+After the independent checkpoints above, the owner authorized merging PRs #4 and
+#5, then resolving PR #6's conflicts, requesting CodeRabbit review and merging its
+repository checkpoint. This later instruction supersedes earlier no-merge wording
+for these PRs only. Production changes, deployment, money/email execution and Cron
+activation remain outside that authorization. See PR-6-MERGE-RECONCILIATION.md.
+
 ### DEC-2026-004 — Approve Phase 2 checkpoint and defer lifecycle activation
 
 **Status:** APPROVED

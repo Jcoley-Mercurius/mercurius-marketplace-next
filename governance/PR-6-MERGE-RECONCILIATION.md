@@ -20,6 +20,9 @@ Local clean reconstruction through the combined Phase 4 and Phase 5 migrations p
 
 ## CodeRabbit review disposition
 
+The follow-up source passed local TypeScript, lint, credential scanning, 84 unit
+tests and 293 SQL assertions. Final CI repeats these checks from a clean checkout.
+
 Confirmed follow-ups: remove stale copied migrations/tests before preparing the isolated stack; safely validate checkout review URLs in both request and dashboard paths; normalize invalid checkout modes; use neutral webhook receipt-failure wording; restrict direct homeowner reads of internal snapshot/attempt metadata while retaining the displayed policy version; allow revoking an unsent invitation; align decision references and partitioned-table permission assertions. Forward migration `20260905009000` and focused SQL/URL tests cover the relevant changes.
 
 The migration-date suggestion is not applied: migration prefixes order execution, and the future-prefixed files were actually validated September 4. The report now states this explicitly.
