@@ -29,4 +29,6 @@ Every material rebuild item must connect approved intent to implementation and e
 Phase 5 IDs start at 050 to avoid the unmerged Phase 4 traceability range.
 See PHASE-5-HANDOFF.md for acceptance gates and dependencies. No Phase 5 phase-complete claim.
 
+| TRACE-054 | Bind checkout to authoritative accepted quotes and eligible fixed offerings | MPS §§6.3/6.5; MTS snapshot authority; DEC-007/008/011 | 5 | Source preview/capture, strict public snapshot/checkout adapters and request-source guard; migration 20260905010000 | SQL 023 and source-bound concurrent publication/checkout; PHASE-5-QUOTE-CHECKOUT.md | Full quote-breakdown presentation, finance workbench, configuration and provider acceptance remain explicit gates | IN PROGRESS |
+
 Status values: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `COMPLETE`, `DEPRECATED`.

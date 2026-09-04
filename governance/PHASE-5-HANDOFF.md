@@ -1,5 +1,26 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
+## Current follow-up: quotes and checkout
+
+PRs #4–6 are now merged. The original baseline narrative below is historical.
+`codex/phase5-quote-checkout` implements TRACE-054 against main 9aeed8f: accepted
+quote/eligible fixed-offering source capture, source-bound snapshot publication,
+stale-source guards and idempotent checkout. See PHASE-5-QUOTE-CHECKOUT.md for exact
+behavior, measured evidence and limitations. This does not close all of Phase 5.
+
+The quote amount remains the accepted **total**. Full allocation is separately
+reviewed and displayed by checkout. An already reserved agreement and its deposit
+balance retain their price despite later catalog edits. New unreserved stale terms
+require renewed review. Request-bound source changes remain blocked across an
+uncertain provider attempt.
+
+Remaining work: full commercial quote presentation/finance workbench and authorized
+provider verification; tax/promotion configuration; completion/dispute-to-payout
+and cancellation-to-refund adapters; recurring payment identities; vendor matching
+eligibility, private onboarding evidence and financial recovery/cutover operations.
+
+## Original independent checkpoint
+
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
 at fetched main d8cceee30a934c17804a0f507cb41c289dc8e417 in a separate worktree.
 PR #4 was rechecked OPEN, draft, unmerged at 91bc94f. Its branch and worktree were
