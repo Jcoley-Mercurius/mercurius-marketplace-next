@@ -99,12 +99,12 @@ select throws_ok($$select public.transition_job_status('43000000-0000-4000-8000-
 reset role;
 
 insert into public.service_requests(id,customer_id,service_type,address) values
- ('43000000-0000-4000-8000-000000000006','41000000-0000-4000-8000-000000000001','Synthetic cancellation','Synthetic fixture');
+ ('43000000-0000-4000-8000-000000000007','41000000-0000-4000-8000-000000000001','Synthetic cancellation','Synthetic fixture');
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"41000000-0000-4000-8000-000000000001"}',true);
-select throws_ok($$delete from public.service_requests where id='43000000-0000-4000-8000-000000000006'$$,'42501',null,'cancellation cannot delete request history');
-select lives_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000006','cancelled','Homeowner cancelled pending request')$$,'homeowner can cancel through audited transition');
-select is((select status::text from public.service_requests where id='43000000-0000-4000-8000-000000000006'),'cancelled','cancelled row is retained');
+select throws_ok($$delete from public.service_requests where id='43000000-0000-4000-8000-000000000007'$$,'42501',null,'cancellation cannot delete request history');
+select lives_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000007','cancelled','Homeowner cancelled pending request')$$,'homeowner can cancel through audited transition');
+select is((select status::text from public.service_requests where id='43000000-0000-4000-8000-000000000007'),'cancelled','cancelled row is retained');
 reset role;
 
 select * from finish();
