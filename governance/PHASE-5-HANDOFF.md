@@ -1,9 +1,14 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
-## Current follow-up: quotes and checkout
+## Current follow-ups: commercial sources and direct ACH eligibility
 
-PRs #4–6 are now merged. The original baseline narrative below is historical.
-`codex/phase5-quote-checkout` implements TRACE-054 against main 9aeed8f: accepted
+PRs #4–7 are merged. TRACE-054 binds checkout to accepted quote revisions and
+eligible fixed offerings, while TRACE-055 binds payout eligibility to authenticated
+lifecycle confirmation receipts and current dispute/appeal evidence. See
+PHASE-5-QUOTE-CHECKOUT.md and PHASE-5-COMPLETION-PAYOUT.md for exact behavior,
+measured evidence and limitations.
+
+The quote/checkout slice implements accepted
 quote/eligible fixed-offering source capture, source-bound snapshot publication,
 stale-source guards and idempotent checkout. See PHASE-5-QUOTE-CHECKOUT.md for exact
 behavior, measured evidence and limitations. This does not close all of Phase 5.
@@ -14,10 +19,15 @@ balance retain their price despite later catalog edits. New unreserved stale ter
 require renewed review. Request-bound source changes remain blocked across an
 uncertain provider attempt.
 
-Remaining work: full commercial quote presentation/finance workbench and authorized
-provider verification; tax/promotion configuration; completion/dispute-to-payout
-and cancellation-to-refund adapters; recurring payment identities; vendor matching
-eligibility, private onboarding evidence and financial recovery/cutover operations.
+The completion/payout slice validates the original homeowner-confirmation clock at
+preparation, submission and retry. Resolved disputes do not restart it; an appeal
+after statement preparation blocks submission, while an already submitted bank
+outcome remains recordable under a later hold so the ledger stays truthful. No bank
+transfer, deployment or scheduler is initiated.
+
+Remaining work includes cancellation/refund linkage, recurring identities, vendor
+matching/private onboarding evidence, tax and promotion configuration, finance
+tooling, recovery and cutover, authorized provider checks, and manual acceptance.
 
 ## Original independent checkpoint
 

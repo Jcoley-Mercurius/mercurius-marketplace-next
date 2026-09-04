@@ -132,8 +132,11 @@ select public.vendor_record_invitation((select id from f where key='invite'),'ac
 select is((select count(*) from public.vendor_onboarding_events),4::bigint,'Invite acceptance does not add activation event');
 
 -- Owner bank ACH: eligibility is explicit; no provider calls occur.
-select throws_ok($$select public.money_payable((select id from f where key='obligation'))$$,'P0001','48 hours after homeowner confirmation required','Vendor completion alone cannot release funds');
-select public.money_record_completion((select id from f where key='obligation'),'51000000-0000-4000-8000-000000000001',now()-interval '48 hours','synthetic-homeowner-confirmation');
+select throws_ok($$select public.money_payable((select id from f where key='obligation'))$$,'P0001','Verified lifecycle confirmation required','Vendor completion alone cannot release funds');
+-- Privileged synthetic historical receipt; public homeowner capture is exercised in 024.
+update public.service_requests set status='completed',homeowner_confirmed_at=now()-interval '48 hours' where id='54000000-0000-4000-8000-000000000001';
+insert into public.money_lifecycle_confirmations(request_id,homeowner_id,contractor_id,confirmed_at)
+ values('54000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001',now()-interval '48 hours');
 select is(public.money_payable((select id from f where key='obligation')),7800::bigint,'Eligible exactly at 48h, retained subtotal and full tip');
 insert into f values('hold',public.money_place_hold((select id from f where key='obligation'),'dispute-test','51000000-0000-4000-8000-000000000003','Dispute','synthetic-ticket'));
 select throws_ok($$select public.money_payable((select id from f where key='obligation'))$$,'P0001','Unresolved payout hold','Dispute stays held after 48h');
