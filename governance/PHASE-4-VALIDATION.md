@@ -1,116 +1,65 @@
-# Phase 4 validation checkpoint
+# Phase 4 validation and acceptance
 
-Status: IN PROGRESS — bounded implementation; full Phase 4 acceptance is not claimed.
-Date: 2026-09-03. Branch: `codex/lifecycle-reconciliation`.
-Starting base: then-unmerged PR #3 at `91379e9ba657624fecf4c6ea7e2db39c8cfd572e`.
-Draft base: verified merge on main, `db3f4061f65f84ccd8bbb08e9c71301167bd6250`,
-whose tree is identical to the Phase 3 head.
+Status: implementation submitted for owner review; final-head CI and acceptance remain gates.
+Recorded: 2026-09-03 (local) / 2026-09-04 UTC.
+Branch: `codex/lifecycle-reconciliation`, draft PR #4 against `main`.
 
-## Implemented slices
+PR #3 was verified open with passing CI at `91379e9` before implementation.
+Its later merge `db3f4061f65f84ccd8bbb08e9c71301167bd6250` has the same tree;
+this is the Phase 4 base. Owner acceptance of Phase 3 is recorded in DEC-005.
+No unperformed manual checks are represented as passed.
 
-1. **Caller and transition safety:** explicit service-role detection; homeowner-only
-   confirmation; admin reasons; no caller-supplied photo-count bypass; duplicate
-   rejection; protected direct writes; append-only browser audit history;
-   metadata cannot override actor/from/to/reason; real `status_changed` events.
-   Invoker triggers permit checked security-definer RPCs while rejecting browser
-   edits to protected fields. Vendor start and homeowner scheduling must respect
-   vendor acceptance.
-2. **Matching:** shared locking and affected-row checks on expiry; no resurrection
-   of terminal/accepted requests; acceptance immediately schedules under DEC-007.
-   Removed the old assignment trigger that replaced canonical package snapshots
-   with a second offer and advertised 24 hours. The canonical offer transaction
-   now owns its four-hour notice and audit. Missing legacy JWT role claims cannot
-   bypass admin authorization. Expiry is inclusive at the deadline.
-3. **Worker:** default-disabled Edge handler calls one transactional SQL batch.
-   Per-run IDs and committed row markers prevent repeat effects. Notices, review
-   flags, job events and successful run records commit together. Database/transport
-   failures return non-2xx and privacy-minimized correlation logs. At 72 hours
-   after notice, flag admin review; never confirm completion or alter money state.
-4. **Cancellation and quote decision:** pending cancellation retains the row and
-   audit instead of deleting it. Cancellation withdraws pending offers. Declining
-   a quote records its time, withdraws outstanding offers, and requests operator
-   follow-up without cancelling the request. Quote approval records a decision;
-   vendor acceptance controls scheduling. Quote validity is still unspecified.
-   Pure CFG-006 time-boundary helpers classify cancellation/rescheduling intent;
-   they do not issue refunds or charge fees.
-5. **MDS consumers:** admin status corrections use shared reason-bearing
-   ConfirmAction and canonical Status projection. Homeowner concern reporting
-   opens a dispute with a reason instead of claiming vendor work has started.
-   Existing focus/error, mobile and dark-mode patterns are retained.
+## Implementation delivered
 
-Historical migrations and Phase 3 commits are preserved. The original worker is
-archived at `supabase/recovered/job-lifecycle-worker.phase2.ts`; the existing
-export fingerprint test now checks that immutable evidence. Current worker tests
-verify the forward implementation separately.
+- Actor-safe canonical transitions, checked completion evidence, retained cancellation history, protected writes and authoritative audit fields. Generic status changes cannot bypass quote revision, completion or dispute-ticket workflows.
+- One exclusive four-hour offer, immediate scheduling on acceptance, shared expiry locks, explicit selected-provider fallback consent and reason-bearing overrides. All eligible fixed and quote providers enter the pool; balanced-v1 weights and deterministic tie breaks are preserved.
+- Immutable 24-hour quote revisions with stale-decision/duplicate guards; decline and expiry remain separate from cancellation. Legacy quotes require review rather than an invented deadline.
+- Forty-eight-hour dispute filing from vendor completion, linked tickets and appeals of each admin resolution. Resolution history is retained; appeals restore the dispute hold flag for Phase 5 consumption.
+- Rating-neutral verified reviews, correction history, reason-bearing moderation and appeal. Legacy private content stays private.
+- Independent recurring visits, appointment instants displayed in Eastern Time, idempotent cancellation/reschedule/exception records and CFG-006/007 assessments. Project-owner tickets carry priority, next action and support-business-hour deadlines.
+- Default-disabled atomic worker: offer/quote expiry, completion notice and 72-hour admin escalation. Run IDs, locks and committed markers prevent duplicated effects. No automatic confirmation or money operations.
+- Shared MDS controls for service changes, fallback consent, quote decisions, dispute appeals and review corrections; mobile/light/dark/focus behavior preserved.
 
-## Recorded local evidence
+See PHASE-4-RECONCILIATION.md for the complete stored-state recovery map and scope boundaries.
 
-| Check | Evidence |
+## Verification evidence
+
+| Check | Result and limits |
 |---|---|
-| Clean replay | Two successful local resets during this work; the later replay included the first six Phase 4 migrations. The final quote-decision migration was subsequently applied and tested locally. CI run 33816965540 reconstructed all migrations successfully at implementation commit 2d74f81. |
-| Database contracts | 96 assertions passed locally; CI run 33816965540 passed all 98 assertions across five rollback-only suites, including the additional vendor-start and homeowner-scheduling authorization checks. |
-| Unit/contract | 62 passed, including every stored status, terminal/admin action restrictions, cancellation/rescheduling boundaries, accepted exceptions and Eastern DST elapsed time. |
-| Edge check | All 11 functions passed frozen Deno 2.9.6 checks. |
-| Edge runtime | All 31 synthetic handler tests passed, including nine current worker cases. No network/process permission. |
-| Authenticated integration | Passed twice, including after clean replay: JWT gateway plus worker secret, two simultaneous HTTP calls, safe retry, one event/notification per business effect, and no confirmation/payment changes. |
-| Scheduler transport | One-off local `pg_net` → gateway → worker → SQL succeeded. Zero `cron.job` rows before and after; no Cron activation. This does not claim a recurring Cron execution. |
-| Application lint/build/browser | Lint passed without warnings; typecheck and one-worker build passed (56 routes). Initial full browser run passed all 48 existing checks and exposed three new nested-dialog focus failures. Parent error focus was corrected; all three new cases then passed, including axe. Full final-head regression remains the CI gate. |
-| Screenshot inspection | Inspected new synthetic 320px admin light/dark and homeowner concern-dialog captures. No clipped controls observed. This is not human screen-reader, true zoom or owner brand approval. |
-| Credential scan | Staged-file credential scan passed. No ignored local worker environment is committed. |
+| Clean database replay | Successful isolated reset through `20260904006000_phase4_candidate_pool.sql`, including reference seed. No live data. |
+| Database contracts | All 185 assertions across 12 rollback-only suites passed after that reset: roles, transitions, exact deadlines, quote revisions, consent, selection/ties, expiry, dispute appeals, review history, operations, recurrence, completion rules and Eastern support calendar. |
+| Authenticated worker integration | Passed again after the final clean reset: concurrent HTTP calls, retry, notification/event deduplication and one-off pg_net transport; no confirmation or money changes. SQL rollback and handler failure cases are separately covered. |
+| Inactive installer | Local synthetic transaction committed only an inactive job, rejected duplicate installation and removed only its own job. Zero active Cron jobs; no recurring execution claimed. Final CI repeats this test. |
+| Unit/contract | All 62 tests passed locally after final presentation filtering; final typecheck also passed. CI reruns all cases. |
+| Edge | Unchanged worker checkpoint: 11 frozen Deno checks and 31 synthetic handler tests passed. Final CI reruns these checks. |
+| Application | Local lint/types passed; one-worker build produced the test artifact. All 55 browser cases passed, including new consent, appeal, cancellation-reason, stable retry key and error-focus tests. Final CI checks the final source, including the subsequent admin-action filtering. |
+| Visual inspection | New 320px service-operation confirmation captures inspected in light/dark; controls and persistent errors were visible without clipping. Existing automated MDS reflow/theme/axe regression passed. This is not manual screen-reader, true browser-zoom or owner brand approval. |
+| Credentials and diff | Staged credential scan and whitespace checks passed before commit; ignored local test environments/logs are excluded. |
 
-## CI implementation checkpoint
+Historical checkpoint [CI run 33816965540](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/33816965540)
+passed the initial implementation at `2d74f81` (98 SQL, 62 unit, 31 Edge runtime,
+11 Edge checks, authenticated integration and 51 browser cases). That checkpoint
+is superseded by the expanded Phase 4 source and is not evidence for new code.
+Final-head CI on draft PR #4 is the current acceptance evidence source.
 
-[CI run 33816965540](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/33816965540)
-passed both sequential jobs at implementation commit `2d74f81`: clean reconstruction,
-98 SQL assertions, 11 frozen Edge checks, 31 handler tests, authenticated concurrent
-worker/retry/pg_net integration with zero Cron jobs, lint, credential scan, types,
-62 unit/contract tests, production dependency audit, one-worker build and all 51
-browser checks. The subsequent evidence/CI-coordination commit changes no application
-or database behavior. Its current-head run remains a draft acceptance check.
+Local verification exposed and corrected a text-encoding problem in a new label,
+Windows shell-script line endings, and a Windows/Linux CLI-path mismatch. Failed
+attempts are not counted as passing evidence. No production data, provider calls,
+email, payment, refunds or payouts were used. CLI credentials remain in memory and
+are not printed. The only enabled worker environment is an ignored synthetic local fixture.
 
-Push and pull-request events now share a branch concurrency key so future pushes
-cannot duplicate heavy CI runs. The initial duplicate push run was cancelled;
-the passing evidence above is the PR run. Git status reported only CodeRabbit,
-with success; the Phase 4 branch's Vercel Git deployments are disabled.
+## Explicit acceptance gates
 
-The first test against the restored local volume found a provider-role assertion
-failure; a clean replay from committed migrations passed it. That restored-volume
-attempt is not acceptance evidence. A test attempted during the final reset's
-restart also failed on incomplete schema readiness; only post-reset runs count.
-The matching suite first exposed the duplicate legacy offer trigger; it passed
-after the forward repair. Test-source quoting mistakes were corrected before
-the reported passing SQL run.
+- [ ] Final-head CI passes clean reconstruction, 185 SQL assertions, 11 Edge checks, 31 runtime tests, authenticated concurrency/retry/pg_net and inactive installation, lint, credential scan, types, 62 unit tests, dependency audit, one-worker build and 55 browser cases.
+- [ ] Owner/code review accepts authority checks, locking, history preservation, legacy recovery, independent quote/dispute/review state, and Phase 3 preservation. Phase 4 owner acceptance has not yet been given.
 
-Fixtures are synthetic, use fixed local ports/container IDs, and roll back or
-delete only their own test records. No production data, function calls, migrations,
-secrets, charges, email or payout operations were used. Local CLI credentials are
-consumed in memory and never printed by the authenticated integration runner.
+The following are separate later gates, not claims of completed testing:
 
-## Explicit draft acceptance gates
+- **Phase 5:** commercial breakdown snapshots, deposits/payment failures, fees/refunds/ledger, ACH, dispute holds and provider onboarding integrity. Lifecycle policy assessments execute no money movements.
+- **Phase 7 / DEC-010:** email/SMS delivery, reminder/backstop/quiet-hour timing and operational alert delivery remain inactive until configured. A separate review-management system remains future work.
+- **Scheduler activation:** target Vault/JWT provisioning, approved cadence, external-scheduler duplicate check, monitoring/retention/stop procedures and explicit activation approval. No recurring scheduler or production work is authorized.
+- **Phase 3 follow-ups:** human screen-reader, true zoom, owner brand/minimum-size/clear-space review and Linux/macOS visual baselines remain separately documented.
 
-- Final-head CI: clean reconstruction, SQL roles/lifecycle, frozen Edge checks,
-  isolated runtime/transport, lint, types, unit tests, build and browser regression.
-- Code review of locking, actor authority, schema compatibility and notification
-  atomicity and preservation of Phase 3 through the verified main merge.
-- Quote revision lineage, quote validity/extension policy, and complete immutable
-  commercial snapshots (money integrity remains Phase 5). No quote-expiry value
-  was approved; four hours is the vendor offer window.
-- Selected-provider fallback consent, complete ranking/candidate-pool acceptance
-  matrix, and reason-bearing force-assignment/release coverage beyond the tested
-  status/quote actions. Existing direct database administrative capabilities are
-  not certified by this checkpoint.
-- Full dispute/appeal and recurring-occurrence contracts, category-specific proof,
-  review moderation/eligibility consolidation, and all legacy status reconciliation.
-- Notification channel/fallback, review solicitation and vendor backstop timers.
-  The old worker's unapproved one-hour/two-day/quiet-hour routines are not active
-  in this worker. In-app completion notice is transactional; email/SMS delivery
-  is not claimed.
-- Inactive installer review, target-environment Vault/JWT provisioning, approved
-  cadence, external-scheduler duplicate check, alert/retention/stop procedures and
-  explicit future activation approval. The installer template was not run.
-- Human screen-reader, true browser zoom, brand approval and Linux/macOS visual
-  baselines remain Phase 3 follow-ups, separately from its accepted closeout.
-
-No merge or deployment is authorized. `vercel.json` disables Git deployments only
-for this Phase 4 branch. Production settings are unchanged. Homeschool Haven must
-remain untouched; heavy checks run sequentially and builds use one worker.
+No merge or deployment. Branch Git deployment remains disabled in `vercel.json`.
+The isolated Mercurius test stack was stopped after final SQL/transport verification, preserving its volume. All 11 Homeschool Haven containers remained running; none was modified.
+Heavy checks are sequential; builds use MERCURIUS_BUILD_WORKERS=1.

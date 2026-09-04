@@ -1,6 +1,6 @@
 # Mercurius Rebuild and Implementation Roadmap
 
-**Status:** READY TO START
+**Status:** IN PROGRESS — Phase 4 implementation review
 **Baseline:** `main` at `94d608a`
 **Authority:** owner-approved MPS, MDS, and MTS
 **Delivery model:** stabilize and rebuild in vertical slices; do not perform a blind rewrite
@@ -105,7 +105,7 @@ Work:
 
 **Owner acceptance:** COMPLETE on 2026-09-03 (DEC-2026-005); manual follow-ups remain separately tracked.
 
-**Status:** IN PROGRESS — component/navigation foundation and critical request/portal slices on `codex/mds-foundation`. See `governance/PHASE-3-VALIDATION.md`; full phase acceptance remains open.
+**Status:** COMPLETE — owner accepted Phase 3; documented manual follow-ups remain separate. See `governance/PHASE-3-VALIDATION.md`.
 
 **Outcome:** critical journeys use an accessible, documented component foundation before large workflow changes.
 
@@ -123,7 +123,7 @@ Work:
 
 ### Phase 4 — Canonical product lifecycle
 
-**Status:** IN PROGRESS — DEC-2026-005/006; see governance/PHASE-4-RECONCILIATION.md.
+**Status:** IN PROGRESS — implementation submitted for verification and owner acceptance under DEC-2026-005–010; see governance/PHASE-4-RECONCILIATION.md and PHASE-4-VALIDATION.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
 
 **Phase 2 handoff (TRACE-010):** replace inherited automatic completion
 confirmation with admin review; define its deadline separately from the four-hour

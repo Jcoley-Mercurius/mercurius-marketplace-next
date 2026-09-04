@@ -155,3 +155,35 @@ approval or mutual appointment confirmation as prerequisites to that scheduling
 transition. The four-hour quote-expiry interpretation was discarded before any
 quote-expiry migration was applied. Quote validity/revision remains an open
 specification, separate from the approved offer window and 72-hour completion review.
+
+### DEC-2026-008 — Homeowner quote approval window
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+Asked how long a price quote remains valid for homeowner approval, the owner
+answered “24 hour for approval.” New quote revisions therefore expire 24 hours
+after being sent. This is separate from the four-hour vendor offer and 72-hour
+completion escalation. Replacing or extending a quote creates a new revision;
+previous revisions and decisions remain in history. No expiry is retroactively
+inferred for a legacy quote that has no recorded notice/deadline.
+
+### DEC-2026-009 — Disputes and rating-neutral reviews
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner approved a 48-hour dispute filing window beginning when the vendor
+marks the work complete. Homeowners may appeal admin resolutions through the
+ticket system. No appeal deadline was specified; none is imposed by this slice.
+Every star rating uses the same moderation rules. A separate review-management
+system is future work. Previously private feedback is not retroactively published.
+
+### DEC-2026-010 — Operational defaults for Phase 4
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner approved at least one completion photo per visit unless a category rule
+requires more; separate jobs for recurring visits; cancellations affecting one
+visit; and moderation for spam, personal information, threats/abuse, or content
+unrelated to the service, never for a low rating alone. Email/reminder timing
+stays inactive until separately configured. These decisions do not authorize
+Cron activation, real messages, charges, refunds, payouts, merge or deployment.

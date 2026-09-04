@@ -1,32 +1,35 @@
 # Phase 4 handoff
 
-Draft review: https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/4
+Draft PR: https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/4
 Branch: `codex/lifecycle-reconciliation`; target: `main`.
 
-Phase 3 is owner-accepted under DEC-2026-005. PR #3 was open/unmerged when Phase 4
-started at its complete head `91379e9`. A later read-only check verified its merge
-at 22:24:42 UTC into `main` as `db3f4061f65f84ccd8bbb08e9c71301167bd6250`.
-That merge has the identical tree to the Phase 3 head. Phase 4 targets this merged
-main, preserving all Phase 3 work. Never merge or deploy without later instruction.
+Phase 3 is owner-accepted (DEC-005). PR #3 was open with passing CI when Phase 4
+started at `91379e9`; its later verified merge `db3f4061f65f84ccd8bbb08e9c71301167bd6250`
+has the identical tree. This branch preserves that work.
 
-Read AGENTS.md, approved systems/configuration, DEC-005–007,
-PHASE-4-RECONCILIATION.md and PHASE-4-VALIDATION.md. The approved timing rules are:
+Read AGENTS.md, the approved MPS/MDS/MTS, configuration decisions, DEC-005–010,
+PHASE-4-RECONCILIATION.md, PHASE-4-VALIDATION.md and TRACEABILITY.md.
 
-- Vendors have four hours to accept an exclusive offer; acceptance immediately
-  schedules the request, including quote-only work. No extra payment or mutual
-  appointment-confirmation prerequisite was authorized for that transition.
-- After an unanswered completion notice, 72 hours triggers admin review, never
-  automatic homeowner confirmation. This does not create payout eligibility.
-- Quote validity remains unspecified; do not reinterpret the four-hour offer
-  window as quote expiry.
+Approved policies now implemented:
 
-The draft contains bounded lifecycle safety, expiry/acceptance reconciliation,
-atomic inactive worker processing, cancellation retention, quote-decision and
-MDS consumer repairs. Full Phase 4 is still open at the explicit acceptance gates
-in the validation report. Payment/refund/ledger/ACH integrity remains Phase 5.
+- Four hours for vendor acceptance; acceptance immediately schedules all service modes.
+- Twenty-four hours for homeowner quote approval; replacements preserve revision history.
+- Forty-eight hours from vendor completion for homeowner dispute filing; admin resolutions may be appealed through tickets.
+- Seventy-two hours after an unanswered completion notice triggers admin review, never automatic confirmation.
+- At least one completion photo unless an approved category rule requires more.
+- Recurring visits are separate jobs; cancellation applies to one visit.
+- All star ratings use the same moderation rules; originals, edits and appeals remain auditable.
 
-No Cron job is active or installed by this implementation. The installer is a
-review template outside migrations. JOB_LIFECYCLE_ENABLED defaults false; the
-only true value used was in an ignored local synthetic test environment.
-Do not stop or modify Homeschool Haven. Keep heavy checks sequential and set
-MERCURIUS_BUILD_WORKERS=1 for builds. Carry manual Phase 3 follow-ups separately.
+Full implementation is submitted for owner review; do not represent Phase 4 as
+owner-accepted until that acceptance is recorded. Final CI is an explicit gate.
+Phase 5 owns immutable commercial breakdowns, checkout, money execution, ledger,
+ACH, holds/reconciliation and provider onboarding. Phase 4 assessments move no money.
+
+The worker defaults disabled. No schedule is installed by migrations. Local tests
+use synthetic data and include an inactive installer transaction, duplicate rejection
+and cleanup; zero active Cron jobs. Email/reminder timing remains inactive under
+DEC-010. Production provisioning/cadence/activation require a separate release decision.
+
+Never merge or deploy without later instruction. Keep branch Git deployment disabled.
+Do not stop or modify Homeschool Haven. Run heavy checks sequentially, with
+MERCURIUS_BUILD_WORKERS=1. Preserve manual Phase 3 accessibility/brand follow-ups separately.

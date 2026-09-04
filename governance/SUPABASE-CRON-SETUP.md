@@ -77,9 +77,9 @@ The recovered worker is retained under supabase/recovered and hash-verified.
 
 Local authenticated gateway and one-off pg_net transport tests passed with
 synthetic fixtures and zero Cron jobs. This proves transport, not recurring Cron
-execution. scripts/install-inactive-lifecycle.sql is an unexecuted review template
+execution. scripts/install-inactive-lifecycle.sql is a locally tested inactive review template
 with required cadence/job-name inputs, Vault lookups and transactional inactive
-installation. It contains no activation statement. Cadence, target provisioning,
+installation. The local installer test verified inactive commit, duplicate rejection and cleanup with zero active jobs. It contains no activation statement. Cadence, target provisioning,
 notification delivery/fallback, retention and production activation remain gates.
 
 Use PHASE-4-VALIDATION.md for the current acceptance boundary.
