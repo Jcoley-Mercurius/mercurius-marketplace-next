@@ -1526,6 +1526,41 @@ export type Database = {
           },
         ]
       }
+      money_commercial_sources: {
+        Row: {
+          created_at: string
+          evidence: Json
+          reviewed_terms: Json
+          snapshot_id: string
+          source_hash: string
+          source_kind: string
+        }
+        Insert: {
+          created_at?: string
+          evidence: Json
+          reviewed_terms: Json
+          snapshot_id: string
+          source_hash: string
+          source_kind: string
+        }
+        Update: {
+          created_at?: string
+          evidence?: Json
+          reviewed_terms?: Json
+          snapshot_id?: string
+          source_hash?: string
+          source_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_commercial_sources_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: true
+            referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_completion_evidence: {
         Row: {
           confirmed_at: string
@@ -1867,6 +1902,32 @@ export type Database = {
             columns: ["service_request_id"]
             isOneToOne: true
             referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_quote_contexts: {
+        Row: {
+          context: Json
+          created_at: string
+          quote_id: string
+        }
+        Insert: {
+          context: Json
+          created_at?: string
+          quote_id: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          quote_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_quote_contexts_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: true
+            referencedRelation: "request_quotes"
             referencedColumns: ["id"]
           },
         ]
@@ -4298,6 +4359,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      money_preview_commercial_source: {
+        Args: { p_request: string }
+        Returns: Json
       }
       money_process_event: { Args: { p_event: string }; Returns: string }
       money_process_payment_event: {

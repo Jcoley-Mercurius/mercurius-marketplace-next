@@ -1,6 +1,11 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- Retain isolated ledger-kernel characterization after moving raw intake behind
+-- the source adapter. These temporary privileges roll back with this fixture.
+-- 023 tests the actual public source/checkout boundary without these grants.
+grant usage on schema private to authenticated;
+grant execute on function private.money_prepare_checkout(uuid,text) to authenticated;
 insert into auth.users(id,raw_user_meta_data) values
  ('51000000-0000-4000-8000-000000000001','{"full_name":"Synthetic homeowner"}'),
  ('51000000-0000-4000-8000-000000000002','{"full_name":"Synthetic other homeowner"}'),
@@ -29,18 +34,18 @@ begin
   perform public.money_approve_review('51000000-0000-4000-8000-000000000003',command,'Synthetic second-person review');
   perform set_config('request.jwt.claims',coalesce(previous,''),true);
 end $$;
-select throws_ok($$select public.money_publish_snapshot('54000000-0000-4000-8000-000000000001',pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004')$$,'42501','Separate authenticated approval of exact financial command required','Supplying another admin UUID is not second-person approval');
+select throws_ok($$select private.money_publish_snapshot('54000000-0000-4000-8000-000000000001',pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004')$$,'42501','Separate authenticated approval of exact financial command required','Supplying another admin UUID is not second-person approval');
 select pg_temp.approve(jsonb_build_object('operation','snapshot','request','54000000-0000-4000-8000-000000000001','terms',pg_temp.terms()));
-insert into f values('snapshot',public.money_publish_snapshot('54000000-0000-4000-8000-000000000001',pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004'));
+insert into f values('snapshot',private.money_publish_snapshot('54000000-0000-4000-8000-000000000001',pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004'));
 insert into f select 'obligation',obligation_id from public.money_snapshots where id=(select id from f where key='snapshot');
 select is((select invoice_number from public.money_snapshots where id=(select id from f where key='snapshot')) like 'M5-%',true,'Collision-safe invoice namespace');
 select throws_ok($$update public.money_snapshots set tax=0$$,'55000','Immutable financial evidence; append a correction','Snapshots cannot be edited');
 select throws_ok($$delete from public.money_snapshots$$,'55000','Immutable financial evidence; append a correction','Snapshots cannot be deleted');
-select throws_ok($$select public.money_publish_snapshot('54000000-0000-4000-8000-000000000001',pg_temp.terms(),'51000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000004')$$,'42501','Restricted finance authority required','Homeowner cannot author commercial amounts');
+select throws_ok($$select private.money_publish_snapshot('54000000-0000-4000-8000-000000000001',pg_temp.terms(),'51000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000004')$$,'42501','Restricted finance authority required','Homeowner cannot author commercial amounts');
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000002"}',true);
 select is((select count(*) from public.money_snapshots),0::bigint,'Other homeowner cannot read snapshots');
-select throws_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'full')$$,'42501','Homeowner authorization required','Cross-account checkout denied');
+select throws_ok($$select private.money_prepare_checkout((select id from f where key='snapshot'),'full')$$,'42501','Homeowner authorization required','Cross-account checkout denied');
 select throws_ok($$insert into public.money_journals(obligation_id,business_key,kind,lines,evidence) values(null,'x','x','[]','x')$$,'42501','permission denied for table money_journals','Browser cannot post ledger');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000001"}',true);
 select is((select count(*) from public.money_snapshots),1::bigint,'Homeowner sees own immutable breakdown');
@@ -48,9 +53,9 @@ select throws_ok($$select tax_evidence from public.money_snapshots$$,'42501',nul
 select throws_ok($$select approved_by from public.money_snapshots$$,'42501',null,'Homeowner cannot read finance approver identities');
 select throws_ok($$select stripe_idempotency_key from public.money_checkout_attempts$$,'42501',null,'Homeowner cannot directly select provider idempotency keys');
 select lives_ok($$select policy_version,total from public.money_snapshots$$,'Customer policy and price remain readable');
-select lives_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'deposit')$$,'Homeowner may authorize only server deposit amount');
-select lives_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'deposit')$$,'Repeated checkout returns existing attempt');
-select throws_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'full')$$,'P0001','Checkout already in progress','Cross-mode race cannot create second live payment');
+select lives_ok($$select private.money_prepare_checkout((select id from f where key='snapshot'),'deposit')$$,'Homeowner may authorize only server deposit amount');
+select lives_ok($$select private.money_prepare_checkout((select id from f where key='snapshot'),'deposit')$$,'Repeated checkout returns existing attempt');
+select throws_ok($$select private.money_prepare_checkout((select id from f where key='snapshot'),'full')$$,'P0001','Checkout already in progress','Cross-mode race cannot create second live payment');
 reset role;
 insert into f select 'deposit',id from public.money_checkout_attempts where snapshot_id=(select id from f where key='snapshot');
 select is((select count(*) from public.money_checkout_attempts),1::bigint,'Exactly one durable checkout attempt');
@@ -71,7 +76,7 @@ select public.money_exclude_event('evt_bad','51000000-0000-4000-8000-00000000000
 select is((select status from public.money_webhook_events where event_id='evt_bad'),'dead_letter','Excluded event retained, never relabelled processed');
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000001"}',true);
-select lives_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'balance')$$,'Balance deducts previously captured deposit');
+select lives_ok($$select private.money_prepare_checkout((select id from f where key='snapshot'),'balance')$$,'Balance deducts previously captured deposit');
 reset role;
 insert into f select 'balance',id from public.money_checkout_attempts where snapshot_id=(select id from f where key='snapshot') and mode='balance';
 select is((select amount from public.money_checkout_attempts where id=(select id from f where key='balance')),8700::bigint,'Balance excludes deposit already paid');
@@ -181,10 +186,10 @@ begin
   previous:=current_setting('request.jwt.claims',true);
   insert into public.service_requests(id,customer_id,contractor_id,service_type,address) values(request,'51000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','house-cleaning','Synthetic test address');
   perform pg_temp.approve(jsonb_build_object('operation','snapshot','request',request,'terms',pg_temp.terms()));
-  snapshot:=public.money_publish_snapshot(request,pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004');
+  snapshot:=private.money_publish_snapshot(request,pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004');
   insert into f values(label||'-snapshot',snapshot);
   perform set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000001"}',true);
-  attempt:=public.money_prepare_checkout(snapshot,mode);
+  attempt:=private.money_prepare_checkout(snapshot,mode);
   insert into f values(label||'-attempt',attempt.id),(label||'-obligation',attempt.obligation_id);
   perform public.money_receive_event('evt_'||label,'capture',jsonb_build_object('attempt_id',attempt.id,'payment_id','pi_'||label,'amount',attempt.amount,'currency','usd'));
   if public.money_process_event('evt_'||label)<>'processed' then raise exception 'Fixture capture failed'; end if;
@@ -223,14 +228,14 @@ select is((select sum((l->>'debit')::bigint-(l->>'credit')::bigint)::bigint from
 select is((select count(*) from cron.job where active),0::bigint,'No active Cron jobs');
 insert into public.service_requests(id,customer_id,contractor_id,service_type,address) values('54000000-0000-4000-8000-000000000002','51000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','house-cleaning','Synthetic expiry address');
 select pg_temp.approve(jsonb_build_object('operation','snapshot','request','54000000-0000-4000-8000-000000000002','terms',pg_temp.terms()));
-insert into f values('expiry-snapshot',public.money_publish_snapshot('54000000-0000-4000-8000-000000000002',pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004'));
+insert into f values('expiry-snapshot',private.money_publish_snapshot('54000000-0000-4000-8000-000000000002',pg_temp.terms(),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004'));
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000001"}',true);
-insert into f select 'expired-attempt',(public.money_prepare_checkout((select id from f where key='expiry-snapshot'),'full')).id;
+insert into f select 'expired-attempt',(private.money_prepare_checkout((select id from f where key='expiry-snapshot'),'full')).id;
 select public.money_receive_event('evt_expiry','checkout_expired',jsonb_build_object('attempt_id',(select id from f where key='expired-attempt'),'session_id','cs_test_expiry'));
 select is(public.money_process_event('evt_expiry'),'processed','Verified provider expiry releases attempt');
-insert into f select 'replacement-attempt',(public.money_prepare_checkout((select id from f where key='expiry-snapshot'),'full')).id;
+insert into f select 'replacement-attempt',(private.money_prepare_checkout((select id from f where key='expiry-snapshot'),'full')).id;
 select isnt((select id from f where key='replacement-attempt'),(select id from f where key='expired-attempt'),'After verified expiry a fresh durable attempt is created');
-select is((public.money_prepare_checkout((select id from f where key='expiry-snapshot'),'full')).id,(select id from f where key='replacement-attempt'),'Repeated replacement checkout reuses the new key');
+select is((private.money_prepare_checkout((select id from f where key='expiry-snapshot'),'full')).id,(select id from f where key='replacement-attempt'),'Repeated replacement checkout reuses the new key');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000003"}',true);
 update public.vendor_applications set business_name='Synthetic reapplication' where id='53000000-0000-4000-8000-000000000001';
 select is(public.vendor_is_eligible('52000000-0000-4000-8000-000000000001'),false,'Changed application invalidates old vetting evidence');

@@ -146,6 +146,11 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
+**Follow-up after PR #6 merge:** TRACE-054 binds snapshots and checkout to accepted
+quote revisions and selected eligible fixed offerings. See
+governance/PHASE-5-QUOTE-CHECKOUT.md. Phase 5 remains open for the remaining functional,
+configuration and integration acceptance gates; Phase 6 has not started.
+
 **Checkpoint 2026-09-04:** Independent bounded slices are implemented for review on
 `codex/phase5-money-integrity`, now combined with main `735df91` after PRs #4 and #5
 merged. Lifecycle code is included; functional adapters remain open. DEC-2026-011 records
