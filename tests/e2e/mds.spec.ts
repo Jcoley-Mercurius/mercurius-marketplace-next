@@ -58,9 +58,10 @@ test("public mobile menu has one trigger, a name, scroll access, trap and restor
   const close = dialog.getByRole("button", { name: "Close", exact: true });
   await close.focus();
   await page.keyboard.press("Tab");
-  expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  // Base UI wraps focus through guards on the next animation frame.
+  await expect.poll(() => dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Shift+Tab");
-  expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  await expect(close).toBeFocused();
   await dialog.getByRole("link", { name: "Request service", exact: true }).scrollIntoViewIfNeeded();
   await expect(dialog.getByRole("link", { name: "Request service", exact: true })).toBeInViewport();
   await page.keyboard.press("Escape");

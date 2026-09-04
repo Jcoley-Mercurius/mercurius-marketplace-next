@@ -32,3 +32,5 @@ The proposal to expire every reconciled checkout is not applied: matching aggreg
 The proposed redesign of onboarding authority is deferred to the documented bank/onboarding integration gate. Admin browser workflows record vetting evidence; they cannot call service-role-only ACH creation or settlement functions. Actual batch preparation still requires two finance authorities and separate approval of the exact command. This checkpoint does not activate bank operations or claim completion of that integration.
 
 The pg_cron suggestion concerns an inherited historical migration, not a new Phase 5 installation. Clean resets and the zero-active-jobs assertion pass with the pinned runtime. No historical schema rewrite is introduced in this conflict-resolution checkpoint.
+
+Browser CI follow-up: the inherited mobile-menu test sampled focus before Base UI FloatingFocusManager completed its requestAnimationFrame guard handoff. Await focus containment after forward Tab and assert the exact Close control after reverse Tab. This preserves keyboard trapping and restoration coverage without retries or skipped assertions; final CI is the acceptance gate.
