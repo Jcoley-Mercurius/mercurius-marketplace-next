@@ -17,3 +17,15 @@ These are source integration decisions under TRACE-010 and TRACE-050–053. They
 ## Validation
 
 Local clean reconstruction through the combined Phase 4 and Phase 5 migrations passed all 288 SQL assertions across 13 suites. Types were regenerated using Supabase 2.116.0 against that isolated database. Local lint, credential scanning, TypeScript and all 76 unit tests passed before submission; final-head CI repeats application checks and both backend workflows. Earlier independent Phase 5 CI is historical evidence only.
+
+## CodeRabbit review disposition
+
+Confirmed follow-ups: remove stale copied migrations/tests before preparing the isolated stack; safely validate checkout review URLs in both request and dashboard paths; normalize invalid checkout modes; use neutral webhook receipt-failure wording; restrict direct homeowner reads of internal snapshot/attempt metadata while retaining the displayed policy version; allow revoking an unsent invitation; align decision references and partitioned-table permission assertions. Forward migration `20260905009000` and focused SQL/URL tests cover the relevant changes.
+
+The migration-date suggestion is not applied: migration prefixes order execution, and the future-prefixed files were actually validated September 4. The report now states this explicitly.
+
+The proposal to expire every reconciled checkout is not applied: matching aggregate readback does not prove a specific Stripe session is expired or cannot charge later. Verified provider expiry already permits replacement; uncertain attempts remain blocked pending the documented recovery integration.
+
+The proposed redesign of onboarding authority is deferred to the documented bank/onboarding integration gate. Admin browser workflows record vetting evidence; they cannot call service-role-only ACH creation or settlement functions. Actual batch preparation still requires two finance authorities and separate approval of the exact command. This checkpoint does not activate bank operations or claim completion of that integration.
+
+The pg_cron suggestion concerns an inherited historical migration, not a new Phase 5 installation. Clean resets and the zero-active-jobs assertion pass with the pinned runtime. No historical schema rewrite is introduced in this conflict-resolution checkpoint.

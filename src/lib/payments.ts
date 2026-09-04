@@ -11,6 +11,17 @@ export type PaymentFunctionError = {
   message: string;
 };
 
+/** Accept only an absolute checkout-review URL on the current origin. */
+export function sameOriginReviewUrl(value: unknown, origin: string): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.origin === origin && !url.username && !url.password ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Extracts the structured response returned by a Supabase Edge Function. */
 export async function paymentFunctionError(error: unknown): Promise<PaymentFunctionError> {
   const fallback = error instanceof Error ? error.message : "The secure payment service could not be reached.";

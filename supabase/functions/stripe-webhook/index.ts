@@ -35,5 +35,5 @@ Deno.serve(async request => {
       },
     });
     return Response.json({ received: true });
-  } catch { return new Response("Event retained when receipt succeeded; retry required", { status: 500 }); }
+  } catch { return new Response("Event receipt or processing did not complete; retry required", { status: 500 }); }
 });

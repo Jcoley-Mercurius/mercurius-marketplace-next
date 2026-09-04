@@ -1,5 +1,10 @@
 # Phase 5 validation — 2026-09-04
 
+Migration prefixes are ordering identifiers, not execution timestamps. The
+`20260905...` files were present and executed during the September 4 UTC checks;
+their ordering prefix does not postpone execution or change the validation date.
+For the subsequent combined-source checkpoint see PR-6-MERGE-RECONCILIATION.md.
+
 Independent draft slices; this report does not claim phase acceptance or production
 readiness. Base: remote main d8cceee30a934c17804a0f507cb41c289dc8e417. PR #4 was
 verified open, draft and unmerged at 91bc94f before branching and again at closeout.

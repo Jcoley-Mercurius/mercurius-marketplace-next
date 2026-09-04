@@ -136,7 +136,7 @@ select is(
 );
 
 select is((select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='public' and c.relkind='r' and (c.relname like 'money\_%' escape '\'
+  where n.nspname='public' and c.relkind in ('r','p') and (c.relname like 'money\_%' escape '\'
     or c.relname in ('vendor_application_versions','vendor_onboarding','vendor_compliance_evidence','vendor_onboarding_events','vendor_invitation_attempts','vendor_invitation_events'))
     and has_table_privilege('service_role',c.oid,'INSERT,UPDATE,DELETE')),0::bigint,
   'Phase 5 service writes require invariant-enforcing RPCs');

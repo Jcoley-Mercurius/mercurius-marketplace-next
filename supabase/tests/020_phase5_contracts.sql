@@ -44,6 +44,10 @@ select throws_ok($$select public.money_prepare_checkout((select id from f where 
 select throws_ok($$insert into public.money_journals(obligation_id,business_key,kind,lines,evidence) values(null,'x','x','[]','x')$$,'42501','permission denied for table money_journals','Browser cannot post ledger');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000001"}',true);
 select is((select count(*) from public.money_snapshots),1::bigint,'Homeowner sees own immutable breakdown');
+select throws_ok($$select tax_evidence from public.money_snapshots$$,'42501',null,'Homeowner cannot read internal tax evidence');
+select throws_ok($$select approved_by from public.money_snapshots$$,'42501',null,'Homeowner cannot read finance approver identities');
+select throws_ok($$select stripe_idempotency_key from public.money_checkout_attempts$$,'42501',null,'Homeowner cannot directly select provider idempotency keys');
+select lives_ok($$select policy_version,total from public.money_snapshots$$,'Customer policy and price remain readable');
 select lives_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'deposit')$$,'Homeowner may authorize only server deposit amount');
 select lives_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'deposit')$$,'Repeated checkout returns existing attempt');
 select throws_ok($$select public.money_prepare_checkout((select id from f where key='snapshot'),'full')$$,'P0001','Checkout already in progress','Cross-mode race cannot create second live payment');
@@ -111,6 +115,8 @@ select is(public.vendor_is_eligible('52000000-0000-4000-8000-000000000001'),fals
 select is(public.vendor_decide_onboarding('52000000-0000-4000-8000-000000000001',3,'renew','Synthetic renewal','renew-1'),4,'Renewal evidence recorded');
 select is(public.vendor_is_eligible('52000000-0000-4000-8000-000000000001'),false,'Renewal does not lift suspension');
 select is(public.vendor_decide_onboarding('52000000-0000-4000-8000-000000000001',4,'activate','Reviewed reactivation','activate-2'),5,'Explicit reviewed reactivation');
+insert into f values('revoke-before-send',public.vendor_prepare_invitation('52000000-0000-4000-8000-000000000001','revoke-before-send',now()+interval '1 day'));
+select lives_ok($$select public.vendor_record_invitation((select id from f where key='revoke-before-send'),'revoked',null,'Synthetic cancellation before sending')$$,'Prepared invitation can be revoked without invented provider reference');
 insert into f values('invite',public.vendor_prepare_invitation('52000000-0000-4000-8000-000000000001','invite-1',now()+interval '1 day'));
 select is(public.vendor_prepare_invitation('52000000-0000-4000-8000-000000000001','invite-1',now()+interval '1 day'),(select id from f where key='invite'),'Invite retry preserves same attempt');
 select public.vendor_record_invitation((select id from f where key='invite'),'submitted','synthetic-invite','Synthetic provider request');

@@ -39,7 +39,7 @@ import {
   dashboardSectionFromParam,
   dashboardSectionHref,
 } from "@/lib/homeownerPortal";
-import { paymentFunctionError } from "@/lib/payments";
+import { paymentFunctionError, sameOriginReviewUrl } from "@/lib/payments";
 import {
   isPastServiceRequestStatus,
   serviceRequestStatusLabel,
@@ -232,8 +232,9 @@ export default function DashboardPage() {
         const detail = await paymentFunctionError(error);
         throw new Error(detail.message);
       }
-      if (typeof data?.review_url === "string" && new URL(data.review_url).origin === window.location.origin) {
-        window.location.assign(data.review_url);
+      const reviewUrl = sameOriginReviewUrl(data?.review_url, window.location.origin);
+      if (reviewUrl) {
+        window.location.assign(reviewUrl);
         return;
       }
       if (typeof data?.url !== "string") throw new Error("Secure checkout did not return a payment link.");
