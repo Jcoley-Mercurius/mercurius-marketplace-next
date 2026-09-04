@@ -232,6 +232,10 @@ export default function DashboardPage() {
         const detail = await paymentFunctionError(error);
         throw new Error(detail.message);
       }
+      if (typeof data?.review_url === "string" && new URL(data.review_url).origin === window.location.origin) {
+        window.location.assign(data.review_url);
+        return;
+      }
       if (typeof data?.url !== "string") throw new Error("Secure checkout did not return a payment link.");
       window.location.assign(data.url);
     } catch (reason) {

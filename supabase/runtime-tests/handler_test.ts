@@ -24,7 +24,7 @@ let route: ((url: URL, init?: RequestInit) => Response | undefined) | undefined;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(input instanceof Request ? input.url : String(input));
   calls.push(`${init?.method ?? "GET"} ${url.pathname}`);
-  if (url.origin === fixture.SUPABASE_URL) {
+  if (url.origin === fixture.SUPABASE_URL || url.origin === 'https://api.stripe.com') {
     const response = route?.(url, init);
     if (response) return response;
   }
@@ -47,7 +47,7 @@ async function request(body: unknown, headers: Record<string, string> = {}, meth
 Deno.test(`${name}: locked module boots and handles preflight or rejects webhook OPTIONS`, async () => {
   await import(new URL(`../functions/${name}/index.ts`, import.meta.url).href);
   const response = await request({}, {}, "OPTIONS");
-  equal(response.status, name === "stripe-webhook" ? 405 : ["checkout-request", "refund-invoice"].includes(name) ? 204 : 200);
+  equal(response.status, name === "stripe-webhook" ? 405 : ["checkout-request", "create-checkout", "refund-invoice"].includes(name) ? 204 : 200);
   equal(calls, []);
   await response.body?.cancel();
 });
@@ -56,7 +56,7 @@ Deno.test(`${name}: rejects unauthenticated operations or characterizes legacy f
   calls = []; unexpected = []; route = undefined;
   const response = await request(name === "beta-access" ? { action: "redeem", code: "incorrect" } : {});
   const expected: Record<string, number> = {
-    "beta-access": 401, "checkout-request": 400, "create-checkout": 400,
+    "beta-access": 401, "checkout-request": 401, "create-checkout": 401,
     "customer-portal": 400, "job-lifecycle-worker": 401, "list-payment-methods": 400,
     "loyalty-recommend": 401, "refund-invoice": 401, "stripe-webhook": 400,
     // Characterization, NOT security approval: source has no handler-level auth.
@@ -89,6 +89,67 @@ if (name === "vendor-invite") {
     equal(response.status, 403);
     await response.body?.cancel();
     equal(calls.length, 2);
+  });
+}
+
+if (["checkout-request", "create-checkout", "refund-invoice"].includes(name)) {
+  Deno.test(`${name}: execution remains disabled with no provider calls`, async () => {
+    calls = []; route = undefined;
+    const response = await request({}, { Authorization: "Bearer synthetic-user" });
+    equal(response.status, 503); equal(calls, []);
+    await response.body?.cancel();
+  });
+}
+if (["checkout-request", "create-checkout"].includes(name)) {
+  Deno.test(`${name}: authenticated checkout uses durable amount and stable Stripe key`, async () => {
+    calls = []; unexpected = [];
+    fixture.MERCURIUS_MONEY_MODE = 'test'; fixture.STRIPE_SECRET_KEY = 'sk_test_' + 'synthetic-no-network';
+    const keys: (string | null)[] = [];
+    route = (url, init) => {
+      if (url.pathname === '/auth/v1/user') return json({ id: '10000000-0000-4000-8000-000000000001' });
+      if (url.pathname === '/rest/v1/rpc/money_prepare_checkout') return json({ id: '10000000-0000-4000-8000-000000000002', snapshot_id: '10000000-0000-4000-8000-000000000003', amount: 11700, currency: 'usd', stripe_idempotency_key: 'synthetic-stable-key', created_at: new Date().toISOString(), expires_at: new Date(Date.now()+3600000).toISOString(), status: 'prepared', stripe_session_id: null, checkout_url: null });
+      if (url.pathname === '/v1/checkout/sessions') {
+        keys.push(new Headers(init?.headers).get('idempotency-key'));
+        const fields = new URLSearchParams(String(init?.body));
+        equal(fields.get('line_items[0][price_data][unit_amount]'), '11700');
+        equal(fields.get('mode'), 'payment');
+        equal(fields.has('payment_intent_data[transfer_data][destination]'), false);
+        return json({ id: 'cs_synthetic', url: 'https://checkout.stripe.com/synthetic' });
+      }
+      if (url.pathname === '/rest/v1/rpc/money_attach_checkout') return json(null);
+    };
+    for (let retry=0;retry<2;retry++) {
+      const response = await request({ snapshot_id: '10000000-0000-4000-8000-000000000003', mode: 'full', amount: 1 }, { Authorization: 'Bearer synthetic-user' });
+      equal(response.status, 200); equal((await response.json()).url, 'https://checkout.stripe.com/synthetic');
+    }
+    equal(keys, ['synthetic-stable-key','synthetic-stable-key']);
+    delete fixture.MERCURIUS_MONEY_MODE;
+  });
+}
+if (name === 'stripe-webhook') {
+  Deno.test('signed webhook commits minimized receipt before failure, then replays', async () => {
+    fixture.MERCURIUS_MONEY_MODE='test'; fixture.STRIPE_SECRET_KEY='sk_test_'+'synthetic-no-network';
+    const event = { id: 'evt_synthetic', type: 'payment_intent.succeeded', livemode: false, data: { object: { id: 'pi_synthetic', status: 'succeeded', currency: 'usd', amount_received: 11700, metadata: { money_attempt_id: '10000000-0000-4000-8000-000000000003' }, receipt_email: 'private@example.invalid' } } };
+    const stamp = Math.floor(Date.now()/1000);
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(fixture.STRIPE_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const signature = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${stamp}.${JSON.stringify(event)}`)))).map(x=>x.toString(16).padStart(2,'0')).join('');
+    let fail=true; const order: string[]=[];
+    route = (url,init) => {
+      if (url.pathname === '/rest/v1/rpc/money_receive_event') {
+        order.push('received'); const payload=JSON.parse(String(init?.body));
+        equal(payload.p_payload, { attempt_id: '10000000-0000-4000-8000-000000000003', payment_id: 'pi_synthetic', amount: 11700, currency: 'usd' });
+        return json(null);
+      }
+      if (url.pathname === '/rest/v1/rpc/money_process_event') { order.push('processed'); return json(fail?'failed':'processed'); }
+    };
+    calls=[]; unexpected=[];
+    const first=await request(event,{'stripe-signature':`t=${stamp},v1=${signature}`}); equal(first.status,500); await first.body?.cancel();
+    fail=false;
+    const second=await request(event,{'stripe-signature':`t=${stamp},v1=${signature}`}); equal(second.status,200); await second.body?.cancel();
+    equal(order,['received','processed','received','processed']);
+    const bad=await request(event,{'stripe-signature':'invalid'}); equal(bad.status,400); await bad.body?.cancel();
+    equal(order.length,4);
+    delete fixture.MERCURIUS_MONEY_MODE;
   });
 }
 

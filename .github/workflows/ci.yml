@@ -12,7 +12,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MERCURIUS_BUILD_WORKERS: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - name: Prepare isolated synthetic stack
+        run: node scripts/prepare-phase5-local.mjs
+      - name: Reconstruct database
+        run: sh scripts/phase5-db.sh start
+      - name: Database role and money contracts
+        run: sh scripts/phase5-db.sh test
+      - name: Concurrent checkout, webhook and refund reservations
+        run: node scripts/phase5-concurrency.mjs
+      - name: Clean reset after committed concurrency fixtures
+        run: sh scripts/phase5-db.sh reset
+      - name: Verify clean replay
+        run: sh scripts/phase5-db.sh test
+      - name: Locked Edge types
+        run: sh scripts/check-edge.sh
+      - name: Synthetic Edge handler transport
+        run: sh scripts/test-edge.sh
+      - name: Stop only this CI test stack
+        if: always()
+        run: sh scripts/phase5-db.sh stop
+
   application:
+    needs: backend
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -23,6 +62,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Use Node 24 LTS
         uses: actions/setup-node@v4
@@ -52,6 +93,8 @@ jobs:
             if [ $i -lt 3 ]; then
               echo "Audit failed, retrying in $((i * 10)) seconds..."
               sleep $((i * 10))
+            else
+              exit 1
             fi
           done
 

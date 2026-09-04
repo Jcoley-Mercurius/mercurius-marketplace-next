@@ -142,6 +142,14 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
+**Checkpoint 2026-09-04:** Independent bounded slices are implemented for review on
+`codex/phase5-money-integrity`, based on remote main d8cceee. PR #4 remains unmerged;
+no lifecycle implementation or unavailable schema was copied. DEC-2026-011 records
+the owner's authorization for this independent work and owner-operated bank ACH.
+TRACE-050–053 and PHASE-5-HANDOFF/VALIDATION track evidence and outstanding Phase 4,
+configuration, provider, banking, onboarding and manual acceptance gates. Execution
+remains disabled; this is not Phase 5 acceptance or authorization to activate.
+
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
 
 Work:

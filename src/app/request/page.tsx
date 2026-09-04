@@ -741,6 +741,10 @@ export default function RequestServicePage() {
         const { data: checkout, error: checkoutError } = await supabase.functions.invoke("checkout-request", {
           body: { request_id: payable.id },
         });
+        if (!checkoutError && typeof checkout?.review_url === "string" && new URL(checkout.review_url).origin === window.location.origin) {
+          window.location.assign(checkout.review_url);
+          return;
+        }
         if (!checkoutError && typeof checkout?.url === "string") {
           toast.success("Request saved", { description: "Taking you to Stripe to complete secure payment." });
           window.location.assign(checkout.url);

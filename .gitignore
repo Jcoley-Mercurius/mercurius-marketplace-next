@@ -51,3 +51,4 @@ next-env.d.ts
 # Local accessibility test output
 /test-results/
 /playwright-report/
+/.phase5-local/
