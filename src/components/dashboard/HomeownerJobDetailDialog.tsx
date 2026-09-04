@@ -1,5 +1,7 @@
 "use client";
 
+import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
+import { JobOperations } from "@/components/dashboard/JobOperations";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -42,6 +44,14 @@ export type HomeownerDashboardJob = {
   id: string;
   service_type: string;
   status: string;
+  scheduled_start_at?: string | null;
+  vendor_completed_at?: string | null;
+  homeowner_confirmed_at?: string | null;
+  matching_status?: string | null;
+  current_quote_id?: string | null;
+  quote_status?: string | null;
+  quote_expires_at?: string | null;
+  quote_amount?: number | null;
   quote_declined_at?: string | null;
   quote_approved_at?: string | null;
   preferred_date: string | null;
@@ -57,6 +67,7 @@ export type HomeownerDashboardJob = {
 };
 
 type JobAction =
+  | "provider-fallback"
   | "approve-quote"
   | "cancel-request"
   | "decline-quote"
@@ -217,12 +228,12 @@ export function HomeownerJobDetailDialog({
   if (!job) return null;
   const currentJob = job;
 
-  const isQuoted = job.status === "quoted" && !job.quote_declined_at && !job.quote_approved_at;
+  const isQuoted = job.quote_status === "submitted" && !job.quote_declined_at && !job.quote_approved_at;
   const isPending = job.status === "pending";
   const needsConfirmation = ["vendor_completed"].includes(
     job.status,
   );
-  const needsReview = job.status === "review_requested";
+  const needsReview = job.status === "review_requested" || (job.status === "completed" && !!job.homeowner_confirmed_at);
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
   const displayRating = hoveredRating || rating;
 
@@ -326,6 +337,7 @@ export function HomeownerJobDetailDialog({
         supabase.rpc("homeowner_respond_to_quote", {
           _job_id: currentJob.id,
           _approve: approve,
+          _quote_id: currentJob.current_quote_id ?? undefined,
         }),
       approve ? "Quote approved" : "Quote declined",
       approve
@@ -387,7 +399,7 @@ export function HomeownerJobDetailDialog({
                 serviceRequestStatusStyle(job.status),
               )}
             >
-              {serviceRequestStatusLabel(job.status)}
+              {serviceRequestStatusLabel(job.status, job.matching_status)}
             </Badge>
           </div>
           <DialogDescription>
@@ -396,6 +408,19 @@ export function HomeownerJobDetailDialog({
           </DialogDescription>
         </DialogHeader>
         {actionError && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg border border-status-danger bg-status-danger-bg p-3 text-sm text-status-danger">{actionError}</p>}
+
+        {job.scheduled_start_at && <p className="font-medium">Appointment: {formatDateTime(job.scheduled_start_at)}</p>}
+        {job.quote_expires_at && <p className="text-sm text-muted-foreground">Quote approval deadline: {formatDateTime(job.quote_expires_at)}</p>}
+        {job.quote_status === "expired" && <p role="status">This quote expired. Contact Mercurius for a new quote; the service has not been cancelled.</p>}
+        {job.quote_status === "legacy_review" && <p role="status">Mercurius must resend this quote with current terms before you can approve it.</p>}
+
+        {job.matching_status === "awaiting_consent" && <section className="space-y-3 rounded-xl border p-4">
+          <p>Your selected provider is unavailable. You can allow Mercurius to offer this request to another eligible provider.</p>
+          <ConfirmAction disabled={!actionsEnabled || !!busyAction} triggerLabel="Find another provider" title="Allow another provider?" entity={job.service_type} consequence="Mercurius may offer this request to other eligible providers. This records your consent to provider fallback." confirmLabel="Allow other providers" onConfirm={async () => {
+            const saved = await runAction("provider-fallback", currentJob.status, () => createClient().rpc("consent_to_provider_fallback", { _request_id: currentJob.id }), "Provider preference updated", "Mercurius will check other eligible providers.");
+            if (!saved) throw new Error("Your consent was not saved.");
+          }} />
+        </section>}
 
         <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2">
           <Detail icon={Calendar} label="Preferred date">
@@ -408,12 +433,12 @@ export function HomeownerJobDetailDialog({
             {location || "Address unavailable"}
           </Detail>
           <Detail icon={CreditCard} label={isQuoted ? "Quoted price" : "Recorded amount"}>
-            {job.total_amount === null
-              ? "Not available"
-              : formatMoney(job.total_amount)}
+            {(isQuoted ? job.quote_amount : job.total_amount) == null ? "Not available" : formatMoney((isQuoted ? job.quote_amount : job.total_amount)!)}
           </Detail>
         </div>
 
+        {actionsEnabled && ["pending", "matched", "quoted", "scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="homeowner" onSaved={() => { void onRefresh(); }} />}
+        {actionsEnabled && <JobFollowUp key={`follow-${job.id}`} jobId={job.id} status={job.status} vendorCompletedAt={job.vendor_completed_at} />}
         {job.description && (
           <div className="rounded-xl border border-border p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -449,7 +474,7 @@ export function HomeownerJobDetailDialog({
               </p>
               <p className="mt-1 text-sm leading-5 text-status-warning text-status-warning">
                 Confirm only after you’ve reviewed the result, or report an issue for review.
-                Unanswered completion notices go to Mercurius for review after 72 hours; silence does not confirm the work.
+                Disputes must be filed within 48 hours of provider completion. Unanswered completion notices go to Mercurius for review after 72 hours; silence does not confirm the work.
               </p>
             </div>
 
@@ -540,7 +565,7 @@ export function HomeownerJobDetailDialog({
             <div>
               <p className="font-medium">How did the service go?</p>
               <p className="mt-1 text-sm text-foreground">
-                Your rating helps Mercurius maintain service quality.
+                Your review is public regardless of its star rating. Spam, personal information, threats or abuse, and unrelated content may be moderated; you may appeal a moderation decision.
               </p>
             </div>
 
@@ -812,3 +837,5 @@ function formatMoney(value: number) {
     currency: "USD",
   }).format(Number(value));
 }
+
+function formatDateTime(value: string) { return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/New_York" }).format(new Date(value)) + " Eastern"; }

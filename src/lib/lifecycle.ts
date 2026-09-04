@@ -18,7 +18,7 @@ const requestStates = {
 export function canonicalRequestState(status: StoredStatus, matchingStatus?: string): RequestState {
   if (status === "pending" && ["sourcing", "exhausted"].includes(matchingStatus ?? "")) return "unavailable";
   if (status === "matched" && matchingStatus === "matched") return "provider_confirmed";
-  if (status === "pending" && ["awaiting_match", "offered"].includes(matchingStatus ?? "")) return "matching";
+  if (status === "pending" && ["awaiting_match", "offered", "awaiting_consent"].includes(matchingStatus ?? "")) return "matching";
   return requestStates[status];
 }
 
@@ -40,7 +40,7 @@ const transitions: Record<StoredStatus, readonly StoredStatus[]> = {
 
 export function adminTransitionTargets(status: string): readonly StoredStatus[] {
   if (!Object.hasOwn(transitions, status)) return [];
-  return transitions[status as StoredStatus].filter(target => target !== "homeowner_confirmed");
+  return transitions[status as StoredStatus].filter(target => !["homeowner_confirmed", "quoted", "pending_review", "disputed", "resolved", "reviewed"].includes(target) && (target !== "cancelled" || status === "pending"));
 }
 
 /** CFG-006: classify intent only. No refund, fee, ledger or payout operation. */

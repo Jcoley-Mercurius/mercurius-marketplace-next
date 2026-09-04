@@ -1,5 +1,6 @@
 "use client";
 
+import { JobOperations } from "@/components/dashboard/JobOperations";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import {
   AlertCircle,
@@ -71,6 +72,9 @@ type ServiceRequest = {
   needs_admin_review: boolean;
   matching_status: string;
   preferred_contractor_id: string | null;
+  quote_revision?: number;
+  frequency?: string | null;
+  scheduled_start_at?: string | null;
 };
 
 type Contractor = {
@@ -188,7 +192,7 @@ export default function AdminRequestsPage() {
       const expiryResult = await supabase.rpc("expire_stale_matches");
       if (expiryResult.error) console.warn("Unable to expire stale offers", expiryResult.error.message);
       const [requestResult, profileResult, contractorResult] = await Promise.all([
-        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id").order("created_at", { ascending: false }),
+        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, frequency, scheduled_start_at").order("created_at", { ascending: false }),
         supabase.from("profiles").select("user_id, full_name"),
         supabase.from("contractors").select("id, name, services, location, rating, jobs_completed, badges, is_active").order("name"),
       ]);
@@ -270,17 +274,19 @@ export default function AdminRequestsPage() {
     }
   };
 
-  const assignVendor = async (request: ServiceRequest, candidate: EligibleMatch) => {
-    await runAction(request, "assign", async () => {
+  const assignVendor = async (request: ServiceRequest, candidate: EligibleMatch, reason: string) => {
+    const assigned = await runAction(request, "assign", async () => {
       const result = await createClient().rpc("create_job_offer", {
         _request_id: request.id,
         _contractor_id: candidate.contractor_id,
         _package_id: candidate.package_id,
         _package_tier_id: candidate.package_tier_id,
         _force: true,
+        _reason: reason,
       });
       return { error: result.error };
     }, `${candidate.contractor_name} received an exclusive four-hour offer.`);
+    if (!assigned) throw new Error("The offer was not saved.");
   };
 
   const offerNext = async (request: ServiceRequest) => {
@@ -290,9 +296,9 @@ export default function AdminRequestsPage() {
     }, "Matching checked for another eligible provider. If none remain, service is not available yet in your area.");
   };
 
-  const releaseMatch = async (request: ServiceRequest) => {
+  const releaseMatch = async (request: ServiceRequest, reason: string) => {
     const released = await runAction(request, "release", async () => {
-      const result = await createClient().rpc("vendor_decline_job", { _job_id: request.id, _reason: "Released by admin for rematching" });
+      const result = await createClient().rpc("release_job_match", { _job_id: request.id, _contractor_id: request.contractor_id!, _outcome: "withdrawn", _reason: reason });
       return { error: result.error };
     }, "The match was released and the request returned to the unmatched queue.");
     if (!released) throw new Error("The match could not be released. Please try again.");
@@ -326,7 +332,7 @@ export default function AdminRequestsPage() {
       return;
     }
     await runAction(request, "quote", async () => {
-      const result = await createClient().rpc("admin_send_quote", { _job_id: request.id, _amount: amount, _reason: quoteReason.trim() });
+      const result = await createClient().rpc("admin_send_quote", { _job_id: request.id, _amount: amount, _reason: quoteReason.trim(), _expected_revision: request.quote_revision ?? 0 });
       return { error: result.error };
     }, "The quote was recorded and sent into the homeowner approval workflow.");
   };
@@ -374,11 +380,12 @@ export default function AdminRequestsPage() {
       { key: "actions", label: "Actions", render: request => <Button variant="outline" size="sm" aria-label={`Review ${request.service_type} ${request.id.slice(0, 10)}`} onClick={() => openDetail(request)}><Eye />Review</Button> },
     ]} />}</CardContent></Card>
 
-    <RequestDialog quoteReason={quoteReason} setQuoteReason={setQuoteReason} quoteError={quoteError} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
+    <RequestDialog saved={() => { void load(false); if (selected) { void loadAttempts(selected.id); void loadEligible(selected.id); } }} quoteReason={quoteReason} setQuoteReason={setQuoteReason} quoteError={quoteError} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
   </div>;
 }
 
 function RequestDialog(props: {
+  saved: () => void;
   quoteError: string;
   actionError: string;
   request: ServiceRequest | null;
@@ -400,9 +407,9 @@ function RequestDialog(props: {
   setNote: (value: string) => void;
   action: Action;
   close: () => void;
-  assign: (request: ServiceRequest, candidate: EligibleMatch) => Promise<void>;
+  assign: (request: ServiceRequest, candidate: EligibleMatch, reason: string) => Promise<void>;
   offerNext: (request: ServiceRequest) => Promise<void>;
-  release: (request: ServiceRequest) => Promise<void>;
+  release: (request: ServiceRequest, reason: string) => Promise<void>;
   changeStatus: (request: ServiceRequest, status: string, reason: string) => Promise<void>;
   sendQuote: (request: ServiceRequest) => Promise<void>;
   saveNote: (request: ServiceRequest) => Promise<void>;
@@ -417,12 +424,14 @@ function RequestDialog(props: {
     <div className="grid gap-3 text-sm sm:grid-cols-2"><Detail icon={User} label="Homeowner">{props.profiles[request.customer_id] ?? "Unknown"}</Detail><Detail icon={UserCheck} label="Vendor">{request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Unknown" : "Unassigned"}</Detail><Detail icon={MapPin} label="Address">{request.address}, {request.city}, {request.state} {request.zip_code}</Detail><Detail icon={Calendar} label="Preferred timing">{request.preferred_date ? formatDate(request.preferred_date) : "No date set"}{request.preferred_time && ` · ${request.preferred_time}`}</Detail><Detail icon={DollarSign} label="Amount">{request.total_amount === null ? "Quote required" : money(request.total_amount)}</Detail><Detail icon={CheckCircle2} label="Payment">{label(request.payment_status)}</Detail></div>
     {request.description && <section className="rounded-xl border bg-muted/30 p-4"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer scope</p><p className="whitespace-pre-wrap text-sm leading-6">{request.description}</p></section>}
 
-    <section className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4"><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center"><div className="flex flex-wrap items-center gap-2"><UserCheck className="h-4 w-4 text-accent" /><h3 className="text-sm font-semibold">Eligible Provider Ranking</h3><Badge className="border-accent/20 bg-accent/10 text-xs text-accent">Live rules</Badge></div><Button size="sm" className="sm:ml-auto" disabled={busy} onClick={() => void props.offerNext(request)}>{props.action?.kind === "next" ? <Loader2 className="animate-spin" /> : <ArrowRight />}Offer next</Button></div><p className="mb-3 text-xs text-muted-foreground">Only active, marketing-enabled providers with matching packages and ZIP coverage appear. Raw scores are for operations only.</p><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search eligible providers" placeholder="Search eligible providers..." value={props.assignSearch} onChange={(event) => props.setAssignSearch(event.target.value)} className="h-9 bg-card pl-9" /></div>{props.eligibleError ? <p className="py-4 text-center text-sm text-destructive">Eligibility unavailable: {props.eligibleError}</p> : <div className="max-h-80 space-y-2 overflow-y-auto">{props.candidates.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">No eligible providers for this service, frequency, and ZIP. Offer next will move the request to sourcing.</p> : props.candidates.slice(0, 20).map((candidate) => <div key={`${candidate.contractor_id}:${candidate.package_id}:${candidate.package_tier_id ?? "quote"}`} className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold text-muted-foreground">#{candidate.rank_order}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{candidate.contractor_name}</span><Badge variant="outline" className="text-xs">{candidate.path === "fixed" ? "Fixed" : "Quote"}</Badge>{candidate.preferred && <Badge className="border-accent/20 bg-accent/10 text-xs text-accent">Homeowner preference</Badge>}</span><span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>Score {Number(candidate.total_score).toFixed(1)}</span><span>Profile +{Number(candidate.profile_score).toFixed(1)}</span><span>Credentials +{Number(candidate.verification_score).toFixed(0)}</span><span>Price band +{Number(candidate.price_band_score).toFixed(0)}</span><span>History +{Number(candidate.response_score).toFixed(1)}</span><span>Freshness +{Number(candidate.freshness_score).toFixed(0)}</span></span></span><div className="flex items-center justify-between gap-3 sm:justify-end"><span className="text-sm font-semibold">{candidate.path === "fixed" && candidate.effective_price !== null ? money(Number(candidate.effective_price)) : "Quote"}</span><Button size="sm" variant="outline" disabled={busy} onClick={() => void props.assign(request, candidate)}>{props.action?.kind === "assign" ? <Loader2 className="animate-spin" /> : null}Force offer</Button></div></div>)}</div>}</section>
+    <section className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4"><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center"><div className="flex flex-wrap items-center gap-2"><UserCheck className="h-4 w-4 text-accent" /><h3 className="text-sm font-semibold">Eligible Provider Ranking</h3><Badge className="border-accent/20 bg-accent/10 text-xs text-accent">Live rules</Badge></div><Button size="sm" className="sm:ml-auto" disabled={busy} onClick={() => void props.offerNext(request)}>{props.action?.kind === "next" ? <Loader2 className="animate-spin" /> : <ArrowRight />}Offer next</Button></div><p className="mb-3 text-xs text-muted-foreground">Only active, marketing-enabled providers with matching packages and ZIP coverage appear. Raw scores are for operations only.</p><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search eligible providers" placeholder="Search eligible providers..." value={props.assignSearch} onChange={(event) => props.setAssignSearch(event.target.value)} className="h-9 bg-card pl-9" /></div>{props.eligibleError ? <p className="py-4 text-center text-sm text-destructive">Eligibility unavailable: {props.eligibleError}</p> : <div className="max-h-80 space-y-2 overflow-y-auto">{props.candidates.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">Not available yet in your area. No eligible providers remain for this service, frequency, and ZIP.</p> : props.candidates.slice(0, 20).map((candidate) => <div key={`${candidate.contractor_id}:${candidate.package_id}:${candidate.package_tier_id ?? "quote"}`} className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold text-muted-foreground">#{candidate.rank_order}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{candidate.contractor_name}</span><Badge variant="outline" className="text-xs">{candidate.path === "fixed" ? "Fixed" : "Quote"}</Badge>{candidate.preferred && <Badge className="border-accent/20 bg-accent/10 text-xs text-accent">Homeowner preference</Badge>}</span><span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>Score {Number(candidate.total_score).toFixed(1)}</span><span>Profile +{Number(candidate.profile_score).toFixed(1)}</span><span>Credentials +{Number(candidate.verification_score).toFixed(0)}</span><span>Price band +{Number(candidate.price_band_score).toFixed(0)}</span><span>History +{Number(candidate.response_score).toFixed(1)}</span><span>Freshness +{Number(candidate.freshness_score).toFixed(0)}</span></span></span><div className="flex items-center justify-between gap-3 sm:justify-end"><span className="text-sm font-semibold">{candidate.path === "fixed" && candidate.effective_price !== null ? money(Number(candidate.effective_price)) : "Quote"}</span><ConfirmAction disabled={busy} requireReason triggerLabel="Force offer" title="Replace the current provider offer?" entity={candidate.contractor_name} consequence="The current offer will be withdrawn and this eligible provider will receive an exclusive four-hour offer. Homeowner fallback consent is still required." confirmLabel="Send offer" onConfirm={reason => props.assign(request, candidate, reason)} /></div></div>)}</div>}</section>
 
-    {request.contractor_id && request.status !== "pending" && <section className="rounded-xl border bg-muted/30 p-4"><div className="flex items-center gap-2 text-sm"><CheckCircle2 className="h-4 w-4 text-accent" /><span className="font-medium">Assigned to {props.contractorNames[request.contractor_id] ?? "Unknown vendor"}</span></div>{request.status === "matched" && <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className={cn("text-xs text-muted-foreground", isOverdue(request) && "font-medium text-status-danger")}>{waitingLabel(request)}{request.match_expires_at && ` · closes ${formatDateTime(request.match_expires_at)}`}</p><ConfirmAction disabled={busy} triggerLabel="Release match" title="Release this vendor?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence="The vendor assignment will be released and the request returned to matching." confirmLabel="Release match" onConfirm={() => props.release(request)} /></div>}</section>}
+    {request.contractor_id && request.status !== "pending" && <section className="rounded-xl border bg-muted/30 p-4"><div className="flex items-center gap-2 text-sm"><CheckCircle2 className="h-4 w-4 text-accent" /><span className="font-medium">Assigned to {props.contractorNames[request.contractor_id] ?? "Unknown vendor"}</span></div>{request.status === "matched" && <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className={cn("text-xs text-muted-foreground", isOverdue(request) && "font-medium text-status-danger")}>{waitingLabel(request)}{request.match_expires_at && ` · closes ${formatDateTime(request.match_expires_at)}`}</p><ConfirmAction disabled={busy} requireReason triggerLabel="Release match" title="Release this vendor?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence="The vendor assignment will be released and the request returned to matching." confirmLabel="Release match" onConfirm={reason => props.release(request, reason)} /></div>}</section>}
 
     {(props.attempts.length > 0 || props.attemptError) && <section className="rounded-xl border bg-muted/30 p-4"><div className="mb-2 flex justify-between"><h3 className="text-sm font-medium">Match History</h3><span className="text-xs text-muted-foreground">{props.attempts.length} attempt{props.attempts.length === 1 ? "" : "s"}</span></div>{props.attemptError ? <p className="text-xs text-destructive">History unavailable: {props.attemptError}</p> : <div className="space-y-2">{props.attempts.map((attempt) => <div key={attempt.id} className="flex items-center justify-between gap-3 text-xs"><div><p className="font-medium">#{attempt.attempt_number} {props.contractorNames[attempt.contractor_id] ?? "Vendor"}</p><p className="text-muted-foreground">Offered {formatDateTime(attempt.offered_at)}{attempt.reason ? ` · ${attempt.reason}` : ""}</p></div><Badge className={cn("border", outcomeStyle[attempt.outcome] ?? "bg-muted text-muted-foreground")}>{attempt.outcome}</Badge></div>)}</div>}</section>}
 
+    {request.scheduled_start_at && <p>Appointment: {new Date(request.scheduled_start_at).toLocaleString("en-US", { timeZone: "America/New_York" })} Eastern</p>}
+    {["pending", "matched", "quoted", "scheduled", "in_progress"].includes(request.status) && <JobOperations key={request.id} jobId={request.id} role="admin" onSaved={props.saved} recurring={!!request.frequency && request.frequency !== "one-time"} />}
     <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
 
     <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><FormField id="quote-reason" label="Quote reason" required>{control => <Textarea {...control} value={props.quoteReason} onChange={event => props.setQuoteReason(event.target.value)} maxLength={1000} />}</FormField><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="min-w-0 flex-1"><FormField id="quote-amount" label="Total amount ($)" error={props.quoteError} required>{control => <Input {...control} type="number" min="0" step="0.01" value={props.quoteAmount} onChange={(event) => props.setQuoteAmount(event.target.value)} className="bg-card" />}</FormField></div><Button className="bg-commitment text-commitment-foreground hover:bg-commitment-hover" disabled={busy || !props.quoteAmount} onClick={() => void props.sendQuote(request)}>{props.action?.kind === "quote" && <Loader2 className="animate-spin" />}Send Quote</Button></div>{request.status === "quoted" && <p className="mt-2 text-xs text-status-info">Current quote: {money(request.quote_amount ?? request.total_amount ?? 0)} · awaiting homeowner action.</p>}</section>

@@ -24,6 +24,9 @@ const job = (suffix, service, status) => ({
   created_at: now.toISOString(), updated_at: now.toISOString(), assigned_at: now.toISOString(),
   match_expires_at: new Date(now.getTime() + 4 * 3600000).toISOString(),
   pricing_mode: "fixed", quote_only: false, payment_status: "paid", total_amount: 120,
+  current_quote_id: status === "quoted" ? "00000000-0000-4000-8000-000000000099" : null,
+  quote_revision: status === "quoted" ? 1 : 0, quote_status: status === "quoted" ? "submitted" : null,
+  quote_expires_at: status === "quoted" ? new Date(now.getTime() + 24 * 3600000).toISOString() : null,
   quote_amount: 120, notes: "Synthetic internal note", needs_admin_review: false,
   match_attempt_count: 1, declined_contractor_ids: [], matching_status: "offered",
   preferred_contractor_id: null, package_question_answers: {},
@@ -63,7 +66,7 @@ const server = createServer(async (request, response) => {
       const rows = [{ id: contractor, user_id: users.vendor, name: "Synthetic Vendor", services: [], is_active: true }];
       return send(url.searchParams.has("user_id") ? rows[0] : rows);
     }
-    if (["job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications"].includes(table)) return send([]);
+    if (["disputes", "job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications"].includes(table)) return send([]);
   }
   // Tests exercise persistent failure UI; never claim a real mutation succeeded.
   return send({ message: "Synthetic service unavailable. Please try again.", code: "FIXTURE_ONLY" }, 503);

@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { JobOperations } from "@/components/dashboard/JobOperations";
 import Link from "next/link";
 import {
   AlertCircle, Briefcase, Calendar, Camera, CheckCircle2, Clock, DollarSign,
@@ -26,6 +27,7 @@ type Job = {
   service_type: string;
   description: string | null;
   status: string;
+  scheduled_start_at?: string | null;
   matching_status?: string;
   pricing_mode: string | null;
   quote_only: boolean | null;
@@ -105,7 +107,7 @@ export default function VendorJobsPage() {
       }
       const result = await supabase
         .from("service_requests")
-        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers")
+        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at")
         .eq("contractor_id", contractorResult.data.id)
         .order("created_at", { ascending: false });
       if (result.error) throw result.error;
@@ -232,7 +234,7 @@ export default function VendorJobsPage() {
           </TabsContent>
         </Tabs>
       )}
-      <Details job={selected} close={() => setSelected(null)} />
+      <Details saved={() => { setSelected(null); void load(); }} job={selected} close={() => setSelected(null)} />
       <Complete job={completing} close={() => setCompleting(null)} done={(id) => { replaceStatus(id, "vendor_completed"); setCompleting(null); }} />
     </div>
   );
@@ -267,7 +269,8 @@ function RequestCard({ job, now, action, view, accept, decline }: {
           <DecisionField icon={Clock} label="Response window"><span className={cn(expired && "font-medium text-destructive")}>{responseWindow(job, now)}</span>{deadline && <span className="block text-muted-foreground">{formatDeadline(deadline)}</span>}</DecisionField>
         </div>
         <div className="rounded-xl border bg-background p-4"><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><FileText className="h-4 w-4 text-accent" />Customer note</p><p className={cn("whitespace-pre-wrap text-sm leading-6", !note && "text-muted-foreground")}>{note || "No customer note was provided."}</p></div>
-        <QuestionAnswers job={job} />
+        {job.scheduled_start_at && <p>Appointment: {new Date(job.scheduled_start_at).toLocaleString("en-US", { timeZone: "America/New_York" })} Eastern</p>}
+    <QuestionAnswers job={job} />
       </CardContent>
       <CardFooter className="flex flex-col gap-4 border-t bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex max-w-xl items-start gap-2 text-xs leading-5 text-muted-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span>{job.status === "matched" ? "Accept confirms the assignment and moves it to Active Jobs. Coordinate through Messages before using Start Job when work begins." : "Mercurius is still preparing this match. Accept becomes available when the request is actively matched to you."}</span></div>
@@ -312,7 +315,7 @@ function JobCard({ job, busy, view, start, complete }: {
   );
 }
 
-function Details({ job, close }: { job: Job | null; close: () => void }) {
+function Details({ job, close, saved }: { job: Job | null; close: () => void; saved: () => void }) {
   if (!job) return null;
   const price = priceContext(job);
   const note = customerNote(job);
@@ -325,6 +328,8 @@ function Details({ job, close }: { job: Job | null; close: () => void }) {
       <Block icon={DollarSign} title={price.label}>{price.value}<br /><span className="text-muted-foreground">{price.note}</span></Block>
     </div>
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
+    {job.scheduled_start_at && <p>Appointment: {new Date(job.scheduled_start_at).toLocaleString("en-US", { timeZone: "America/New_York" })} Eastern</p>}
+    {["scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="vendor" onSaved={saved} />}
     <QuestionAnswers job={job} />
     {!isIncoming(job) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} onClick={close} className={cn(buttonVariants({ variant: "outline" }), "w-full")}><MessageSquare />Open Messages</Link>}
   </DialogContent></Dialog>;
