@@ -433,7 +433,7 @@ export function HomeownerJobDetailDialog({
             {location || "Address unavailable"}
           </Detail>
           <Detail icon={CreditCard} label={isQuoted ? "Quoted price" : "Recorded amount"}>
-            {(isQuoted ? job.quote_amount : job.total_amount) == null ? "Not available" : formatMoney((isQuoted ? job.quote_amount : job.total_amount)!)}
+            {!isQuoted && ["sourcing", "exhausted", "awaiting_consent", "quote_pending"].includes(job.matching_status ?? "") ? "Awaiting provider" : (isQuoted ? job.quote_amount : job.total_amount) == null ? "Not available" : formatMoney((isQuoted ? job.quote_amount : job.total_amount)!)}
           </Detail>
         </div>
 

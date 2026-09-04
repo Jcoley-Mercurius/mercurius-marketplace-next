@@ -273,7 +273,7 @@ function RequestCard({ job, now, action, view, accept, decline }: {
     <QuestionAnswers job={job} />
       </CardContent>
       <CardFooter className="flex flex-col gap-4 border-t bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex max-w-xl items-start gap-2 text-xs leading-5 text-muted-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span>{job.status === "matched" ? "Accept confirms the assignment and moves it to Active Jobs. Coordinate through Messages before using Start Job when work begins." : "Mercurius is still preparing this match. Accept becomes available when the request is actively matched to you."}</span></div>
+        <div className="flex max-w-xl items-start gap-2 text-xs leading-5 text-muted-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span>{canAccept ? "Accept confirms the assignment and moves it to Active Jobs. Coordinate through Messages before using Start Job when work begins." : "Mercurius is still preparing this match. Accept becomes available when the request is actively matched to you."}</span></div>
         <div className="flex w-full shrink-0 gap-2 sm:w-auto">
           <ConfirmAction triggerLabel="Decline" title="Decline this request?" entity={`${job.service_type} · ${job.id.slice(0, 8)}`} consequence="The request will return to Mercurius for another provider match." confirmLabel="Decline request" disabled={busy || expired} onConfirm={decline} />
           <Button className="min-h-11 flex-1 bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active sm:min-w-40" disabled={busy || !canAccept} onClick={accept}>{busy && action?.kind === "accept" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Accept request</Button>
@@ -425,7 +425,7 @@ function QuestionAnswers({ job }: { job: Job }) {
 }
 
 function responseWindow(job: Job, now: number) {
-  if (job.status !== "matched") return "Not open yet";
+  if (!(job.status === "matched" || (job.status === "quoted" && job.matching_status === "offered"))) return "Not open yet";
   const deadline = matchDeadline(job);
   if (!deadline) return "No deadline recorded";
   if (!now) return "Calculating…";

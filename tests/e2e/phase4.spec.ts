@@ -44,6 +44,7 @@ test("Phase 4: homeowner fallback requires explicit confirmation", async ({ page
   });
   await page.goto("/dashboard?tab=upcoming");
   await page.getByRole("button", { name: "Open Synthetic Lawn Service details" }).click();
+  await expect(page.getByText("Awaiting provider", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Find another provider" }).click();
   const confirm = page.getByRole("alertdialog", { name: "Allow another provider?" });
   await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
@@ -66,4 +67,17 @@ test("Phase 4: resolution remains visible while homeowner appeals", async ({ pag
   await confirm.getByRole("button", { name: "Submit appeal", exact: true }).click();
   expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic appeal evidence" });
   await expect(confirm.getByRole("alert")).toBeFocused();
+});
+
+test("Phase 4: quoted vendor offer guidance agrees with the acceptance control", async ({ page }) => {
+  await syntheticSession(page.context(), "vendor");
+  await page.route("**/rest/v1/service_requests?**", async route => {
+    const response = await route.fetch();
+    const rows = await response.json();
+    await route.fulfill({ response, json: rows.map((row: { id: string }) => row.id.endsWith("010") ? { ...row, status: "quoted", matching_status: "offered" } : row) });
+  });
+  await page.goto("/vendor/jobs");
+  await expect(page.getByRole("button", { name: "Accept request", exact: true })).toBeEnabled();
+  await expect(page.getByText(/Accept confirms the assignment/)).toBeVisible();
+  await expect(page.getByText("Not open yet", { exact: true })).toHaveCount(0);
 });

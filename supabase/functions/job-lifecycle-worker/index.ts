@@ -24,6 +24,7 @@ type AuthResult = { ok: true; via: 'cron_secret' | 'admin'; actorId?: string } |
 
 async function authorize(req: Request): Promise<AuthResult> {
   const provided = req.headers.get('x-worker-secret');
+  if (provided === 'YOUR_SERVER_SIDE_WORKER_SECRET') return { ok: false, status: 401, reason: 'placeholder_worker_secret' };
   if (provided) {
     if (WORKER_SECRET && safeEqual(provided, WORKER_SECRET)) return { ok: true, via: 'cron_secret' };
     // Fallback: token stored in the private internal_worker_tokens table (used by pg_cron).

@@ -50,7 +50,7 @@ are not printed. The only enabled worker environment is an ignored synthetic loc
 
 ## Explicit acceptance gates
 
-- [ ] Final-head CI passes clean reconstruction, 185 SQL assertions, 11 Edge checks, 31 runtime tests, authenticated concurrency/retry/pg_net and inactive installation, lint, credential scan, types, 62 unit tests, dependency audit, one-worker build and 55 browser cases.
+- [ ] Final-head CI passes clean reconstruction, 185 SQL assertions, 11 Edge checks, 32 runtime tests, authenticated concurrency/retry/pg_net and inactive installation, lint, credential scan, types, 62 unit tests, dependency audit, one-worker build and 56 browser cases.
 - [ ] Owner/code review accepts authority checks, locking, history preservation, legacy recovery, independent quote/dispute/review state, and Phase 3 preservation. Phase 4 owner acceptance has not yet been given.
 
 The following are separate later gates, not claims of completed testing:
@@ -63,3 +63,23 @@ The following are separate later gates, not claims of completed testing:
 No merge or deployment. Branch Git deployment remains disabled in `vercel.json`.
 The isolated Mercurius test stack was stopped after final SQL/transport verification, preserving its volume. All 11 Homeschool Haven containers remained running; none was modified.
 Heavy checks are sequential; builds use MERCURIUS_BUILD_WORKERS=1.
+
+## PR review reconciliation
+
+The copied worker-secret placeholder is rejected and the example is empty. CI
+checkout does not persist credentials; concurrency includes source repository
+identity while preserving same-repository push/PR deduplication. Quoted offer
+acceptance guidance now matches the control. Unavailable/fallback price displays
+hide stale offer totals; historical amounts remain intact for Phase 5 reconciliation.
+A new worker rejection test and vendor-offer browser case raise final CI targets
+to 32 handler tests and 56 browser cases. Earlier local 31/55 checkpoints remain
+accurate for their source snapshots.
+
+The recovered Edge digest intentionally verifies the archived Phase 2 evidence;
+active worker correctness is covered by runtime and frozen type checks. Restoring
+browser access to audit-writing functions would weaken the authority boundary;
+failed invoker edits remain rejected and do not claim durable rejection logs.
+The generic quote transition is now forbidden, so its historical numeric metadata
+cast is unreachable. Legacy pending_review requires operator reconciliation, not
+fabricated homeowner confirmation. Expired acceptance and actual prior-status audit
+findings are fixed by the forward Phase 4 migrations and covered by SQL tests.

@@ -101,6 +101,12 @@ if (name === "job-lifecycle-worker") {
     await response.body?.cancel();
     equal(calls, ["GET /rest/v1/internal_worker_tokens"]);
   });
+  Deno.test("worker: copied example credential is rejected without a token lookup", async () => {
+    calls = []; unexpected = [];
+    route = url => url.pathname === "/rest/v1/internal_worker_tokens" ? json({ token: "YOUR_SERVER_SIDE_WORKER_SECRET" }) : undefined;
+    const response = await request({}, { "x-worker-secret": "YOUR_SERVER_SIDE_WORKER_SECRET" });
+    equal(response.status, 401); await response.body?.cancel(); equal(calls, []);
+  });
   Deno.test("worker: valid scheduler credential runs an empty synthetic lifecycle batch", async () => {
     calls = []; unexpected = [];
     route = (url) => {

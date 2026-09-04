@@ -47,6 +47,7 @@ Historical status values remain intact. Generic transitions cannot create new
 | pending + awaiting_match/offered | Matching; eligible provider receives/responds to exclusive offer |
 | pending or matched + awaiting_consent | Homeowner chooses whether to allow another provider; admin can explain, cannot impersonate consent |
 | pending + sourcing/exhausted | Not available yet in your area; operations reviews supply or owner cancels; no sourcing promise |
+| pending or matched + quote_pending | Declined quote requires admin follow-up; send a revised quote and resume an eligible offer explicitly |
 | matched + offered | Offered provider accepts/declines before four-hour expiry; worker advances expired offer |
 | matched + matched | Legacy accepted match; admin corrects to Scheduled with reason |
 | quoted | Legacy quote state; no retroactive expiry inferred; admin sends a versioned quote or reconciles accepted provider state |
