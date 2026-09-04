@@ -1948,6 +1948,79 @@ export type Database = {
           },
         ]
       }
+      money_operation_refund_sources: {
+        Row: {
+          assessment_hash: string
+          authorization_id: string
+          created_at: string
+          id: string
+          obligation_id: string
+          operation_id: string
+          payment_id: string
+          refund_percent: number
+          service: number
+          target_service: number
+          target_tax: number
+          target_tip: number
+          tax: number
+          tip: number
+        }
+        Insert: {
+          assessment_hash: string
+          authorization_id: string
+          created_at?: string
+          id?: string
+          obligation_id: string
+          operation_id: string
+          payment_id: string
+          refund_percent: number
+          service: number
+          target_service: number
+          target_tax: number
+          target_tip: number
+          tax: number
+          tip: number
+        }
+        Update: {
+          assessment_hash?: string
+          authorization_id?: string
+          created_at?: string
+          id?: string
+          obligation_id?: string
+          operation_id?: string
+          payment_id?: string
+          refund_percent?: number
+          service?: number
+          target_service?: number
+          target_tax?: number
+          target_tip?: number
+          tax?: number
+          tip?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_operation_refund_sources_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: true
+            referencedRelation: "money_refund_authorizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_operation_refund_sources_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_operation_refund_sources_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "job_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_quote_contexts: {
         Row: {
           context: Json
@@ -4304,6 +4377,16 @@ export type Database = {
         Args: { p_attempt: string; p_session: string; p_url: string }
         Returns: undefined
       }
+      money_authorize_cancellation_refund: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_operation: string
+          p_payment: string
+          p_reason: string
+        }
+        Returns: string
+      }
       money_authorize_refund: {
         Args: {
           p_actor: string
@@ -4401,6 +4484,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      money_preview_cancellation_refund: {
+        Args: { p_actor: string; p_operation: string; p_payment: string }
+        Returns: Json
       }
       money_preview_commercial_source: {
         Args: { p_request: string }

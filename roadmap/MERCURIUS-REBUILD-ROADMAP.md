@@ -154,6 +154,12 @@ appeal gates; see governance/PHASE-5-COMPLETION-PAYOUT.md. PR #7 is merged. Phas
 remains open for functional, configuration, operations and integration acceptance;
 Phase 6 has not started.
 
+**Cancellation/refund follow-up:** TRACE-056 consumes the Phase 4 CFG-006 customer
+cancellation assessment as immutable money evidence and creates exact, dual-reviewed
+refund authorizations per captured payment. Provider cancellation remains blocked
+until CFG-007 acceptable-replacement exhaustion is recorded. See
+`governance/PHASE-5-CANCELLATION-REFUNDS.md`.
+
 **Checkpoint 2026-09-04:** Independent bounded slices are implemented for review on
 `codex/phase5-money-integrity`, now combined with main `735df91` after PRs #4 and #5
 merged. Lifecycle code is included; functional adapters remain open. DEC-2026-011 records
