@@ -1,21 +1,35 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
-## Current follow-up: completion and direct ACH
+## Current follow-ups: commercial sources and direct ACH eligibility
 
-PRs #4–6 are merged. PR #7 (quotes/checkout) was verified draft and unmerged;
-`codex/phase5-completion-payout` starts independently from main 9aeed8f. TRACE-055
-binds payout eligibility to authenticated lifecycle confirmation receipts and
-current dispute/appeal evidence, with transaction locks at preparation, submission
-and retry. See PHASE-5-COMPLETION-PAYOUT.md for characterization and validation.
+PRs #4–7 are merged. TRACE-054 binds checkout to accepted quote revisions and
+eligible fixed offerings, while TRACE-055 binds payout eligibility to authenticated
+lifecycle confirmation receipts and current dispute/appeal evidence. See
+PHASE-5-QUOTE-CHECKOUT.md and PHASE-5-COMPLETION-PAYOUT.md for exact behavior,
+measured evidence and limitations.
 
-The 48-hour clock uses homeowner confirmation; resolved disputes do not restart it.
-Bank settlement already in flight remains recordable under a new hold. No bank
-transfer, deployment or scheduler is initiated. Phase 5 remains open, including
-PR #7 acceptance, cancellation/refund linkage, recurring identities, onboarding
-integration, finance tooling, recovery/cutover and authorized provider/manual gates.
+The quote/checkout slice implements accepted
+quote/eligible fixed-offering source capture, source-bound snapshot publication,
+stale-source guards and idempotent checkout. See PHASE-5-QUOTE-CHECKOUT.md for exact
+behavior, measured evidence and limitations. This does not close all of Phase 5.
 
-The original independent checkpoint and dependencies below are historical; the
-current follow-up evidence supersedes the still-unconnected completion port.
+The quote amount remains the accepted **total**. Full allocation is separately
+reviewed and displayed by checkout. An already reserved agreement and its deposit
+balance retain their price despite later catalog edits. New unreserved stale terms
+require renewed review. Request-bound source changes remain blocked across an
+uncertain provider attempt.
+
+The completion/payout slice validates the original homeowner-confirmation clock at
+preparation, submission and retry. Resolved disputes do not restart it; an appeal
+after statement preparation blocks submission, while an already submitted bank
+outcome remains recordable under a later hold so the ledger stays truthful. No bank
+transfer, deployment or scheduler is initiated.
+
+Remaining work includes cancellation/refund linkage, recurring identities, vendor
+matching/private onboarding evidence, tax and promotion configuration, finance
+tooling, recovery and cutover, authorized provider checks, and manual acceptance.
+
+## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
 at fetched main d8cceee30a934c17804a0f507cb41c289dc8e417 in a separate worktree.

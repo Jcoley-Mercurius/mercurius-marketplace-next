@@ -4,9 +4,10 @@
 
 The owner requested the next Phase 5 slice after quotes/checkout on September 4,
 2026. Remote main was fetched at 9aeed8fd16edb16b403c872c9bf403a998bd831c.
-PR #7 remained open, draft and unmerged at 5be8aca. This independent branch,
-`codex/phase5-completion-payout`, starts from main, without changing PR #7 or
-another worktree. Merged Phase 4 lifecycle contracts are available on that base.
+PR #7 was open, draft and unmerged at 5be8aca when this independent branch began.
+It is now merged through main 1d6342a. This reconciliation combines its commercial
+source contracts without changing the completion/payout boundary. Merged Phase 4
+lifecycle contracts remain the authority for confirmation and dispute evidence.
 
 Authority: AGENTS.md, OWNER-APPROVALS, MPS §6.5, MTS financial/audit separation,
 MDS MoneySummary/ConfirmAction, CFG-005/008, DEC-006/009/011, and Phase 4–5
@@ -88,9 +89,9 @@ implied; this slice changes no application controls, mobile layout or dark mode.
 
 ## Remaining Phase 5 gates
 
-- PR #7 review/CI and the remaining quote presentation, finance tooling and uncertain
-  checkout recovery gates remain separate. This adapter has no runtime dependency
-  on PR #7; its ledger fixtures accommodate the private intake kernel after merge.
+- The remaining quote presentation, finance tooling and uncertain checkout recovery
+  gates remain separate. This adapter retains no runtime dependency on checkout;
+  its ledger fixtures now accommodate the merged private intake kernel.
 - Cancellation/refund assessment linkage, recurring commercial identities, vendor
   matching eligibility/private evidence collection and legacy cutover remain open.
 - Receipt conflict/reconfirmation recovery, changed bank/amount replacement
