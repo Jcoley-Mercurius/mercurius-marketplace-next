@@ -34,6 +34,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      completion_evidence_rules: {
+        Row: {
+          actor_id: string
+          created_at: string
+          minimum_photos: number
+          reason: string
+          service_id: string
+          version: number
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          minimum_photos: number
+          reason: string
+          service_id: string
+          version: number
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          minimum_photos?: number
+          reason?: string
+          service_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "completion_evidence_rules_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_submissions: {
         Row: {
           created_at: string
@@ -251,6 +286,51 @@ export type Database = {
         }
         Relationships: []
       }
+      dispute_appeals: {
+        Row: {
+          created_at: string
+          dispute_id: string
+          homeowner_id: string
+          id: string
+          reason: string
+          resolution_version: number
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          dispute_id: string
+          homeowner_id: string
+          id?: string
+          reason: string
+          resolution_version: number
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          dispute_id?: string
+          homeowner_id?: string
+          id?: string
+          reason?: string
+          resolution_version?: number
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispute_appeals_dispute_id_fkey"
+            columns: ["dispute_id"]
+            isOneToOne: false
+            referencedRelation: "disputes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispute_appeals_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       disputes: {
         Row: {
           created_at: string
@@ -260,8 +340,10 @@ export type Database = {
           raised_at: string
           reason: string | null
           resolution_notes: string | null
+          resolution_version: number
           resolved_at: string | null
           status: Database["public"]["Enums"]["dispute_status"]
+          ticket_id: string | null
           updated_at: string
           vendor_id: string | null
         }
@@ -273,8 +355,10 @@ export type Database = {
           raised_at?: string
           reason?: string | null
           resolution_notes?: string | null
+          resolution_version?: number
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["dispute_status"]
+          ticket_id?: string | null
           updated_at?: string
           vendor_id?: string | null
         }
@@ -286,8 +370,10 @@ export type Database = {
           raised_at?: string
           reason?: string | null
           resolution_notes?: string | null
+          resolution_version?: number
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["dispute_status"]
+          ticket_id?: string | null
           updated_at?: string
           vendor_id?: string | null
         }
@@ -297,6 +383,13 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
             referencedColumns: ["id"]
           },
         ]
@@ -684,6 +777,50 @@ export type Database = {
           },
         ]
       }
+      job_operations: {
+        Row: {
+          actor_id: string
+          before_value: Json
+          created_at: string
+          id: string
+          job_id: string
+          kind: string
+          operation_key: string
+          policy_assessment: Json
+          reason: string
+        }
+        Insert: {
+          actor_id: string
+          before_value: Json
+          created_at?: string
+          id?: string
+          job_id: string
+          kind: string
+          operation_key: string
+          policy_assessment: Json
+          reason: string
+        }
+        Update: {
+          actor_id?: string
+          before_value?: Json
+          created_at?: string
+          id?: string
+          job_id?: string
+          kind?: string
+          operation_key?: string
+          policy_assessment?: Json
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_operations_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_photos: {
         Row: {
           caption: string | null
@@ -814,6 +951,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lifecycle_worker_runs: {
+        Row: {
+          actor_id: string | null
+          completed_at: string
+          id: string
+          summary: Json
+        }
+        Insert: {
+          actor_id?: string | null
+          completed_at?: string
+          id: string
+          summary: Json
+        }
+        Update: {
+          actor_id?: string | null
+          completed_at?: string
+          id?: string
+          summary?: Json
+        }
+        Relationships: []
       }
       loyalty_accounts: {
         Row: {
@@ -957,6 +1115,42 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      matching_fallback_consents: {
+        Row: {
+          homeowner_id: string
+          preferred_contractor_id: string
+          recorded_at: string
+          request_id: string
+        }
+        Insert: {
+          homeowner_id: string
+          preferred_contractor_id: string
+          recorded_at?: string
+          request_id: string
+        }
+        Update: {
+          homeowner_id?: string
+          preferred_contractor_id?: string
+          recorded_at?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matching_fallback_consents_preferred_contractor_id_fkey"
+            columns: ["preferred_contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matching_fallback_consents_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -2652,6 +2846,107 @@ export type Database = {
         }
         Relationships: []
       }
+      request_quotes: {
+        Row: {
+          amount: number
+          decided_at: string | null
+          decision_actor: string | null
+          expires_at: string
+          id: string
+          policy_version: string
+          reason: string
+          request_id: string
+          revision: number
+          sender_id: string
+          sent_at: string
+          status: string
+          supersedes_id: string | null
+        }
+        Insert: {
+          amount: number
+          decided_at?: string | null
+          decision_actor?: string | null
+          expires_at?: string
+          id?: string
+          policy_version?: string
+          reason: string
+          request_id: string
+          revision: number
+          sender_id: string
+          sent_at?: string
+          status?: string
+          supersedes_id?: string | null
+        }
+        Update: {
+          amount?: number
+          decided_at?: string | null
+          decision_actor?: string | null
+          expires_at?: string
+          id?: string
+          policy_version?: string
+          reason?: string
+          request_id?: string
+          revision?: number
+          sender_id?: string
+          sent_at?: string
+          status?: string
+          supersedes_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_quotes_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_quotes_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "request_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      review_history: {
+        Row: {
+          action: string
+          actor_id: string
+          before_value: Json
+          created_at: string
+          id: string
+          reason: string
+          review_id: string
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          before_value: Json
+          created_at?: string
+          id?: string
+          reason: string
+          review_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          before_value?: Json
+          created_at?: string
+          id?: string
+          reason?: string
+          review_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_history_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           comment: string | null
@@ -2661,6 +2956,7 @@ export type Database = {
           google_prompt_clicked: boolean
           google_prompt_shown: boolean
           id: string
+          moderation_state: string
           rating: number
           service_request_id: string
           vendor_acknowledged_at: string | null
@@ -2674,6 +2970,7 @@ export type Database = {
           google_prompt_clicked?: boolean
           google_prompt_shown?: boolean
           id?: string
+          moderation_state?: string
           rating: number
           service_request_id: string
           vendor_acknowledged_at?: string | null
@@ -2687,6 +2984,7 @@ export type Database = {
           google_prompt_clicked?: boolean
           google_prompt_shown?: boolean
           id?: string
+          moderation_state?: string
           rating?: number
           service_request_id?: string
           vendor_acknowledged_at?: string | null
@@ -2753,6 +3051,7 @@ export type Database = {
           confirmation_sent_at: string | null
           contractor_id: string | null
           created_at: string
+          current_quote_id: string | null
           customer_id: string
           declined_contractor_ids: string[]
           description: string | null
@@ -2770,6 +3069,7 @@ export type Database = {
           matching_status: string
           needs_admin_review: boolean
           notes: string | null
+          occurrence_key: string | null
           package_answers: Json | null
           package_id: string | null
           package_question_answers: Json
@@ -2786,10 +3086,16 @@ export type Database = {
           promotion_id: string | null
           quote_amount: number | null
           quote_approved_at: string | null
+          quote_declined_at: string | null
+          quote_expires_at: string | null
           quote_only: boolean
+          quote_revision: number
+          quote_status: string | null
+          recurrence_parent_id: string | null
           resolved_price: number | null
           review_request_due_at: string | null
           review_requested_at: string | null
+          scheduled_start_at: string | null
           service_catalog_id: string | null
           service_type: string
           state: string
@@ -2813,6 +3119,7 @@ export type Database = {
           confirmation_sent_at?: string | null
           contractor_id?: string | null
           created_at?: string
+          current_quote_id?: string | null
           customer_id: string
           declined_contractor_ids?: string[]
           description?: string | null
@@ -2830,6 +3137,7 @@ export type Database = {
           matching_status?: string
           needs_admin_review?: boolean
           notes?: string | null
+          occurrence_key?: string | null
           package_answers?: Json | null
           package_id?: string | null
           package_question_answers?: Json
@@ -2846,10 +3154,16 @@ export type Database = {
           promotion_id?: string | null
           quote_amount?: number | null
           quote_approved_at?: string | null
+          quote_declined_at?: string | null
+          quote_expires_at?: string | null
           quote_only?: boolean
+          quote_revision?: number
+          quote_status?: string | null
+          recurrence_parent_id?: string | null
           resolved_price?: number | null
           review_request_due_at?: string | null
           review_requested_at?: string | null
+          scheduled_start_at?: string | null
           service_catalog_id?: string | null
           service_type: string
           state?: string
@@ -2873,6 +3187,7 @@ export type Database = {
           confirmation_sent_at?: string | null
           contractor_id?: string | null
           created_at?: string
+          current_quote_id?: string | null
           customer_id?: string
           declined_contractor_ids?: string[]
           description?: string | null
@@ -2890,6 +3205,7 @@ export type Database = {
           matching_status?: string
           needs_admin_review?: boolean
           notes?: string | null
+          occurrence_key?: string | null
           package_answers?: Json | null
           package_id?: string | null
           package_question_answers?: Json
@@ -2906,10 +3222,16 @@ export type Database = {
           promotion_id?: string | null
           quote_amount?: number | null
           quote_approved_at?: string | null
+          quote_declined_at?: string | null
+          quote_expires_at?: string | null
           quote_only?: boolean
+          quote_revision?: number
+          quote_status?: string | null
+          recurrence_parent_id?: string | null
           resolved_price?: number | null
           review_request_due_at?: string | null
           review_requested_at?: string | null
+          scheduled_start_at?: string | null
           service_catalog_id?: string | null
           service_type?: string
           state?: string
@@ -2929,6 +3251,13 @@ export type Database = {
             columns: ["contractor_id"]
             isOneToOne: false
             referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_requests_current_quote_id_fkey"
+            columns: ["current_quote_id"]
+            isOneToOne: false
+            referencedRelation: "request_quotes"
             referencedColumns: ["id"]
           },
           {
@@ -2957,6 +3286,13 @@ export type Database = {
             columns: ["promotion_id"]
             isOneToOne: false
             referencedRelation: "package_promotions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_requests_recurrence_parent_id_fkey"
+            columns: ["recurrence_parent_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -3101,6 +3437,10 @@ export type Database = {
           id: string
           issue_type: string
           job_id: string | null
+          next_action: string
+          priority: string
+          queue_owner: string
+          response_due_at: string | null
           status: string
           subject: string
           ticket_number: string
@@ -3113,6 +3453,10 @@ export type Database = {
           id?: string
           issue_type: string
           job_id?: string | null
+          next_action?: string
+          priority?: string
+          queue_owner?: string
+          response_due_at?: string | null
           status?: string
           subject: string
           ticket_number: string
@@ -3125,6 +3469,10 @@ export type Database = {
           id?: string
           issue_type?: string
           job_id?: string | null
+          next_action?: string
+          priority?: string
+          queue_owner?: string
+          response_due_at?: string | null
           status?: string
           subject?: string
           ticket_number?: string
@@ -3617,7 +3965,7 @@ export type Database = {
     }
     Functions: {
       admin_assign_contractor: {
-        Args: { _contractor_id: string; _job_id: string }
+        Args: { _contractor_id: string; _job_id: string; _reason?: string }
         Returns: undefined
       }
       admin_get_contractor_linked_email: {
@@ -3648,11 +3996,24 @@ export type Database = {
         Returns: undefined
       }
       admin_send_quote: {
-        Args: { _amount: number; _job_id: string }
+        Args: {
+          _amount: number
+          _expected_revision: number
+          _job_id: string
+          _reason: string
+        }
         Returns: undefined
       }
       admin_unlink_contractor: {
         Args: { _contractor_id: string }
+        Returns: undefined
+      }
+      appeal_dispute_resolution: {
+        Args: { _dispute_id: string; _reason: string }
+        Returns: string
+      }
+      appeal_job_review: {
+        Args: { _reason: string; _review_id: string }
         Returns: undefined
       }
       award_points: {
@@ -3666,13 +4027,27 @@ export type Database = {
         }
         Returns: undefined
       }
+      consent_to_provider_fallback: {
+        Args: { _request_id: string }
+        Returns: string
+      }
       create_job_offer: {
         Args: {
           _contractor_id: string
           _force?: boolean
           _package_id?: string
           _package_tier_id?: string
+          _reason?: string
           _request_id: string
+        }
+        Returns: string
+      }
+      create_service_occurrence: {
+        Args: {
+          _occurrence_key: string
+          _reason: string
+          _scheduled_at: string
+          _template_id: string
         }
         Returns: string
       }
@@ -3778,7 +4153,7 @@ export type Database = {
         Returns: string
       }
       homeowner_respond_to_quote: {
-        Args: { _approve: boolean; _job_id: string }
+        Args: { _approve: boolean; _job_id: string; _quote_id?: string }
         Returns: undefined
       }
       job_transition_actor_allowed: {
@@ -3812,6 +4187,10 @@ export type Database = {
           _reason: string
           _to: string
         }
+        Returns: undefined
+      }
+      moderate_job_review: {
+        Args: { _reason: string; _review_id: string; _state: string }
         Returns: undefined
       }
       money_approve_review: {
@@ -4052,6 +4431,17 @@ export type Database = {
       }
       offer_next_for_request: { Args: { _request_id: string }; Returns: string }
       pricing_server_now: { Args: never; Returns: string }
+      record_job_operation: {
+        Args: {
+          _job_id: string
+          _kind: string
+          _operation_key: string
+          _reason: string
+          _scheduled_at?: string
+          _waived?: boolean
+        }
+        Returns: Json
+      }
       release_job_match: {
         Args: {
           _contractor_id: string
@@ -4069,6 +4459,23 @@ export type Database = {
           promotion_id: string
           promotion_label: string
         }[]
+      }
+      revise_job_review: {
+        Args: {
+          _comment: string
+          _rating: number
+          _reason: string
+          _review_id: string
+        }
+        Returns: undefined
+      }
+      run_lifecycle_batch: {
+        Args: { _actor_id?: string; _run_id: string }
+        Returns: Json
+      }
+      set_completion_evidence_rule: {
+        Args: { _minimum_photos: number; _reason: string; _service_id: string }
+        Returns: undefined
       }
       start_request_matching: { Args: { _request_id: string }; Returns: string }
       submit_job_review: {
@@ -4185,6 +4592,7 @@ export type Database = {
         | "match_declined"
         | "match_expired"
         | "match_reassigned"
+        | "status_changed"
       job_payment_status: "pending" | "captured" | "released" | "refunded"
       loyalty_source_type:
         | "review"
@@ -4379,6 +4787,7 @@ export const Constants = {
         "match_declined",
         "match_expired",
         "match_reassigned",
+        "status_changed",
       ],
       job_payment_status: ["pending", "captured", "released", "refunded"],
       loyalty_source_type: [

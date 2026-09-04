@@ -215,3 +215,11 @@ Homeschool Haven remains untouched.
 Final local checks: lint passed; all 48 unit/contract tests passed; secret scan
 and whitespace checks passed; production build passed with one worker. All six
 unchanged Windows screenshot comparisons passed after the visual review.
+
+## Owner acceptance update — 2026-09-03
+
+Phase 3 is **COMPLETE / OWNER ACCEPTED** under DEC-2026-005. Earlier in-progress
+statements above describe the pre-acceptance checkpoint. Human screen-reader,
+true browser zoom, brand approval and Linux/macOS visual baseline follow-ups
+remain open separately; acceptance does not assert those checks were performed.
+Phase 4 starting evidence and requirements are in PHASE-4-RECONCILIATION.md.

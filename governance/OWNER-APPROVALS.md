@@ -12,3 +12,10 @@
 The owner has stated that no additional product-authority approval chain is required. Legal, financial, privacy, security, and platform-provider constraints may still require specialist validation where the approved systems identify it.
 
 The approved authority chain is now **MPS → MDS → MTS → implementation evidence**. No additional system-level approval is outstanding.
+
+## Phase 3 acceptance — 2026-09-03
+
+The owner accepted Phase 3 as closed and authorized Phase 4 implementation and
+a draft PR (DEC-2026-005). This accepts the implementation checkpoint; human
+screen-reader/zoom, brand review and cross-platform visual follow-ups remain
+separate. No unperformed manual checks are claimed to have passed.

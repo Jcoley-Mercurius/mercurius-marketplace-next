@@ -140,12 +140,14 @@
     },
     {
       "file": "job-lifecycle-worker/index.ts",
-      "bytes": 11813,
-      "sha256": "fca28aa2f96970129fb27fcae8d3772721d8adf94ffe4df3fc5d7502520a64ad",
-      "normalizedSha256": "fca28aa2f96970129fb27fcae8d3772721d8adf94ffe4df3fc5d7502520a64ad",
+      "bytes": 4027,
+      "sha256": "4fd4b39a754ee80a203e91fa02708c2e61ebe0a2568a134fd828e566fbbacfad",
+      "normalizedSha256": "4fd4b39a754ee80a203e91fa02708c2e61ebe0a2568a134fd828e566fbbacfad",
+      "phase2NormalizedSha256": "fca28aa2f96970129fb27fcae8d3772721d8adf94ffe4df3fc5d7502520a64ad",
       "credentialFindings": [],
       "literalCredentialCandidates": [],
       "environmentNames": [
+        "JOB_LIFECYCLE_ENABLED",
         "JOB_WORKER_SECRET",
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_URL"
