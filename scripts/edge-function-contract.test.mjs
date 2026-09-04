@@ -43,7 +43,10 @@ describe("recovered Edge Function contract", () => {
     });
     if (!retainedLocal.has(file.file.split("/")[0])) {
       it(`${file.file}: matches the reviewed export apart from line endings`, () => {
-        expect(digest(source(file.file))).toBe(file.normalizedSha256);
+        const evidence = file.file === "job-lifecycle-worker/index.ts"
+          ? readFileSync("supabase/recovered/job-lifecycle-worker.phase2.ts", "utf8")
+          : source(file.file);
+        expect(digest(evidence)).toBe(file.normalizedSha256);
       });
     }
   }

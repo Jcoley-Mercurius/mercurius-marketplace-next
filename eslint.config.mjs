@@ -19,6 +19,7 @@ const eslintConfig = defineConfig([
     ".agents/**",
     ".codex/**",
     "supabase/functions/**",
+    "supabase/recovered/**", // Immutable Phase 2 evidence, hash-verified by contract tests.
     "supabase/runtime-tests/**", // Checked separately by Deno.
     "supabase/.temp/**",
     "supabase/.audit/**",

@@ -48,11 +48,11 @@ export const serviceRequestStatusStyles = {
 
 const serviceRequestStatusLabels = {
   pending: "Request received",
-  matched: "Provider matched",
+  matched: "Provider offer pending",
   quoted: "Quote ready",
   scheduled: "Scheduled",
   in_progress: "In progress",
-  pending_review: "Awaiting confirmation",
+  pending_review: "Completion pending",
   vendor_completed: "Ready to confirm",
   homeowner_confirmed: "Completion confirmed",
   completed: "Completed",
@@ -68,7 +68,9 @@ export function isPastServiceRequestStatus(status: string) {
   return pastServiceRequestStatuses.has(status);
 }
 
-export function serviceRequestStatusLabel(status: string) {
+export function serviceRequestStatusLabel(status: string, matchingStatus?: string | null) {
+  if (["pending", "matched"].includes(status) && matchingStatus === "awaiting_consent") return "Provider choice needed";
+  if (status === "pending" && ["exhausted", "sourcing"].includes(matchingStatus ?? "")) return "Not available yet in your area";
   return status in serviceRequestStatusLabels
     ? serviceRequestStatusLabels[status as ServiceRequestStatus]
     : status.replaceAll("_", " ");

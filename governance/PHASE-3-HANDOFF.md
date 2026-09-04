@@ -26,3 +26,11 @@ Prior evidence: two clean resets with identical schema/types; 35 SQL assertions;
 48 unit/contract assertions; 11 frozen Deno checks; 26 isolated handler tests;
 10 local missing-JWT gateway checks; successful 56-page one-worker build.
 These do not constitute production readiness or provider integration coverage.
+
+## Owner acceptance update — 2026-09-03
+
+Phase 3 is **COMPLETE / OWNER ACCEPTED** under DEC-2026-005. Earlier in-progress
+statements above describe the pre-acceptance checkpoint. Human screen-reader,
+true browser zoom, brand approval and Linux/macOS visual baseline follow-ups
+remain open separately; acceptance does not assert those checks were performed.
+Phase 4 starting evidence and requirements are in PHASE-4-RECONCILIATION.md.

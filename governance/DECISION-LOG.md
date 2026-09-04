@@ -117,3 +117,73 @@ under DEC-2026-004; they are not claimed as passing at Phase 2 closeout.
 **Required evidence:** Sanitized schema artifact; object inventory; live-to-repository drift report; secret scan; confirmation that no customer rows were committed.
 
 **Supersedes:** Nothing.
+
+### DEC-2026-005 — Accept Phase 3 and authorize Phase 4
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner accepted Phase 3 as closed at PR #3 and authorized lifecycle/scheduler
+reconciliation, tests, governance updates and a draft PR. Phase 3 manual
+accessibility, brand and cross-platform follow-ups remain recorded separately.
+PR #3 was verified open/unmerged at 91379e9; Phase 4 initially branched from that
+head. Its later merge at db3f406 was independently verified as tree-identical;
+the Phase 4 branch was rebased onto that merged main without changing Phase 3.
+No merge, deploy, production change, Cron activation or Homeschool Haven operation
+is authorized. Heavy checks remain sequential, with MERCURIUS_BUILD_WORKERS=1.
+
+### DEC-2026-006 — Completion escalation deadline
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+Asked how long after the homeowner completion-confirmation notice an unanswered
+job should escalate to admin review, the owner answered: “72 hours is approved.”
+The clock begins with the recorded notice, not provider offer creation. At 72h
+the job stays completion-pending and gains an auditable admin-review flag. Silence
+never creates homeowner confirmation or payout eligibility. The four-hour vendor
+offer deadline is separate. No other inherited reminder/quiet-hour timer is
+approved by this decision. Required evidence: boundary, retry, cross-role, failure
+and concurrency tests; no confirmation or financial effects on escalation.
+
+### DEC-2026-007 — Vendor acceptance schedules service
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner clarified that the four-hour window is the vendor's time to accept the
+homeowner's offer, not a quote-validity period. A request becomes scheduled
+immediately when the vendor accepts. Do not add payment, separate homeowner quote
+approval or mutual appointment confirmation as prerequisites to that scheduling
+transition. The four-hour quote-expiry interpretation was discarded before any
+quote-expiry migration was applied. Quote validity/revision remains an open
+specification, separate from the approved offer window and 72-hour completion review.
+
+### DEC-2026-008 — Homeowner quote approval window
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+Asked how long a price quote remains valid for homeowner approval, the owner
+answered “24 hour for approval.” New quote revisions therefore expire 24 hours
+after being sent. This is separate from the four-hour vendor offer and 72-hour
+completion escalation. Replacing or extending a quote creates a new revision;
+previous revisions and decisions remain in history. No expiry is retroactively
+inferred for a legacy quote that has no recorded notice/deadline.
+
+### DEC-2026-009 — Disputes and rating-neutral reviews
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner approved a 48-hour dispute filing window beginning when the vendor
+marks the work complete. Homeowners may appeal admin resolutions through the
+ticket system. No appeal deadline was specified; none is imposed by this slice.
+Every star rating uses the same moderation rules. A separate review-management
+system is future work. Previously private feedback is not retroactively published.
+
+### DEC-2026-010 — Operational defaults for Phase 4
+
+**Status:** APPROVED. **Date:** 2026-09-03.
+
+The owner approved at least one completion photo per visit unless a category rule
+requires more; separate jobs for recurring visits; cancellations affecting one
+visit; and moderation for spam, personal information, threats/abuse, or content
+unrelated to the service, never for a low rating alone. Email/reminder timing
+stays inactive until separately configured. These decisions do not authorize
+Cron activation, real messages, charges, refunds, payouts, merge or deployment.

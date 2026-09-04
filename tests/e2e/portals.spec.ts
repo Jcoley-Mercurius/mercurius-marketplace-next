@@ -90,3 +90,23 @@ test("portal guards still reject absent and wrong-role sessions", async ({ page 
   await page.goto("/vendor/jobs");
   await expect(page).toHaveURL(/\/dashboard$/);
 });
+
+for (const theme of ["light", "dark"]) {
+  test(`admin ${theme}: status correction requires an audited reason`, async ({ page }) => {
+    await portal(page, "admin", theme);
+    await page.getByRole("button", { name: /Review Synthetic Lawn/ }).click();
+    const detail = page.getByRole("dialog", { name: "Synthetic Lawn Service" });
+    await expect(detail.getByRole("button", { name: /Homeowner Confirmed/i })).toHaveCount(0);
+    await detail.getByRole("button", { name: "Scheduled", exact: true }).click();
+    const confirm = page.getByRole("alertdialog", { name: "Change request status?" });
+    await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await expect(confirm.getByRole("button", { name: "Change to Scheduled" })).toBeDisabled();
+    await confirm.getByLabel("Reason (required)").fill("Synthetic operator correction");
+    const request = page.waitForRequest(request => request.url().includes("/rpc/transition_job_status"));
+    await confirm.getByRole("button", { name: "Change to Scheduled" }).click();
+    expect((await request).postDataJSON()).toMatchObject({ _to_status: "scheduled", _reason: "Synthetic operator correction" });
+    await expect(confirm.getByRole("alert")).toBeFocused();
+    expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: `test-results/phase4-admin-${theme}.png`, fullPage: true });
+  });
+}

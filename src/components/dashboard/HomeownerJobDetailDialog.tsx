@@ -1,9 +1,10 @@
 "use client";
 
+import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
+import { JobOperations } from "@/components/dashboard/JobOperations";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  AlertTriangle,
   Calendar,
   CheckCircle2,
   Clock,
@@ -43,6 +44,16 @@ export type HomeownerDashboardJob = {
   id: string;
   service_type: string;
   status: string;
+  scheduled_start_at?: string | null;
+  vendor_completed_at?: string | null;
+  homeowner_confirmed_at?: string | null;
+  matching_status?: string | null;
+  current_quote_id?: string | null;
+  quote_status?: string | null;
+  quote_expires_at?: string | null;
+  quote_amount?: number | null;
+  quote_declined_at?: string | null;
+  quote_approved_at?: string | null;
   preferred_date: string | null;
   preferred_time: string | null;
   address: string;
@@ -56,6 +67,7 @@ export type HomeownerDashboardJob = {
 };
 
 type JobAction =
+  | "provider-fallback"
   | "approve-quote"
   | "cancel-request"
   | "decline-quote"
@@ -87,7 +99,6 @@ const ratingLabels = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
 
 export function HomeownerJobDetailDialog({
   job,
-  homeownerId,
   open,
   actionsEnabled,
   onOpenChange,
@@ -102,7 +113,7 @@ export function HomeownerJobDetailDialog({
   const [signedPhotos, setSignedPhotos] = useState<string[]>([]);
   const [actionError, setActionError] = useState("");
   const errorRef = useRef<HTMLParagraphElement>(null);
-  useEffect(() => { if (actionError) errorRef.current?.focus(); }, [actionError]);
+  useEffect(() => { if (actionError && !document.querySelector('[role=alertdialog]')) errorRef.current?.focus(); }, [actionError]);
   const [provider, setProvider] = useState<ProviderSummary | null>(null);
   const [providerMode, setProviderMode] = useState<ProviderMode>(
     job?.contractor_id ? "loading" : "idle",
@@ -217,12 +228,12 @@ export function HomeownerJobDetailDialog({
   if (!job) return null;
   const currentJob = job;
 
-  const isQuoted = job.status === "quoted";
+  const isQuoted = job.quote_status === "submitted" && !job.quote_declined_at && !job.quote_approved_at;
   const isPending = job.status === "pending";
-  const needsConfirmation = ["pending_review", "vendor_completed"].includes(
+  const needsConfirmation = ["vendor_completed"].includes(
     job.status,
   );
-  const needsReview = job.status === "review_requested";
+  const needsReview = job.status === "review_requested" || (job.status === "completed" && !!job.homeowner_confirmed_at);
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
   const displayRating = hoveredRating || rating;
 
@@ -242,27 +253,17 @@ export function HomeownerJobDetailDialog({
     setActionError("");
     setBusyAction("cancel-request");
     try {
-      const { data, error } = await createClient()
-        .from("service_requests")
-        .delete()
-        .eq("id", currentJob.id)
-        .eq("customer_id", homeownerId)
-        .eq("status", "pending")
-        .select("id");
-
+      const { error } = await createClient().rpc("transition_job_status", {
+        _job_id: currentJob.id, _to_status: "cancelled", _reason: "Homeowner cancelled pending request",
+      });
       if (error) throw new Error(error.message);
-      if (!Array.isArray(data) || data.length !== 1) {
-        throw new Error(
-          "This request could not be cancelled. It may no longer be pending.",
-        );
-      }
 
       onRemoveJob(currentJob.id);
       requestAnimationFrame(() => document.getElementById("homeowner-dashboard-heading")?.focus());
       setActionError("");
       onOpenChange(false);
       toast.success("Request cancelled", {
-        description: "Your pending request has been removed.",
+        description: "Your request is cancelled and its history is retained.",
       });
 
       try {
@@ -317,9 +318,11 @@ export function HomeownerJobDetailDialog({
               : "Refresh the page to see the latest status.",
         });
       }
+      return true;
     } catch (error) {
       onOptimisticStatus(currentJob.id, previousStatus);
       setActionError(error instanceof Error ? error.message : "We couldn’t update this service. Please try again.");
+      return false;
     } finally {
       setBusyAction(null);
     }
@@ -329,35 +332,36 @@ export function HomeownerJobDetailDialog({
     const supabase = createClient();
     return runAction(
       approve ? "approve-quote" : "decline-quote",
-      approve ? "scheduled" : "cancelled",
+      currentJob.status,
       () =>
         supabase.rpc("homeowner_respond_to_quote", {
           _job_id: currentJob.id,
           _approve: approve,
+          _quote_id: currentJob.current_quote_id ?? undefined,
         }),
       approve ? "Quote approved" : "Quote declined",
       approve
-        ? "Your service is now moving into the scheduled workflow."
-        : "This quoted service has been cancelled.",
+        ? "Your quote decision has been recorded. Vendor acceptance confirms scheduling."
+        : "Your quote was declined. Mercurius will review the next step; the request has not been cancelled.",
     );
   }
 
-  function respondToCompletion(confirm: boolean) {
+  function respondToCompletion(confirm: boolean, reason = "") {
     const supabase = createClient();
     return runAction(
       confirm ? "confirm-done" : "needs-rework",
-      confirm ? "homeowner_confirmed" : "in_progress",
+      confirm ? "homeowner_confirmed" : currentJob.status,
       () =>
         confirm
           ? supabase.rpc("homeowner_confirm_job", { _job_id: currentJob.id })
-          : supabase.rpc("transition_job_status", {
+          : supabase.rpc("homeowner_raise_dispute", {
               _job_id: currentJob.id,
-              _to_status: "in_progress",
+              _reason: reason,
             }),
-      confirm ? "Service confirmed" : "Sent back for rework",
+      confirm ? "Service confirmed" : "Issue reported",
       confirm
         ? "Thanks—Mercurius will move this service into the review workflow."
-        : "The provider can now continue work on this service.",
+        : "Mercurius will review the issue with you and the provider.",
     );
   }
 
@@ -395,7 +399,7 @@ export function HomeownerJobDetailDialog({
                 serviceRequestStatusStyle(job.status),
               )}
             >
-              {serviceRequestStatusLabel(job.status)}
+              {serviceRequestStatusLabel(job.status, job.matching_status)}
             </Badge>
           </div>
           <DialogDescription>
@@ -404,6 +408,19 @@ export function HomeownerJobDetailDialog({
           </DialogDescription>
         </DialogHeader>
         {actionError && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg border border-status-danger bg-status-danger-bg p-3 text-sm text-status-danger">{actionError}</p>}
+
+        {job.scheduled_start_at && <p className="font-medium">Appointment: {formatDateTime(job.scheduled_start_at)}</p>}
+        {job.quote_expires_at && <p className="text-sm text-muted-foreground">Quote approval deadline: {formatDateTime(job.quote_expires_at)}</p>}
+        {job.quote_status === "expired" && <p role="status">This quote expired. Contact Mercurius for a new quote; the service has not been cancelled.</p>}
+        {job.quote_status === "legacy_review" && <p role="status">Mercurius must resend this quote with current terms before you can approve it.</p>}
+
+        {job.matching_status === "awaiting_consent" && <section className="space-y-3 rounded-xl border p-4">
+          <p>Your selected provider is unavailable. You can allow Mercurius to offer this request to another eligible provider.</p>
+          <ConfirmAction disabled={!actionsEnabled || !!busyAction} triggerLabel="Find another provider" title="Allow another provider?" entity={job.service_type} consequence="Mercurius may offer this request to other eligible providers. This records your consent to provider fallback." confirmLabel="Allow other providers" onConfirm={async () => {
+            const saved = await runAction("provider-fallback", currentJob.status, () => createClient().rpc("consent_to_provider_fallback", { _request_id: currentJob.id }), "Provider preference updated", "Mercurius will check other eligible providers.");
+            if (!saved) throw new Error("Your consent was not saved.");
+          }} />
+        </section>}
 
         <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2">
           <Detail icon={Calendar} label="Preferred date">
@@ -416,12 +433,12 @@ export function HomeownerJobDetailDialog({
             {location || "Address unavailable"}
           </Detail>
           <Detail icon={CreditCard} label={isQuoted ? "Quoted price" : "Recorded amount"}>
-            {job.total_amount === null
-              ? "Not available"
-              : formatMoney(job.total_amount)}
+            {!isQuoted && ["sourcing", "exhausted", "awaiting_consent", "quote_pending"].includes(job.matching_status ?? "") ? "Awaiting provider" : (isQuoted ? job.quote_amount : job.total_amount) == null ? "Not available" : formatMoney((isQuoted ? job.quote_amount : job.total_amount)!)}
           </Detail>
         </div>
 
+        {actionsEnabled && ["pending", "matched", "quoted", "scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="homeowner" onSaved={() => { void onRefresh(); }} />}
+        {actionsEnabled && <JobFollowUp key={`follow-${job.id}`} jobId={job.id} status={job.status} vendorCompletedAt={job.vendor_completed_at} />}
         {job.description && (
           <div className="rounded-xl border border-border p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -456,8 +473,8 @@ export function HomeownerJobDetailDialog({
                 Confirm the completed work
               </p>
               <p className="mt-1 text-sm leading-5 text-status-warning text-status-warning">
-                Confirm only after you’ve reviewed the result. “Needs rework”
-                returns the service to in progress.
+                Confirm only after you’ve reviewed the result, or report an issue for review.
+                Disputes must be filed within 48 hours of provider completion. Unanswered completion notices go to Mercurius for review after 72 hours; silence does not confirm the work.
               </p>
             </div>
 
@@ -482,18 +499,10 @@ export function HomeownerJobDetailDialog({
             )}
 
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                variant="outline"
-                disabled={!actionsEnabled || Boolean(busyAction)}
-                onClick={() => void respondToCompletion(false)}
-              >
-                {busyAction === "needs-rework" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <AlertTriangle />
-                )}
-                Needs rework
-              </Button>
+              <ConfirmAction triggerLabel="Report an issue" title="Report an issue with this service?"
+                entity={currentJob.service_type} consequence="Mercurius will review your concern with you and the provider. This does not confirm completion."
+                confirmLabel="Report issue" requireReason disabled={!actionsEnabled || Boolean(busyAction)}
+                onConfirm={async reason => { const saved = await respondToCompletion(false, reason); if (!saved) throw new Error("Issue was not saved"); }} />
               <Button
                 disabled={!actionsEnabled || Boolean(busyAction)}
                 className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
@@ -510,6 +519,7 @@ export function HomeownerJobDetailDialog({
           </div>
         )}
 
+        {job.quote_declined_at && <p role="status" className="rounded-xl border border-status-warning bg-status-warning-bg p-4 text-sm text-status-warning">Quote declined. Mercurius will review the next step; this request has not been cancelled.</p>}
         {isQuoted && (
           <div className="space-y-4 rounded-xl border border-status-info bg-status-info-bg p-4 bg-status-info-bg">
             <div>
@@ -517,8 +527,8 @@ export function HomeownerJobDetailDialog({
                 Respond to this quote
               </p>
               <p className="mt-1 text-sm leading-5 text-status-info text-status-info">
-                Approving moves the request into scheduling. Declining cancels
-                this quoted service.
+                Approving records your price approval. Declining asks Mercurius to review
+                the next step and does not cancel the request.
               </p>
             </div>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -555,7 +565,7 @@ export function HomeownerJobDetailDialog({
             <div>
               <p className="font-medium">How did the service go?</p>
               <p className="mt-1 text-sm text-foreground">
-                Your rating helps Mercurius maintain service quality.
+                Your review is public regardless of its star rating. Spam, personal information, threats or abuse, and unrelated content may be moderated; you may appeal a moderation decision.
               </p>
             </div>
 
@@ -827,3 +837,5 @@ function formatMoney(value: number) {
     currency: "USD",
   }).format(Number(value));
 }
+
+function formatDateTime(value: string) { return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/New_York" }).format(new Date(value)) + " Eastern"; }

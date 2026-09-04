@@ -10,6 +10,7 @@ const fixture: Record<string, string> = {
   STRIPE_WEBHOOK_SECRET: "synthetic-webhook-key-for-runtime-tests",
   BETA_ACCESS_CODE: "SYNTHETIC-BETA-CODE",
   BETA_TOKEN_SECRET: "synthetic-beta-signing-secret-for-runtime-tests",
+  JOB_LIFECYCLE_ENABLED: "true",
   JOB_WORKER_SECRET: "synthetic-worker-secret-for-runtime-tests",
   SITE_URL: "http://localhost:3000",
   NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
@@ -100,19 +101,71 @@ if (name === "job-lifecycle-worker") {
     await response.body?.cancel();
     equal(calls, ["GET /rest/v1/internal_worker_tokens"]);
   });
+  Deno.test("worker: copied example credential is rejected without a token lookup", async () => {
+    calls = []; unexpected = [];
+    route = url => url.pathname === "/rest/v1/internal_worker_tokens" ? json({ token: "YOUR_SERVER_SIDE_WORKER_SECRET" }) : undefined;
+    const response = await request({}, { "x-worker-secret": "YOUR_SERVER_SIDE_WORKER_SECRET" });
+    equal(response.status, 401); await response.body?.cancel(); equal(calls, []);
+  });
   Deno.test("worker: valid scheduler credential runs an empty synthetic lifecycle batch", async () => {
     calls = []; unexpected = [];
     route = (url) => {
-      if (url.pathname === "/rest/v1/rpc/expire_stale_matches") return json(0);
-      if (url.pathname === "/rest/v1/service_requests") return json([]);
+      if (url.pathname === "/rest/v1/rpc/run_lifecycle_batch") return json({ ok: true, matches_expired: 0, admin_flagged: 0 });
     };
     const response = await request({ job_id: "must-not-be-used" }, { "x-worker-secret": fixture.JOB_WORKER_SECRET });
     equal(response.status, 200);
     const body = await response.json();
     equal(body.ok, true);
     equal(body.matches_expired, 0);
-    equal(body.auto_confirmed, 0);
-    equal(calls.length, 5);
-    equal(calls.filter((call) => call.startsWith("POST")), ["POST /rest/v1/rpc/expire_stale_matches"]);
+    equal(body.auto_confirmed, undefined);
+    equal(calls, ["POST /rest/v1/rpc/run_lifecycle_batch"]);
+  });
+}
+
+if (name === "job-lifecycle-worker") {
+  Deno.test("worker: disabled by default even for a valid worker secret", async () => {
+    calls = []; unexpected = []; delete fixture.JOB_LIFECYCLE_ENABLED;
+    const response = await request({}, { "x-worker-secret": fixture.JOB_WORKER_SECRET });
+    equal(response.status, 503); await response.body?.cancel(); equal(calls, []);
+    fixture.JOB_LIFECYCLE_ENABLED = "true";
+  });
+  Deno.test("worker: database failure is non-2xx and does not expose details", async () => {
+    calls = []; unexpected = [];
+    route = url => url.pathname === "/rest/v1/rpc/run_lifecycle_batch"
+      ? json({ code: "23514", message: "sensitive synthetic failure detail" }, 400) : undefined;
+    const response = await request({}, { "x-worker-secret": fixture.JOB_WORKER_SECRET });
+    equal(response.status, 500);
+    equal((await response.text()).includes("sensitive synthetic"), false);
+    equal(calls.length, 1);
+  });
+  Deno.test("worker: malformed successful RPC response fails closed", async () => {
+    calls = []; unexpected = [];
+    route = url => url.pathname === "/rest/v1/rpc/run_lifecycle_batch" ? json(null) : undefined;
+    const response = await request({}, { "x-worker-secret": fixture.JOB_WORKER_SECRET });
+    equal(response.status, 500); await response.body?.cancel();
+  });
+  Deno.test("worker: authenticated homeowner is denied", async () => {
+    calls = []; unexpected = [];
+    route = url => url.pathname === "/auth/v1/user" ? json({ id: "10000000-0000-4000-8000-000000000001" })
+      : url.pathname === "/rest/v1/rpc/has_role" ? json(false) : undefined;
+    const response = await request({}, { Authorization: "Bearer synthetic-user-token" });
+    equal(response.status, 403); await response.body?.cancel();
+    equal(calls.length, 2);
+  });
+  Deno.test("worker: admin identity is verified and passed for audit, caller state ignored", async () => {
+    calls = []; unexpected = [];
+    const actor = "10000000-0000-4000-8000-000000000004";
+    route = (url, init) => {
+      if (url.pathname === "/auth/v1/user") return json({ id: actor });
+      if (url.pathname === "/rest/v1/rpc/has_role") return json(true);
+      if (url.pathname === "/rest/v1/rpc/run_lifecycle_batch") {
+        const body = JSON.parse(String(init?.body));
+        equal(body._actor_id, actor);
+        equal(Object.keys(body).sort(), ["_actor_id", "_run_id"]);
+        return json({ ok: true });
+      }
+    };
+    const response = await request({ _actor_id: "forged", _to_status: "homeowner_confirmed" }, { Authorization: "Bearer synthetic-admin-token" });
+    equal(response.status, 200); await response.body?.cancel();
   });
 }
