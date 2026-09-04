@@ -19,9 +19,10 @@ added to `supabase/functions`; no existing source was overwritten. The shared
 catalog, platform-fee, and soft-launch helpers match the local versions.
 
 `EDGE-FUNCTION-INVENTORY.json` records deployed versions, observed JWT settings,
-source hashes, and required environment **names**, never their values. Source
-review and credential-pattern/literal checks found no embedded credentials or
-customer records. The team-email fallback in the notification function is a
+source hashes, and required environment **names**, never their values. The worker
+entry tracks the current deployable Phase 4 source and retains its recovered Phase 2
+hash separately. The source review and credential-pattern/literal checks found no
+embedded credentials or customer records. The team-email fallback in the notification function is a
 source-code configuration constant, not an exported customer record.
 
 All deployed functions require gateway JWT verification except `stripe-webhook`,

@@ -145,7 +145,7 @@ BEGIN
 
   IF _to_status='cancelled' AND j.status<>'pending' AND NOT EXISTS(
     SELECT 1 FROM public.job_operations WHERE job_id=j.id AND kind='customer_cancel'
-      AND operation_key::text=_metadata->>'operation_key' AND actor_id=auth.uid() AND created_at=now()) THEN
+      AND actor_id=auth.uid() AND created_at BETWEEN now()-interval '5 minutes' AND now()) THEN
     RAISE EXCEPTION 'Record cancellation policy before cancelling this service' USING ERRCODE='42501';
   END IF;
   -- Guard: completion proof is mandatory

@@ -437,7 +437,14 @@ export function HomeownerJobDetailDialog({
           </Detail>
         </div>
 
-        {actionsEnabled && ["pending", "matched", "quoted", "scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="homeowner" onSaved={() => { void onRefresh(); }} />}
+        {actionsEnabled && ["pending", "matched", "quoted", "scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="homeowner" onSaved={() => {
+          onOpenChange(false);
+          void onRefresh().catch((error) => {
+            toast.warning("Action saved, but the dashboard could not refresh", {
+              description: error instanceof Error ? error.message : "Refresh the page to see the latest status.",
+            });
+          });
+        }} />}
         {actionsEnabled && <JobFollowUp key={`follow-${job.id}`} jobId={job.id} status={job.status} vendorCompletedAt={job.vendor_completed_at} />}
         {job.description && (
           <div className="rounded-xl border border-border p-4">

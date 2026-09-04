@@ -21,12 +21,14 @@ CREATE FUNCTION private.route_support_ticket() RETURNS trigger LANGUAGE plpgsql 
 DECLARE local_now timestamp:=now() AT TIME ZONE 'America/New_York'; appointment date;
 BEGIN
   NEW.queue_owner:='project_owner';
-  NEW.next_action:=CASE NEW.issue_type
-    WHEN 'dispute' THEN 'Review completion evidence and contact both parties'
-    WHEN 'dispute_appeal' THEN 'Review the prior resolution and homeowner appeal'
-    WHEN 'review_appeal' THEN 'Review original content and moderation reason'
-    WHEN 'schedule_exception' THEN 'Review service exception, replacement options and policy consequences'
-    ELSE 'Review and respond to the customer' END;
+  NEW.next_action:=CASE WHEN NULLIF(btrim(NEW.next_action),'') IS NOT NULL THEN NEW.next_action ELSE
+    CASE NEW.issue_type
+      WHEN 'dispute' THEN 'Review completion evidence and contact both parties'
+      WHEN 'dispute_appeal' THEN 'Review the prior resolution and homeowner appeal'
+      WHEN 'review_appeal' THEN 'Review original content and moderation reason'
+      WHEN 'schedule_exception' THEN 'Review service exception, replacement options and policy consequences'
+      ELSE 'Review and respond to the customer' END
+    END;
   NEW.priority:='standard';
   NEW.response_due_at:=private.support_response_deadline(now());
   SELECT COALESCE((scheduled_start_at AT TIME ZONE 'America/New_York')::date,preferred_date)
