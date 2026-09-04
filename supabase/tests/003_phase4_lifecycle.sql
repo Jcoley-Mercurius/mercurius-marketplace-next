@@ -25,7 +25,7 @@ select ('43000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
  now()-interval '10 days',
  case n when 4 then now()+interval '1 hour' when 6 then now() else null end,
  array['synthetic-proof']
-from generate_series(1,6) n;
+from generate_series(1,7) n;
 update public.service_requests set status='cancelled' where id='43000000-0000-4000-8000-000000000005';
 
 set local role anon;
@@ -47,6 +47,8 @@ select is((select count(*) from public.service_requests where id::text like '430
 select is((select count(*) from public.service_requests where id::text like '43000000-%' and payment_status <> 'pending'),0::bigint,'escalation does not change money state');
 select is((select status::text from public.service_requests where id='43000000-0000-4000-8000-000000000005'),'cancelled','cancelled request remains cancelled');
 select ok((select confirmation_sent_at is null and confirmation_due_at>now() from public.service_requests where id='43000000-0000-4000-8000-000000000004'),'future-scheduled confirmation remains pending with its due time intact');
+select is((select confirmation_deadline_at-confirmation_sent_at from public.service_requests where id='43000000-0000-4000-8000-000000000006'),interval '72 hours','due confirmation receives a fresh notice and full response window');
+select is((select confirmation_deadline_at-confirmation_sent_at from public.service_requests where id='43000000-0000-4000-8000-000000000007'),interval '72 hours','unscheduled legacy completion receives a fresh notice and full response window');
 select is(public.run_lifecycle_batch('44000000-0000-4000-8000-000000000001')->>'replayed','true','same run ID replays committed result');
 select is((public.run_lifecycle_batch('44000000-0000-4000-8000-000000000002')->>'admin_flagged')::int,0,'new retry ID does not repeat effects');
 select is((select count(*) from public.job_events where job_id::text like '43000000-%' and metadata->>'reason'='homeowner_confirmation_unanswered'),2::bigint,'one escalation audit per job');
@@ -99,12 +101,12 @@ select throws_ok($$select public.transition_job_status('43000000-0000-4000-8000-
 reset role;
 
 insert into public.service_requests(id,customer_id,service_type,address) values
- ('43000000-0000-4000-8000-000000000007','41000000-0000-4000-8000-000000000001','Synthetic cancellation','Synthetic fixture');
+ ('43000000-0000-4000-8000-000000000008','41000000-0000-4000-8000-000000000001','Synthetic cancellation','Synthetic fixture');
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"41000000-0000-4000-8000-000000000001"}',true);
-select throws_ok($$delete from public.service_requests where id='43000000-0000-4000-8000-000000000007'$$,'42501',null,'cancellation cannot delete request history');
-select lives_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000007','cancelled','Homeowner cancelled pending request')$$,'homeowner can cancel through audited transition');
-select is((select status::text from public.service_requests where id='43000000-0000-4000-8000-000000000007'),'cancelled','cancelled row is retained');
+select throws_ok($$delete from public.service_requests where id='43000000-0000-4000-8000-000000000008'$$,'42501',null,'cancellation cannot delete request history');
+select lives_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000008','cancelled','Homeowner cancelled pending request')$$,'homeowner can cancel through audited transition');
+select is((select status::text from public.service_requests where id='43000000-0000-4000-8000-000000000008'),'cancelled','cancelled row is retained');
 reset role;
 
 select * from finish();
