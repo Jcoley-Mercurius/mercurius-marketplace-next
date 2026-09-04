@@ -43,6 +43,7 @@ BEGIN
   -- New transitions send the same notice atomically at vendor completion.
   FOR j IN SELECT * FROM public.service_requests
     WHERE status = 'vendor_completed' AND confirmation_sent_at IS NULL
+      AND confirmation_due_at <= now()
     ORDER BY vendor_completed_at NULLS FIRST, id LIMIT 200 FOR UPDATE
   LOOP
     PERFORM public.notify_user(j.customer_id, 'job_confirmation', 'warning',

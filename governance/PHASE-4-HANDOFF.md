@@ -1,7 +1,7 @@
 # Phase 4 handoff
 
-Draft PR: https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/4
-Branch: `codex/lifecycle-reconciliation`; target: `main`.
+Draft PR: https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/5
+Branch: `coderabbit/tighten-worker-workflow-matching-safety/031ff3bf`; target: `main`.
 
 Phase 3 is owner-accepted (DEC-005). PR #3 was open with passing CI when Phase 4
 started at `91379e9`; its later verified merge `db3f4061f65f84ccd8bbb08e9c71301167bd6250`

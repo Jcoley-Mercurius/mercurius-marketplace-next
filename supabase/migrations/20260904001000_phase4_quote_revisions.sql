@@ -46,7 +46,7 @@ REVOKE ALL ON FUNCTION private.guard_quote_history() FROM PUBLIC,anon,authentica
 CREATE TRIGGER preserve_quote_terms BEFORE UPDATE OR DELETE ON public.request_quotes FOR EACH ROW EXECUTE FUNCTION private.guard_quote_history();
 
 DROP FUNCTION public.admin_send_quote(uuid,numeric,text);
-CREATE FUNCTION public.admin_send_quote(_job_id uuid,_amount numeric,_reason text DEFAULT NULL,_expected_revision integer DEFAULT NULL)
+CREATE FUNCTION public.admin_send_quote(_job_id uuid,_amount numeric,_reason text,_expected_revision integer)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,private,pg_temp AS $$
 DECLARE r public.service_requests; q_id uuid;
 BEGIN

@@ -92,7 +92,7 @@ test("completion concern records a reason without claiming vendor work started",
   await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
   await expect(confirm.getByRole("button", { name: "Report issue", exact: true })).toBeDisabled();
   await confirm.getByLabel("Reason (required)").fill("Synthetic completion concern");
-  const request = page.waitForRequest(request => request.url().includes("/rpc/homeowner_raise_dispute"));
+  const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/homeowner_raise_dispute"));
   await confirm.getByRole("button", { name: "Report issue", exact: true }).click();
   expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic completion concern" });
   await expect(confirm.getByRole("alert")).toBeFocused();

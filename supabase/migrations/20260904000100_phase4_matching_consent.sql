@@ -227,7 +227,15 @@ BEGIN
   LIMIT 1;
 
   IF candidate.contractor_id IS NOT NULL AND NOT private.fallback_permitted(_request_id,candidate.contractor_id) THEN
-    UPDATE public.service_requests SET matching_status='awaiting_consent',needs_admin_review=true WHERE id=_request_id;
+    UPDATE public.service_requests
+    SET contractor_id = NULL,
+        assigned_at = NULL,
+        match_expires_at = NULL,
+        status = 'pending',
+        matching_status = 'awaiting_consent',
+        needs_admin_review = true,
+        updated_at = now()
+    WHERE id = _request_id;
     RETURN NULL;
   END IF;
 

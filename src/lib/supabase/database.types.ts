@@ -2653,9 +2653,9 @@ export type Database = {
       admin_send_quote: {
         Args: {
           _amount: number
-          _expected_revision?: number
+          _expected_revision: number
           _job_id: string
-          _reason?: string
+          _reason: string
         }
         Returns: undefined
       }

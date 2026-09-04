@@ -36,6 +36,8 @@ BEGIN
             AND request.customer_id = auth.uid()
         )
       )
+    ORDER BY attempt.service_request_id
+    LIMIT 200
   LOOP
     -- Same lock/order as acceptance, decline and transition; recheck after waiting.
     PERFORM pg_advisory_xact_lock(hashtextextended(stale_request_id::text, 0));

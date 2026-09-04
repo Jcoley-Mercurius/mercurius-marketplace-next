@@ -2,7 +2,7 @@
 
 Status: implementation submitted for owner review; final-head CI and acceptance remain gates.
 Recorded: 2026-09-03 (local) / 2026-09-04 UTC.
-Branch: `codex/lifecycle-reconciliation`, draft PR #4 against `main`.
+Branch: `coderabbit/tighten-worker-workflow-matching-safety/031ff3bf`, draft PR #5 against `main`.
 
 PR #3 was verified open with passing CI at `91379e9` before implementation.
 Its later merge `db3f4061f65f84ccd8bbb08e9c71301167bd6250` has the same tree;
@@ -30,7 +30,7 @@ See PHASE-4-RECONCILIATION.md for the complete stored-state recovery map and sco
 | Database contracts | All 185 assertions across 12 rollback-only suites passed after that reset: roles, transitions, exact deadlines, quote revisions, consent, selection/ties, expiry, dispute appeals, review history, operations, recurrence, completion rules and Eastern support calendar. |
 | Authenticated worker integration | Passed again after the final clean reset: concurrent HTTP calls, retry, notification/event deduplication and one-off pg_net transport; no confirmation or money changes. SQL rollback and handler failure cases are separately covered. |
 | Inactive installer | Local synthetic transaction committed only an inactive job, rejected duplicate installation and removed only its own job. Zero active Cron jobs; no recurring execution claimed. Final CI repeats this test. |
-| Unit/contract | All 62 tests passed locally after final presentation filtering; final typecheck also passed. CI reruns all cases. |
+| Unit/contract | All 63 tests passed locally after final presentation filtering and active-worker digest coverage; final typecheck also passed. CI reruns all cases. |
 | Edge | Unchanged worker checkpoint: 11 frozen Deno checks and 31 synthetic handler tests passed. Final CI reruns these checks. |
 | Application | Local lint/types passed; one-worker build produced the test artifact. All 55 browser cases passed, including new consent, appeal, cancellation-reason, stable retry key and error-focus tests. Final CI checks the final source, including the subsequent admin-action filtering. |
 | Visual inspection | New 320px service-operation confirmation captures inspected in light/dark; controls and persistent errors were visible without clipping. Existing automated MDS reflow/theme/axe regression passed. This is not manual screen-reader, true browser-zoom or owner brand approval. |
@@ -40,7 +40,7 @@ Historical checkpoint [CI run 33816965540](https://github.com/Jcoley-Mercurius/m
 passed the initial implementation at `2d74f81` (98 SQL, 62 unit, 31 Edge runtime,
 11 Edge checks, authenticated integration and 51 browser cases). That checkpoint
 is superseded by the expanded Phase 4 source and is not evidence for new code.
-Final-head CI on draft PR #4 is the current acceptance evidence source.
+Final-head CI on draft PR #5 is the current acceptance evidence source.
 
 Local verification exposed and corrected a text-encoding problem in a new label,
 Windows shell-script line endings, and a Windows/Linux CLI-path mismatch. Failed
@@ -50,7 +50,7 @@ are not printed. The only enabled worker environment is an ignored synthetic loc
 
 ## Explicit acceptance gates
 
-- [ ] Final-head CI passes clean reconstruction, 185 SQL assertions, 11 Edge checks, 32 runtime tests, authenticated concurrency/retry/pg_net and inactive installation, lint, credential scan, types, 62 unit tests, dependency audit, one-worker build and 56 browser cases.
+- [ ] Final-head CI passes clean reconstruction, 185 SQL assertions, 11 Edge checks, 32 runtime tests, authenticated concurrency/retry/pg_net and inactive installation, lint, credential scan, types, 63 unit tests, dependency audit, one-worker build and 56 browser cases.
 - [ ] Owner/code review accepts authority checks, locking, history preservation, legacy recovery, independent quote/dispute/review state, and Phase 3 preservation. Phase 4 owner acceptance has not yet been given.
 
 The following are separate later gates, not claims of completed testing:
@@ -75,8 +75,9 @@ A new worker rejection test and vendor-offer browser case raise final CI targets
 to 32 handler tests and 56 browser cases. Earlier local 31/55 checkpoints remain
 accurate for their source snapshots.
 
-The recovered Edge digest intentionally verifies the archived Phase 2 evidence;
-active worker correctness is covered by runtime and frozen type checks. Restoring
+The Edge inventory digest verifies the active worker source, while a separate
+assertion preserves the archived Phase 2 digest. Runtime and frozen type checks
+cover active worker behavior. Restoring
 browser access to audit-writing functions would weaken the authority boundary;
 failed invoker edits remain rejected and do not claim durable rejection logs.
 The generic quote transition is now forbidden, so its historical numeric metadata

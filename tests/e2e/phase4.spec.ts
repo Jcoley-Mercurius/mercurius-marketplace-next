@@ -21,12 +21,12 @@ for (const theme of ["light", "dark"]) {
     await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await expect(confirm.getByRole("button", { name: "Record change" })).toBeDisabled();
     await confirm.getByLabel("Reason (required)").fill("Synthetic cancellation reason");
-    const first = page.waitForRequest("**/rpc/record_job_operation");
+    const first = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/record_job_operation"));
     await confirm.getByRole("button", { name: "Record change" }).click();
     const payload = (await first).postDataJSON();
     expect(payload).toMatchObject({ _kind: "customer_cancel", _reason: "Synthetic cancellation reason", _waived: false });
     await expect(confirm.getByRole("alert")).toBeFocused();
-    const retry = page.waitForRequest("**/rpc/record_job_operation");
+    const retry = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/record_job_operation"));
     await confirm.getByRole("button", { name: "Record change" }).click();
     expect((await retry).postDataJSON()._operation_key).toBe(payload._operation_key);
     await expect(confirm.getByRole("alert")).toBeFocused();
@@ -48,7 +48,7 @@ test("Phase 4: homeowner fallback requires explicit confirmation", async ({ page
   await page.getByRole("button", { name: "Find another provider" }).click();
   const confirm = page.getByRole("alertdialog", { name: "Allow another provider?" });
   await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
-  const request = page.waitForRequest("**/rpc/consent_to_provider_fallback");
+  const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/consent_to_provider_fallback"));
   await confirm.getByRole("button", { name: "Allow other providers" }).click();
   expect((await request).postDataJSON()._request_id).toBe("00000000-0000-4000-8000-000000000010");
   await expect(confirm.getByRole("alert")).toBeFocused();
@@ -63,7 +63,7 @@ test("Phase 4: resolution remains visible while homeowner appeals", async ({ pag
   await page.getByRole("button", { name: "Appeal resolution" }).click();
   const confirm = page.getByRole("alertdialog", { name: "Appeal this resolution?" });
   await confirm.getByLabel("Reason (required)").fill("Synthetic appeal evidence");
-  const request = page.waitForRequest("**/rpc/appeal_dispute_resolution");
+  const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/appeal_dispute_resolution"));
   await confirm.getByRole("button", { name: "Submit appeal", exact: true }).click();
   expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic appeal evidence" });
   await expect(confirm.getByRole("alert")).toBeFocused();

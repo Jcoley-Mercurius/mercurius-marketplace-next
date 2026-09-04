@@ -102,7 +102,7 @@ for (const theme of ["light", "dark"]) {
     await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await expect(confirm.getByRole("button", { name: "Change to Scheduled" })).toBeDisabled();
     await confirm.getByLabel("Reason (required)").fill("Synthetic operator correction");
-    const request = page.waitForRequest(request => request.url().includes("/rpc/transition_job_status"));
+    const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/transition_job_status"));
     await confirm.getByRole("button", { name: "Change to Scheduled" }).click();
     expect((await request).postDataJSON()).toMatchObject({ _to_status: "scheduled", _reason: "Synthetic operator correction" });
     await expect(confirm.getByRole("alert")).toBeFocused();

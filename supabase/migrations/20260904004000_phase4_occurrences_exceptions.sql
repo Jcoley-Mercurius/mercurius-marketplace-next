@@ -38,9 +38,11 @@ BEGIN
     RETURN existing.id;
   END IF;
   INSERT INTO public.service_requests(customer_id,service_type,service_catalog_id,address,city,state,zip_code,
-    description,frequency,preferred_contractor_id,recurrence_parent_id,occurrence_key,scheduled_start_at,preferred_date,timezone)
+    description,frequency,package_id,package_tier_id,package_question_answers,preferred_contractor_id,
+    recurrence_parent_id,occurrence_key,scheduled_start_at,preferred_date,timezone)
     VALUES(r.customer_id,r.service_type,r.service_catalog_id,r.address,r.city,r.state,r.zip_code,
-      r.description,r.frequency,r.contractor_id,r.id,_occurrence_key,_scheduled_at,(_scheduled_at AT TIME ZONE 'America/New_York')::date,'America/New_York') RETURNING id INTO new_id;
+      r.description,r.frequency,r.package_id,r.package_tier_id,r.package_question_answers,r.contractor_id,
+      r.id,_occurrence_key,_scheduled_at,(_scheduled_at AT TIME ZONE 'America/New_York')::date,'America/New_York') RETURNING id INTO new_id;
   PERFORM public.log_job_event(new_id,'status_changed',auth.uid(),jsonb_build_object('action','occurrence_created','template_id',r.id,'reason',btrim(_reason),'scheduled_at',_scheduled_at));
   -- Each visit must receive its own provider acceptance and completion evidence.
   IF NOT EXISTS(SELECT 1 FROM private.find_eligible_packages_core(new_id)) THEN
