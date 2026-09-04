@@ -39,6 +39,7 @@ jobs:
           worker_pid=$!
           trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
           node scripts/test-lifecycle-integration.mjs
+          sh scripts/test-inactive-scheduler.sh
       - name: Stop only the isolated CI stack
         if: always()
         run: npx supabase stop --project-id vugqqyemuptlvcieihww

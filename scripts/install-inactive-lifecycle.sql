@@ -1,4 +1,4 @@
--- REVIEW TEMPLATE ONLY: never executed by migrations/reset/CI.
+-- REVIEW TEMPLATE: outside migrations/reset; CI tests only its inactive installation.
 -- Required psql variables: job_name and cadence, approved for the target environment.
 -- Preconditions: pg_cron, pg_net and Vault installed; no duplicate external scheduler;
 -- Vault names mercurius_lifecycle_url, mercurius_lifecycle_gateway_jwt and
