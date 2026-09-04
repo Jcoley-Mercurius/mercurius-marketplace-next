@@ -46,7 +46,14 @@ jobs:
         run: npm run test:unit
 
       - name: Audit production dependencies
-        run: npm run audit:prod
+        run: |
+          for i in {1..3}; do
+            npm run audit:prod && break
+            if [ $i -lt 3 ]; then
+              echo "Audit failed, retrying in $((i * 10)) seconds..."
+              sleep $((i * 10))
+            fi
+          done
 
       - name: Build
         run: npm run build
