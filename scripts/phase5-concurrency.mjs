@@ -57,4 +57,5 @@ assert.equal(refunds.filter(x=>x.status==='fulfilled').length,1);
 assert.equal(refunds.filter(x=>x.status==='rejected' && x.reason.message.includes('Refund exceeds remaining components')).length,1);
 assert.equal(await sql(`select sum(service) from public.money_refund_authorizations where obligation_id='${obligation}'`),'7000');
 assert.equal(await sql('select count(*) from cron.job where active'),'0');
-console.log('PASS: 8 concurrent source publications, 8 authenticated checkouts, 8 receipt processors, 8 distinct duplicate events, and competing refund reservations. One snapshot/invoice, one checkout, one capture/earnings journal pair, no over-refund and zero active Cron jobs. Synthetic fixtures remain only in the isolated database until reset.');
+
+await import('./phase5-provider-refund-concurrency.mjs');

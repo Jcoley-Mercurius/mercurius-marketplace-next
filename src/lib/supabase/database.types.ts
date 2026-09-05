@@ -2021,6 +2021,47 @@ export type Database = {
           },
         ]
       }
+      money_provider_replacement_decisions: {
+        Row: {
+          actor_id: string
+          created_at: string
+          decision_key: string
+          id: string
+          matching_evidence: Json
+          operation_id: string
+          outcome: string
+          reason: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          decision_key: string
+          id?: string
+          matching_evidence: Json
+          operation_id: string
+          outcome: string
+          reason: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          decision_key?: string
+          id?: string
+          matching_evidence?: Json
+          operation_id?: string
+          outcome?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_provider_replacement_decisions_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "job_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_quote_contexts: {
         Row: {
           context: Json
@@ -4635,6 +4676,25 @@ export type Database = {
           _waived?: boolean
         }
         Returns: Json
+      }
+      record_provider_replacement_decision: {
+        Args: { p_key: string; p_operation: string; p_reason: string }
+        Returns: {
+          actor_id: string
+          created_at: string
+          decision_key: string
+          id: string
+          matching_evidence: Json
+          operation_id: string
+          outcome: string
+          reason: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "money_provider_replacement_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       release_job_match: {
         Args: {

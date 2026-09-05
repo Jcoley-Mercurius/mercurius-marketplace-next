@@ -31,7 +31,12 @@ after statement preparation blocks submission, while an already submitted bank
 outcome remains recordable under a later hold so the ledger stays truthful. No bank
 transfer, deployment or scheduler is initiated.
 
-Remaining work includes provider-cancellation/no-replacement linkage, recurring
+TRACE-057 records canonical replacement outcomes and connects exhausted provider
+cancellations/no-shows to reviewed full refunds. See PHASE-5-PROVIDER-REFUNDS.md.
+Paid replacements retain their original captured agreement; checkout and payout
+remain blocked pending replacement commercial reconciliation.
+
+Remaining work includes replacement commercial reconciliation, recurring
 identities, vendor matching/private onboarding evidence, tax and promotion
 configuration, finance tooling, recovery and cutover, authorized provider checks,
 and manual acceptance.
