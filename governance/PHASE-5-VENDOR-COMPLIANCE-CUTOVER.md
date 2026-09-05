@@ -20,6 +20,7 @@ migration creates no legal requirements, migrates no production provider, and do
 activate cutover; authorized operations must supply reviewed real-world requirements and
 provider decisions.
 
-Acceptance evidence is SQL 030 and the full clean database suite: 21 files and 468
-assertions. It covers missing requirements, independent license/insurance scope, binding,
-inclusion, finalization, strict matching, suspension, immutability and privilege denial.
+Acceptance evidence is SQL 030 and the full clean database suite: 21 files and 476
+assertions. It covers operator-only requirement authoring, missing requirements,
+independent license/insurance scope, evidence reuse and replacement bindings, inclusion,
+finalization, strict matching, suspension, immutability and privilege denial.

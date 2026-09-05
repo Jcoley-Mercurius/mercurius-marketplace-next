@@ -88,4 +88,4 @@ the branch validation evidence.
 
 ## TRACE-061 existing-provider compliance cutover — 2026-09-05
 
-Clean reconstruction and all 21 SQL suites pass with 468 assertions. SQL 030 covers scoped license/insurance requirements, current evidence binding, reviewed provider decisions, strict finalization, post-cutover matching, suspension, immutability and RPC-only privileges. Application validation is recorded with the branch evidence.
+Clean reconstruction and all 21 SQL suites pass with 476 assertions. SQL 030 covers operator-only scoped license/insurance requirement authoring, multi-requirement evidence reuse, replacement evidence binding, reviewed provider decisions, strict finalization, post-cutover matching, suspension, immutability and RPC-only privileges. Application validation is recorded with the branch evidence.

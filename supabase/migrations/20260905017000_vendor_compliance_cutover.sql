@@ -15,11 +15,11 @@ create table public.vendor_compliance_requirements (
 );
 create table public.vendor_requirement_evidence (
   requirement_id uuid not null references public.vendor_compliance_requirements(id),
-  evidence_id uuid not null unique references public.vendor_compliance_evidence(id),
+  evidence_id uuid not null references public.vendor_compliance_evidence(id),
   contractor_id uuid not null references public.vendor_onboarding(contractor_id),
   bound_by uuid not null references auth.users(id),
   bound_at timestamptz not null default now(),
-  primary key(requirement_id,contractor_id)
+  primary key(requirement_id,contractor_id,evidence_id)
 );
 create table public.vendor_cutover_decisions (
   contractor_id uuid primary key references public.contractors(id),
@@ -40,6 +40,21 @@ create table public.vendor_cutover_control (
     or (enforced and finalized_by is not null and finalized_at is not null and length(btrim(reason))>0))
 );
 insert into public.vendor_cutover_control(singleton) values(true);
+
+create function public.vendor_create_compliance_requirement(
+  p_service text,p_zip text,p_kind text,p_requirement_version text,p_description text,
+  p_effective timestamptz,p_expires timestamptz default null
+) returns uuid language plpgsql security definer set search_path='' as $$
+declare actor uuid; result uuid;
+begin
+  actor:=public.vendor_require_operator();
+  insert into public.vendor_compliance_requirements(
+    service_id,zip_code,kind,requirement_version,description,effective_at,expires_at,created_by
+  ) values(
+    p_service,p_zip,p_kind,p_requirement_version,p_description,p_effective,p_expires,actor
+  ) returning id into result;
+  return result;
+end $$;
 
 create function public.vendor_category_evidence_current(p_contractor uuid,p_at timestamptz default now())
 returns boolean language sql stable security definer set search_path='' as $$
@@ -98,7 +113,7 @@ begin
   end if;
   insert into public.vendor_requirement_evidence(requirement_id,evidence_id,contractor_id,bound_by)
     values(p_requirement,p_evidence,p_contractor,actor)
-    on conflict(requirement_id,contractor_id) do nothing;
+    on conflict(requirement_id,contractor_id,evidence_id) do nothing;
   if not exists(select 1 from public.vendor_requirement_evidence where requirement_id=p_requirement
       and contractor_id=p_contractor and evidence_id=p_evidence) then
     raise exception 'Requirement evidence conflict';
@@ -174,10 +189,12 @@ do $$ declare t text; begin
     execute format('create trigger immutable_evidence before update or delete on public.%I for each row execute function public.money_immutable()',t);
   end loop;
 end $$;
-revoke all on function public.vendor_category_evidence_current(uuid,timestamptz),
+revoke all on function public.vendor_create_compliance_requirement(text,text,text,text,text,timestamptz,timestamptz),
+ public.vendor_category_evidence_current(uuid,timestamptz),
  public.vendor_bind_requirement_evidence(uuid,uuid,uuid),
  public.vendor_record_cutover_decision(uuid,text,text),
  public.vendor_finalize_cutover(text) from public,anon,authenticated,service_role;
-grant execute on function public.vendor_bind_requirement_evidence(uuid,uuid,uuid),
+grant execute on function public.vendor_create_compliance_requirement(text,text,text,text,text,timestamptz,timestamptz),
+ public.vendor_bind_requirement_evidence(uuid,uuid,uuid),
  public.vendor_record_cutover_decision(uuid,text,text),public.vendor_finalize_cutover(text) to authenticated;
 grant execute on function public.vendor_category_evidence_current(uuid,timestamptz) to service_role;
