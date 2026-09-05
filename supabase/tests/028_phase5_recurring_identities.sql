@@ -60,6 +60,16 @@ insert into f(key,id) values
  ('visit-1',pg_temp.publish('a5000000-0000-4000-8000-000000000002')),
  ('visit-2',pg_temp.publish('a5000000-0000-4000-8000-000000000003'));
 select is((select count(*) from public.money_recurring_occurrence_identities),2::bigint,'Each visit has one commercial identity');
+select is((select i.obligation_id from public.money_recurring_occurrence_identities i where i.occurrence_request_id='a5000000-0000-4000-8000-000000000002'),
+ (select o.id from public.money_obligations o where o.service_request_id='a5000000-0000-4000-8000-000000000002'),
+ 'Visit 1 identity binds its occurrence obligation');
+select is((select i.obligation_id from public.money_recurring_occurrence_identities i where i.occurrence_request_id='a5000000-0000-4000-8000-000000000003'),
+ (select o.id from public.money_obligations o where o.service_request_id='a5000000-0000-4000-8000-000000000003'),
+ 'Visit 2 identity binds its occurrence obligation');
+select is((select i.snapshot_id from public.money_recurring_occurrence_identities i where i.occurrence_request_id='a5000000-0000-4000-8000-000000000002'),
+ (select id from f where key='visit-1'),'Visit 1 identity binds its published snapshot');
+select is((select i.snapshot_id from public.money_recurring_occurrence_identities i where i.occurrence_request_id='a5000000-0000-4000-8000-000000000003'),
+ (select id from f where key='visit-2'),'Visit 2 identity binds its published snapshot');
 select isnt((select obligation_id from public.money_recurring_occurrence_identities where occurrence_request_id='a5000000-0000-4000-8000-000000000002'),
  (select obligation_id from public.money_recurring_occurrence_identities where occurrence_request_id='a5000000-0000-4000-8000-000000000003'),
  'Visits have separate obligations');
@@ -68,6 +78,12 @@ select is(pg_temp.publish('a5000000-0000-4000-8000-000000000002'),(select id fro
 select is((select count(*) from public.money_recurring_occurrence_identities),2::bigint,'Publication retry does not duplicate identity');
 select throws_ok($$update public.money_recurring_occurrence_identities set scheduled_at=now()$$,
  '55000','Immutable financial evidence; append a correction','Occurrence identity cannot be rewritten');
+select throws_ok($$update public.money_recurring_occurrence_identities set obligation_id='a5000000-0000-4000-8000-000000000001'$$,
+ '55000','Immutable financial evidence; append a correction','Occurrence identity obligation cannot be rewritten');
+select throws_ok($$update public.money_recurring_occurrence_identities set snapshot_id='a5000000-0000-4000-8000-000000000001'$$,
+ '55000','Immutable financial evidence; append a correction','Occurrence identity snapshot cannot be rewritten');
+select throws_ok($$update public.money_recurring_occurrence_identities set source_hash='rewritten'$$,
+ '55000','Immutable financial evidence; append a correction','Occurrence identity source hash cannot be rewritten');
 select ok(not has_table_privilege('authenticated','public.money_recurring_occurrence_identities','INSERT'),
  'Browser cannot invent a recurring payment identity');
 
