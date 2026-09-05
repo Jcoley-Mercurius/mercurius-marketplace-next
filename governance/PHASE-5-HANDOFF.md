@@ -33,10 +33,11 @@ transfer, deployment or scheduler is initiated.
 
 TRACE-057 records canonical replacement outcomes and connects exhausted provider
 cancellations/no-shows to reviewed full refunds. See PHASE-5-PROVIDER-REFUNDS.md.
-Paid replacements retain their original captured agreement; checkout and payout
-remain blocked pending replacement commercial reconciliation.
+Paid replacements retain their original captured agreement. TRACE-058 now records a
+dual-reviewed payee reassignment to the canonically accepted replacement and binds
+completion and ACH to that provider; changed-price replacement checkout remains blocked.
 
-Remaining work includes replacement commercial reconciliation, recurring
+Remaining work includes recurring
 identities, vendor matching/private onboarding evidence, tax and promotion
 configuration, finance tooling, recovery and cutover, authorized provider checks,
 and manual acceptance.
