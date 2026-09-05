@@ -42,7 +42,7 @@ identity; subscription renewals remain no-effect observations rather than visit 
 See PHASE-5-RECURRING-IDENTITIES.md.
 
 TRACE-060 connects matching and offer acceptance to private onboarding eligibility,
-with an explicit cutover path for providers whose evidence has not yet been migrated.
+with an explicit legacy cutover path only for providers without an onboarding record.
 See PHASE-5-VENDOR-MATCHING-ELIGIBILITY.md. Remaining work includes existing-provider
 evidence migration and category/jurisdiction sufficiency, tax and promotion configuration,
 finance tooling, recovery and cutover, authorized provider checks, and manual acceptance.

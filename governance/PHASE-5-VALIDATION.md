@@ -21,7 +21,7 @@ No pending Phase 4 code was included. See TRACE-050–053 and PHASE-5-HANDOFF.md
 | Locked Edge typechecks | PASS: all 11 recovered entrypoints, including replaced handlers and shared modules |
 | Isolated actual Edge handlers | PASS: 32 Deno cases; fetch replaced with synthetic transport and no network permission. Includes both checkout wrappers, stable amount/key, disabled execution and signed raw webhook retry/invalid-signature cases |
 | Lint and TypeScript | PASS after final implementation and generated types |
-| Unit/contracts | PASS: 61 tests in 5 files; includes integer cents, retained fees, deposits, retry windows, payout gates and webhook normalization |
+| Unit/contracts | PASS: 84 tests in 7 files; includes integer cents, retained fees, deposits, retry windows, payout gates, webhook normalization and vendor matching eligibility |
 | Production build | PASS with MERCURIUS_BUILD_WORKERS=1 and synthetic local public configuration |
 | Production dependency audit | PASS: npm audit --omit=dev --audit-level=high reported zero vulnerabilities |
 | Browser regression suite | First full run: 54 passed, one new test selector failed because it matched Next.js's route announcer as well as the intended error. Scoped the selector to main content; focused rerun: all 7 payment cases passed. All 48 inherited cases passed unchanged. Final-head CI must run all 55 together |
