@@ -108,5 +108,25 @@ select throws_ok($$select public.money_reconcile_replacement((select id from f w
  '42501','Separate authenticated approval of exact financial command required','Changed reconciliation intent needs a new exact approval');
 select is((select count(*) from public.money_ach_items),1::bigint,'Only one provider statement exists for the obligation');
 
+-- An operations record alone does not require reconciliation when the effective
+-- and currently assigned providers are still the same.
+insert into public.service_requests(id,customer_id,contractor_id,service_type,address,status,scheduled_start_at)
+ values('94000000-0000-4000-8000-000000000002','91000000-0000-4000-8000-000000000001',
+ '92000000-0000-4000-8000-000000000001','Synthetic','Same payee cancellation','scheduled',now()+interval '3 days');
+insert into public.money_obligations(id,service_request_id,customer_id,contractor_id,captured)
+ values('95000000-0000-4000-8000-000000000002','94000000-0000-4000-8000-000000000002',
+ '91000000-0000-4000-8000-000000000001','92000000-0000-4000-8000-000000000001',0);
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"91000000-0000-4000-8000-000000000002"}',true);
+select public.record_job_operation('94000000-0000-4000-8000-000000000002','98000000-0000-4000-8000-000000000003','provider_cancel','Recorded without payee change');
+reset role;
+update public.service_requests set contractor_id='92000000-0000-4000-8000-000000000001',
+ status='completed',homeowner_confirmed_at=now()-interval '49 hours'
+ where id='94000000-0000-4000-8000-000000000002';
+insert into public.money_lifecycle_confirmations(request_id,homeowner_id,contractor_id,confirmed_at)
+ select id,customer_id,contractor_id,homeowner_confirmed_at from public.service_requests
+ where id='94000000-0000-4000-8000-000000000002';
+select lives_ok($$select private.money_completion_source('95000000-0000-4000-8000-000000000002')$$,
+ 'Provider operation with unchanged effective payee does not create an impossible reconciliation gate');
+
 select * from finish();
 rollback;

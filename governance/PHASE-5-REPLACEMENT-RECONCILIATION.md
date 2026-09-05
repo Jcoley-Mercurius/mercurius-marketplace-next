@@ -24,7 +24,7 @@ Replacement scope or price differences need a separately approved adjustment
 policy and reviewed commercial terms.
 
 Acceptance evidence is SQL 027 plus the full Phase 5 database regression suite:
-18 files and 421 assertions after a clean migration replay. The focused cases cover
+18 files and 422 assertions after a clean migration replay. The focused cases cover
 separate approval, accepted-match evidence, immutable/idempotent receipts, preserved
 customer amount and original obligation, replacement completion, replacement bank
 evidence, and a single ACH statement.

@@ -116,7 +116,8 @@ begin
   select * into strict o from public.money_obligations where id=p_obligation;
   select * into strict r from public.service_requests where id=o.service_request_id;
   payee:=private.money_effective_contractor(o.id);
-  if exists(select 1 from public.job_operations j where j.job_id=r.id and j.kind in ('provider_cancel','no_show'))
+  if payee is distinct from r.contractor_id
+    and exists(select 1 from public.job_operations j where j.job_id=r.id and j.kind in ('provider_cancel','no_show'))
     and not exists(select 1 from public.money_replacement_reconciliations x
       where x.obligation_id=o.id and x.replacement_contractor_id=r.contractor_id
         and x.snapshot_id=o.current_snapshot_id and x.captured=o.captured) then
