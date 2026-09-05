@@ -75,3 +75,13 @@ remain open. No inference from these automated checks closes those gates.
 CI status is separate from local evidence and must be checked on the final PR head.
 No merge, deployment, Cron activation or configuration activation is authorized.
 Homeschool Haven remained running and was not stopped or modified.
+
+## TRACE-060 vendor matching eligibility follow-up — 2026-09-05
+
+A clean isolated reset applied the complete migration chain through
+`20260905016000_vendor_matching_eligibility.sql`. The database suite passed 20 files
+and 454 assertions. SQL 029 verifies the explicit legacy cutover boundary, incomplete
+review exclusion, current-evidence activation, immediate suspension, acceptance-time
+revalidation, unchanged job/offer state after rejection, and privilege-negative bypass
+checks. Application secret scan, lint, typecheck, unit tests and build are recorded with
+the branch validation evidence.
