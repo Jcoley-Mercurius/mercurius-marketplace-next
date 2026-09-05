@@ -2329,6 +2329,97 @@ export type Database = {
           },
         ]
       }
+      money_replacement_reconciliations: {
+        Row: {
+          approved_by: string
+          captured: number
+          created_at: string
+          created_by: string
+          id: string
+          obligation_id: string
+          operation_id: string
+          original_contractor_id: string
+          reason: string
+          replacement_contractor_id: string
+          replacement_decision_id: string
+          snapshot_id: string
+          source_hash: string
+        }
+        Insert: {
+          approved_by: string
+          captured: number
+          created_at?: string
+          created_by: string
+          id?: string
+          obligation_id: string
+          operation_id: string
+          original_contractor_id: string
+          reason: string
+          replacement_contractor_id: string
+          replacement_decision_id: string
+          snapshot_id: string
+          source_hash: string
+        }
+        Update: {
+          approved_by?: string
+          captured?: number
+          created_at?: string
+          created_by?: string
+          id?: string
+          obligation_id?: string
+          operation_id?: string
+          original_contractor_id?: string
+          reason?: string
+          replacement_contractor_id?: string
+          replacement_decision_id?: string
+          snapshot_id?: string
+          source_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_replacement_reconciliation_replacement_contractor_id_fkey"
+            columns: ["replacement_contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_replacement_reconciliations_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_replacement_reconciliations_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: true
+            referencedRelation: "job_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_replacement_reconciliations_original_contractor_id_fkey"
+            columns: ["original_contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_replacement_reconciliations_replacement_decision_id_fkey"
+            columns: ["replacement_decision_id"]
+            isOneToOne: true
+            referencedRelation: "money_provider_replacement_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_replacement_reconciliations_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_review_approvals: {
         Row: {
           approved_by: string
@@ -4551,6 +4642,36 @@ export type Database = {
       money_receive_event: {
         Args: { p_id: string; p_payload: Json; p_type: string }
         Returns: undefined
+      }
+      money_reconcile_replacement: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_decision: string
+          p_operation: string
+          p_reason: string
+        }
+        Returns: {
+          approved_by: string
+          captured: number
+          created_at: string
+          created_by: string
+          id: string
+          obligation_id: string
+          operation_id: string
+          original_contractor_id: string
+          reason: string
+          replacement_contractor_id: string
+          replacement_decision_id: string
+          snapshot_id: string
+          source_hash: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "money_replacement_reconciliations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       money_record_ach: {
         Args: {
