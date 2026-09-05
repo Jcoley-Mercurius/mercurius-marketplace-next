@@ -160,7 +160,7 @@ refund authorizations per captured payment. Provider cancellation remains blocke
 until CFG-007 acceptable-replacement exhaustion is recorded. See
 `governance/PHASE-5-CANCELLATION-REFUNDS.md`.
 
-**Provider-refund follow-up:** TRACE-057 records replacement decisions and links exhausted supply to reviewed full refunds. Replacement commercial reconciliation and recurring payment identities remain follow-ups. See governance/PHASE-5-PROVIDER-REFUNDS.md.
+**Provider-refund follow-up:** TRACE-057 records replacement decisions and links exhausted supply to reviewed full refunds. TRACE-058 completes replacement commercial reconciliation and TRACE-059 binds separate recurring occurrence payment identities. Automated recurring generation/charge timing remains a follow-up. See governance/PHASE-5-PROVIDER-REFUNDS.md.
 
 **Checkpoint 2026-09-04:** Independent bounded slices are implemented for review on
 `codex/phase5-money-integrity`, now combined with main `735df91` after PRs #4 and #5

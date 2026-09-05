@@ -2167,6 +2167,74 @@ export type Database = {
           },
         ]
       }
+      money_recurring_occurrence_identities: {
+        Row: {
+          created_at: string
+          frequency: string
+          id: string
+          obligation_id: string
+          occurrence_key: string
+          occurrence_request_id: string
+          scheduled_at: string
+          snapshot_id: string
+          source_hash: string
+          template_request_id: string
+        }
+        Insert: {
+          created_at?: string
+          frequency: string
+          id?: string
+          obligation_id: string
+          occurrence_key: string
+          occurrence_request_id: string
+          scheduled_at: string
+          snapshot_id: string
+          source_hash: string
+          template_request_id: string
+        }
+        Update: {
+          created_at?: string
+          frequency?: string
+          id?: string
+          obligation_id?: string
+          occurrence_key?: string
+          occurrence_request_id?: string
+          scheduled_at?: string
+          snapshot_id?: string
+          source_hash?: string
+          template_request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_recurring_occurrence_identitie_occurrence_request_id_fkey"
+            columns: ["occurrence_request_id"]
+            isOneToOne: true
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_recurring_occurrence_identities_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: true
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_recurring_occurrence_identities_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: true
+            referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_recurring_occurrence_identities_template_request_id_fkey"
+            columns: ["template_request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_refund_attempt_events: {
         Row: {
           amount: number

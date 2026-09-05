@@ -37,8 +37,11 @@ Paid replacements retain their original captured agreement. TRACE-058 now record
 dual-reviewed payee reassignment to the canonically accepted replacement and binds
 completion and ACH to that provider; changed-price replacement checkout remains blocked.
 
-Remaining work includes recurring
-identities, vendor matching/private onboarding evidence, tax and promotion
+TRACE-059 gives every recurring occurrence a distinct obligation, snapshot and payment
+identity; subscription renewals remain no-effect observations rather than visit funding.
+See PHASE-5-RECURRING-IDENTITIES.md.
+
+Remaining work includes vendor matching/private onboarding evidence, tax and promotion
 configuration, finance tooling, recovery and cutover, authorized provider checks,
 and manual acceptance.
 
@@ -85,7 +88,8 @@ behavior characterized before replacing the five active entrypoints.
   No duplicate lifecycle implementation or hard-coded cancellation engine is added.
 - [ ] Phase 4 confirmation actor/time and dispute/appeal evidence feed batch eligibility
   transactionally. Current vendor eligibility joins both matching and acceptance.
-  Recurring visits receive distinct commercial/payment identities.
+  Recurring visit generation and charge timing receive approved operating configuration;
+  implemented occurrences already receive distinct commercial/payment identities.
 - [ ] Versioned tax calculation/remittance and promotion funding/allocation/limits
   are approved. Synthetic values are not policy. Two finance operators are provisioned.
 - [ ] Legacy sessions, subscriptions, invoices, refunds and released states are
