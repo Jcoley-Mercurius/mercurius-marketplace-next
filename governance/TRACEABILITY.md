@@ -30,6 +30,8 @@ Every material rebuild item must connect approved intent to implementation and e
 | TRACE-055 | Authoritative homeowner completion and live dispute/appeal gates for weekly direct ACH | MPS §6.5; CFG-008; DEC-006/009/011 | 5 | Immutable lifecycle receipts; source-bound completion; lifecycle locks before ACH preparation/submission/retry | SQL 024 and existing 020; two-order appeal/batch concurrency; PHASE-5-COMPLETION-PAYOUT.md | Final-head CI/review, bank operations acceptance, receipt/reconfirmation and already-paid recovery remain; no runtime dependency on unmerged PR #7 | IN PROGRESS |
 | TRACE-056 | Bind canonical customer cancellation assessments to reviewed refund authorizations | MPS §§6.5–6.6; CFG-005/006; DEC-010/011 | 5 | Immutable operation hash; deterministic per-payment component plan; dual-reviewed authorization; zero-refund/provider-replacement blocks | SQL 025 plus full Phase 5 regression and concurrency; PHASE-5-CANCELLATION-REFUNDS.md | Provider no-replacement evidence, reschedule fee handling, provider integration and recovery remain | IN PROGRESS |
 
+| TRACE-057 | Provider cancellation/no-show replacement evidence and reviewed full refunds | CFG-007; MPS §§6.5–6.6 | 5 | Authenticated immutable replacement decisions; canonical matching/lifecycle locks; full-refund source hash; captured agreement protection | SQL 026; provider decision concurrency; PHASE-5-PROVIDER-REFUNDS.md | Replacement commercial reconciliation, finance UI and provider/operations acceptance remain | IN PROGRESS |
+
 Phase 5 IDs start at 050 to avoid the unmerged Phase 4 traceability range.
 See PHASE-5-HANDOFF.md for acceptance gates and dependencies. No Phase 5 phase-complete claim.
 
