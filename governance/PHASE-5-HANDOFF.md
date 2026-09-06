@@ -43,8 +43,9 @@ See PHASE-5-RECURRING-IDENTITIES.md.
 
 TRACE-060 connects matching and offer acceptance to private onboarding eligibility,
 with an explicit legacy cutover path only for providers without an onboarding record.
-See PHASE-5-VENDOR-MATCHING-ELIGIBILITY.md. Remaining work includes existing-provider
-evidence migration and category/jurisdiction sufficiency, tax and promotion configuration,
+See PHASE-5-VENDOR-MATCHING-ELIGIBILITY.md. TRACE-061 adds reviewed provider cutover
+and service/ZIP compliance requirements; real requirements and decisions remain an
+authorized activation task. Remaining work includes tax and promotion configuration,
 finance tooling, recovery and cutover, authorized provider checks, and manual acceptance.
 
 ## Original independent checkpoint
