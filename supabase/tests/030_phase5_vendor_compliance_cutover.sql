@@ -15,6 +15,7 @@ insert into public.contractors(id,user_id,name,is_active,marketing_enabled)
 insert into public.vendor_applications(id,business_name,first_name,last_name,email,phone,contractor_id)
  values('c3000000-0000-4000-8000-000000000001','Synthetic cutover provider','Test','Provider',
  'provider@example.invalid','synthetic','c2000000-0000-4000-8000-000000000001');
+update public.vendor_applications set document_urls=array['c3000000/license.pdf','c3000000/insurance.pdf'] where id='c3000000-0000-4000-8000-000000000001';
 insert into public.coverage_areas(zip_code,city) values('00011','Synthetic');
 insert into public.contractor_service_zips(contractor_id,zip_code)
  values('c2000000-0000-4000-8000-000000000001','00011');
@@ -29,7 +30,7 @@ insert into public.service_requests(id,customer_id,service_type,address,service_
 
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"c1000000-0000-4000-8000-000000000003"}',true);
 select public.vendor_begin_review('c2000000-0000-4000-8000-000000000001',
- (select id from public.vendor_application_versions where application_id='c3000000-0000-4000-8000-000000000001'));
+ (select id from public.vendor_application_versions where application_id='c3000000-0000-4000-8000-000000000001' order by revision desc limit 1));
 do $$ declare kind text; begin
   foreach kind in array array['identity','agreement','coverage','license','insurance','bank_authorization','profile_pricing','availability','test_notification'] loop
     perform public.vendor_record_evidence('c2000000-0000-4000-8000-000000000001',kind,
@@ -71,11 +72,33 @@ select is(public.vendor_category_evidence_current('c2000000-0000-4000-8000-00000
 select public.vendor_create_compliance_requirement(
  (select service_id from public.vendor_packages where id='c4000000-0000-4000-8000-000000000001'),
  '00011','insurance','synthetic-category-v1','Synthetic insurance requirement',now()-interval '1 day');
-select public.vendor_bind_requirement_evidence('c2000000-0000-4000-8000-000000000001',
+select lives_ok($$select public.vendor_record_requirement_document('c2000000-0000-4000-8000-000000000001',
  (select id from public.vendor_compliance_requirements where zip_code='00011' and kind='insurance'),
- (select id from public.vendor_compliance_evidence where contractor_id='c2000000-0000-4000-8000-000000000001' and kind='insurance'));
+ 'c3000000/insurance.pdf',now()-interval '1 hour',now()+interval '1 year',
+ (select id from public.vendor_compliance_evidence where contractor_id='c2000000-0000-4000-8000-000000000001' and kind='insurance'))$$,
+ 'Operator can bind a verified private application document to a scoped requirement');
+select throws_ok($$select public.vendor_record_requirement_document('c2000000-0000-4000-8000-000000000001',
+ (select id from public.vendor_compliance_requirements where zip_code='00011' and kind='insurance'),
+ 'another-provider/insurance.pdf',now()-interval '1 hour',now()+interval '1 year')$$,
+ 'P0001','Document must belong to the current provider application',
+ 'Private evidence workflow rejects document paths outside the current application');
 select is(public.vendor_category_evidence_current('c2000000-0000-4000-8000-000000000001'),true,
  'License and insurance evidence satisfy exact service and ZIP scope');
+select lives_ok($$select public.vendor_record_requirement_document('c2000000-0000-4000-8000-000000000001',
+ (select id from public.vendor_compliance_requirements where zip_code='00011' and kind='insurance'),
+ 'c3000000/insurance.pdf',now()-interval '1 hour',now()+interval '1 year')$$,
+ 'Exact document retry reuses existing evidence');
+select is((select count(*) from public.vendor_compliance_evidence where kind='insurance'
+ and contractor_id='c2000000-0000-4000-8000-000000000001'),2::bigint,
+ 'Exact retry does not append or supersede evidence');
+select throws_ok($$select public.vendor_record_requirement_document('c2000000-0000-4000-8000-000000000001',
+ (select id from public.vendor_compliance_requirements where zip_code='00011' and kind='insurance'),
+ 'c3000000/insurance.pdf',now()-interval '2 hours',now()+interval '1 year')$$,
+ 'P0001','Stale evidence version','Changed review requires the expected evidence head');
+select ok(not exists(select 1 from jsonb_array_elements(public.vendor_compliance_operations()->'bindings') b
+ where b->>'evidence_id' in (select supersedes::text from public.vendor_compliance_evidence where supersedes is not null)
+ and (b->>'current')::boolean),'Dashboard never marks superseded evidence current');
+
 
 insert into public.coverage_areas(zip_code,city) values('00012','Synthetic reuse scope');
 insert into public.contractor_service_zips(contractor_id,zip_code)
@@ -98,7 +121,9 @@ select public.vendor_create_compliance_requirement(
  '00012','insurance','synthetic-category-v1','Synthetic reused insurance requirement',now()-interval '1 day');
 select public.vendor_bind_requirement_evidence('c2000000-0000-4000-8000-000000000001',
  (select id from public.vendor_compliance_requirements where zip_code='00012' and kind='insurance'),
- (select id from public.vendor_compliance_evidence where contractor_id='c2000000-0000-4000-8000-000000000001' and kind='insurance'));
+ (select evidence.id from public.vendor_compliance_evidence evidence
+   where evidence.contractor_id='c2000000-0000-4000-8000-000000000001' and evidence.kind='insurance'
+   and not exists(select 1 from public.vendor_compliance_evidence newer where newer.supersedes=evidence.id)));
 select is(public.vendor_category_evidence_current('c2000000-0000-4000-8000-000000000001'),true,
  'Reused evidence satisfies every matching service and ZIP requirement');
 select lives_ok($$select public.vendor_record_cutover_decision('c2000000-0000-4000-8000-000000000001',
@@ -106,6 +131,7 @@ select lives_ok($$select public.vendor_record_cutover_decision('c2000000-0000-40
 select lives_ok($$select public.vendor_finalize_cutover('Synthetic provider inventory reviewed')$$,
  'Complete provider inventory activates strict cutover');
 select is((select enforced from public.vendor_cutover_control),true,'Strict cutover is active');
+select is((public.vendor_compliance_operations()->'control'->>'enforced')::boolean,true,'Admin dashboard reports strict cutover state');
 select is((select count(*) from private.find_eligible_packages_core('c5000000-0000-4000-8000-000000000001')),
  1::bigint,'Included provider remains matchable after strict cutover');
 
@@ -133,6 +159,32 @@ select throws_ok($$select public.vendor_create_compliance_requirement(
  '42501','Onboarding operator required','Non-operator authenticated users cannot author requirements');
 select ok(not has_table_privilege('authenticated','public.vendor_cutover_control','UPDATE'),
  'Browser cannot activate or disable cutover');
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"c1000000-0000-4000-8000-000000000002"}',true);
+select throws_ok($$select public.vendor_compliance_operations()$$,'42501','Onboarding operator required','Provider cannot read compliance operations dashboard');
+reset role;
 
+set local role authenticated;
+select throws_ok($$select public.vendor_record_requirement_document('c2000000-0000-4000-8000-000000000001',
+ '00000000-0000-4000-8000-000000000000','private.pdf',now(),now()+interval '1 year')$$,
+ '42501','Onboarding operator required','Provider cannot record private compliance evidence');
+reset role;
+select ok(not has_function_privilege('anon','public.vendor_compliance_operations()','EXECUTE'),
+ 'Anonymous users cannot read the private dashboard');
+select ok(not has_function_privilege('service_role',
+ 'public.vendor_record_requirement_document(uuid,uuid,text,timestamptz,timestamptz,uuid)','EXECUTE'),
+ 'Service role cannot record operator-reviewed documents');
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"c1000000-0000-4000-8000-000000000003"}',true);
+update public.vendor_applications set document_urls=array['new-unreviewed/insurance.pdf']
+ where id='c3000000-0000-4000-8000-000000000001';
+select throws_ok($$select public.vendor_record_requirement_document('c2000000-0000-4000-8000-000000000001',
+ (select id from public.vendor_compliance_requirements where zip_code='00011' and kind='insurance'),
+ 'new-unreviewed/insurance.pdf',now()-interval '1 hour',now()+interval '1 year')$$,
+ 'P0001','Document must belong to the current provider application',
+ 'New intake documents cannot be recorded against an older reviewed application version');
+select ok(not exists(select 1 from jsonb_array_elements(public.vendor_compliance_operations()->'providers') p
+ where p->'documents' ? 'new-unreviewed/insurance.pdf'),
+ 'Dashboard lists documents from the reviewed application snapshot');
 select * from finish();
 rollback;

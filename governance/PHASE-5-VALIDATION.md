@@ -89,3 +89,36 @@ the branch validation evidence.
 ## TRACE-061 existing-provider compliance cutover — 2026-09-05
 
 Clean reconstruction and all 21 SQL suites pass with 476 assertions. SQL 030 covers operator-only scoped license/insurance requirement authoring, multi-requirement evidence reuse, replacement evidence binding, reviewed provider decisions, strict finalization, post-cutover matching, suspension, immutability and RPC-only privileges. Application validation is recorded with the branch evidence.
+
+## TRACE-062 provider compliance operations — 2026-09-08
+
+- Clean isolated reconstruction applies migrations through
+  `20260905018000_vendor_compliance_operations.sql` using Supabase 2.116.0.
+- All 21 SQL suites pass with 489 assertions. Added cases cover private application
+  snapshot ownership, stale evidence replacement, exact retry reuse, superseded
+  binding readback and operator/anonymous/service-role access boundaries.
+- Secret scan passes. Full lint found only the new page's render-time clock use;
+  corrected to use the database evaluation timestamp. Final focused lint covers
+  the page, navigation and browser fixtures/tests; it passes. Final secret and
+  whitespace checks also pass.
+- TypeScript and all 84 unit tests pass.
+- Generated database bindings match a fresh generation from the clean local schema.
+- Production build passes with `MERCURIUS_BUILD_WORKERS=1` and synthetic public
+  configuration; all 57 static pages generate, including `/admin/compliance`.
+- All six focused compliance browser cases pass against the production build:
+  mobile/light (320px), desktop/dark (1440px), evidence reuse, stale-head request
+  submission, failed exclusion confirmation, and successful inclusion/finalization
+  after synthetic server readback.
+- Both viewport/theme accessibility checks report zero WCAG A/AA axe violations;
+  reflow checks pass. Agent screenshot inspection found readable controls and no
+  clipping. These checks do not replace human screen-reader or browser-zoom review.
+- The separate browser CLI reached the access-denied state with synthetic state;
+  an initial state had expired during the pause, and refreshing it did not establish
+  the client-side role check. Local fixture connectivity passed, but this CLI run
+  does not count as authenticated workflow verification. The successful Playwright
+  cases above remain the measured browser acceptance evidence. A fresh-session
+  Playwright mobile/light rerun after the pause also passes.
+
+No real provider document, financial action, invitation, cutover activation or
+production operation was performed. Remaining Phase 5 and human acceptance gates
+are listed in PHASE-5-COMPLIANCE-OPERATIONS.md.

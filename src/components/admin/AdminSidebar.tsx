@@ -14,6 +14,7 @@ const navigation = [
   { label: "Service Requests", href: "/admin/requests", icon: ClipboardList },
   { label: "Applications", href: "/admin/applications", icon: FileText },
   { label: "Vendors", href: "/admin/vendors", icon: UserCheck },
+  { label: "Provider Compliance", href: "/admin/compliance", icon: ShieldCheck },
   { label: "Homeowners", href: "/admin/homeowners", icon: House },
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Service Catalog", href: "/admin/catalog", icon: BookOpen },

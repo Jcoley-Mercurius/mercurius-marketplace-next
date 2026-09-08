@@ -53,6 +53,23 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/auth/v1/user") return send({ id: user.sub, aud: "authenticated", role: "authenticated", email: `${user.testRole}@example.invalid`, app_metadata: {}, user_metadata: {}, created_at: now.toISOString() });
   if (url.pathname === "/rest/v1/rpc/has_role") return send(body._user_id === user.sub && body._role === user.testRole);
   if (url.pathname === "/rest/v1/rpc/expire_stale_matches") return send(null);
+  if (url.pathname === "/rest/v1/rpc/vendor_compliance_operations") return send({
+    evaluated_at: new Date().toISOString(),
+    control: { enforced: false, finalized_at: null, reason: null },
+    providers: [{ id: contractor, name: "Synthetic Vendor", active: true, marketing_enabled: true,
+      onboarding_status: "active", onboarding_revision: 2, application_id: "00000000-0000-4000-8000-000000000040",
+      documents: ["synthetic-vendor/license.pdf", "synthetic-vendor/insurance.pdf"], generic_current: true,
+      scoped_current: false, decision: null, decision_reason: null, service_ids: ["lawn"], zip_codes: ["33904"] }],
+    requirements: [
+      { id: "00000000-0000-4000-8000-000000000041", service_id: "lawn", service_name: "Lawn care", zip_code: "33904", kind: "license", version: "LEE-2026", description: "Reviewed license", effective_at: now.toISOString(), expires_at: null },
+      { id: "00000000-0000-4000-8000-000000000042", service_id: "lawn", service_name: "Lawn care", zip_code: "33904", kind: "insurance", version: "LEE-2026", description: "Reviewed insurance", effective_at: now.toISOString(), expires_at: null },
+    ],
+    evidence: [],
+    bindings: [{ requirement_id: "00000000-0000-4000-8000-000000000041", contractor_id: contractor,
+      current: true, evidence_id: "00000000-0000-4000-8000-000000000043", evidence_ref: "synthetic-vendor/license.pdf",
+      accepted_at: now.toISOString(), expires_at: new Date(now.getTime() + 86400000).toISOString() }],
+    services: [{ id: "lawn", name: "Lawn care" }], areas: [{ zip_code: "33904", city: "Cape Coral" }],
+  });
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {

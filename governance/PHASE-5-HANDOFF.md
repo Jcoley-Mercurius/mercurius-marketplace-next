@@ -48,6 +48,11 @@ and service/ZIP compliance requirements; real requirements and decisions remain 
 authorized activation task. Remaining work includes tax and promotion configuration,
 finance tooling, recovery and cutover, authorized provider checks, and manual acceptance.
 
+TRACE-062 adds the provider compliance operations interface and private evidence
+review/binding workflow. See PHASE-5-COMPLIANCE-OPERATIONS.md for scope, evidence
+reuse, stale-review protection and remaining onboarding operations. Phase 5 remains
+open; implementation of this interface does not activate provider cutover.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

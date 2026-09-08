@@ -4084,6 +4084,119 @@ export type Database = {
           },
         ]
       }
+      vendor_compliance_requirements: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string
+          effective_at: string
+          expires_at: string | null
+          id: string
+          kind: string
+          requirement_version: string
+          service_id: string
+          zip_code: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description: string
+          effective_at: string
+          expires_at?: string | null
+          id?: string
+          kind: string
+          requirement_version: string
+          service_id: string
+          zip_code: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string
+          effective_at?: string
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          requirement_version?: string
+          service_id?: string
+          zip_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_compliance_requirements_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_compliance_requirements_zip_code_fkey"
+            columns: ["zip_code"]
+            isOneToOne: false
+            referencedRelation: "coverage_areas"
+            referencedColumns: ["zip_code"]
+          },
+        ]
+      }
+      vendor_cutover_control: {
+        Row: {
+          enforced: boolean
+          finalized_at: string | null
+          finalized_by: string | null
+          reason: string | null
+          singleton: boolean
+        }
+        Insert: {
+          enforced?: boolean
+          finalized_at?: string | null
+          finalized_by?: string | null
+          reason?: string | null
+          singleton?: boolean
+        }
+        Update: {
+          enforced?: boolean
+          finalized_at?: string | null
+          finalized_by?: string | null
+          reason?: string | null
+          singleton?: boolean
+        }
+        Relationships: []
+      }
+      vendor_cutover_decisions: {
+        Row: {
+          contractor_id: string
+          disposition: string
+          onboarding_revision: number | null
+          reason: string
+          reviewed_at: string
+          reviewed_by: string
+        }
+        Insert: {
+          contractor_id: string
+          disposition: string
+          onboarding_revision?: number | null
+          reason: string
+          reviewed_at?: string
+          reviewed_by: string
+        }
+        Update: {
+          contractor_id?: string
+          disposition?: string
+          onboarding_revision?: number | null
+          reason?: string
+          reviewed_at?: string
+          reviewed_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_cutover_decisions_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: true
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_invitation_attempts: {
         Row: {
           application_version_id: string
@@ -4331,6 +4444,52 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "pricing_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_requirement_evidence: {
+        Row: {
+          bound_at: string
+          bound_by: string
+          contractor_id: string
+          evidence_id: string
+          requirement_id: string
+        }
+        Insert: {
+          bound_at?: string
+          bound_by: string
+          contractor_id: string
+          evidence_id: string
+          requirement_id: string
+        }
+        Update: {
+          bound_at?: string
+          bound_by?: string
+          contractor_id?: string
+          evidence_id?: string
+          requirement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_requirement_evidence_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+          {
+            foreignKeyName: "vendor_requirement_evidence_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_compliance_evidence"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_requirement_evidence_requirement_id_fkey"
+            columns: ["requirement_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_compliance_requirements"
             referencedColumns: ["id"]
           },
         ]
@@ -4950,9 +5109,34 @@ export type Database = {
         Args: { p_contractor: string; p_version: string }
         Returns: undefined
       }
+      vendor_bind_requirement_evidence: {
+        Args: {
+          p_contractor: string
+          p_evidence: string
+          p_requirement: string
+        }
+        Returns: undefined
+      }
+      vendor_category_evidence_current: {
+        Args: { p_at?: string; p_contractor: string }
+        Returns: boolean
+      }
       vendor_complete_job: {
         Args: { _job_id: string; _photo_urls: string[] }
         Returns: undefined
+      }
+      vendor_compliance_operations: { Args: never; Returns: Json }
+      vendor_create_compliance_requirement: {
+        Args: {
+          p_description: string
+          p_effective: string
+          p_expires?: string
+          p_kind: string
+          p_requirement_version: string
+          p_service: string
+          p_zip: string
+        }
+        Returns: string
       }
       vendor_decide_onboarding: {
         Args: {
@@ -4972,10 +5156,18 @@ export type Database = {
         Args: { p_at: string; p_contractor: string }
         Returns: boolean
       }
+      vendor_finalize_cutover: {
+        Args: { p_reason: string }
+        Returns: undefined
+      }
       vendor_is_eligible: { Args: { p_contractor: string }; Returns: boolean }
       vendor_prepare_invitation: {
         Args: { p_contractor: string; p_expires: string; p_key: string }
         Returns: string
+      }
+      vendor_record_cutover_decision: {
+        Args: { p_contractor: string; p_disposition: string; p_reason: string }
+        Returns: undefined
       }
       vendor_record_evidence: {
         Args: {
@@ -4997,6 +5189,17 @@ export type Database = {
           p_status: string
         }
         Returns: undefined
+      }
+      vendor_record_requirement_document: {
+        Args: {
+          p_accepted: string
+          p_contractor: string
+          p_document_path: string
+          p_expires: string
+          p_requirement: string
+          p_supersedes?: string
+        }
+        Returns: string
       }
       vendor_require_operator: { Args: never; Returns: string }
     }

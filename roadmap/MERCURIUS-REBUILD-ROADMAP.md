@@ -146,6 +146,11 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
+**Compliance operations follow-up:** TRACE-062 provides the admin compliance
+interface, version-bound private document review/binding, evidence reuse and
+protected provider decisions/finalization. See governance/PHASE-5-COMPLIANCE-OPERATIONS.md.
+Remaining invitation, renewal, retention, finance and integration gates stay open.
+
 **Follow-ups after PR #6 merge:** TRACE-054 binds snapshots and checkout to accepted
 quote revisions and selected eligible fixed offerings. See
 governance/PHASE-5-QUOTE-CHECKOUT.md. TRACE-055 connects the merged lifecycle to
