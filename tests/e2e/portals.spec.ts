@@ -110,3 +110,125 @@ for (const theme of ["light", "dark"]) {
     await page.screenshot({ path: `test-results/phase4-admin-${theme}.png`, fullPage: true });
   });
 }
+
+
+for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
+  test(`provider compliance operations ${theme} ${width}px`, async ({ page }) => {
+    await syntheticSession(page.context(), "admin");
+    await page.addInitScript(theme => localStorage.setItem("theme", theme), theme);
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/admin/compliance");
+    await expect(page.getByRole("heading", { name: "Provider compliance" })).toBeVisible();
+    await expect(page.getByText("Synthetic Vendor", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Evidence bound", { exact: true })).toBeVisible();
+    await expect(page.getByText("Needs evidence", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Finalize cutover" })).toBeDisabled();
+    expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+    expect(await page.locator("main").evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: `test-results/provider-compliance-${theme}-${width}.png`, fullPage: true });
+  });
+}
+
+test("compliance evidence reuse sends the reviewed IDs and preserves errors", async ({ page }) => {
+  await syntheticSession(page.context(), "admin");
+  await page.route("**/rpc/vendor_compliance_operations", async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.evidence = [{ id: "00000000-0000-4000-8000-000000000043", contractor_id: data.providers[0].id,
+      current: true, kind: "license", requirement_version: "LEE-2026", evidence_ref: "synthetic-vendor/license.pdf",
+      accepted_at: new Date(Date.now()-3600000).toISOString(), expires_at: new Date(Date.now()+86400000).toISOString() }];
+    await route.fulfill({ response, json: data });
+  });
+  await page.goto("/admin/compliance");
+  await page.getByLabel("Requirement", { exact: true }).selectOption("00000000-0000-4000-8000-000000000041");
+  const request = page.waitForRequest("**/rpc/vendor_bind_requirement_evidence");
+  await page.getByRole("button", { name: "Reuse current license evidence" }).click();
+  expect((await request).postDataJSON()).toEqual({
+    p_contractor: "00000000-0000-4000-8000-000000000002",
+    p_requirement: "00000000-0000-4000-8000-000000000041",
+    p_evidence: "00000000-0000-4000-8000-000000000043",
+  });
+  await expect(page.getByText("Action could not be completed", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Requirement", { exact: true })).toHaveValue("00000000-0000-4000-8000-000000000041");
+  await expect(page.getByRole("button", { name: "Finalize cutover" })).toBeDisabled();
+});
+
+test("compliance exclusion requires a reason and keeps a failed confirmation open", async ({ page }) => {
+  await syntheticSession(page.context(), "admin");
+  await page.goto("/admin/compliance");
+  await page.getByRole("button", { name: "Exclude from beta" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog.getByRole("button", { name: "Exclude provider" })).toBeDisabled();
+  await dialog.getByLabel("Reason (required)", { exact: true }).fill("Synthetic incomplete requirements");
+  const request = page.waitForRequest("**/rpc/vendor_record_cutover_decision");
+  await dialog.getByRole("button", { name: "Exclude provider" }).click();
+  expect((await request).postDataJSON()).toMatchObject({ p_disposition: "excluded", p_reason: "Synthetic incomplete requirements" });
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Exclude from beta" })).toBeFocused();
+});
+
+test("compliance inclusion and finalization follow successful server readback", async ({ page }) => {
+  await syntheticSession(page.context(), "admin");
+  let included = false;
+  let enforced = false;
+  await page.route("**/rpc/vendor_compliance_operations", async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.providers[0].scoped_current = true;
+    data.providers[0].decision = included ? "included" : null;
+    data.control.enforced = enforced;
+    await route.fulfill({ response, json: data });
+  });
+  await page.route("**/rpc/vendor_record_cutover_decision", async route => {
+    expect(route.request().postDataJSON()).toMatchObject({ p_disposition: "included", p_reason: "Synthetic reviewed provider" });
+    included = true;
+    await route.fulfill({ json: null });
+  });
+  await page.route("**/rpc/vendor_finalize_cutover", async route => {
+    expect(route.request().postDataJSON()).toEqual({ p_reason: "Synthetic inventory reviewed" });
+    enforced = true;
+    await route.fulfill({ json: null });
+  });
+  await page.goto("/admin/compliance");
+  await expect(page.getByRole("button", { name: "Finalize cutover" })).toBeDisabled();
+  await page.getByRole("button", { name: "Include in beta" }).click();
+  let dialog = page.getByRole("alertdialog");
+  await dialog.getByLabel("Reason (required)", { exact: true }).fill("Synthetic reviewed provider");
+  await dialog.getByRole("button", { name: "Include provider", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Include in beta" })).toBeDisabled();
+  await page.getByRole("button", { name: "Finalize cutover" }).click();
+  dialog = page.getByRole("alertdialog");
+  await dialog.getByLabel("Reason (required)", { exact: true }).fill("Synthetic inventory reviewed");
+  await dialog.getByRole("button", { name: "Finalize strict matching", exact: true }).click();
+  await expect(page.getByText("Finalized", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Finalize cutover" })).toHaveCount(0);
+});
+
+test("compliance document review submits the observed evidence head", async ({ page }) => {
+  await syntheticSession(page.context(), "admin");
+  await page.route("**/rpc/vendor_compliance_operations", async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.evidence = [{ id: "00000000-0000-4000-8000-000000000044", contractor_id: data.providers[0].id,
+      current: false, kind: "insurance", requirement_version: "LEE-2026", evidence_ref: "synthetic-vendor/insurance.pdf",
+      accepted_at: "2025-01-01T00:00:00Z", expires_at: "2025-02-01T00:00:00Z" }];
+    await route.fulfill({ response, json: data });
+  });
+  await page.goto("/admin/compliance");
+  await page.getByLabel("Requirement", { exact: true }).selectOption("00000000-0000-4000-8000-000000000042");
+  await expect(page.getByRole("button", { name: "Reuse current insurance evidence" })).toHaveCount(0);
+  await page.getByLabel("Private application document", { exact: true }).selectOption("synthetic-vendor/insurance.pdf");
+  await page.getByLabel("Reviewed at", { exact: true }).fill("2026-01-01T10:00");
+  await page.getByLabel("Evidence expires", { exact: true }).fill("2027-01-01T10:00");
+  const request = page.waitForRequest("**/rpc/vendor_record_requirement_document");
+  await page.getByRole("button", { name: "Record reviewed evidence" }).click();
+  expect((await request).postDataJSON()).toMatchObject({
+    p_supersedes: "00000000-0000-4000-8000-000000000044", p_document_path: "synthetic-vendor/insurance.pdf",
+    p_requirement: "00000000-0000-4000-8000-000000000042", p_contractor: "00000000-0000-4000-8000-000000000002",
+  });
+  await expect(page.getByText("Action could not be completed", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Private application document", { exact: true })).toHaveValue("synthetic-vendor/insurance.pdf");
+});
