@@ -4197,6 +4197,42 @@ export type Database = {
           },
         ]
       }
+      vendor_invitation_acceptances: {
+        Row: {
+          accepted_at: string
+          application_version_id: string
+          attempt_id: string
+          auth_user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          application_version_id: string
+          attempt_id: string
+          auth_user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          application_version_id?: string
+          attempt_id?: string
+          auth_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_invitation_acceptances_application_version_id_fkey"
+            columns: ["application_version_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_application_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_invitation_acceptances_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_invitation_dispatches"
+            referencedColumns: ["attempt_id"]
+          },
+        ]
+      }
       vendor_invitation_attempts: {
         Row: {
           application_version_id: string
@@ -4245,6 +4281,44 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vendor_onboarding"
             referencedColumns: ["contractor_id"]
+          },
+        ]
+      }
+      vendor_invitation_dispatches: {
+        Row: {
+          attempt_id: string
+          auth_user_id: string | null
+          recipient_email: string
+          resolved_at: string | null
+          started_at: string
+          started_by: string
+          state: string
+        }
+        Insert: {
+          attempt_id: string
+          auth_user_id?: string | null
+          recipient_email: string
+          resolved_at?: string | null
+          started_at?: string
+          started_by: string
+          state?: string
+        }
+        Update: {
+          attempt_id?: string
+          auth_user_id?: string | null
+          recipient_email?: string
+          resolved_at?: string | null
+          started_at?: string
+          started_by?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_invitation_dispatches_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_invitation_attempts"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5104,6 +5178,10 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["request_status"]
       }
+      vendor_accept_invitation: {
+        Args: { p_attempt: string }
+        Returns: undefined
+      }
       vendor_accept_job: { Args: { _job_id: string }; Returns: undefined }
       vendor_begin_review: {
         Args: { p_contractor: string; p_version: string }
@@ -5120,6 +5198,11 @@ export type Database = {
       vendor_category_evidence_current: {
         Args: { p_at?: string; p_contractor: string }
         Returns: boolean
+      }
+      vendor_claim_invitation: { Args: { p_attempt: string }; Returns: Json }
+      vendor_close_dispatched_invitation: {
+        Args: { p_attempt: string; p_reason: string; p_status: string }
+        Returns: undefined
       }
       vendor_complete_job: {
         Args: { _job_id: string; _photo_urls: string[] }
@@ -5160,6 +5243,11 @@ export type Database = {
         Args: { p_reason: string }
         Returns: undefined
       }
+      vendor_finish_invitation: {
+        Args: { p_actor?: string; p_attempt: string; p_auth_user?: string }
+        Returns: undefined
+      }
+      vendor_invitation_status: { Args: { p_attempt: string }; Returns: Json }
       vendor_is_eligible: { Args: { p_contractor: string }; Returns: boolean }
       vendor_prepare_invitation: {
         Args: { p_contractor: string; p_expires: string; p_key: string }
@@ -5182,6 +5270,15 @@ export type Database = {
         Returns: string
       }
       vendor_record_invitation: {
+        Args: {
+          p_attempt: string
+          p_evidence: string
+          p_ref: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      vendor_record_legacy_invitation: {
         Args: {
           p_attempt: string
           p_evidence: string

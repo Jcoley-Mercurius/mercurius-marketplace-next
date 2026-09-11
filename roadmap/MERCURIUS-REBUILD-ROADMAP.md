@@ -146,6 +146,11 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
+**Invitation follow-up:** TRACE-063 adds reserved local Auth dispatch, verified
+recipient acceptance and explicit uncertain-outcome reconciliation. Hosted delivery,
+existing-account linking and operator queue integration remain open. See
+governance/PHASE-5-VENDOR-INVITATIONS.md.
+
 **Compliance operations follow-up:** TRACE-062 provides the admin compliance
 interface, version-bound private document review/binding, evidence reuse and
 protected provider decisions/finalization. See governance/PHASE-5-COMPLIANCE-OPERATIONS.md.

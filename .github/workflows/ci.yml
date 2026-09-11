@@ -40,6 +40,8 @@ jobs:
         run: node scripts/phase5-concurrency.mjs
       - name: Concurrent lifecycle appeals and ACH preparation
         run: node scripts/phase5-payout-concurrency.mjs
+      - name: Concurrent provider invitation dispatch
+        run: node scripts/phase5-invitation-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay

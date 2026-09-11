@@ -230,3 +230,90 @@ if (name === "job-lifecycle-worker") {
     equal(response.status, 200); await response.body?.cancel();
   });
 }
+
+if (name === "vendor-invite") {
+  const attempt = "d4000000-0000-4000-8000-000000000001";
+  const recipient = "d1000000-0000-4000-8000-000000000002";
+  const operator = "d1000000-0000-4000-8000-000000000001";
+  const operatorRoute = (url: URL) => {
+    if (url.pathname === "/auth/v1/user") return json({ id: operator });
+    if (url.pathname === "/rest/v1/rpc/has_role") return json(true);
+  };
+  Deno.test("invitation dispatch: disabled and hosted modes never reach Auth", async () => {
+    calls=[]; unexpected=[]; route=undefined;
+    let response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,503); await response.body?.cancel(); equal(calls,[]);
+    fixture.MERCURIUS_INVITATION_MODE="local-test";
+    const local=fixture.SUPABASE_URL; fixture.SUPABASE_URL="https://synthetic.supabase.co";
+    response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,503); await response.body?.cancel(); equal(calls,[]);
+    fixture.SUPABASE_URL=local; delete fixture.MERCURIUS_INVITATION_MODE;
+  });
+  Deno.test("invitation dispatch: reserves first, uses snapshot recipient, and cannot resend", async () => {
+    calls=[]; unexpected=[]; fixture.MERCURIUS_INVITATION_MODE="local-test";
+    let claimed=false; const order:string[]=[];
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation") {order.push("claim"); const first=!claimed; claimed=true; return json({claimed:first,recipient_email:"recipient@example.invalid",status:"submitted"});}
+      if(url.pathname==="/auth/v1/invite") {
+        order.push("invite"); equal(JSON.parse(String(init?.body)).email,"recipient@example.invalid");
+        equal(url.searchParams.get("redirect_to"),`http://localhost:3000/set-password?invitation=${attempt}`);
+        return json({user:{id:recipient}});
+      }
+      if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation") {
+        order.push("receipt"); equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_auth_user:recipient,p_actor:operator}); return json(null);
+      }
+    };
+    let response=await request({action:"send",attempt_id:attempt,email:"attacker@example.invalid",origin:"https://attacker.invalid"},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,200); equal(await response.json(),{attempt_id:attempt,status:"provider_accepted",delivered:false,activated:false});
+    response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,409); await response.body?.cancel(); equal(order,["claim","invite","receipt","claim"]);
+    delete fixture.MERCURIUS_INVITATION_MODE;
+  });
+  Deno.test("invitation dispatch: uncertain Auth result is recorded without a retry", async () => {
+    calls=[]; unexpected=[]; fixture.MERCURIUS_INVITATION_MODE="local-test"; let sends=0; let unknown=false;
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
+      if(url.pathname==="/auth/v1/invite") {sends++; throw new Error("Synthetic lost response");}
+      if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation") {unknown=JSON.parse(String(init?.body)).p_auth_user===null; return json(null);}
+    };
+    const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,409); equal((await response.json()).status,"unknown"); equal(sends,1); equal(unknown,true);
+    delete fixture.MERCURIUS_INVITATION_MODE;
+  });
+  Deno.test("invitation dispatch: receipt failure cannot report successful delivery", async () => {
+    calls=[]; unexpected=[]; fixture.MERCURIUS_INVITATION_MODE="local-test"; const receipts:unknown[]=[];
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
+      if(url.pathname==="/auth/v1/invite")return json({user:{id:recipient}});
+      if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation") {const payload=JSON.parse(String(init?.body));receipts.push(payload.p_auth_user);return payload.p_auth_user ? json({message:"synthetic receipt failure"},500):json(null);}
+    };
+    const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,409); equal((await response.json()).status,"unknown"); equal(receipts,[recipient,null]);
+    delete fixture.MERCURIUS_INVITATION_MODE;
+  });
+  Deno.test("invitation acceptance: verified caller token reaches recipient-owned RPC", async () => {
+    calls=[];unexpected=[];
+    route=(url,init)=>{
+      if(url.pathname==="/auth/v1/user")return json({id:recipient});
+      if(url.pathname==="/rest/v1/rpc/vendor_accept_invitation") {
+        equal(new Headers(init?.headers).get("authorization"),"Bearer synthetic-recipient-token");
+        equal(JSON.parse(String(init?.body)),{p_attempt:attempt}); return json(null);
+      }
+    };
+    const response=await request({action:"accept",attempt_id:attempt,auth_user_id:operator},{Authorization:"Bearer synthetic-recipient-token"});
+    equal(response.status,200);equal(await response.json(),{status:"accepted",activated:false});equal(calls.length,2);
+  });
+  Deno.test("invitation reconciliation: reads exact Auth user ID and records authenticated operator", async () => {
+    calls=[];unexpected=[];
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({user:{id:recipient}});
+      if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation") {equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_auth_user:recipient,p_actor:operator});return json(null);}
+    };
+    const response=await request({action:"reconcile",attempt_id:attempt,auth_user_id:recipient},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,200); await response.body?.cancel();equal(calls.some(call=>call.endsWith("/auth/v1/invite")),false);
+  });
+}

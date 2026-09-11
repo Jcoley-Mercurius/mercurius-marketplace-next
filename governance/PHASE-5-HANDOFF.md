@@ -53,6 +53,11 @@ review/binding workflow. See PHASE-5-COMPLIANCE-OPERATIONS.md for scope, evidenc
 reuse, stale-review protection and remaining onboarding operations. Phase 5 remains
 open; implementation of this interface does not activate provider cutover.
 
+TRACE-063 adds durable local-only invitation dispatch, unknown-outcome reconciliation
+and verified recipient acceptance receipts. See PHASE-5-VENDOR-INVITATIONS.md.
+Hosted delivery, operator queue wiring and existing-account linking remain gates;
+acceptance never activates a provider.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
