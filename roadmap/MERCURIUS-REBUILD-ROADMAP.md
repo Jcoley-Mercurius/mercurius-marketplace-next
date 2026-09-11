@@ -150,6 +150,8 @@ Work:
 interface, version-bound private document review/binding, evidence reuse and
 protected provider decisions/finalization. See governance/PHASE-5-COMPLIANCE-OPERATIONS.md.
 Remaining invitation, renewal, retention, finance and integration gates stay open.
+TRACE-064 restores the production dependency-audit CI gate (Next.js 16.3.4 and
+transitive patches); see governance/PHASE-5-DEPENDENCY-SECURITY.md.
 
 **Follow-ups after PR #6 merge:** TRACE-054 binds snapshots and checkout to accepted
 quote revisions and selected eligible fixed offerings. See
