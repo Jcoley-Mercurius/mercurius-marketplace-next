@@ -163,3 +163,30 @@ synthetic fixtures. Actual gateway/JWT, Auth invitation links, mail templates,
 redirect allowlists and mailbox delivery remain integration gates. Existing-account
 linking and operator queue wiring remain follow-up slices. No production operation,
 real email, role grant, account linking or activation was performed.
+
+## TRACE-064 production dependency audit remediation — 2026-09-10
+
+Base `d815e90` (origin/main). Local checks ran sequentially in an isolated worktree
+with Node 24.17.0 and the CI synthetic public configuration
+(`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55831`, synthetic anon value,
+`MERCURIUS_BUILD_WORKERS=1`).
+
+- Before: `npm run audit:prod` on unmodified main reports 4 vulnerabilities
+  (1 critical next, 2 high sharp/js-yaml, 1 moderate hono), matching PR #16's
+  failed `application` job log.
+- After: `npm ci --ignore-scripts` from the updated lockfile succeeds, and
+  `npm run audit:prod` reports zero vulnerabilities. `npm ls` resolves next 16.3.4,
+  sharp 0.35.4, js-yaml 4.3.2 and hono 4.13.7.
+- Secret scan, lint, TypeScript and all 84 unit tests pass.
+- Production build passes on Next.js 16.3.4 (Turbopack) and generates all 57 static
+  pages without warnings.
+- `npm run test:a11y`: all 69 Playwright cases pass against the production build,
+  including axe WCAG A/AA, reflow, keyboard/focus, both themes and 320/1440px
+  viewports.
+- `git diff --check` passes; only `package.json` and `package-lock.json` change
+  outside governance documentation.
+
+Not run locally: database suites, Edge checks/handler tests and concurrency scripts
+(npm-only change; Deno imports are separately locked), the `@visual` screenshot
+suite (not a CI gate), and a hosted or dev-server session. CI must confirm all three
+jobs on the final PR head.
