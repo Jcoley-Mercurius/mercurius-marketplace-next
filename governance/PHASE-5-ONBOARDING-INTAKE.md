@@ -2,7 +2,10 @@
 
 **Status:** PLANNED. Awaiting Codex design confirmation before implementation.
 Owner decisions (2026-09-11): this is a separate slice ahead of invitation operator UI;
-the work is stacked on PR #16 (TRACE-063); invitation expiry stays operator-entered.
+invitation expiry stays operator-entered with no default. PR #16 (TRACE-063) has
+since merged, so this branch is based on main `5a3bffe`. The owner accepted the
+recommended answer (A) to all four design decisions below; Codex confirms the
+technical contract before implementation.
 
 ## Gap
 
@@ -76,14 +79,17 @@ the following invitation UI slice.
 
 ## Decisions for Codex
 
-1. Confirm an account-less contractor record (hidden, no contact data) is the right
-   identity anchor before invitation, versus a separate pre-contractor table.
-2. Public visibility after activation: `vendor_decide_onboarding('activate')` does
-   not set `contractors.is_active`. Binding public listing to onboarding eligibility
-   is a separate, pre-existing gap and is proposed as out of scope here.
-3. Duplicate applications for the same business/email produce separate contractors;
-   deduplication would need identity matching and is proposed as out of scope.
-4. Whether `review_started` should be recorded as onboarding revision 1 (proposed)
-   or kept outside the revision sequence.
+Owner answered A to each (2026-09-11). Codex confirms or raises technical objections.
+
+1. Identity anchor. **Owner: A.** Use a hidden, account-less contractor record with
+   no contact data, not a separate pre-contractor table.
+2. Public visibility after activation. **Owner: A (separate slice).**
+   `vendor_decide_onboarding('activate')` does not set `contractors.is_active`.
+   Binding the public listing to onboarding eligibility is a pre-existing gap and
+   stays out of this slice.
+3. Duplicate applications. **Owner: A (out of scope).** Each application gets its
+   own contractor. Operators reject duplicates; no email-based identity matching.
+4. Audit sequence. **Owner: A.** Record `review_started` as onboarding revision 1,
+   ahead of later activate/suspend/renew events.
 
 No production migration, provider record, email or activation is performed.

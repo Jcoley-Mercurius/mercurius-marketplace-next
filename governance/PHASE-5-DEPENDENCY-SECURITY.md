@@ -46,8 +46,10 @@ product rule or provider configuration changes.
 - Whether `shadcn` (a code-generation CLI) should move to `devDependencies`. That
   would remove its transitive tree from the production audit scope, but it changes
   dependency classification and is left as a separate, explicit decision.
-- PR #16 must incorporate this fix (merge or rebase after this lands) before its
-  final-head CI can pass. That sequencing is a reviewer/owner choice.
+- Outcome (2026-09-11): at the owner's request this fix was merged into PR #16
+  (`23f1150`). Final-head CI passed on PR #17 (`ce5527b`) and PR #16 (`23f1150`).
+  The owner merged PR #16 to main (`5a3bffe`, tree identical to `23f1150`), and
+  main's CI passed all three jobs. PR #17 closed as merged via that history.
 
 ## Validation
 
