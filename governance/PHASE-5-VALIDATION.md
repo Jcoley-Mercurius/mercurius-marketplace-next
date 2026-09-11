@@ -122,3 +122,71 @@ Clean reconstruction and all 21 SQL suites pass with 476 assertions. SQL 030 cov
 No real provider document, financial action, invitation, cutover activation or
 production operation was performed. Remaining Phase 5 and human acceptance gates
 are listed in PHASE-5-COMPLIANCE-OPERATIONS.md.
+
+## TRACE-063 — Provider invitation dispatch and acceptance (2026-09-10)
+
+The isolated `codex/phase5-vendor-invitations` worktree starts at merged PR #15
+(`d815e90`). Verification uses only synthetic local fixtures and substituted Auth
+transport. No real invitation or Auth account provisioning was performed.
+
+- Clean migration replay and all 22 SQL suites pass: **518 assertions**. Cases
+  include authorization, duplicate reservation, uncertain outcomes, exact identity
+  readback, confirmed recipient checks, expiry, suspension, revocation, stale
+  applications, immutable acceptance and absence of role/link/activation effects.
+- Eight simultaneous authenticated claims produce exactly one winner, one durable
+  dispatch and one submitted event. The isolated database was reset afterward and
+  the complete SQL suite passed again. CI includes this concurrency check and reset.
+- Fresh database types were generated from the clean isolated schema.
+- The invitation's locked Deno type check passes. All **9 invitation handler tests**
+  pass with substituted transport and no network permission. All 11 locked Edge
+  handlers subsequently passed type checks and all **44 handler tests** passed.
+- Secret scan, full application lint, TypeScript and all **84 unit tests** pass.
+
+- Production build passes with synthetic public configuration and one build worker;
+  all **58 pages** generate, including `/invitation`.
+- All **5 focused browser cases** pass against that build: mobile/light at 320px,
+  desktop/dark at 1440px, retryable failure, invalid/unauthenticated links, and the
+  password-setup handoff with no automatic acceptance. The first run exposed two
+  selectors that also matched Next.js's route announcer and a navigation timeout;
+  scoped selectors and a 15-second navigation assertion resolved the three cases
+  on their focused rerun. No application change was needed for those failures.
+- Both theme/viewport accessibility checks have zero WCAG A/AA axe violations;
+  overflow checks pass. Screenshot inspection confirms readable controls and no
+  clipping. Human screen-reader and browser-zoom acceptance remain separate.
+
+- Separate browser CLI smoke check passes: the unauthenticated invitation page
+  renders the sign-in control, no runtime errors or framework overlay are reported,
+  and home navigation renders content. Screenshot inspection passes.
+
+The browser, handler and SQL checks verify their respective boundaries with
+synthetic fixtures. Actual gateway/JWT, Auth invitation links, mail templates,
+redirect allowlists and mailbox delivery remain integration gates. Existing-account
+linking and operator queue wiring remain follow-up slices. No production operation,
+real email, role grant, account linking or activation was performed.
+
+## TRACE-064 production dependency audit remediation — 2026-09-10
+
+Base `d815e90` (origin/main). Local checks ran sequentially in an isolated worktree
+with Node 24.17.0 and the CI synthetic public configuration
+(`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55831`, synthetic anon value,
+`MERCURIUS_BUILD_WORKERS=1`).
+
+- Before: `npm run audit:prod` on unmodified main reports 4 vulnerabilities
+  (1 critical next, 2 high sharp/js-yaml, 1 moderate hono), matching PR #16's
+  failed `application` job log.
+- After: `npm ci --ignore-scripts` from the updated lockfile succeeds, and
+  `npm run audit:prod` reports zero vulnerabilities. `npm ls` resolves next 16.3.4,
+  sharp 0.35.4, js-yaml 4.3.2 and hono 4.13.7.
+- Secret scan, lint, TypeScript and all 84 unit tests pass.
+- Production build passes on Next.js 16.3.4 (Turbopack) and generates all 57 static
+  pages without warnings.
+- `npm run test:a11y`: all 69 Playwright cases pass against the production build,
+  including axe WCAG A/AA, reflow, keyboard/focus, both themes and 320/1440px
+  viewports.
+- `git diff --check` passes; only `package.json` and `package-lock.json` change
+  outside governance documentation.
+
+Not run locally: database suites, Edge checks/handler tests and concurrency scripts
+(npm-only change; Deno imports are separately locked), the `@visual` screenshot
+suite (not a CI gate), and a hosted or dev-server session. CI must confirm all three
+jobs on the final PR head.

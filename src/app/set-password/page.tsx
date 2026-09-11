@@ -220,6 +220,11 @@ export default function SetPasswordPage() {
         console.warn("Password updated, but roles could not be loaded", error);
       }
 
+      const invitation = new URLSearchParams(window.location.search).get("invitation");
+      if (invitation && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(invitation)) {
+        destination = `/invitation?attempt=${invitation}`;
+      }
+
       setPageState("success");
       toast.success("Password set", {
         description: "Your password has been updated and you’re signed in.",
