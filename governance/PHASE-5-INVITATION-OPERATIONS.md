@@ -86,6 +86,29 @@ The recovered `vendor_applications` invite columns are still displayed, relabell
 "Legacy onboarding pipeline" and marked as history, so existing rows remain readable
 without implying the queue acts on them.
 
+## Dialog reflow fix (MDS §8)
+
+`DialogContent` is a grid whose single track was `auto`. An `auto` track is floored
+at its items' min-content contribution, so one intrinsically wide control widens the
+whole dialog past its content box and the dialog scrolls horizontally at 320px. The
+`datetime-local` expiry control added by this slice contributes a 271px minimum
+against a 256px content box, which made the defect reachable in the applications
+dialog: measured `scrollWidth` 303 against `clientWidth` 288.
+
+The track is now `minmax(0,1fr)`, which caps it at the content box. Measured after
+the fix: `scrollWidth` 288 equals `clientWidth` 288, and the expiry control renders
+222px wide with no internal clipping, so no function is lost. `min-width:0` on the
+control itself changes nothing — the blowout is track sizing, not the used width —
+and the earlier reading that blamed `DialogFooter`'s `-mx-4` bleed and a scrollbar
+was wrong: `offsetWidth` equals `clientWidth`, so no scrollbar is involved and the
+footer only made the symptom visible.
+
+This is a one-line change to a shared primitive that every dialog uses. It is a
+required-behavior fix under MDS §8 ("200% zoom and 320px reflow without loss of
+function") and MDS §10.1 ("fix P0 accessibility defects in existing primitives"),
+not a redesign: no spacing, color, elevation or composition token changes. All 90
+browser cases, including every other dialog surface, pass unchanged with it.
+
 ## Acceptance and follow-ups
 
 Evidence is recorded in PHASE-5-VALIDATION.md. SQL suite 033 covers permissions, the
@@ -96,14 +119,6 @@ nothing.
 
 Open items for review:
 
-- **Pre-existing MDS defect, surfaced by this slice.** `DialogFooter` bleeds to the
-  dialog edge with `-mx-4` while `DialogContent` scrolls with `overflow-y-auto`.
-  Once the content scrolls, the footer overflows the padding box by the scrollbar
-  width and the dialog scrolls horizontally at 320px. Adding this panel makes the
-  applications dialog scroll, so the defect is now reachable there. It is a shared
-  MDS primitive used by every dialog; the fix belongs to an MDS slice, not this one.
-  The reflow assertion in this slice's browser tests is scoped to the panel and the
-  defect is not asserted away.
 - The pre-existing dark-theme contrast defect in the applications queue table
   (recorded under TRACE-065) is unchanged.
 - Existing-account linking remains the next bounded slice; the panel reports the

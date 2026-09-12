@@ -50,10 +50,13 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
+      {/* grid-cols-[minmax(0,1fr)]: an auto track is floored at its items' min-content
+          width, so one intrinsically wide control widens the whole dialog and breaks
+          320px reflow (MDS §8). */}
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed max-h-[calc(100dvh-2rem)] overflow-y-auto top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-border-strong duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed max-h-[calc(100dvh-2rem)] overflow-y-auto top-1/2 left-1/2 z-50 grid grid-cols-[minmax(0,1fr)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-border-strong duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}

@@ -64,13 +64,6 @@ async function openInvitation(page: Page, theme = "light", width = 320) {
   return dialog;
 }
 
-// The slice owns this section. The dialog around it carries a pre-existing MDS
-// defect recorded in the slice report: its footer bleeds past the padding box by
-// the scrollbar width once the content scrolls.
-function panel(dialog: ReturnType<Page["getByRole"]>) {
-  return dialog.locator("section").filter({ hasText: "Provider invitation" });
-}
-
 function overview(page: Page, body: Record<string, unknown>) {
   return page.route("**/rpc/vendor_invitation_overview", async route => {
     const response = await route.fetch();
@@ -88,7 +81,12 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     // Scoped to this slice's surface. The queue table behind it carries a pre-existing
     // fixed light palette that fails dark-theme contrast; recorded in the slice report.
     expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
-    expect(await panel(dialog).evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    // The datetime control's intrinsic minimum used to widen the dialog's auto grid
+    // track past its content box; DialogContent now caps that track (MDS §8).
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    const field = dialog.getByLabel("Invitation expiry (required)", { exact: true });
+    expect(await field.evaluate((element: HTMLInputElement) =>
+      element.getBoundingClientRect().width >= 180 && element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: `test-results/invitation-operations-${theme}-${width}.png`, fullPage: true });
   });
 }

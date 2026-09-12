@@ -294,18 +294,33 @@ that local database.
   explaining the block instead of offering an action. Axe WCAG A/AA checks over the dialog
   report zero violations.
 
-Pre-existing defect surfaced, not introduced and not fixed here: `DialogFooter` bleeds to
-the dialog edge with `-mx-4` while `DialogContent` scrolls with `overflow-y-auto`, so once
-the content scrolls the footer exceeds the padding box by the scrollbar width and the
-dialog scrolls horizontally at 320px (measured: `scrollWidth` 303 against `clientWidth`
-288). Adding this panel makes the applications dialog scroll, which is what makes the
-defect reachable there; the intake dialog did not scroll, so TRACE-065 did not meet it. It
-is a shared MDS primitive affecting every dialog, so the fix belongs to an MDS slice. This
-slice's reflow assertion is scoped to its own panel and the defect is recorded rather than
-asserted away. The TRACE-065 dark-theme contrast defect in the queue table is unchanged.
+- Edge gates run locally on pinned Deno 2.9.6: `scripts/check-edge.sh` type-checks all
+  **11 locked functions** clean and `scripts/test-edge.sh` passes **44 handler tests, 0
+  failures**. This slice changes no Edge source; the gates are recorded as run rather than
+  assumed.
 
-Not run locally: Edge checks and handler tests — Deno is not installed in this workspace
-and this slice changes no Edge source — the `@visual` screenshot suite (not a CI gate), and
-any hosted or dev-server session. Real invitations, Auth provisioning, delivery and
-activation remain authorized operations outside this slice. CI must confirm all three jobs
-on the final PR head.
+Dialog reflow defect found and fixed here (MDS §8). `DialogContent`'s single grid track
+was `auto`, and an `auto` track is floored at its items' min-content contribution, so one
+intrinsically wide control widens the whole dialog past its content box. The
+`datetime-local` expiry control contributes a 271px minimum against a 256px content box,
+giving `scrollWidth` 303 against `clientWidth` 288 at 320px. The track is now
+`minmax(0,1fr)`: measured after the fix, `scrollWidth` 288 equals `clientWidth` 288 and the
+control still renders 222px wide with `scrollWidth` 220, so nothing is clipped and no
+function is lost. All 90 browser cases pass with the change, including every other dialog
+surface, and this slice's reflow assertion now covers the whole dialog plus the control's
+own width rather than being scoped around the defect.
+
+Correction to an earlier reading in this slice: the blowout was first attributed to
+`DialogFooter`'s `-mx-4` bleed overflowing a scrollbar. That was wrong. `offsetWidth`
+equals `clientWidth` (288), so no scrollbar is present; the footer's bleed only made the
+track blowout visible. The cause is grid track sizing, and `min-width:0` on the control
+changes nothing.
+
+The TRACE-065 dark-theme contrast defect in the queue table is unchanged and still open.
+
+Not run: the `@visual` screenshot suite. It is not a CI gate and has **no Linux baselines**
+— only `-win32` snapshots are tracked — so it cannot compare on this platform. The run
+wrote `-linux` actuals, which were deleted rather than committed: adopting baselines is a
+separate decision, not a side effect of this slice. No hosted or dev-server session was
+run. Real invitations, Auth provisioning, delivery and activation remain authorized
+operations outside this slice. CI must confirm all three jobs on the final PR head.
