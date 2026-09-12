@@ -190,3 +190,56 @@ Not run locally: database suites, Edge checks/handler tests and concurrency scri
 (npm-only change; Deno imports are separately locked), the `@visual` screenshot
 suite (not a CI gate), and a hosted or dev-server session. CI must confirm all three
 jobs on the final PR head.
+
+## TRACE-065 — Start onboarding review for new applicants — 2026-09-12
+
+Verified in the isolated `mercurius-phase5-isolated` stack from the
+`codex/phase5-onboarding-intake` worktree, base main `5a3bffe`. Synthetic fixtures only.
+No provider record, Auth account, invitation, email or activation was created anywhere
+outside that local database.
+
+- Clean migration replay and all 23 SQL suites pass: **582 assertions**, of which the new
+  `032_phase5_onboarding_intake.sql` contributes **64** covering operator-only access
+  (anon, service role and vendor denied before any key or application lookup; the request
+  table unreadable and unwritable directly), validation (blank reason/key, missing,
+  foreign and stale version, rejected and abandoned applications, unknown application),
+  creation (hidden account-less contractor carrying only the business name, link,
+  revision-1 review on the expected version, exactly one `review_started` event with
+  trimmed reason and namespaced key, stored request identity, unchanged legacy application
+  status, no new application version), effects (not onboarding-eligible, not
+  match-eligible, no role, no Auth user, no invitation, no evidence, invisible to anon and
+  authenticated listing reads, immutable request row), replay (exact retry, retry after an
+  application edit, and conflicts on changed reason, application, actor or expected
+  version), a non-creating different-key start, and rejection without mutation for active,
+  suspended, rejected and older-version onboarding plus legacy-linked and cut-over
+  providers. Every rejection branch asserts an unchanged fingerprint of contractors,
+  applications, onboarding, events, request rows, versions and roles.
+- `scripts/phase5-onboarding-concurrency.mjs`: eight **different-key** concurrent starts
+  produce one contractor, link, onboarding row, revision-1 event and request row, with one
+  `created: true` and the rest `created: false` on the same contractor; eight **same-key**
+  concurrent starts all return the identical original result over one set of rows. Both
+  raced contractors remain hidden and account-less. The isolated database was reset
+  afterward and the full suite passed again. CI runs this script after the invitation
+  concurrency step and before the clean reset.
+- Fresh database types were generated from the clean isolated schema; the diff is additive.
+- Secret scan, lint, TypeScript and all **84 unit tests** pass.
+- Production build passes with synthetic public configuration and one build worker; all
+  **58 pages** generate.
+- `npm run test:a11y`: all **79 browser cases** pass against that build, including the
+  **5 new onboarding cases**: the dialog at light/320px and
+  dark/1440px with no legacy approve action, a reason-required confirmation whose failure
+  keeps the dialog open and whose retry reuses the same idempotency key, success gated on
+  server readback, and a readback that does not confirm the review keeping the dialog open
+  with an error. Axe WCAG A/AA checks are scoped to this slice's dialog surfaces and report
+  zero violations; overflow checks pass.
+
+Pre-existing defect observed, not introduced and not fixed here: in dark theme the
+Applications queue table behind the dialog uses a fixed light palette (`bg-amber-50/30`
+pending rows and the light status badge styles), which axe reports as serious contrast
+failures (2.7:1). It belongs to an MDS follow-up for that page; this slice's axe
+assertions are scoped to its own surface rather than weakened.
+
+Not run locally: Edge checks and handler tests (no Edge change), the `@visual` screenshot
+suite (not a CI gate), and any hosted or dev-server session. Real applicants, operator
+decisions, invitations and activation remain authorized operations outside this slice. CI
+must confirm all three jobs on the final PR head.

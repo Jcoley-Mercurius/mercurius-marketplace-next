@@ -6,7 +6,6 @@ import {
   AlertCircle,
   ArrowRight,
   Briefcase,
-  CheckCircle2,
   Clock,
   Eye,
   FileText,
@@ -27,6 +26,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 import {
   Dialog,
   DialogContent,
@@ -78,7 +78,24 @@ type Application = {
 };
 
 type PageMode = "loading" | "live" | "error";
-type InviteAction = "approve" | "resend";
+// Legacy resend only; new applicants start onboarding review (TRACE-065).
+type InviteAction = "resend";
+
+type IntakeStatus = {
+  application_status: string;
+  latest_version_id: string | null;
+  contractor_id: string | null;
+  onboarding_status: string | null;
+  onboarding_revision: number | null;
+  review_started: boolean;
+};
+
+type ReviewStart = {
+  contractor_id: string;
+  onboarding_status: string;
+  onboarding_revision: number;
+  created: boolean;
+};
 
 type InviteResponse = {
   ok?: boolean;
@@ -318,25 +335,19 @@ export default function AdminApplicationsPage() {
       patchApplication(application.id, patch);
 
       const accountIsActive = patch.invite_status === "account_active";
-      toast.success(
-        action === "approve" ? "Application approved" : "Invite resent",
-        {
-          description: accountIsActive
-            ? application.email +
-              " already has an account. Vendor access is active and the contractor is linked."
-            : "Vendor access was provisioned and an invitation was sent to " +
-              application.email +
-              ".",
-        },
-      );
+      toast.success("Invite resent", {
+        description: accountIsActive
+          ? application.email +
+            " already has an account. Vendor access is active and the contractor is linked."
+          : "Vendor access was provisioned and an invitation was sent to " +
+            application.email +
+            ".",
+      });
     } catch (error) {
-      toast.error(
-        action === "approve" ? "Approval failed" : "Invite could not be sent",
-        {
-          description:
-            error instanceof Error ? error.message : "Please try again.",
-        },
-      );
+      toast.error("Invite could not be sent", {
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+      });
     } finally {
       setProcessing(null);
     }
@@ -644,8 +655,8 @@ export default function AdminApplicationsPage() {
         onClose={() => {
           if (!processing) setSelected(null);
         }}
-        onApprove={(application) =>
-          void runInvite(application, "approve")
+        onReviewStarted={(application, contractorId) =>
+          patchApplication(application.id, { contractor_id: contractorId })
         }
         onReject={(application) => void rejectApplication(application)}
         onResend={(application) => void runInvite(application, "resend")}
@@ -660,7 +671,7 @@ function ApplicationDialog({
   processing,
   openingDocument,
   onClose,
-  onApprove,
+  onReviewStarted,
   onReject,
   onResend,
   onOpenDocument,
@@ -669,7 +680,7 @@ function ApplicationDialog({
   processing: InviteAction | "reject" | null;
   openingDocument: string | null;
   onClose: () => void;
-  onApprove: (application: Application) => void;
+  onReviewStarted: (application: Application, contractorId: string) => void;
   onReject: (application: Application) => void;
   onResend: (application: Application) => void;
   onOpenDocument: (path: string) => void;
@@ -851,43 +862,30 @@ function ApplicationDialog({
           </DetailSection>
         )}
 
+        <OnboardingReview
+          key={application.id}
+          application={application}
+          disabled={Boolean(processing)}
+          onStarted={(contractorId) => onReviewStarted(application, contractorId)}
+        />
+
         {application.status === "pending" && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="font-medium text-amber-950">Approval provisions access</p>
-            <p className="mt-1 text-xs leading-5 text-amber-800">
-              Approving creates or reuses the contractor record, adds the vendor
-              role to the applicant’s account, links the account to the
-              contractor, and sends the appropriate invite or password email.
+          <div className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-muted-foreground">
+              Rejecting records this application as rejected.
             </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <Button
-                className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
-                disabled={Boolean(processing)}
-                onClick={() => onApprove(application)}
-              >
-                {processing === "approve" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <CheckCircle2 />
-                )}
-                {processing === "approve"
-                  ? "Processing..."
-                  : "Approve & Send Invite"}
-              </Button>
-              <Button
-                variant="destructive"
-                className="flex-1"
-                disabled={Boolean(processing)}
-                onClick={() => onReject(application)}
-              >
-                {processing === "reject" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <XCircle />
-                )}
-                {processing === "reject" ? "Rejecting..." : "Reject"}
-              </Button>
-            </div>
+            <Button
+              variant="destructive"
+              disabled={Boolean(processing)}
+              onClick={() => onReject(application)}
+            >
+              {processing === "reject" ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <XCircle />
+              )}
+              {processing === "reject" ? "Rejecting..." : "Reject"}
+            </Button>
           </div>
         )}
 
@@ -985,6 +983,167 @@ function ApplicationDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const onboardingLabel: Record<string, string> = {
+  review: "In review",
+  active: "Active",
+  suspended: "Suspended",
+  rejected: "Rejected",
+};
+
+// Operator-only readback and creation-only start (TRACE-065). The server owns
+// authorization, idempotency and every existing-state decision.
+function OnboardingReview({
+  application,
+  disabled,
+  onStarted,
+}: {
+  application: Application;
+  disabled: boolean;
+  onStarted: (contractorId: string) => void;
+}) {
+  const [intake, setIntake] = useState<IntakeStatus | null>(null);
+  const [loadError, setLoadError] = useState("");
+  // One key per opened application so a retried confirmation replays, not duplicates.
+  const [key] = useState(() => "onboarding-review:" + crypto.randomUUID());
+
+  const readIntake = useCallback(async () => {
+    const { data, error } = await createClient().rpc(
+      "vendor_onboarding_intake_status",
+      { p_application: application.id },
+    );
+    if (error) throw error;
+    return data as unknown as IntakeStatus;
+  }, [application.id]);
+
+  const refresh = useCallback(async () => {
+    setLoadError("");
+    try {
+      setIntake(await readIntake());
+    } catch (error) {
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "Onboarding status could not be loaded.",
+      );
+    }
+  }, [readIntake]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  const start = async (reason: string) => {
+    if (!intake?.latest_version_id) return;
+    try {
+      const { data, error } = await createClient().rpc(
+        "vendor_start_onboarding_review",
+        {
+          p_application: application.id,
+          p_expected_version: intake.latest_version_id,
+          p_reason: reason,
+          p_key: key,
+        },
+      );
+      if (error) throw error;
+      const result = data as unknown as ReviewStart;
+      const readback = await readIntake();
+      if (
+        !readback.review_started ||
+        readback.onboarding_status !== "review" ||
+        readback.contractor_id !== result.contractor_id
+      ) {
+        throw new Error(
+          "The server did not confirm the onboarding review. Review the current state before retrying.",
+        );
+      }
+      setIntake(readback);
+      onStarted(result.contractor_id);
+      toast.success("Onboarding review started", {
+        description: "No account, invitation or public listing was created.",
+      });
+    } catch (error) {
+      toast.error("Onboarding review could not be started", {
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+      });
+      void refresh();
+      throw error;
+    }
+  };
+
+  const closed =
+    intake?.application_status === "rejected" ||
+    intake?.application_status === "abandoned";
+  const canStart =
+    Boolean(intake?.latest_version_id) && !intake?.contractor_id && !closed;
+
+  return (
+    <DetailSection title="Onboarding review">
+      {loadError ? (
+        <div className="space-y-2">
+          <p role="alert" className="text-sm text-destructive">
+            {loadError}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => void refresh()}>
+            <RefreshCw />
+            Try again
+          </Button>
+        </div>
+      ) : !intake ? (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading onboarding status...
+        </p>
+      ) : intake.onboarding_status && intake.review_started ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <ShieldCheck className="h-4 w-4 text-accent" />
+          <Badge variant="secondary">
+            {onboardingLabel[intake.onboarding_status] ??
+              intake.onboarding_status}
+          </Badge>
+          <span className="text-muted-foreground">
+            Revision {intake.onboarding_revision}. Continue vetting in provider
+            compliance.
+          </span>
+        </div>
+      ) : intake.contractor_id ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          Linked to an existing provider record. Its review follows the
+          provider compliance cutover path.
+        </p>
+      ) : closed ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          Closed applications cannot start onboarding review.
+        </p>
+      ) : !intake.latest_version_id ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          This application has no recorded intake version, so onboarding
+          review cannot start here yet.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs leading-5 text-muted-foreground">
+            Opens compliance review for this applicant. No account, vendor
+            access, invitation or public listing is created.
+          </p>
+          <ConfirmAction
+            disabled={disabled || !canStart}
+            requireReason
+            confirmationTone="commitment"
+            triggerLabel="Start onboarding review"
+            title="Start onboarding review?"
+            entity={application.business_name}
+            consequence="Creates a hidden provider record without an account, links this application and opens review at revision 1. No email, invitation, vendor access or public listing results."
+            confirmLabel="Start review"
+            onConfirm={start}
+          />
+        </div>
+      )}
+    </DetailSection>
   );
 }
 
