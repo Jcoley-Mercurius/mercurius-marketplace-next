@@ -166,6 +166,14 @@ delivery, renewal and retention operations remain open.
 TRACE-064 restores the production dependency-audit CI gate (Next.js 16.3.4 and
 transitive patches); see governance/PHASE-5-DEPENDENCY-SECURITY.md.
 
+**Onboarding operations follow-up:** TRACE-065 starts onboarding review for a new
+applicant, TRACE-066 wires the provider invitation operator interface, and TRACE-067
+binds an account the applicant already holds, closing the last unreviewed path that
+granted the vendor role from an email-directory scan. See
+governance/PHASE-5-ONBOARDING-INTAKE.md, PHASE-5-INVITATION-OPERATIONS.md and
+PHASE-5-ACCOUNT-LINKING.md. Activation still grants no vendor role; that, plus
+renewal, retention, finance and integration gates, stays open.
+
 **Follow-ups after PR #6 merge:** TRACE-054 binds snapshots and checkout to accepted
 quote revisions and selected eligible fixed offerings. See
 governance/PHASE-5-QUOTE-CHECKOUT.md. TRACE-055 connects the merged lifecycle to

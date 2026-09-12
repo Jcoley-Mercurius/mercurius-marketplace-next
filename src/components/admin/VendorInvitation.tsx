@@ -301,12 +301,11 @@ export function VendorInvitation({
 
   return (
     <div className="space-y-4">
+      {/* The account binding itself is reported by the TRACE-067 account panel;
+          repeating it here would be a second, divergible copy of one fact. Its
+          consequence for invitations is still stated in `blocked` below. */}
       <dl className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
         <Fact label="Recipient" value={overview.recipient_email ?? "Not recorded"} />
-        <Fact
-          label="Reviewed account"
-          value={overview.account_linked ? "Linked" : "None linked"}
-        />
       </dl>
 
       {attempt ? (

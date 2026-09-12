@@ -129,7 +129,7 @@ select is(
    where n.nspname = 'public'
      and c.relkind in ('r', 'p')
      and c.relname not like 'money\_%' escape '\'
-     and c.relname not in ('vendor_application_versions','vendor_onboarding','vendor_compliance_evidence','vendor_onboarding_events','vendor_invitation_attempts','vendor_invitation_events','vendor_compliance_requirements','vendor_requirement_evidence','vendor_cutover_decisions','vendor_cutover_control','vendor_invitation_dispatches','vendor_invitation_acceptances','vendor_onboarding_review_starts')
+     and c.relname not in ('vendor_application_versions','vendor_onboarding','vendor_compliance_evidence','vendor_onboarding_events','vendor_invitation_attempts','vendor_invitation_events','vendor_compliance_requirements','vendor_requirement_evidence','vendor_cutover_decisions','vendor_cutover_control','vendor_invitation_dispatches','vendor_invitation_acceptances','vendor_onboarding_review_starts','vendor_account_link_decisions')
      and not has_table_privilege('service_role', c.oid, permission.name)),
   0::bigint,
   'service role retains recovered access outside the Phase 5 RPC-only boundary'
@@ -137,7 +137,7 @@ select is(
 
 select is((select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relkind in ('r','p') and (c.relname like 'money\_%' escape '\'
-    or c.relname in ('vendor_application_versions','vendor_onboarding','vendor_compliance_evidence','vendor_onboarding_events','vendor_invitation_attempts','vendor_invitation_events','vendor_compliance_requirements','vendor_requirement_evidence','vendor_cutover_decisions','vendor_cutover_control','vendor_invitation_dispatches','vendor_invitation_acceptances','vendor_onboarding_review_starts'))
+    or c.relname in ('vendor_application_versions','vendor_onboarding','vendor_compliance_evidence','vendor_onboarding_events','vendor_invitation_attempts','vendor_invitation_events','vendor_compliance_requirements','vendor_requirement_evidence','vendor_cutover_decisions','vendor_cutover_control','vendor_invitation_dispatches','vendor_invitation_acceptances','vendor_onboarding_review_starts','vendor_account_link_decisions'))
     and has_table_privilege('service_role',c.oid,'INSERT,UPDATE,DELETE')),0::bigint,
   'Phase 5 service writes require invariant-enforcing RPCs');
 

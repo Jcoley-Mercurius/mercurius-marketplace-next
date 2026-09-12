@@ -3875,6 +3875,60 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_account_link_decisions: {
+        Row: {
+          action: string
+          actor: string
+          application_version_id: string
+          auth_user_id: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          onboarding_revision: number
+          reason: string
+          recipient_email: string
+        }
+        Insert: {
+          action: string
+          actor: string
+          application_version_id: string
+          auth_user_id: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          onboarding_revision: number
+          reason: string
+          recipient_email: string
+        }
+        Update: {
+          action?: string
+          actor?: string
+          application_version_id?: string
+          auth_user_id?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          onboarding_revision?: number
+          reason?: string
+          recipient_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_account_link_decisions_application_version_id_fkey"
+            columns: ["application_version_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_application_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_account_link_decisions_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+        ]
+      }
       vendor_application_versions: {
         Row: {
           application: Json
@@ -5235,6 +5289,10 @@ export type Database = {
         Returns: undefined
       }
       vendor_accept_job: { Args: { _job_id: string }; Returns: undefined }
+      vendor_account_link_overview: {
+        Args: { p_contractor: string }
+        Returns: Json
+      }
       vendor_begin_review: {
         Args: { p_contractor: string; p_version: string }
         Returns: undefined
@@ -5305,6 +5363,16 @@ export type Database = {
       }
       vendor_invitation_status: { Args: { p_attempt: string }; Returns: Json }
       vendor_is_eligible: { Args: { p_contractor: string }; Returns: boolean }
+      vendor_link_existing_account: {
+        Args: {
+          p_auth_user: string
+          p_contractor: string
+          p_expected_revision: number
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       vendor_onboarding_intake_status: {
         Args: { p_application: string }
         Returns: Json
@@ -5357,6 +5425,15 @@ export type Database = {
           p_supersedes?: string
         }
         Returns: string
+      }
+      vendor_release_linked_account: {
+        Args: {
+          p_contractor: string
+          p_expected_revision: number
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
       }
       vendor_require_operator: { Args: never; Returns: string }
       vendor_start_onboarding_review: {

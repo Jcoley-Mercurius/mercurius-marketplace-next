@@ -76,6 +76,14 @@ const server = createServer(async (request, response) => {
     contractor_id: null, onboarding_status: null, onboarding_revision: null,
     onboarding_version_id: null, review_started: false,
   });
+  if (url.pathname === "/rest/v1/rpc/vendor_account_link_overview") return send({
+    contractor_id: body.p_contractor, onboarding_status: "review", onboarding_revision: 1,
+    application_id: "00000000-0000-4000-8000-000000000050",
+    application_version_id: "00000000-0000-4000-8000-000000000051", version_current: true,
+    recipient_email: "applicant@example.invalid", recipient_valid: true,
+    linked: false, linked_user_id: null, linked_email: null, link_reviewed: false,
+    invitation_live: false, decisions: [],
+  });
   if (url.pathname === "/rest/v1/rpc/vendor_invitation_overview") return send({
     contractor_id: body.p_contractor, onboarding_status: "review", onboarding_revision: 1,
     application_id: "00000000-0000-4000-8000-000000000050",
