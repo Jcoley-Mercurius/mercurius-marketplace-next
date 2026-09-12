@@ -323,4 +323,11 @@ Not run: the `@visual` screenshot suite. It is not a CI gate and has **no Linux 
 wrote `-linux` actuals, which were deleted rather than committed: adopting baselines is a
 separate decision, not a side effect of this slice. No hosted or dev-server session was
 run. Real invitations, Auth provisioning, delivery and activation remain authorized
-operations outside this slice. CI must confirm all three jobs on the final PR head.
+operations outside this slice.
+
+Final-head CI on `2540744` (PR #19, run 34699048634) passed all three jobs: backend 3m23s,
+lifecycle 2m58s, application 5m22s. The earlier red checks on PR #19 are the push-triggered
+run (34699026121) cancelled by the workflow's concurrency group; all three of its jobs
+report `cancelled`, not `failed`. CodeRabbit reported no line-level findings — the
+organization's free plan produces a summary and walkthrough only, not a line-by-line
+review, so it is not review evidence. Codex code review remains the open gate.
