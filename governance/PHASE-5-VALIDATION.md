@@ -468,3 +468,53 @@ the isolated stack; the diff is purely additive (57 lines).
 
 Not performed: hosted/production verification, real accounts, manual screen-reader review,
 and CI on the final head (not yet pushed). Codex code review is the open gate.
+
+## TRACE-069 — Activation checklist and onboarding decisions — 2026-09-12
+
+Branch `codex/phase5-onboarding-decisions`, stacked on TRACE-068 (`51a9fcc`), isolated
+synthetic stack only. Scope and decisions are in PHASE-5-ONBOARDING-CHECKLIST.md.
+
+Database: 811 pgTAP assertions across 27 suites pass, 58 of them new. Suite 036 covers
+operator-only access to both functions (anon, `service_role` and a vendor refused), the
+raw `vendor_record_evidence` refused to clients, the missing-onboarding case, and a
+nine-item missing readback in MPS §8 order with its documents, no account and no role
+decision, fingerprinted as writing nothing. Refusals by name: blank key, unknown item,
+blank requirement version, blank reference, missing review time, future review time,
+already expired evidence, a license document outside the application, free-text
+insurance, license without expiry, a rejected provider and a superseded application
+version — all proven to write nothing. It then covers recording, trimmed storage, exact
+replay, two key conflicts, the stale-supersede guard and supersession, a named call
+omitting optional arguments, document-bound license and insurance, a full checklist that
+changes no status, revision, eligibility or role and is not reported as scoped compliance,
+the readback after a reviewed link and activation (status, `granted` role outcome, role,
+newest event first), `expired` and `superseded_version` item states, and private,
+append-only request rows.
+
+Suite 001 needed `vendor_checklist_evidence_requests` added to the Phase 5 RPC-only list.
+
+Concurrency: `scripts/phase5-checklist-evidence-concurrency.mjs`, new and wired into CI
+after the activation step. Eight different-key records of one item record once and refuse
+the rest for a stale evidence version; eight same-key records all succeed, agree on the
+evidence ID, and write one evidence row and one request; no onboarding status or revision
+changes. `scripts/phase5-activation-role-concurrency.mjs` now writes fixture evidence as
+the database owner, since the raw kernel is no longer a client command. All seven scripts
+pass, and a clean reset and replay of all 27 suites pass after the fixtures.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm run audit:prod` (0 vulnerabilities) pass. 84 unit tests pass. The production build
+generates 58 pages. 121 browser cases pass, 14 of them new: the panel at light 320px and
+dark 1440px with axe (`wcag2a/2aa/21aa/22aa`) and dialog reflow; document-only license
+entry with required, future expiry and no defaults; the payout bank-detail warning; the
+sent payload and one replayed key on retry; readback-gated recording; supersession
+naming the current evidence; activation stating the role outcome, sending the read-back
+revision and key, and confirming by readback; activation with no reviewed account; an
+unconfirmed decision keeping the confirmation open; the actions offered to active,
+suspended and rejected providers; and the superseded-revision block.
+`database.types.ts` was regenerated; the diff is purely additive (74 lines). No Edge code
+changed; Edge gates were not rerun for this slice.
+
+Found and fixed: the first command draft had no defaults for the optional arguments the
+panel omits, so a real PostgREST call would not have resolved. Now defaulted and asserted.
+
+Not performed: hosted PostgREST round-trip, real documents or accounts, manual
+screen-reader review, CI on the final head. Codex code review is the open gate.

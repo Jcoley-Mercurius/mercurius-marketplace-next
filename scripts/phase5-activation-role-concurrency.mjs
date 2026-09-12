@@ -72,9 +72,13 @@ for (const [contractor, application, identity] of [
     `select id from public.vendor_application_versions where application_id='${application}' order by revision desc limit 1`,
   );
   await asOperator(`select public.vendor_begin_review('${contractor}','${version}');
-select public.vendor_link_existing_account('${contractor}',1,'${identity}','Synthetic race link','role-race-link-${contractor}');
+select public.vendor_link_existing_account('${contractor}',1,'${identity}','Synthetic race link','role-race-link-${contractor}');`);
+  // Fixture evidence is written by the database owner: the raw kernel is not a client
+  // command (TRACE-069).
+  await sql(`begin; ${claims}
 select public.vendor_record_evidence('${contractor}',kind,'synthetic-rule','private-synthetic-'||kind,now()-interval '1 hour',now()+interval '1 year')
- from unnest(array['identity','agreement','coverage','license','insurance','bank_authorization','profile_pricing','availability','test_notification']) kind;`);
+ from unnest(array['identity','agreement','coverage','license','insurance','bank_authorization','profile_pricing','availability','test_notification']) kind;
+commit;`);
 }
 const decide = (contractor, revision, action, key) =>
   asOperator(
