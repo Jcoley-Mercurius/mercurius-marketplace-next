@@ -408,3 +408,11 @@ Not run: the `@visual` screenshot suite, unchanged from TRACE-066 — it has no 
 baselines, so it cannot compare on this platform. No hosted or dev-server session was run.
 No real account, identity verification, role grant or activation is represented anywhere
 in this evidence. Codex code review is the open gate.
+
+Final-head CI on `105a64e` (PR #20, run 34707275907) passed all three jobs: backend 3m23s,
+lifecycle 3m09s, application 5m17s, including the new `Concurrent existing-account links`
+step, which reported the same three-race PASS in CI as locally. The red checks on PR #20
+are the push-triggered run (34707251605) cancelled by the workflow's concurrency group;
+all three of its jobs report `cancelled`, not `failed`. CodeRabbit remains a free-plan
+summary rather than a line-by-line review, so it is not review evidence. Codex code review
+is the open gate.
