@@ -243,3 +243,69 @@ Not run locally: Edge checks and handler tests (no Edge change), the `@visual` s
 suite (not a CI gate), and any hosted or dev-server session. Real applicants, operator
 decisions, invitations and activation remain authorized operations outside this slice. CI
 must confirm all three jobs on the final PR head.
+
+## TRACE-066 — Provider invitation operator interface — 2026-09-12
+
+Verified in the isolated `mercurius-phase5-isolated` stack from the
+`codex/phase5-invitation-operations` worktree, base main `f47ac84`. Synthetic fixtures
+only. No Auth call, email, invitation, role grant or activation occurred anywhere outside
+that local database.
+
+- Clean migration replay and all 24 SQL suites pass: **626 assertions**, of which the new
+  `033_phase5_invitation_operations.sql` contributes **44**. It covers operator-only access
+  (anon and service role denied at the function grant; a vendor denied by
+  `vendor_require_operator`, including for its own provider), the missing-onboarding and
+  unknown-provider cases, the pre-preparation state (no attempt, no prior attempts, the
+  bound snapshot recipient reported and marked usable, account-link state for both a
+  linked and an account-less provider), a stale bound version reported as such while the
+  reported version stays the bound one rather than the newest, and each dispatch state in
+  turn: prepared and live with a future expiry and no dispatch state; reserved and reported
+  as `started` with the attempt at `submitted`; an uncertain result reported as `unknown`
+  with no Auth identity; a reconciled result reported as `provider_accepted` with the
+  verified identity but still not accepted; and a recipient receipt reported as accepted,
+  no longer live, with no account link and no activation. Ranking is covered by a later
+  live attempt outranking the newest closed one, which then appears as a prior attempt with
+  its identity and closed status intact. Expiry is covered as reported, not enforced: a past
+  expiry sets `expired` while the attempt keeps the live slot until it is closed. A row
+  fingerprint over attempts, events, dispatches, acceptances, onboarding, contractors and
+  roles is asserted unchanged across every readback, and asserted changed only where the
+  dispatch command ran, so "read-only" is proved rather than stated.
+- `scripts/phase5-concurrency.mjs`, `phase5-payout-concurrency.mjs`,
+  `phase5-invitation-concurrency.mjs` and `phase5-onboarding-concurrency.mjs` all pass
+  unchanged. The isolated database was reset afterward and the full suite passed again at
+  626 assertions. No new concurrency script is added: this slice introduces no write path.
+- Fresh database types were generated from the clean isolated schema; the diff is additive
+  and contains only `vendor_invitation_overview`.
+- Secret scan, lint, TypeScript and all **84 unit tests** pass.
+- Production build passes with synthetic public configuration and one build worker; all
+  **58 pages** generate.
+- `npm run test:a11y`: all **90 browser cases** pass against that build, including the
+  **11 new invitation cases**: the panel at light/320px and dark/1440px with the blocked
+  legacy invite button absent; an expiry field that starts empty, states that there is no
+  default, and keeps preparation disabled for an empty and for a past value; a preparation
+  request carrying the operator expiry and a key built from it, whose failure keeps the
+  confirmation open and whose retry reuses that same key; success gated on a readback
+  showing a prepared attempt; a readback that does not confirm preparation keeping the
+  confirmation open with an error; a disabled delivery environment surfaced verbatim with
+  the attempt still only prepared; an unknown result offering reconciliation only, gated on
+  an exact Auth user ID and sending it verbatim; closure requiring a reason and not offering
+  an early expiry; a past expiry offering the expiry closure, an accepted receipt closing the
+  attempt and freeing the slot with the earlier attempt listed; and a linked account
+  explaining the block instead of offering an action. Axe WCAG A/AA checks over the dialog
+  report zero violations.
+
+Pre-existing defect surfaced, not introduced and not fixed here: `DialogFooter` bleeds to
+the dialog edge with `-mx-4` while `DialogContent` scrolls with `overflow-y-auto`, so once
+the content scrolls the footer exceeds the padding box by the scrollbar width and the
+dialog scrolls horizontally at 320px (measured: `scrollWidth` 303 against `clientWidth`
+288). Adding this panel makes the applications dialog scroll, which is what makes the
+defect reachable there; the intake dialog did not scroll, so TRACE-065 did not meet it. It
+is a shared MDS primitive affecting every dialog, so the fix belongs to an MDS slice. This
+slice's reflow assertion is scoped to its own panel and the defect is recorded rather than
+asserted away. The TRACE-065 dark-theme contrast defect in the queue table is unchanged.
+
+Not run locally: Edge checks and handler tests — Deno is not installed in this workspace
+and this slice changes no Edge source — the `@visual` screenshot suite (not a CI gate), and
+any hosted or dev-server session. Real invitations, Auth provisioning, delivery and
+activation remain authorized operations outside this slice. CI must confirm all three jobs
+on the final PR head.

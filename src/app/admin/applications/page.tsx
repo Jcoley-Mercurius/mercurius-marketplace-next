@@ -17,7 +17,6 @@ import {
   Phone,
   RefreshCw,
   Search,
-  Send,
   ShieldCheck,
   User,
   XCircle,
@@ -27,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/ui/confirm-action";
+import { VendorInvitation } from "@/components/admin/VendorInvitation";
 import {
   Dialog,
   DialogContent,
@@ -78,8 +78,6 @@ type Application = {
 };
 
 type PageMode = "loading" | "live" | "error";
-// Legacy resend only; new applicants start onboarding review (TRACE-065).
-type InviteAction = "resend";
 
 type IntakeStatus = {
   application_status: string;
@@ -95,17 +93,6 @@ type ReviewStart = {
   onboarding_status: string;
   onboarding_revision: number;
   created: boolean;
-};
-
-type InviteResponse = {
-  ok?: boolean;
-  error?: string;
-  contractor_id?: string | null;
-  user_id?: string | null;
-  invite_status?: string | null;
-  invited_at?: string | null;
-  invite_expires_at?: string | null;
-  activated_at?: string | null;
 };
 
 const applicationSelect = [
@@ -171,25 +158,16 @@ export default function AdminApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [mode, setMode] = useState<PageMode>("loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const [processing, setProcessing] = useState<InviteAction | "reject" | null>(null);
+  const [processing, setProcessing] = useState<"reject" | null>(null);
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
 
   const loadApplications = useCallback(
-    async (showLoading = false, syncPipeline = false) => {
+    async (showLoading = false) => {
       if (showLoading) setMode("loading");
       setErrorMessage("");
       const supabase = createClient();
 
       try {
-        if (syncPipeline) {
-          const syncResult = await supabase.functions.invoke("vendor-invite", {
-            body: { action: "sync" },
-          });
-          if (syncResult.error) {
-            console.warn("Unable to sync vendor invite pipeline", syncResult.error);
-          }
-        }
-
         const { data, error } = await supabase
           .from("vendor_applications")
           .select(applicationSelect)
@@ -222,7 +200,7 @@ export default function AdminApplicationsPage() {
   useEffect(() => {
     // This live admin queue loads once when the protected route mounts.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadApplications(true, true);
+    void loadApplications(true);
   }, [loadApplications]);
 
   const patchApplication = useCallback(
@@ -240,118 +218,6 @@ export default function AdminApplicationsPage() {
     },
     [],
   );
-
-  const runInvite = async (
-    application: Application,
-    action: InviteAction,
-  ) => {
-    setProcessing(action);
-    const supabase = createClient();
-
-    try {
-      const { data, error } = await supabase.functions.invoke("vendor-invite", {
-        body: {
-          action,
-          application_id: application.id,
-          origin: window.location.origin,
-        },
-      });
-      const response = isRecord(data) ? (data as InviteResponse) : null;
-      const invocationError = await getFunctionError(error, data);
-
-      if (invocationError) {
-        await loadApplications(false, false);
-        throw new Error(invocationError);
-      }
-
-      if (!response?.ok || !response.contractor_id || !response.user_id) {
-        await loadApplications(false, false);
-        throw new Error(
-          "The onboarding function returned an incomplete provisioning result. Review the application before retrying.",
-        );
-      }
-
-      const [roleResult, contractorResult, applicationResult] = await Promise.all([
-        supabase.rpc("has_role", {
-          _user_id: response.user_id,
-          _role: "vendor",
-        }),
-        supabase
-          .from("contractors")
-          .select("id, user_id")
-          .eq("id", response.contractor_id)
-          .eq("user_id", response.user_id)
-          .maybeSingle(),
-        supabase
-          .from("vendor_applications")
-          .select("id, status, contractor_id, invited_user_id, invite_status")
-          .eq("id", application.id)
-          .maybeSingle(),
-      ]);
-      if (roleResult.error) throw roleResult.error;
-      if (contractorResult.error) throw contractorResult.error;
-      if (applicationResult.error) throw applicationResult.error;
-      if (!roleResult.data || !contractorResult.data) {
-        await loadApplications(false, false);
-        throw new Error(
-          "Provisioning did not produce a verified vendor role and linked contractor record.",
-        );
-      }
-      const savedApplication = applicationResult.data as {
-        status: string;
-        contractor_id: string | null;
-        invited_user_id: string | null;
-        invite_status: string | null;
-      } | null;
-      if (
-        !savedApplication ||
-        savedApplication.status !== "approved" ||
-        savedApplication.contractor_id !== response.contractor_id ||
-        savedApplication.invited_user_id !== response.user_id
-      ) {
-        await loadApplications(false, false);
-        throw new Error(
-          "The vendor account was provisioned, but the application record was not linked correctly.",
-        );
-      }
-
-      const patch: Partial<Application> = {
-        status: "approved",
-        contractor_id:
-          response?.contractor_id ?? application.contractor_id ?? null,
-        invited_user_id:
-          response?.user_id ?? application.invited_user_id ?? null,
-        invite_status:
-          savedApplication.invite_status ?? response.invite_status ?? "not_invited",
-        invited_at: response?.invited_at ?? application.invited_at ?? null,
-        invite_expires_at:
-          response?.invite_expires_at ??
-          application.invite_expires_at ??
-          null,
-        activated_at:
-          response?.activated_at ?? application.activated_at ?? null,
-        invite_error: null,
-      };
-      patchApplication(application.id, patch);
-
-      const accountIsActive = patch.invite_status === "account_active";
-      toast.success("Invite resent", {
-        description: accountIsActive
-          ? application.email +
-            " already has an account. Vendor access is active and the contractor is linked."
-          : "Vendor access was provisioned and an invitation was sent to " +
-            application.email +
-            ".",
-      });
-    } catch (error) {
-      toast.error("Invite could not be sent", {
-        description:
-          error instanceof Error ? error.message : "Please try again.",
-      });
-    } finally {
-      setProcessing(null);
-    }
-  };
 
   const rejectApplication = async (application: Application) => {
     const confirmed = window.confirm(
@@ -373,7 +239,7 @@ export default function AdminApplicationsPage() {
         .maybeSingle();
       if (error) throw error;
       if (!data) {
-        await loadApplications(false, false);
+        await loadApplications(false);
         throw new Error(
           "This application is no longer pending. The queue has been refreshed.",
         );
@@ -461,7 +327,7 @@ export default function AdminApplicationsPage() {
             <Button
               variant="outline"
               className="mt-5"
-              onClick={() => void loadApplications(true, true)}
+              onClick={() => void loadApplications(true)}
             >
               <RefreshCw />
               Try again
@@ -489,10 +355,10 @@ export default function AdminApplicationsPage() {
           </div>
           <Button
             variant="outline"
-            onClick={() => void loadApplications(false, true)}
+            onClick={() => void loadApplications(true)}
           >
             <RefreshCw />
-            Sync onboarding
+            Refresh queue
           </Button>
         </div>
       </header>
@@ -659,7 +525,6 @@ export default function AdminApplicationsPage() {
           patchApplication(application.id, { contractor_id: contractorId })
         }
         onReject={(application) => void rejectApplication(application)}
-        onResend={(application) => void runInvite(application, "resend")}
         onOpenDocument={(path) => void openDocument(path)}
       />
     </div>
@@ -673,16 +538,14 @@ function ApplicationDialog({
   onClose,
   onReviewStarted,
   onReject,
-  onResend,
   onOpenDocument,
 }: {
   application: Application | null;
-  processing: InviteAction | "reject" | null;
+  processing: "reject" | null;
   openingDocument: string | null;
   onClose: () => void;
   onReviewStarted: (application: Application, contractorId: string) => void;
   onReject: (application: Application) => void;
-  onResend: (application: Application) => void;
   onOpenDocument: (path: string) => void;
 }) {
   if (!application) return null;
@@ -894,7 +757,7 @@ function ApplicationDialog({
             <div className="rounded-xl border border-border bg-muted/30 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-accent" />
-                <p className="font-medium">Onboarding pipeline</p>
+                <p className="font-medium">Legacy onboarding pipeline</p>
                 <PipelineStatus status={pipelineStatus} />
               </div>
               <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
@@ -932,30 +795,11 @@ function ApplicationDialog({
                   {application.invite_error}
                 </div>
               )}
-              {pipelineStatus !== "account_active" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-4 w-full"
-                  disabled={Boolean(processing)}
-                  onClick={() => onResend(application)}
-                >
-                  {processing === "resend" ? (
-                    <Loader2 className="animate-spin" />
-                  ) : pipelineStatus === "not_invited" ||
-                    pipelineStatus === "failed" ? (
-                    <Send />
-                  ) : (
-                    <RefreshCw />
-                  )}
-                  {processing === "resend"
-                    ? "Sending..."
-                    : pipelineStatus === "not_invited" ||
-                        pipelineStatus === "failed"
-                      ? "Send invite"
-                      : "Resend invite"}
-                </Button>
-              )}
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                Recovered pipeline record, kept as history. Invitations are
+                prepared, sent, reconciled and closed in Provider invitation
+                above.
+              </p>
             </div>
 
             <Link
@@ -1082,6 +926,7 @@ function OnboardingReview({
     Boolean(intake?.latest_version_id) && !intake?.contractor_id && !closed;
 
   return (
+    <>
     <DetailSection title="Onboarding review">
       {loadError ? (
         <div className="space-y-2">
@@ -1144,6 +989,17 @@ function OnboardingReview({
         </div>
       )}
     </DetailSection>
+    {/* The invitation queue belongs to a provider under review (TRACE-066). */}
+    {intake?.contractor_id && intake.review_started && (
+      <DetailSection title="Provider invitation">
+        <VendorInvitation
+          contractorId={intake.contractor_id}
+          businessName={application.business_name}
+          disabled={disabled}
+        />
+      </DetailSection>
+    )}
+    </>
   );
 }
 
@@ -1281,26 +1137,4 @@ function formatDateTime(value: string | null, fallback = "—") {
         hour: "numeric",
         minute: "2-digit",
       });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-async function getFunctionError(error: unknown, data: unknown) {
-  if (isRecord(data) && typeof data.error === "string") return data.error;
-  if (!error) return null;
-
-  if (isRecord(error) && error.context instanceof Response) {
-    try {
-      const body = (await error.context.clone().json()) as unknown;
-      if (isRecord(body) && typeof body.error === "string") return body.error;
-    } catch {
-      // Fall through to the SDK error message.
-    }
-  }
-
-  return error instanceof Error
-    ? error.message
-    : "The vendor onboarding function returned an error.";
 }
