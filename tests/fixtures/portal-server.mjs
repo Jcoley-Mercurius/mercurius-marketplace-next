@@ -81,8 +81,8 @@ const server = createServer(async (request, response) => {
     application_id: "00000000-0000-4000-8000-000000000050",
     application_version_id: "00000000-0000-4000-8000-000000000051", version_current: true,
     recipient_email: "applicant@example.invalid", recipient_valid: true,
-    linked: false, linked_user_id: null, linked_email: null, link_reviewed: false,
-    invitation_live: false, vendor_role_held: false, vendor_role_from_activation: false,
+    linked: false, linked_user_id: null, linked_email: null, link_reviewed: false, link_source: null,
+    accepted_invitation: null, invitation_live: false, vendor_role_held: false, vendor_role_from_activation: false,
     decisions: [], role_decisions: [],
   });
   if (url.pathname === "/rest/v1/rpc/vendor_onboarding_checklist") return send({
@@ -100,7 +100,7 @@ const server = createServer(async (request, response) => {
     contractor_id: body.p_contractor, onboarding_status: "review", onboarding_revision: 1,
     application_id: "00000000-0000-4000-8000-000000000050",
     application_version_id: "00000000-0000-4000-8000-000000000051", version_current: true,
-    recipient_email: "applicant@example.invalid", recipient_valid: true, account_linked: false,
+    recipient_email: "applicant@example.invalid", recipient_valid: true, account_linked: false, recipient_account_id: null,
     attempt: null, prior_attempts: [],
   });
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);

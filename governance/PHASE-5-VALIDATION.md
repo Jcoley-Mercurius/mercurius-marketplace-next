@@ -518,3 +518,74 @@ panel omits, so a real PostgREST call would not have resolved. Now defaulted and
 
 Not performed: hosted PostgREST round-trip, real documents or accounts, manual
 screen-reader review, CI on the final head. Codex code review is the open gate.
+
+## TRACE-070 — Accepted-invitation account binding — 2026-09-12
+
+Branch `codex/phase5-invitation-binding`, based on `20f0a4c` (TRACE-069; PR #23 carries it
+to `main`), isolated synthetic stack only. Scope and decisions are in
+PHASE-5-INVITATION-BINDING.md.
+
+Database: 883 pgTAP assertions across 28 suites pass, 72 of them new (60 in the first
+draft, 12 for the recovery fix). Suite 037 builds
+every receipt through the real TRACE-063 prepare/claim/finish/accept commands, then
+covers: a signed-in non-operator, the recipient itself, `anon` and `service_role`
+refused, the replay helper not client-executable; refusals by name for a blank reason,
+a missing attempt, a stale revision, a provider with no onboarding, another provider's
+receipt, an unknown attempt, an unconfirmed account and a changed account address, all
+proven to write nothing; the overview reporting the receipt, current version and
+unbound state; the binding (account, receipt, revision, one `invited_account_bound`
+event, `link_source`, `link_reviewed`, checklist `account_reviewed`, no role, no status
+change); exact replay, a reason conflict, and the binding and stated-identity keys
+refused as each other's replays; the same receipt bound twice; activation granting
+`vendor` through the unchanged TRACE-068 path and naming the binding; release withdrawing
+it with no receipt on the release row, and a release key refused as a binding replay;
+a suspended provider refused; a moved address and an account linked elsewhere refused;
+a live newer attempt blocking until closed; a legacy `accepted` status with no receipt
+refused and not reported; a superseded application revision refused both before and
+after onboarding is rebound; a fingerprint over contractors, decisions, events, roles
+and onboarding proving the overview writes nothing; no listing; decision immutability;
+and the check constraint refusing a receipt on a release row.
+
+Recovery fix: suite 037 adds re-invitation of an accepted recipient refused at
+preparation with no attempt recorded, the invitation readback reporting
+`recipient_account_id`, a pre-existing attempt refused at dispatch with nothing reserved,
+and the superseded-receipt recovery end to end (re-invitation refused, link by account
+ID recorded as `stated_identity`, activation granting `vendor`). Suites 031 and 033 had
+re-invited an accepted recipient; 031 now asserts that refusal and runs its revocation
+and staleness cases against a second, never-accepted provider, and 033 asserts the
+refusal and readback and records its later live attempt directly to keep testing
+readback ordering. No prior assertion was removed. Effective execute privileges on
+`vendor_prepare_invitation`, `vendor_claim_invitation` and `vendor_invitation_overview`
+were captured before the change and are identical after it; the new helper is not
+executable by `anon`, `authenticated` or `service_role`.
+
+Concurrency: `scripts/phase5-invitation-binding-concurrency.mjs`, new and wired into CI
+after the checklist step. Eight different-key bindings of one receipt record once and
+refuse the rest for a stale revision; eight same-key bindings all succeed, agree, and
+record once; four invitation bindings racing four stated-identity links for one provider
+record exactly one decision of the winning path. No race grants a role or lists a
+provider. All eight scripts pass in CI order, and a clean reset and replay of all 28
+suites pass afterward.
+
+Found and fixed during verification: the first draft of the script reused the
+`ca000000-` fixture prefix of `phase5-activation-role-concurrency.mjs`, so whichever
+ran second failed its reset guard. It now uses `cc000000-`.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm run audit:prod` (0 vulnerabilities) pass. 84 unit tests pass. The production build
+(with CI's synthetic public environment) generates 58 pages. 134 browser cases pass, 13
+of them new: the receipt panel at light 320px and dark 1440px with axe
+(`wcag2a/2aa/21aa/22aa`) and dialog reflow; no receipt offering no action; the sent
+payload carrying the receipt and no identity, with one replayed key on retry;
+readback-gated success reporting the invitation source and decision; a stated-identity
+readback not confirming the binding; superseded, unconfirmed and changed-address receipts
+explained rather than offered; a live invitation blocking in place; and, for the recovery fix, a superseded receipt
+directing the operator to link by account ID with "Use this account ID" filling the form
+without submitting it, no shortcut for an unverifiable receipt, and the invitation panel
+refusing to re-invite a recipient who holds an account.
+`database.types.ts` gains only this slice's column and command, taken from
+`supabase gen types` against the migrated stack (20 lines). No Edge code changed; Edge
+gates were not rerun.
+
+Not performed: hosted PostgREST/Auth round-trip, real invitations or accounts, manual
+screen-reader review, CI on this branch. Codex code review is the open gate.

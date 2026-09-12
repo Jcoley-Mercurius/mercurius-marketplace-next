@@ -3884,6 +3884,7 @@ export type Database = {
           business_key: string
           contractor_id: string
           created_at: string
+          invitation_attempt_id: string | null
           onboarding_revision: number
           reason: string
           recipient_email: string
@@ -3897,6 +3898,7 @@ export type Database = {
           business_key: string
           contractor_id: string
           created_at?: string
+          invitation_attempt_id?: string | null
           onboarding_revision: number
           reason: string
           recipient_email: string
@@ -3910,6 +3912,7 @@ export type Database = {
           business_key?: string
           contractor_id?: string
           created_at?: string
+          invitation_attempt_id?: string | null
           onboarding_revision?: number
           reason?: string
           recipient_email?: string
@@ -3929,6 +3932,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vendor_onboarding"
             referencedColumns: ["contractor_id"]
+          },
+          {
+            foreignKeyName: "vendor_account_link_decisions_invitation_attempt_id_fkey"
+            columns: ["invitation_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_invitation_acceptances"
+            referencedColumns: ["attempt_id"]
           },
         ]
       }
@@ -5410,6 +5420,16 @@ export type Database = {
       vendor_begin_review: {
         Args: { p_contractor: string; p_version: string }
         Returns: undefined
+      }
+      vendor_bind_invited_account: {
+        Args: {
+          p_attempt: string
+          p_contractor: string
+          p_expected_revision: number
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
       }
       vendor_bind_requirement_evidence: {
         Args: {

@@ -14,11 +14,13 @@ import { createClient } from "@/lib/supabase/client";
 // decision is the server's: this panel reads state back and reports it. Linking
 // binds an identity and records why; it grants no role, accepts no compliance
 // evidence and activates no provider. TRACE-068: activation grants the vendor role
-// to a reviewed binding, and releasing that binding withdraws it.
+// to a reviewed binding, and releasing that binding withdraws it. TRACE-070: the
+// account that accepted this provider's invitation can be bound from its receipt.
 
 type Decision = {
   action: string;
   auth_user_id: string;
+  invitation_attempt_id: string | null;
   recipient_email: string;
   onboarding_revision: number;
   reason: string;
@@ -33,6 +35,16 @@ type RoleDecision = {
   created_at: string;
 };
 
+type AcceptedInvitation = {
+  attempt_id: string;
+  auth_user_id: string;
+  accepted_at: string;
+  account_email: string | null;
+  account_confirmed: boolean;
+  for_current_version: boolean;
+  bound: boolean;
+};
+
 type Overview = {
   contractor_id: string;
   onboarding_status: string;
@@ -45,6 +57,8 @@ type Overview = {
   linked_user_id: string | null;
   linked_email: string | null;
   link_reviewed: boolean;
+  link_source: "stated_identity" | "accepted_invitation" | null;
+  accepted_invitation: AcceptedInvitation | null;
   invitation_live: boolean;
   vendor_role_held: boolean;
   vendor_role_from_activation: boolean;
@@ -183,6 +197,30 @@ export function VendorAccountLinking({
     setAuthUserId("");
   };
 
+  const bindInvited = async (reason: string) => {
+    const receipt = overview?.accepted_invitation;
+    if (!overview || !receipt) return;
+    await run(
+      () =>
+        createClient().rpc("vendor_bind_invited_account", {
+          p_contractor: contractorId,
+          p_expected_revision: overview.onboarding_revision,
+          p_attempt: receipt.attempt_id,
+          p_reason: reason,
+          p_key: `invitation-bind:${nonce}:${overview.onboarding_revision}:${receipt.attempt_id}`,
+        }),
+      (next) =>
+        next.link_reviewed &&
+        next.link_source === "accepted_invitation" &&
+        next.linked_user_id === receipt.auth_user_id,
+      {
+        title: "Accepted account bound",
+        description:
+          "The account that accepted this provider's invitation was re-verified and bound. No role, evidence or activation followed.",
+      },
+    );
+  };
+
   const release = async (reason: string) => {
     if (!overview) return;
     await run(
@@ -259,6 +297,18 @@ export function VendorAccountLinking({
           : overview.invitation_live
             ? "An invitation is live for this provider. Close it before linking an existing account; the two paths are mutually exclusive."
             : "";
+  // The receipt facts the server will check again; an unbindable receipt is
+  // explained rather than offered.
+  const receipt = overview.accepted_invitation;
+  const receiptBlocked = !receipt
+    ? ""
+    : !receipt.for_current_version
+      ? "The recipient accepted an invitation for an earlier application revision, so that acceptance cannot be bound to the current review. The account already exists and cannot be re-invited; link it by account ID below."
+      : !receipt.account_confirmed
+        ? "The account that accepted the invitation is no longer confirmed, so it cannot be bound."
+        : receipt.account_email !== overview.recipient_email
+          ? "The account that accepted the invitation no longer matches the reviewed application recipient, so it cannot be bound."
+          : "";
   const releasable =
     overview.linked &&
     overview.link_reviewed &&
@@ -303,6 +353,16 @@ export function VendorAccountLinking({
               label="Account identity"
               value={overview.linked_user_id ?? "Not recorded"}
             />
+            {overview.link_source && (
+              <Fact
+                label="Bound through"
+                value={
+                  overview.link_source === "accepted_invitation"
+                    ? "Accepted invitation"
+                    : "Stated account identity"
+                }
+              />
+            )}
           </dl>
           {overview.link_reviewed ? (
             <p className="text-xs leading-5 text-muted-foreground">
@@ -337,51 +397,114 @@ export function VendorAccountLinking({
           )}
           {overview.linked && overview.link_reviewed && !releasable && (
             <p className="text-xs leading-5 text-muted-foreground">
-              Suspend this provider before releasing its account, so a release is
-              never what takes a live provider offline.
+              Suspend this provider before releasing its account, so a release
+              is never what takes a live provider offline.
             </p>
           )}
         </div>
       ) : linkBlocked ? (
         <p className="text-sm leading-6 text-muted-foreground">{linkBlocked}</p>
       ) : (
-        <div className="space-y-3 border-t border-border pt-4">
-          <FormField
-            label="Account identity"
-            required
-            help="The exact Auth user ID of the account the applicant already holds. The database verifies it against the reviewed application recipient; no directory is searched from here."
-            error={
-              authUserId && !uuidPattern.test(identity)
-                ? "Enter the exact Auth user ID."
-                : undefined
-            }
-          >
-            {(control) => (
-              <Input
-                {...control}
-                value={authUserId}
-                disabled={busy}
-                onChange={(event) => setAuthUserId(event.target.value)}
-              />
-            )}
-          </FormField>
-          <p className="text-xs leading-5 text-muted-foreground">
-            Linking records the binding only. No vendor role, compliance
-            evidence, activation or public listing results from it; a later
-            reviewed activation grants the vendor role to this account.
-          </p>
-          <ConfirmAction
-            disabled={busy || !uuidPattern.test(identity)}
-            requireReason
-            confirmationTone="commitment"
-            triggerLabel="Link existing account"
-            title="Link this existing account?"
-            entity={businessName + " · " + (overview.recipient_email ?? "")}
-            consequence="Binds the stated account to this provider at the reviewed application revision and records your reason. The database refuses an identity that is not the reviewed recipient, is unconfirmed, or already belongs to another provider."
-            confirmLabel="Link account"
-            onConfirm={link}
-          />
-        </div>
+        <>
+          {receipt && (
+            <div className="space-y-3 rounded-lg border border-border p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-accent" />
+                <Badge variant="secondary">Invitation accepted</Badge>
+              </div>
+              <dl className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                <Fact
+                  label="Accepting account"
+                  value={receipt.account_email ?? "Not recorded"}
+                />
+                <Fact
+                  label="Accepted"
+                  value={formatDateTime(receipt.accepted_at)}
+                />
+              </dl>
+              {receiptBlocked ? (
+                <>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {receiptBlocked}
+                  </p>
+                  {/* Fills the stated-identity form only; the link command still
+                      verifies the account and the operator still confirms. */}
+                  {!receipt.for_current_version &&
+                    receipt.account_confirmed &&
+                    receipt.account_email === overview.recipient_email && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setAuthUserId(receipt.auth_user_id)}
+                      >
+                        Use this account ID
+                      </Button>
+                    )}
+                </>
+              ) : (
+                <>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    The recipient explicitly accepted this provider&apos;s
+                    invitation. Binding records that account from the acceptance
+                    receipt; no role, compliance evidence, activation or public
+                    listing results from it.
+                  </p>
+                  <ConfirmAction
+                    disabled={busy}
+                    requireReason
+                    confirmationTone="commitment"
+                    triggerLabel="Bind accepted account"
+                    title="Bind the account that accepted the invitation?"
+                    entity={
+                      businessName + " · " + (receipt.account_email ?? "")
+                    }
+                    consequence="Binds the accepting account to this provider at the reviewed application revision and records your reason. The database re-verifies the receipt, the application revision and the account before anything is written."
+                    confirmLabel="Bind account"
+                    onConfirm={bindInvited}
+                  />
+                </>
+              )}
+            </div>
+          )}
+          <div className="space-y-3 border-t border-border pt-4">
+            <FormField
+              label="Account identity"
+              required
+              help="The exact Auth user ID of the account the applicant already holds. The database verifies it against the reviewed application recipient; no directory is searched from here."
+              error={
+                authUserId && !uuidPattern.test(identity)
+                  ? "Enter the exact Auth user ID."
+                  : undefined
+              }
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  value={authUserId}
+                  disabled={busy}
+                  onChange={(event) => setAuthUserId(event.target.value)}
+                />
+              )}
+            </FormField>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Linking records the binding only. No vendor role, compliance
+              evidence, activation or public listing results from it; a later
+              reviewed activation grants the vendor role to this account.
+            </p>
+            <ConfirmAction
+              disabled={busy || !uuidPattern.test(identity)}
+              requireReason
+              confirmationTone="commitment"
+              triggerLabel="Link existing account"
+              title="Link this existing account?"
+              entity={businessName + " · " + (overview.recipient_email ?? "")}
+              consequence="Binds the stated account to this provider at the reviewed application revision and records your reason. The database refuses an identity that is not the reviewed recipient, is unconfirmed, or already belongs to another provider."
+              confirmLabel="Link account"
+              onConfirm={link}
+            />
+          </div>
+        </>
       )}
 
       {overview.decisions.length > 0 && (
@@ -392,8 +515,10 @@ export function VendorAccountLinking({
           <ul className="mt-2 space-y-1">
             {overview.decisions.map((decision) => (
               <li key={decision.onboarding_revision}>
-                {decisionLabel[decision.action] ?? decision.action} ·{" "}
-                {formatDateTime(decision.created_at)} · {decision.reason}
+                {decision.invitation_attempt_id
+                  ? "Accepted invitation bound"
+                  : (decisionLabel[decision.action] ?? decision.action)}{" "}
+                · {formatDateTime(decision.created_at)} · {decision.reason}
               </li>
             ))}
           </ul>
@@ -423,7 +548,9 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt>{label}</dt>
-      <dd className="mt-0.5 break-words font-medium text-foreground">{value}</dd>
+      <dd className="mt-0.5 break-words font-medium text-foreground">
+        {value}
+      </dd>
     </div>
   );
 }

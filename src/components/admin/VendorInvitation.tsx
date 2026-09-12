@@ -43,6 +43,7 @@ type Overview = {
   recipient_email: string | null;
   recipient_valid: boolean;
   account_linked: boolean;
+  recipient_account_id: string | null;
   attempt: Attempt | null;
   prior_attempts: PriorAttempt[];
 };
@@ -288,7 +289,9 @@ export function VendorInvitation({
   // can only fail, without becoming a second copy of the server's rules.
   const blocked = overview.account_linked
     ? "This provider already has an account. New-account invitations are blocked; existing-account linking is a separate reviewed path."
-    : !overview.recipient_valid
+    : overview.recipient_account_id
+      ? "The recipient already accepted an invitation and holds an account, so a new invitation cannot be sent to it. Bind or link that account in the Provider account panel."
+      : !overview.recipient_valid
       ? "The reviewed application snapshot has no usable recipient address, so no invitation can be prepared."
       : !overview.version_current
         ? "A newer application revision exists. Rebind onboarding to the current version before inviting."
