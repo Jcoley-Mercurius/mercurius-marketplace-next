@@ -1,11 +1,16 @@
 # Phase 5 — Start onboarding review for new applicants (TRACE-065, design proposal)
 
-**Status:** PLANNED. Awaiting Codex design confirmation before implementation.
-Owner decisions (2026-09-11): this is a separate slice ahead of invitation operator UI;
-invitation expiry stays operator-entered with no default. PR #16 (TRACE-063) has
-since merged, so this branch is based on main `5a3bffe`. The owner accepted the
-recommended answer (A) to all four design decisions below; Codex confirms the
-technical contract before implementation.
+**Status:** IMPLEMENTED on branch `codex/phase5-onboarding-intake`, awaiting Codex
+code review. Owner decisions (2026-09-11): this is a separate slice ahead of invitation
+operator UI; invitation expiry stays operator-entered with no default. PR #16
+(TRACE-063) has since merged, so this branch is based on main `5a3bffe`. The owner
+accepted the recommended answer (A) to all four design decisions below.
+
+**Owner authorization (2026-09-12):** the owner directed implementation to proceed
+without waiting for the separate Codex design confirmation recorded below. The two
+design corrections from the 2026-09-11 Codex review are implemented as written. Codex
+review of this slice is therefore a code review of the implementation rather than a
+design gate. Merging is not phase acceptance or production activation.
 
 ## Gap
 
@@ -175,3 +180,68 @@ Owner answered A to each (2026-09-11). Codex confirms or raises technical object
    ahead of later activate/suspend/renew events.
 
 No production migration, provider record, email or activation is performed.
+
+## Implementation (2026-09-12)
+
+Migration `20260911001000_vendor_onboarding_intake.sql` adds the private, immutable
+`vendor_onboarding_review_starts` request table (RLS on, no table grants,
+`money_immutable` trigger) and `public.vendor_start_onboarding_review(uuid,uuid,text,text)`
+exactly in the order recorded above: `vendor_require_operator()`, exact-replay lookup,
+application row lock, replay re-check under the lock, validation, existing-state
+reporting or rejection, then creation. The replay lookup is a volatile
+`private.vendor_review_start_replay` helper so its second call reads a fresh snapshot
+under the lock. Both functions are security definer with a fixed empty `search_path`,
+revoked from `public,anon,authenticated,service_role` and granted to `authenticated`
+only. The creating transaction inserts the contractor with `is_active=false`,
+`marketing_enabled=false`, `user_id=null` and the trimmed business name, links the
+application, opens `vendor_onboarding` at revision 1, appends one `review_started`
+event keyed `review-start:<key>`, and stores the request identity.
+
+Raised errors: `Onboarding operator required` (42501), `Application not found`,
+`Reason and idempotency key required`, `Closed application cannot start onboarding`,
+`Latest application version required`, `Onboarding review idempotency conflict`,
+`Onboarding already exists`, `Existing provider requires the cutover review path`.
+
+Three additions beyond the proposal text, each for Codex review:
+
+1. **Operator readback RPC.** `public.vendor_onboarding_intake_status(uuid)` (operator-only,
+   read-only) returns the application status, latest version ID, contractor ID, onboarding
+   status/revision/version and whether a review start exists. The proposal required the UI
+   to send the latest version and show server readback, but `vendor_application_versions`
+   carries no `authenticated` grant, so the operator queue had no approved way to learn
+   either. It writes nothing.
+2. **Security-contract allowlist.** `vendor_onboarding_review_starts` is added to both
+   RPC-only table lists in `supabase/tests/001_phase2_security_contract.sql`, exactly as
+   TRACE-063 did for its dispatch tables.
+3. **Event business key namespace.** The onboarding event key is `review-start:<p_key>`
+   so an operator key cannot collide with a `vendor_decide_onboarding` key in the globally
+   unique `vendor_onboarding_events.business_key`.
+
+Applications UI: the disabled legacy "Approve & Send Invite" action and its
+invite-promising copy are removed. A new "Onboarding review" section reads the status
+RPC on open and renders either the current review state, the legacy/cut-over explanation,
+a closed-application note, or a reason-required ConfirmAction whose success is accepted
+only after a server readback confirms a started review for the returned contractor. The
+idempotency key is generated once per opened application, so a retried confirmation
+replays rather than duplicating. The legacy resend button and on-load `sync` call remain
+for the following invitation UI slice.
+
+## Unresolved for Codex and the owner
+
+- **Applications with no intake version.** `vendor_application_versions` is written by a
+  trigger added in `20260905002000`; applications submitted before it have no version row
+  and were never backfilled. For those, `p_expected_version` cannot satisfy "latest
+  version", so the command fails closed with `Latest application version required` and the
+  UI states that onboarding cannot start yet. Backfilling historical intake rows would
+  change existing records and is not part of an approved authority, so it is recorded here
+  instead of being invented. A decision is required before such applications can be
+  onboarded.
+- **Default contractor columns.** The created record takes table defaults for unset
+  columns, including `rating` 5.0. It is hidden while `is_active=false`, so nothing is
+  published now, but decision 2 (binding public listing to onboarding eligibility) still
+  owns what becomes visible at activation.
+- **Pre-existing script ordering.** `scripts/phase5-payout-concurrency.mjs` reuses
+  `024_phase5_completion_payout.sql`, which selects `vendor_application_versions limit 1`
+  and therefore fails if any other committed application fixture exists first. CI order
+  (payout before the invitation and onboarding scripts) avoids this; the new script is
+  appended after the invitation step. Not changed by this slice.

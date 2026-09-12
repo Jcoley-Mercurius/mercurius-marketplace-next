@@ -70,6 +70,12 @@ const server = createServer(async (request, response) => {
       accepted_at: now.toISOString(), expires_at: new Date(now.getTime() + 86400000).toISOString() }],
     services: [{ id: "lawn", name: "Lawn care" }], areas: [{ zip_code: "33904", city: "Cape Coral" }],
   });
+  if (url.pathname === "/rest/v1/rpc/vendor_onboarding_intake_status") return send({
+    application_id: body.p_application, application_status: "pending",
+    latest_version_id: "00000000-0000-4000-8000-000000000051", latest_revision: 1,
+    contractor_id: null, onboarding_status: null, onboarding_revision: null,
+    onboarding_version_id: null, review_started: false,
+  });
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {
@@ -85,6 +91,16 @@ const server = createServer(async (request, response) => {
     if (table === "user_roles") return send([{ role: user.testRole }]);
     if (table === "invoices") return send([{ id: "00000000-0000-4000-8000-000000000020", invoice_number: "MDS-INV-001", amount: 125, status: "pending", created_at: now.toISOString(), paid_at: null }]);
     if (table === "reviews") return send([]);
+    if (table === "vendor_applications") return send([{
+      id: "00000000-0000-4000-8000-000000000050", first_name: "Synthetic", last_name: "Applicant",
+      business_name: "Synthetic Applicant Services", email: "applicant@example.invalid", phone: "synthetic",
+      address: null, services: ["Lawn care"], years_experience: 4, availability: null, service_areas: "33904",
+      status: "pending", created_at: now.toISOString(), contractor_id: null, invited_user_id: null,
+      invite_status: "not_invited", invited_at: null, invite_expires_at: null, activated_at: null, invite_error: null,
+      primary_category: "Lawn care", team_size: null, business_description: null, website: null, preferred_contact: null,
+      license_number: null, insurance_policy_number: null, credentials: [], other_certification: null,
+      additional_notes: null, document_urls: [],
+    }]);
     if (table === "service_requests") return send(user.testRole === "homeowner" ? [...jobs, job("12", "Synthetic Quote Service", "quoted"), job("13", "Synthetic Pending Service", "pending"), job("14", "Synthetic Review Service", "review_requested"), job("15", "Synthetic Completed Service", "vendor_completed")] : jobs);
     if (table === "profiles") return send([{ user_id: homeowner, full_name: "Synthetic Homeowner" }]);
     if (table === "contractors") {

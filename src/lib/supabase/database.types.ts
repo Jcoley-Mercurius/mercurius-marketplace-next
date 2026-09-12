@@ -4449,6 +4449,58 @@ export type Database = {
           },
         ]
       }
+      vendor_onboarding_review_starts: {
+        Row: {
+          actor: string
+          application_id: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          expected_version_id: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          application_id: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          expected_version_id: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          application_id?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          expected_version_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_onboarding_review_starts_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_onboarding_review_starts_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+          {
+            foreignKeyName: "vendor_onboarding_review_starts_expected_version_id_fkey"
+            columns: ["expected_version_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_application_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_packages: {
         Row: {
           contractor_id: string
@@ -5249,6 +5301,10 @@ export type Database = {
       }
       vendor_invitation_status: { Args: { p_attempt: string }; Returns: Json }
       vendor_is_eligible: { Args: { p_contractor: string }; Returns: boolean }
+      vendor_onboarding_intake_status: {
+        Args: { p_application: string }
+        Returns: Json
+      }
       vendor_prepare_invitation: {
         Args: { p_contractor: string; p_expires: string; p_key: string }
         Returns: string
@@ -5299,6 +5355,15 @@ export type Database = {
         Returns: string
       }
       vendor_require_operator: { Args: never; Returns: string }
+      vendor_start_onboarding_review: {
+        Args: {
+          p_application: string
+          p_expected_version: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role:
