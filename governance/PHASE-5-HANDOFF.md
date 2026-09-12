@@ -59,8 +59,18 @@ Hosted delivery, operator queue wiring and existing-account linking remain gates
 acceptance never activates a provider.
 
 TRACE-064 restores the production dependency-audit CI gate after post-merge
-advisories (critical Next.js) made it fail on main and draft PR #16. See
+advisories (critical Next.js) made it fail on main and on PR #16, which the owner
+merged to main at `5a3bffe` on 2026-09-11 carrying both slices. See
 PHASE-5-DEPENDENCY-SECURITY.md. It changes dependency versions only.
+
+TRACE-065 starts onboarding review for a new applicant without creating an account,
+invitation or public listing. Merged in PR #18 at main `f47ac84`. See
+PHASE-5-ONBOARDING-INTAKE.md.
+
+TRACE-066 wires the invitation operator interface onto the TRACE-063 commands with a
+read-only operator readback and an operator-entered expiry that has no default. See
+PHASE-5-INVITATION-OPERATIONS.md. Hosted delivery, existing-account linking and
+renewal/retention operations remain open gates; nothing here activates a provider.
 
 ## Original independent checkpoint
 

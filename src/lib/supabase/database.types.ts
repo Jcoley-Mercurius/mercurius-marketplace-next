@@ -5299,6 +5299,10 @@ export type Database = {
         Args: { p_actor?: string; p_attempt: string; p_auth_user?: string }
         Returns: undefined
       }
+      vendor_invitation_overview: {
+        Args: { p_contractor: string }
+        Returns: Json
+      }
       vendor_invitation_status: { Args: { p_attempt: string }; Returns: Json }
       vendor_is_eligible: { Args: { p_contractor: string }; Returns: boolean }
       vendor_onboarding_intake_status: {

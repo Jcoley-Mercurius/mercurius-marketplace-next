@@ -155,6 +155,14 @@ governance/PHASE-5-VENDOR-INVITATIONS.md.
 interface, version-bound private document review/binding, evidence reuse and
 protected provider decisions/finalization. See governance/PHASE-5-COMPLIANCE-OPERATIONS.md.
 Remaining invitation, renewal, retention, finance and integration gates stay open.
+
+**Onboarding operations follow-up:** TRACE-065 starts onboarding review for a new
+applicant without creating an account, invitation or public listing; TRACE-066 wires
+the invitation operator interface onto the TRACE-063 dispatch commands with a
+read-only operator readback and an operator-entered expiry that carries no default.
+See governance/PHASE-5-ONBOARDING-INTAKE.md and
+governance/PHASE-5-INVITATION-OPERATIONS.md. Existing-account linking, hosted
+delivery, renewal and retention operations remain open.
 TRACE-064 restores the production dependency-audit CI gate (Next.js 16.3.4 and
 transitive patches); see governance/PHASE-5-DEPENDENCY-SECURITY.md.
 
