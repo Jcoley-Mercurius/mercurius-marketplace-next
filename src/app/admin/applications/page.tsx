@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/ui/confirm-action";
+import { VendorAccountLinking } from "@/components/admin/VendorAccountLinking";
 import { VendorInvitation } from "@/components/admin/VendorInvitation";
 import {
   Dialog,
@@ -989,15 +990,26 @@ function OnboardingReview({
         </div>
       )}
     </DetailSection>
-    {/* The invitation queue belongs to a provider under review (TRACE-066). */}
+    {/* The invitation and account queues belong to a provider under review
+        (TRACE-066/067). An applicant either receives a new account or has one
+        bound; the panels report which path is open. */}
     {intake?.contractor_id && intake.review_started && (
-      <DetailSection title="Provider invitation">
-        <VendorInvitation
-          contractorId={intake.contractor_id}
-          businessName={application.business_name}
-          disabled={disabled}
-        />
-      </DetailSection>
+      <>
+        <DetailSection title="Provider account">
+          <VendorAccountLinking
+            contractorId={intake.contractor_id}
+            businessName={application.business_name}
+            disabled={disabled}
+          />
+        </DetailSection>
+        <DetailSection title="Provider invitation">
+          <VendorInvitation
+            contractorId={intake.contractor_id}
+            businessName={application.business_name}
+            disabled={disabled}
+          />
+        </DetailSection>
+      </>
     )}
     </>
   );

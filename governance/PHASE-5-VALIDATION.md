@@ -331,3 +331,80 @@ run (34699026121) cancelled by the workflow's concurrency group; all three of it
 report `cancelled`, not `failed`. CodeRabbit reported no line-level findings — the
 organization's free plan produces a summary and walkthrough only, not a line-by-line
 review, so it is not review evidence. Codex code review remains the open gate.
+
+## TRACE-067 — Reviewed existing-account linking — 2026-09-12
+
+Branch `codex/phase5-account-linking`, base main `717877d`, isolated synthetic stack only.
+Scope and design decisions are in PHASE-5-ACCOUNT-LINKING.md.
+
+Database: 704 pgTAP assertions across 25 suites pass, 78 of them new. Suite 034 covers
+operator-only access for all three functions (anon, `service_role` and a vendor are each
+refused before any provider lookup), the missing-onboarding case, and every refusal by
+name: absent identity, empty reason, empty key, stale onboarding revision, unknown
+identity, unconfirmed account, an identity that is not the reviewed recipient, an
+inherited link, a suspended provider, a superseded application version, and a live
+invitation. It then asserts the properties the command must *not* have — no vendor role,
+no change to the account's existing roles, no activation, no public listing, no
+compliance evidence, `vendor_is_eligible` still false — followed by exact replay, two
+idempotency-key conflicts, the cross-provider block, the TRACE-063 dispatch gate closing
+behind a link, release gating (reason, revision, active provider), re-linking after a
+release, and decision immutability. A row fingerprint taken around the readbacks proves
+the overview writes nothing.
+
+Suite 001 assertion 18 needed `vendor_account_link_decisions` added to the Phase 5
+RPC-only boundary list, as TRACE-065 did for its own table. Assertion 19 then covers the
+new table positively: `service_role` holds no direct INSERT/UPDATE/DELETE on it.
+
+Concurrency: `scripts/phase5-account-link-concurrency.mjs`, new and wired into CI after
+the onboarding step, proves three races on the isolated stack. Eight different-key
+concurrent links of one identity to one provider record exactly once and refuse the seven
+losers for a stale onboarding revision, leaving one decision, one event, one revision step
+and one binding. Eight same-key concurrent links all succeed, agree on the recorded
+decision, and record once. Two providers racing the *same* identity — locking different
+contractor rows, so the database's own invariant is the only thing separating them —
+produce exactly one binding, and the loser is told the account is already linked rather
+than seeing a constraint name. That last assertion proves the outcome and the wording; it
+does not isolate which of the two guards fired, the pre-check or the partial unique index.
+
+A clean reset, the four pre-existing concurrency scripts and a replay of all 25 suites all
+pass after the committed fixtures.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm run audit:prod` (0 vulnerabilities) pass. 84 unit tests pass. The production build
+generates 58 pages. 103 browser cases pass, 13 of them new, including axe at
+`wcag2a/2aa/21aa/22aa` and a whole-dialog reflow assertion at 320px in both themes.
+`database.types.ts` was regenerated from the isolated stack; the diff is purely additive
+(77 added lines, 0 removed).
+
+Two defects this slice surfaced and fixed, both in code it wrote:
+
+`vendor_account_link_overview` returned SQL `NULL` rather than `false` for
+`link_reviewed` on an inherited link, because `true and NULL` is `NULL`. A panel reading
+it as a boolean would have shown an inherited link as reviewed. Now `coalesce(...,false)`,
+asserted directly.
+
+The panel reported "Account status could not be loaded." for every failure, losing the
+server's own wording — Supabase rejects with a `PostgrestError`, a plain object, so
+`error instanceof Error` is false. The message is now read off the object, which is what
+lets the no-onboarding case be explained in place instead of offered a retry button.
+`VendorInvitation` has the same `instanceof` pattern on its load path and is unchanged
+here; it is worth a look in review but is not this slice's code.
+
+One simplification: `VendorInvitation`'s "Reviewed account" fact was removed. The account
+panel now sits directly above it in the same dialog and reports the binding, so keeping
+both created two copies of one fact that could diverge. The invitation panel still states
+the consequence for invitations in its blocked message.
+
+Corrected during the slice: two assertions were first written as "linking grants no role"
+meaning zero `user_roles` rows. That was wrong — the recovered signup trigger gives every
+new `auth.users` row a `homeowner` role, so the claim to prove is that linking changes the
+account's role set not at all. Both assertions now compare the exact role set before and
+after.
+
+Edge gates pass unchanged on pinned Deno: 11 functions type-check clean, 9 handler tests
+pass. No Edge, transport, environment or delivery change is in this slice.
+
+Not run: the `@visual` screenshot suite, unchanged from TRACE-066 — it has no Linux
+baselines, so it cannot compare on this platform. No hosted or dev-server session was run.
+No real account, identity verification, role grant or activation is represented anywhere
+in this evidence. Codex code review is the open gate.

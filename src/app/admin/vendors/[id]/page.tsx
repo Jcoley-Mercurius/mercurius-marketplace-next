@@ -9,10 +9,8 @@ import {
   ArrowLeft,
   Award,
   Briefcase,
-  CheckCircle2,
   Eye,
   ImageIcon,
-  Link2,
   Loader2,
   MapPin,
   Plus,
@@ -21,10 +19,10 @@ import {
   Shield,
   Star,
   Trash2,
-  Unlink,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import { VendorAccountLinking } from "@/components/admin/VendorAccountLinking";
 import { ManagedPricingEditor } from "@/components/vendor/ManagedPricingEditor";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -230,43 +228,12 @@ export default function AdminVendorDetailPage() {
 
         <Card><CardHeader><CardTitle>Visibility</CardTitle></CardHeader><CardContent className="space-y-4"><Setting label="Active on platform" description="Inactive vendors are hidden from directories and matching."><Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} /></Setting><Setting label="Marketing enabled" description="Eligible for featured placements and spotlights."><Toggle checked={form.marketing_enabled} onChange={(checked) => update({ marketing_enabled: checked })} /></Setting></CardContent></Card>
 
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Vendor Account</CardTitle><CardDescription>Link an existing authenticated account to this contractor.</CardDescription></CardHeader><CardContent><VendorAccountLink contractorId={id} /></CardContent></Card>
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Vendor Account</CardTitle><CardDescription>Bind an account the applicant already holds, under onboarding review.</CardDescription></CardHeader><CardContent><VendorAccountLinking contractorId={id} businessName={form.name} /></CardContent></Card>
       </aside></div>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 py-3 backdrop-blur lg:left-64"><div className="mx-auto flex max-w-7xl justify-end px-4 sm:px-6 md:px-8"><Button disabled={saving} onClick={() => void save()}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Publishing..." : "Publish Changes"}</Button></div></div>
     </div>
   );
-}
-
-function VendorAccountLink({ contractorId }: { contractorId: string }) {
-  const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    const result = await createClient().rpc("admin_get_contractor_linked_email", { _contractor_id: contractorId });
-    if (result.error) setError(result.error.message); else setLinkedEmail((result.data as string | null) || null);
-    setLoading(false);
-  }, [contractorId]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
-  const link = async () => {
-    if (!email.trim()) return; setBusy(true);
-    const result = await createClient().rpc("admin_link_contractor_to_user", { _contractor_id: contractorId, _email: email.trim() });
-    setBusy(false);
-    if (result.error) return toast.error("Account could not be linked", { description: result.error.message });
-    toast.success("Account linked", { description: `${email.trim()} now has vendor access for this contractor.` }); setEmail(""); await load();
-  };
-  const unlink = async () => {
-    if (!window.confirm("Unlink this account? The user will lose access to this vendor portal.")) return; setBusy(true);
-    const result = await createClient().rpc("admin_unlink_contractor", { _contractor_id: contractorId }); setBusy(false);
-    if (result.error) return toast.error("Account could not be unlinked", { description: result.error.message });
-    toast.success("Account unlinked"); await load();
-  };
-  if (loading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin" />Loading account...</p>;
-  if (error) return <div className="space-y-3"><p className="text-sm text-destructive">{error}</p><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw />Retry</Button></div>;
-  return linkedEmail ? <div className="space-y-3"><div className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" /><div className="min-w-0"><p className="text-sm font-medium">Linked account</p><p className="break-all text-sm text-muted-foreground">{linkedEmail}</p><Badge variant="secondary" className="mt-2">Vendor role granted</Badge></div></div><Button variant="outline" className="w-full" disabled={busy} onClick={() => void unlink()}>{busy ? <Loader2 className="animate-spin" /> : <Unlink />}Unlink Account</Button></div> : <div className="space-y-3"><div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 text-amber-600" /><p className="text-xs text-muted-foreground">No account is linked. The user must already have a Mercurius login before it can be linked.</p></div><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="vendor@example.com" /><Button className="w-full" disabled={busy || !email.trim()} onClick={() => void link()}>{busy ? <Loader2 className="animate-spin" /> : <Link2 />}{busy ? "Linking..." : "Link Account"}</Button></div>;
 }
 
 const textareaClass = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
