@@ -416,3 +416,55 @@ are the push-triggered run (34707251605) cancelled by the workflow's concurrency
 all three of its jobs report `cancelled`, not `failed`. CodeRabbit remains a free-plan
 summary rather than a line-by-line review, so it is not review evidence. Codex code review
 is the open gate.
+
+## TRACE-068 — Vendor role grant at reviewed activation — 2026-09-12
+
+Branch `codex/phase5-activation-role`, base main `8f4ca0d`, isolated synthetic stack only.
+Scope, owner decisions and the TRACE-067 ordering fix are in PHASE-5-ACTIVATION-ROLE.md.
+
+Database: 753 pgTAP assertions across 26 suites pass, 49 of them new. Suite 035 covers the
+private decision table (authenticated and `service_role` refused), a vendor refused
+self-activation, and the full ownership cycle on one provider: no role before activation;
+activation grants and records account, link decision and revision; exact replay records
+nothing further; suspension and renewal keep the role and record nothing; reactivation
+records `already_held` without losing ownership; release withdraws only `vendor`
+(`homeowner` kept) and records `revoked`; release replay withdraws nothing further; a new
+application revision, relink and activation grant again; an out-of-band removal is
+recorded as `already_absent` at release. It then covers `no_account` (activates, grants
+nothing, nothing granted by recipient address), `inherited_link` (activates, no promotion),
+a pre-held role (`already_held`, not reported as activation-owned, kept on release, no
+revoke row), a changed account address and an unconfirmed account (both refuse activation
+with no event, revision, status or role change), an incomplete checklist (refused, no role
+decision), rejection (no role), no contractor activated or listed, and decision
+immutability.
+
+Suite 001 assertion 18 needed `vendor_role_decisions` added to the Phase 5 RPC-only list,
+as each prior slice did for its table; assertion 19 then covers it positively.
+
+Found by suite 035 and fixed in this slice: TRACE-067 chose the live link by
+`created_at, business_key`. A release and relink in one transaction tied and the release
+won on key order, so the relink was reported unreviewed and refused as inherited. Ordering
+is now by a new identity column; suite 035 asserts the tied case directly. Suite 034 passes
+unchanged.
+
+Concurrency: `scripts/phase5-activation-role-concurrency.mjs`, new and wired into CI after
+the account-link step. Eight different-key activations of one linked provider record once
+(losers refused for a stale revision) with one grant decision and one `vendor` row; eight
+same-key activations all succeed, agree on the revision, and record one grant; a
+reactivation racing a release of the same suspended provider applies exactly one, refuses
+the other for a stale revision, and leaves the matching role state. That race exercises one
+ordering per run (reactivation won locally); both outcomes are asserted deterministically in
+suite 035. The five pre-existing concurrency scripts pass unchanged, and a clean reset and
+replay of all 26 suites pass after the fixtures.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm run audit:prod` (0 vulnerabilities) pass. 84 unit tests pass. The production build
+generates 58 pages. 107 browser cases pass, 4 of them new: the activation-granted role
+state with axe (`wcag2a/2aa/21aa/22aa`) and dialog reflow at dark 320px and light 1440px,
+the release confirmation stating withdrawal, and a pre-held role kept on release. One
+existing assertion changed with its copy ("holds no vendor role yet"). Edge type check and
+44 Edge handler tests pass; no Edge code changed. `database.types.ts` was regenerated from
+the isolated stack; the diff is purely additive (57 lines).
+
+Not performed: hosted/production verification, real accounts, manual screen-reader review,
+and CI on the final head (not yet pushed). Codex code review is the open gate.

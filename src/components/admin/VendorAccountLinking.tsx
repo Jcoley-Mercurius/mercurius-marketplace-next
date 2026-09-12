@@ -13,7 +13,8 @@ import { createClient } from "@/lib/supabase/client";
 // TRACE-067 operator surface over the reviewed account-link commands. Every
 // decision is the server's: this panel reads state back and reports it. Linking
 // binds an identity and records why; it grants no role, accepts no compliance
-// evidence and activates no provider.
+// evidence and activates no provider. TRACE-068: activation grants the vendor role
+// to a reviewed binding, and releasing that binding withdraws it.
 
 type Decision = {
   action: string;
@@ -21,6 +22,14 @@ type Decision = {
   recipient_email: string;
   onboarding_revision: number;
   reason: string;
+  created_at: string;
+};
+
+type RoleDecision = {
+  action: string;
+  outcome: string;
+  auth_user_id: string | null;
+  onboarding_revision: number;
   created_at: string;
 };
 
@@ -37,7 +46,10 @@ type Overview = {
   linked_email: string | null;
   link_reviewed: boolean;
   invitation_live: boolean;
+  vendor_role_held: boolean;
+  vendor_role_from_activation: boolean;
   decisions: Decision[];
+  role_decisions: RoleDecision[];
 };
 
 const uuidPattern =
@@ -46,6 +58,15 @@ const uuidPattern =
 const decisionLabel: Record<string, string> = {
   link: "Account linked",
   release: "Account released",
+};
+
+const roleOutcomeLabel: Record<string, string> = {
+  granted: "Vendor role granted at activation",
+  already_held: "Activated; vendor role already held",
+  no_account: "Activated with no bound account; no role granted",
+  inherited_link: "Activated with an inherited link; no role granted",
+  revoked: "Vendor role withdrawn with the account release",
+  already_absent: "Account released; vendor role was already absent",
 };
 
 // Supabase rejects with a PostgrestError, which is a plain object rather than an
@@ -176,7 +197,7 @@ export function VendorAccountLinking({
       {
         title: "Account released",
         description:
-          "The binding was removed and recorded. No role was withdrawn and no evidence was retracted.",
+          "The binding was removed and recorded. A vendor role granted at activation was withdrawn; no evidence was retracted.",
       },
     );
   };
@@ -255,6 +276,18 @@ export function VendorAccountLinking({
           label="Bound account"
           value={overview.linked_email ?? "None linked"}
         />
+        {overview.linked && (
+          <Fact
+            label="Vendor role"
+            value={
+              overview.vendor_role_from_activation
+                ? "Granted at activation"
+                : overview.vendor_role_held
+                  ? "Held before activation"
+                  : "Not granted"
+            }
+          />
+        )}
       </dl>
 
       {overview.linked ? (
@@ -273,9 +306,11 @@ export function VendorAccountLinking({
           </dl>
           {overview.link_reviewed ? (
             <p className="text-xs leading-5 text-muted-foreground">
-              This account can sign in as itself. It holds no vendor role and no
-              provider access from this link: activation remains a separate
-              reviewed decision with its own evidence.
+              {overview.vendor_role_from_activation
+                ? "Activation granted this account the vendor role. Suspension keeps it; releasing the account withdraws it."
+                : overview.vendor_role_held
+                  ? "This account held the vendor role before activation. Releasing the account does not withdraw a role activation did not grant."
+                  : "This account holds no vendor role yet. Linking grants none: the role follows only from a reviewed activation with its own evidence."}
             </p>
           ) : (
             <p className="text-xs leading-5 text-muted-foreground">
@@ -291,7 +326,11 @@ export function VendorAccountLinking({
               triggerLabel="Release account"
               title="Release this linked account?"
               entity={businessName + " · " + (overview.linked_email ?? "")}
-              consequence="Removes the binding and records your reason. The account keeps any role it already holds elsewhere, and no compliance evidence is withdrawn."
+              consequence={
+                overview.vendor_role_from_activation
+                  ? "Removes the binding, withdraws the vendor role activation granted to it, and records your reason. No compliance evidence is withdrawn."
+                  : "Removes the binding and records your reason. The account keeps any role it already holds, and no compliance evidence is withdrawn."
+              }
               confirmLabel="Release"
               onConfirm={release}
             />
@@ -328,7 +367,8 @@ export function VendorAccountLinking({
           </FormField>
           <p className="text-xs leading-5 text-muted-foreground">
             Linking records the binding only. No vendor role, compliance
-            evidence, activation or public listing results from it.
+            evidence, activation or public listing results from it; a later
+            reviewed activation grants the vendor role to this account.
           </p>
           <ConfirmAction
             disabled={busy || !uuidPattern.test(identity)}
@@ -354,6 +394,22 @@ export function VendorAccountLinking({
               <li key={decision.onboarding_revision}>
                 {decisionLabel[decision.action] ?? decision.action} ·{" "}
                 {formatDateTime(decision.created_at)} · {decision.reason}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {overview.role_decisions.length > 0 && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            Role decisions ({overview.role_decisions.length})
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {overview.role_decisions.map((decision) => (
+              <li key={decision.action + decision.onboarding_revision}>
+                {roleOutcomeLabel[decision.outcome] ?? decision.outcome} ·{" "}
+                {formatDateTime(decision.created_at)}
               </li>
             ))}
           </ul>

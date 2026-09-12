@@ -3887,6 +3887,7 @@ export type Database = {
           onboarding_revision: number
           reason: string
           recipient_email: string
+          sequence: number
         }
         Insert: {
           action: string
@@ -3899,6 +3900,7 @@ export type Database = {
           onboarding_revision: number
           reason: string
           recipient_email: string
+          sequence?: never
         }
         Update: {
           action?: string
@@ -3911,6 +3913,7 @@ export type Database = {
           onboarding_revision?: number
           reason?: string
           recipient_email?: string
+          sequence?: never
         }
         Relationships: [
           {
@@ -4671,6 +4674,60 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vendor_compliance_requirements"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_role_decisions: {
+        Row: {
+          action: string
+          actor: string
+          auth_user_id: string | null
+          business_key: string
+          contractor_id: string
+          created_at: string
+          id: number
+          link_decision_key: string | null
+          onboarding_revision: number
+          outcome: string
+        }
+        Insert: {
+          action: string
+          actor: string
+          auth_user_id?: string | null
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          id?: never
+          link_decision_key?: string | null
+          onboarding_revision: number
+          outcome: string
+        }
+        Update: {
+          action?: string
+          actor?: string
+          auth_user_id?: string | null
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          id?: never
+          link_decision_key?: string | null
+          onboarding_revision?: number
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_role_decisions_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+          {
+            foreignKeyName: "vendor_role_decisions_link_decision_key_fkey"
+            columns: ["link_decision_key"]
+            isOneToOne: false
+            referencedRelation: "vendor_account_link_decisions"
+            referencedColumns: ["business_key"]
           },
         ]
       }

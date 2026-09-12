@@ -82,7 +82,8 @@ const server = createServer(async (request, response) => {
     application_version_id: "00000000-0000-4000-8000-000000000051", version_current: true,
     recipient_email: "applicant@example.invalid", recipient_valid: true,
     linked: false, linked_user_id: null, linked_email: null, link_reviewed: false,
-    invitation_live: false, decisions: [],
+    invitation_live: false, vendor_role_held: false, vendor_role_from_activation: false,
+    decisions: [], role_decisions: [],
   });
   if (url.pathname === "/rest/v1/rpc/vendor_invitation_overview") return send({
     contractor_id: body.p_contractor, onboarding_status: "review", onboarding_revision: 1,
