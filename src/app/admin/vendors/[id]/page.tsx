@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Award,
   Briefcase,
+  ClipboardCheck,
   Eye,
   ImageIcon,
   Loader2,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { VendorAccountLinking } from "@/components/admin/VendorAccountLinking";
+import { VendorOnboardingChecklist } from "@/components/admin/VendorOnboardingChecklist";
 import { ManagedPricingEditor } from "@/components/vendor/ManagedPricingEditor";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -229,6 +231,7 @@ export default function AdminVendorDetailPage() {
         <Card><CardHeader><CardTitle>Visibility</CardTitle></CardHeader><CardContent className="space-y-4"><Setting label="Active on platform" description="Inactive vendors are hidden from directories and matching."><Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} /></Setting><Setting label="Marketing enabled" description="Eligible for featured placements and spotlights."><Toggle checked={form.marketing_enabled} onChange={(checked) => update({ marketing_enabled: checked })} /></Setting></CardContent></Card>
 
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Vendor Account</CardTitle><CardDescription>Bind an account the applicant already holds, under onboarding review.</CardDescription></CardHeader><CardContent><VendorAccountLinking contractorId={id} businessName={form.name} /></CardContent></Card>
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4" />Activation Checklist</CardTitle><CardDescription>Record MPS activation evidence and onboarding decisions for a provider under review.</CardDescription></CardHeader><CardContent><VendorOnboardingChecklist contractorId={id} businessName={form.name} /></CardContent></Card>
       </aside></div>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 py-3 backdrop-blur lg:left-64"><div className="mx-auto flex max-w-7xl justify-end px-4 sm:px-6 md:px-8"><Button disabled={saving} onClick={() => void save()}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Publishing..." : "Publish Changes"}</Button></div></div>

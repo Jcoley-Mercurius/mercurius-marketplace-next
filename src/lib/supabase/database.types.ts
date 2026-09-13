@@ -4077,6 +4077,63 @@ export type Database = {
           },
         ]
       }
+      vendor_checklist_evidence_requests: {
+        Row: {
+          accepted_at: string
+          actor: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          evidence_id: string
+          evidence_ref: string
+          expires_at: string | null
+          kind: string
+          requirement_version: string
+          supersedes: string | null
+        }
+        Insert: {
+          accepted_at: string
+          actor: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          evidence_id: string
+          evidence_ref: string
+          expires_at?: string | null
+          kind: string
+          requirement_version: string
+          supersedes?: string | null
+        }
+        Update: {
+          accepted_at?: string
+          actor?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          evidence_id?: string
+          evidence_ref?: string
+          expires_at?: string | null
+          kind?: string
+          requirement_version?: string
+          supersedes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_checklist_evidence_requests_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+          {
+            foreignKeyName: "vendor_checklist_evidence_requests_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_compliance_evidence"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_compliance_evidence: {
         Row: {
           accepted_at: string
@@ -5430,6 +5487,10 @@ export type Database = {
         }
         Returns: Json
       }
+      vendor_onboarding_checklist: {
+        Args: { p_contractor: string }
+        Returns: Json
+      }
       vendor_onboarding_intake_status: {
         Args: { p_application: string }
         Returns: Json
@@ -5437,6 +5498,19 @@ export type Database = {
       vendor_prepare_invitation: {
         Args: { p_contractor: string; p_expires: string; p_key: string }
         Returns: string
+      }
+      vendor_record_checklist_evidence: {
+        Args: {
+          p_accepted: string
+          p_contractor: string
+          p_expires?: string
+          p_key?: string
+          p_kind: string
+          p_reference: string
+          p_requirement: string
+          p_supersedes?: string
+        }
+        Returns: Json
       }
       vendor_record_cutover_decision: {
         Args: { p_contractor: string; p_disposition: string; p_reason: string }

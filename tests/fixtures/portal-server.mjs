@@ -85,6 +85,17 @@ const server = createServer(async (request, response) => {
     invitation_live: false, vendor_role_held: false, vendor_role_from_activation: false,
     decisions: [], role_decisions: [],
   });
+  if (url.pathname === "/rest/v1/rpc/vendor_onboarding_checklist") return send({
+    contractor_id: body.p_contractor, onboarding_status: "review", onboarding_revision: 1,
+    application_version_id: "00000000-0000-4000-8000-000000000051", version_current: true, application_open: true,
+    documents: ["synthetic/applicant/license.pdf", "synthetic/applicant/insurance.pdf"],
+    checklist_current: false, eligible: false, scoped_compliance_current: false, cutover_enforced: false,
+    account_linked: false, account_reviewed: false, account_email: null, vendor_role_held: false,
+    evaluated_at: new Date().toISOString(),
+    items: ["identity", "agreement", "coverage", "license", "insurance", "bank_authorization", "profile_pricing", "availability", "test_notification"]
+      .map(kind => ({ kind, evidence_id: null, requirement_version: null, evidence_ref: null, accepted_at: null, expires_at: null, state: "missing" })),
+    events: [], last_role_decision: null,
+  });
   if (url.pathname === "/rest/v1/rpc/vendor_invitation_overview") return send({
     contractor_id: body.p_contractor, onboarding_status: "review", onboarding_revision: 1,
     application_id: "00000000-0000-4000-8000-000000000050",
