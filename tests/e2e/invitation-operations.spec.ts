@@ -19,6 +19,8 @@ type Attempt = {
   live: boolean;
   dispatch_state: string | null;
   auth_user_id: string | null;
+  refusal_code: string | null;
+  refused_account_id: string | null;
   accepted: boolean;
 };
 
@@ -31,6 +33,8 @@ const attempt = (overrides: Partial<Attempt> = {}): Attempt => ({
   live: true,
   dispatch_state: null,
   auth_user_id: null,
+  refusal_code: null,
+  refused_account_id: null,
   accepted: false,
   ...overrides,
 });
@@ -241,4 +245,99 @@ test("an invitation blocked by provider state explains itself instead of offerin
   const dialog = await openInvitation(page);
   await expect(dialog.getByText("existing-account linking is a separate reviewed path", { exact: false })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Prepare invitation" })).toHaveCount(0);
+});
+
+// TRACE-063 forward fix: a definite Auth refusal closes the attempt as failed.
+const existingAccount = "00000000-0000-4000-8000-000000000056";
+
+for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
+  test(`an Auth refusal explains itself and releases the provider ${theme} ${width}px`, async ({ page }) => {
+    await overview(page, {
+      attempt: attempt({ status: "failed", live: false, dispatch_state: "failed", refusal_code: "email_exists", refused_account_id: existingAccount }),
+    });
+    const dialog = await openInvitation(page, theme, width);
+    await expect(dialog.getByText("Failed", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Refused by Auth — nothing sent")).toBeVisible();
+    await expect(dialog.getByText("already holds a confirmed account", { exact: false })).toBeVisible();
+    await expect(dialog.getByText(existingAccount)).toBeVisible();
+    for (const name of ["Send invitation", "Reconcile result", "Record Auth refusal", "Revoke invitation"])
+      await expect(dialog.getByRole("button", { name })).toHaveCount(0);
+    // Failed is not live, so the slot is free.
+    await expect(dialog.getByRole("button", { name: "Prepare invitation" })).toBeVisible();
+    expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: `test-results/invitation-refusal-${theme}-${width}.png`, fullPage: true });
+  });
+}
+
+test("an unknown result can be recorded as an Auth refusal with an exact account ID", async ({ page }) => {
+  let refused = false;
+  await page.route("**/functions/v1/vendor-invite", route => {
+    refused = true;
+    return route.fulfill({ json: { status: "failed", refusal: "email_exists", dispatched: false } });
+  });
+  await page.route("**/rpc/vendor_invitation_overview", async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({ response, json: { ...data, attempt: refused
+      ? attempt({ status: "failed", live: false, dispatch_state: "failed", refusal_code: "email_exists", refused_account_id: existingAccount })
+      : attempt({ status: "unknown", dispatch_state: "unknown" }) } });
+  });
+  const dialog = await openInvitation(page);
+  const record = dialog.getByRole("button", { name: "Record Auth refusal" });
+  await expect(record).toBeDisabled();
+  const field = dialog.getByLabel("Auth user ID (required)", { exact: true });
+  await field.fill("not-a-user-id");
+  await expect(record).toBeDisabled();
+  await field.fill(existingAccount);
+  await record.click();
+  const confirm = page.getByRole("alertdialog", { name: "Record this invitation as refused by Auth?" });
+  await expect(confirm.getByText("held the recipient address, confirmed, before this dispatch", { exact: false })).toBeVisible();
+  await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  const request = page.waitForRequest("**/functions/v1/vendor-invite");
+  await confirm.getByRole("button", { name: "Record refusal", exact: true }).click();
+  expect((await request).postDataJSON()).toEqual({ action: "refuse", attempt_id: attemptId, auth_user_id: existingAccount });
+  await expect(confirm).not.toBeVisible();
+  await expect(dialog.getByText("Refused by Auth — nothing sent")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Prepare invitation" })).toBeVisible();
+});
+
+test("a refusal the server does not prove keeps the attempt unknown and the dialog open", async ({ page }) => {
+  await overview(page, { attempt: attempt({ status: "unknown", dispatch_state: "unknown" }) });
+  await page.route("**/functions/v1/vendor-invite", route =>
+    route.fulfill({ status: 409, json: { error: "INVITATION_REFUSAL_NOT_PROVEN" } }));
+  const dialog = await openInvitation(page);
+  await dialog.getByLabel("Auth user ID (required)", { exact: true }).fill(existingAccount);
+  await dialog.getByRole("button", { name: "Record Auth refusal" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Record this invitation as refused by Auth?" });
+  await confirm.getByRole("button", { name: "Record refusal", exact: true }).click();
+  await expect(page.getByText("INVITATION_REFUSAL_NOT_PROVEN")).toBeVisible();
+  await expect(confirm.getByRole("alert")).toBeFocused();
+  await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog.getByText("Unknown — reconcile before any further dispatch")).toBeVisible();
+});
+
+test("a send refused by Auth reports the refusal and reads back the failed attempt", async ({ page }) => {
+  let sent = false;
+  await page.route("**/functions/v1/vendor-invite", route => {
+    sent = true;
+    return route.fulfill({ status: 409, json: { error: "INVITATION_RECIPIENT_HAS_ACCOUNT", status: "failed", dispatched: false } });
+  });
+  await page.route("**/rpc/vendor_invitation_overview", async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({ response, json: { ...data, attempt: sent
+      ? attempt({ status: "failed", live: false, dispatch_state: "failed", refusal_code: "email_exists" })
+      : attempt() } });
+  });
+  const dialog = await openInvitation(page);
+  await dialog.getByRole("button", { name: "Send invitation" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Send this invitation?" });
+  await confirm.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByText("INVITATION_RECIPIENT_HAS_ACCOUNT")).toBeVisible();
+  // The readback shows a closed attempt, so the send confirmation has nothing left to confirm.
+  await expect(confirm).not.toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Send invitation" })).toHaveCount(0);
+  await expect(dialog.getByText("already holds a confirmed account", { exact: false })).toBeVisible();
+  await expect(dialog.getByText("Existing account", { exact: true })).toHaveCount(0);
 });

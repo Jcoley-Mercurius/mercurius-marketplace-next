@@ -145,7 +145,8 @@ no client or `service_role` privilege.
   an address that already has an Auth account from outside this provider's receipts —
   for example a homeowner signup — still becomes an unreconcilable, unclosable `unknown`
   attempt. That predates this slice (TRACE-063) and needs its own fix: a definitive Auth
-  refusal should be recordable as failed and closable.
+  refusal should be recordable as failed and closable. *Addressed by the TRACE-063
+  forward fix in PHASE-5-INVITATION-REFUSAL.md (branch `codex/phase5-auth-refusal`).*
 - Rejection-after-activation role policy and account deletion versus role/link audit
   rows remain as recorded in TRACE-068.
 - An invitation accepted for an earlier application revision cannot be bound; whether

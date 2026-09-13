@@ -4413,6 +4413,8 @@ export type Database = {
           attempt_id: string
           auth_user_id: string | null
           recipient_email: string
+          refusal_code: string | null
+          refused_account_id: string | null
           resolved_at: string | null
           started_at: string
           started_by: string
@@ -4422,6 +4424,8 @@ export type Database = {
           attempt_id: string
           auth_user_id?: string | null
           recipient_email: string
+          refusal_code?: string | null
+          refused_account_id?: string | null
           resolved_at?: string | null
           started_at?: string
           started_by: string
@@ -4431,6 +4435,8 @@ export type Database = {
           attempt_id?: string
           auth_user_id?: string | null
           recipient_email?: string
+          refusal_code?: string | null
+          refused_account_id?: string | null
           resolved_at?: string | null
           started_at?: string
           started_by?: string
@@ -5576,6 +5582,15 @@ export type Database = {
           p_supersedes?: string
         }
         Returns: string
+      }
+      vendor_refuse_invitation: {
+        Args: {
+          p_actor: string
+          p_attempt: string
+          p_code: string
+          p_existing_account?: string
+        }
+        Returns: undefined
       }
       vendor_release_linked_account: {
         Args: {

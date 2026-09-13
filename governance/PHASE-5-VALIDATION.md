@@ -589,3 +589,69 @@ gates were not rerun.
 
 Not performed: hosted PostgREST/Auth round-trip, real invitations or accounts, manual
 screen-reader review, CI on this branch. Codex code review is the open gate.
+
+## TRACE-063 forward fix — Definite Auth refusal recorded as failed — 2026-09-12
+
+Branch `codex/phase5-auth-refusal`, based on `main` `26900eb`, isolated synthetic stack
+only. Scope and decisions are in PHASE-5-INVITATION-REFUSAL.md.
+
+Characterization: through the locked admin client against the isolated local Auth, a
+confirmed existing account returned `AuthApiError` 422 `email_exists` with no user; an
+unconfirmed one was re-invited as the same user; an invalid address returned 400
+`validation_failed`. Synthetic probe accounts were deleted.
+
+Database: 936 pgTAP assertions across 29 suites pass, 53 of them new in suite 038: the
+receipt guard not seeing an account from elsewhere; the command not executable by `anon`
+or `authenticated` and refused for a null or non-operator actor, an unsupported or null
+code, and an undispatched attempt, with nothing written; the handler report recording
+dispatch and attempt `failed`, no identity, one event naming the operator, and replaying;
+a late unknown report not reopening it, an identity refused on it, closure not re-closing
+it, and both check constraints; the overview and status reporting the refusal; no link,
+activation or vendor role; linking the existing account by ID then succeeding; for an
+attempt already `unknown`, reconciliation still refused, a bare report refused, and
+missing, other-address, unconfirmed, confirmed-at-or-after-dispatch and
+invited-at-or-after-dispatch accounts refused with nothing written, then a pre-existing
+account recording `failed` naming it, exact and bare replays, a different account
+conflicting, and the slot freed for a new preparation; a `provider_accepted` dispatch
+refused. Effective execute privileges on the three replaced functions were captured before
+and after and are identical.
+
+Concurrency: `scripts/phase5-invitation-refusal-concurrency.mjs`, new and wired into CI
+after the binding step. Eight duplicate refusal reports record once; four refusal reports
+racing four unknown reports end in exactly one consistent outcome (a refusal never lands
+on an unknown outcome); four corroborated refusals racing four reconciliations with the
+same pre-existing account record one failure and no identity. No race links, activates or
+grants a role. Passed three consecutive runs with resets, then all nine scripts passed in
+CI order, followed by a clean reset and replay of all 29 suites.
+
+Edge: `scripts/check-edge.sh` passes; `scripts/test-edge.sh` passes for every function,
+`vendor-invite` 13 cases with 4 new: the `422 email_exists` refusal recorded once and
+never as unknown; a failed refusal write falling back to unknown without a retry; 422
+`validation_failed`, 500 `email_exists` and 429 staying unknown; the `refuse` action
+reading the exact account by ID, requiring it, reporting an unproven refusal, and never
+calling the invite API.
+
+Local round-trip: the real `vendor-invite` handler under Deno 2.9.6 in local-test mode,
+against the isolated Auth and database with a synthetic operator and a synthetic confirmed
+"homeowner" account: send returned 409 `INVITATION_RECIPIENT_HAS_ACCOUNT` and the database
+held `failed|email_exists|failed`; a new preparation then succeeded; a claimed attempt
+forced to `unknown` was refused by `reconcile` (409) and recorded by `refuse` (200) as
+failed naming the account. The script's final string comparison was written wrongly
+(`t` for `true`) and reported a failure after the values printed matched; the database
+was reset afterwards.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm run audit:prod` (0 vulnerabilities) pass. 84 unit tests pass. The production build
+(with CI's synthetic public environment) generates 58 pages. 139 browser cases pass, 5
+new: the refused attempt at light 320px and dark 1440px with axe
+(`wcag2a/2aa/21aa/22aa`) and reflow, explaining the refusal, naming the account and
+offering only preparation; the unknown attempt's "Record Auth refusal" gated on an exact
+ID with the `refuse` payload and readback-gated success; an unproven refusal keeping the
+confirmation open and the attempt unknown; and a refused send reporting the refusal and
+reading back the failed attempt. A full `playwright test` run also executed the six
+`@visual` cases CI excludes; they failed only because no Linux baselines exist, and the
+baselines that run wrote were removed. `database.types.ts` gains only this slice's columns
+and command, from `supabase gen types` against the migrated stack.
+
+Not performed: hosted Auth/PostgREST round-trip, real invitations or accounts, manual
+screen-reader review, CI on this branch. Codex code review is the open gate.
