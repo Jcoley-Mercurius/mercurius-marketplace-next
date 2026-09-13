@@ -152,9 +152,19 @@ select is((public.vendor_invitation_overview('f2000000-0000-4000-8000-0000000000
 select is((select is_active from public.contractors where id='f2000000-0000-4000-8000-000000000001'),false,
  'Acceptance did not activate the provider');
 
--- A later live attempt outranks the newest closed one.
-insert into attempt values('second',public.vendor_prepare_invitation('f2000000-0000-4000-8000-000000000001',
- 'queue-2',now()-interval '1 second'+interval '2 days'));
+-- TRACE-070: the accepted recipient holds an account, so preparing another invitation
+-- is refused and the readback says why.
+select throws_ok($$select public.vendor_prepare_invitation('f2000000-0000-4000-8000-000000000001','queue-2',now()+interval '2 days')$$,
+ 'P0001','Recipient already holds an account; link it by account ID','An accepted recipient is not re-invited');
+select is(public.vendor_invitation_overview('f2000000-0000-4000-8000-000000000001')->>'recipient_account_id',
+ 'f1000000-0000-4000-8000-000000000002','The readback reports the recipient''s existing account');
+
+-- A later live attempt outranks the newest closed one. Recorded directly, as an attempt
+-- prepared before the TRACE-070 guard would be; the readback ordering is what is tested.
+insert into public.vendor_invitation_attempts(contractor_id,application_version_id,business_key,expires_at,created_by)
+ select contractor_id,application_version_id,'queue-2',now()-interval '1 second'+interval '2 days','f1000000-0000-4000-8000-000000000001'
+ from public.vendor_onboarding where contractor_id='f2000000-0000-4000-8000-000000000001';
+insert into attempt select 'second',id from public.vendor_invitation_attempts where business_key='queue-2';
 select is(public.vendor_invitation_overview('f2000000-0000-4000-8000-000000000001')->'attempt'->>'attempt_id',
  (select id::text from attempt where k='second'),'The live attempt is the current record');
 select is(jsonb_array_length(public.vendor_invitation_overview('f2000000-0000-4000-8000-000000000001')->'prior_attempts'),1,

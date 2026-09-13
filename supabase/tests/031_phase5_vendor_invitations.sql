@@ -69,18 +69,32 @@ select is((select count(*) from public.user_roles where user_id='d1000000-0000-4
 select ok((select user_id is null and not is_active from public.contractors where id='d2000000-0000-4000-8000-000000000001'),'Acceptance neither links nor activates provider');
 select throws_ok($$delete from public.vendor_invitation_acceptances$$,'55000','Immutable financial evidence; append a correction','Acceptance history cannot be deleted');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"d1000000-0000-4000-8000-000000000001"}',true);
-insert into invitation_fixture values('revoked',public.vendor_prepare_invitation('d2000000-0000-4000-8000-000000000001','dispatch-revoked',now()+interval '1 day'));
+-- TRACE-070: an accepted recipient holds an account, so re-inviting it is refused
+-- before any attempt is recorded. The revocation and staleness cases below use a
+-- second provider whose recipient has not accepted.
+select throws_ok($$select public.vendor_prepare_invitation('d2000000-0000-4000-8000-000000000001','dispatch-reinvite',now()+interval '1 day')$$,
+ 'P0001','Recipient already holds an account; link it by account ID','An accepted recipient is not re-invited');
+insert into auth.users(id,email,email_confirmed_at,invited_at)
+ values('d1000000-0000-4000-8000-000000000004','recipient-two@example.invalid',now(),now());
+insert into public.contractors(id,name,is_active,marketing_enabled)
+ values('d2000000-0000-4000-8000-000000000002','Synthetic second invitation provider',false,false);
+insert into public.vendor_applications(id,business_name,first_name,last_name,email,phone,contractor_id)
+ values('d3000000-0000-4000-8000-000000000002','Synthetic second invitation provider','Test','Recipient',
+ 'recipient-two@example.invalid','synthetic','d2000000-0000-4000-8000-000000000002');
+select public.vendor_begin_review('d2000000-0000-4000-8000-000000000002',
+ (select id from public.vendor_application_versions where application_id='d3000000-0000-4000-8000-000000000002'));
+insert into invitation_fixture values('revoked',public.vendor_prepare_invitation('d2000000-0000-4000-8000-000000000002','dispatch-revoked',now()+interval '1 day'));
 select public.vendor_claim_invitation((select id from invitation_fixture where key='revoked'));
-select public.vendor_finish_invitation((select id from invitation_fixture where key='revoked'),'d1000000-0000-4000-8000-000000000002');
+select public.vendor_finish_invitation((select id from invitation_fixture where key='revoked'),'d1000000-0000-4000-8000-000000000004');
 select throws_ok($$select public.vendor_close_dispatched_invitation((select id from invitation_fixture where key='revoked'),'expired','Synthetic expiry')$$,
  'P0001','Invitation not expired','Cannot expire a current link');
 select public.vendor_close_dispatched_invitation((select id from invitation_fixture where key='revoked'),'revoked','Synthetic operator revocation');
-select set_config('request.jwt.claims','{"role":"authenticated","sub":"d1000000-0000-4000-8000-000000000002"}',true);
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"d1000000-0000-4000-8000-000000000004"}',true);
 select throws_ok($$select public.vendor_accept_invitation((select id from invitation_fixture where key='revoked'))$$,
  'P0001','Current invitation and application required','Revoked invitation cannot be accepted');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"d1000000-0000-4000-8000-000000000001"}',true);
-insert into invitation_fixture values('stale',public.vendor_prepare_invitation('d2000000-0000-4000-8000-000000000001','dispatch-stale',now()+interval '1 day'));
-update public.vendor_applications set phone='changed' where id='d3000000-0000-4000-8000-000000000001';
+insert into invitation_fixture values('stale',public.vendor_prepare_invitation('d2000000-0000-4000-8000-000000000002','dispatch-stale',now()+interval '1 day'));
+update public.vendor_applications set phone='changed' where id='d3000000-0000-4000-8000-000000000002';
 select throws_ok($$select public.vendor_claim_invitation((select id from invitation_fixture where key='stale'))$$,
  'P0001','Current invitation and application required','New application revision invalidates pending dispatch');
 select ok(not has_function_privilege('anon','public.vendor_accept_invitation(uuid)','EXECUTE'),'Anonymous users cannot accept');

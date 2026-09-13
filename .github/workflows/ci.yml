@@ -50,6 +50,8 @@ jobs:
         run: node scripts/phase5-activation-role-concurrency.mjs
       - name: Concurrent checklist evidence records
         run: node scripts/phase5-checklist-evidence-concurrency.mjs
+      - name: Concurrent accepted-invitation bindings
+        run: node scripts/phase5-invitation-binding-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay
