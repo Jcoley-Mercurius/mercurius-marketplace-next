@@ -316,4 +316,68 @@ if (name === "vendor-invite") {
     const response=await request({action:"reconcile",attempt_id:attempt,auth_user_id:recipient},{Authorization:"Bearer synthetic-user-token"});
     equal(response.status,200); await response.body?.cancel();equal(calls.some(call=>call.endsWith("/auth/v1/invite")),false);
   });
+  // TRACE-063 forward fix. The refusal body mirrors local GoTrue's observed response.
+  const refused=()=>json({code:422,error_code:"email_exists",msg:"A user with this email address has already been registered"},422);
+  Deno.test("invitation dispatch: Auth's existing-account refusal is recorded as failed, once, never unknown", async () => {
+    calls=[];unexpected=[];fixture.MERCURIUS_INVITATION_MODE="local-test";const order:string[]=[];
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation"){order.push("claim");return json({claimed:true,recipient_email:"recipient@example.invalid"});}
+      if(url.pathname==="/auth/v1/invite"){order.push("invite");return refused();}
+      if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_code:"email_exists",p_actor:operator});return json(null);}
+      if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation"){order.push("finish");return json(null);}
+    };
+    const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,409);equal(await response.json(),{error:"INVITATION_RECIPIENT_HAS_ACCOUNT",status:"failed",dispatched:false});
+    equal(order,["claim","invite","refuse"]);
+    delete fixture.MERCURIUS_INVITATION_MODE;
+  });
+  Deno.test("invitation dispatch: an unrecorded refusal falls back to unknown without a retry", async () => {
+    calls=[];unexpected=[];fixture.MERCURIUS_INVITATION_MODE="local-test";const order:string[]=[];
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
+      if(url.pathname==="/auth/v1/invite"){order.push("invite");return refused();}
+      if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");return json({message:"synthetic refusal write failure"},500);}
+      if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation"){order.push("unknown");equal(JSON.parse(String(init?.body)).p_auth_user,null);return json(null);}
+    };
+    const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,409);equal((await response.json()).status,"unknown");equal(order,["invite","refuse","unknown"]);
+    delete fixture.MERCURIUS_INVITATION_MODE;
+  });
+  Deno.test("invitation dispatch: other Auth errors are not treated as refusals", async () => {
+    for(const [status,code] of [[422,"validation_failed"],[500,"email_exists"],[429,"over_email_send_rate_limit"]] as const){
+      calls=[];unexpected=[];fixture.MERCURIUS_INVITATION_MODE="local-test";const order:string[]=[];
+      route=(url)=>{
+        const auth=operatorRoute(url); if(auth)return auth;
+        if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
+        if(url.pathname==="/auth/v1/invite"){order.push("invite");return json({code:status,error_code:code,msg:"synthetic"},status);}
+        if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");return json(null);}
+        if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation"){order.push("unknown");return json(null);}
+      };
+      const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+      equal(response.status,409);equal((await response.json()).status,"unknown");equal(order,["invite","unknown"]);
+    }
+    delete fixture.MERCURIUS_INVITATION_MODE;
+  });
+  Deno.test("invitation refusal reconciliation: reads the exact account ID, never re-invites", async () => {
+    calls=[];unexpected=[];
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({user:{id:recipient}});
+      if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_code:"email_exists",p_actor:operator,p_existing_account:recipient});return json(null);}
+    };
+    let response=await request({action:"refuse",attempt_id:attempt,auth_user_id:recipient},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,200);equal(await response.json(),{status:"failed",refusal:"email_exists",dispatched:false});
+    equal(calls.some(call=>call.endsWith("/auth/v1/invite")),false);
+    response=await request({action:"refuse",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,400);await response.body?.cancel();
+    route=(url)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({user:{id:recipient}});
+      if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation")return json({message:"Auth refusal evidence mismatch"},400);
+    };
+    response=await request({action:"refuse",attempt_id:attempt,auth_user_id:recipient},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,409);equal(await response.json(),{error:"INVITATION_REFUSAL_NOT_PROVEN"});
+  });
 }

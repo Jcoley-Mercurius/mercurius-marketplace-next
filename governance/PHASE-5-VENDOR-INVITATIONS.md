@@ -86,3 +86,9 @@ scheduler, merge or deployment is performed by this slice.
 The implementation uses the repository's locked Supabase JS 2.112.0 and local SDK
 source, including its non-PKCE invitation behavior. Auth template/provider behavior
 remains an integration gate, not something the synthetic tests claim to prove.
+
+## Forward fix — definite Auth refusal (2026-09-12)
+
+Every Auth error used to be recorded as `unknown`, which wedged a provider whose recipient
+already held a confirmed account elsewhere. Auth's `422 email_exists` refusal is now
+recorded as a terminal `failed` attempt. See PHASE-5-INVITATION-REFUSAL.md.

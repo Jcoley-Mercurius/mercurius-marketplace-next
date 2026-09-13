@@ -99,7 +99,11 @@ Deno.serve(async (request) => {
         emailed: false,
       });
     }
-    if (!["send", "status", "reconcile", "close"].includes(String(body.action)))
+    if (
+      !["send", "status", "reconcile", "refuse", "close"].includes(
+        String(body.action),
+      )
+    )
       return json(
         {
           error: "ONBOARDING_REVIEW_REQUIRED",
@@ -150,6 +154,24 @@ Deno.serve(async (request) => {
         ? json({ error: "INVITATION_RECONCILIATION_REQUIRED" }, 409)
         : json({ status: "provider_accepted", delivered: false });
     }
+    // An unknown outcome whose recipient already held a confirmed account before the
+    // dispatch: the database proves Auth must have refused it. Read by exact ID only.
+    if (body.action === "refuse") {
+      if (!uuid(body.auth_user_id))
+        return json({ error: "Verified Auth user ID required" }, 400);
+      const readback = await admin.auth.admin.getUserById(body.auth_user_id);
+      if (readback.error || !readback.data.user)
+        return json({ error: "AUTH_READBACK_REQUIRED" }, 409);
+      const result = await admin.rpc("vendor_refuse_invitation", {
+        p_attempt: attempt,
+        p_code: "email_exists",
+        p_actor: identity.data.user.id,
+        p_existing_account: readback.data.user.id,
+      });
+      return result.error
+        ? json({ error: "INVITATION_REFUSAL_NOT_PROVEN" }, 409)
+        : json({ status: "failed", refusal: "email_exists", dispatched: false });
+    }
     const claim = await client.rpc("vendor_claim_invitation", {
       p_attempt: attempt,
     });
@@ -184,6 +206,34 @@ Deno.serve(async (request) => {
         claim.data.recipient_email,
         { redirectTo: redirect.toString() },
       );
+      // Auth's structured refusal of an address that already holds a confirmed
+      // account is definite: no user was created and nothing was sent. Every other
+      // error, including a lost response, stays unknown.
+      if (
+        invited.error?.status === 422 &&
+        invited.error.code === "email_exists"
+      ) {
+        const refusal = await admin.rpc("vendor_refuse_invitation", {
+          p_attempt: attempt,
+          p_code: "email_exists",
+          p_actor: identity.data.user.id,
+        });
+        if (refusal.error) {
+          await markUnknown();
+          return json(
+            { error: "INVITATION_RECONCILIATION_REQUIRED", status: "unknown" },
+            409,
+          );
+        }
+        return json(
+          {
+            error: "INVITATION_RECIPIENT_HAS_ACCOUNT",
+            status: "failed",
+            dispatched: false,
+          },
+          409,
+        );
+      }
       if (invited.error || !invited.data.user) {
         await markUnknown();
         return json(

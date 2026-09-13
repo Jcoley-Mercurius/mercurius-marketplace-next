@@ -13,7 +13,8 @@ import { createClient } from "@/lib/supabase/client";
 // TRACE-066 operator surface over the TRACE-053/063 invitation commands. Every
 // decision is the server's: this panel reads state back and reports it. Preparing,
 // dispatching, reconciling or closing an invitation grants no role, links no
-// account and activates no provider.
+// account and activates no provider. A definite Auth refusal closes an attempt as
+// failed (TRACE-063 forward fix).
 
 type Attempt = {
   attempt_id: string;
@@ -24,6 +25,8 @@ type Attempt = {
   live: boolean;
   dispatch_state: string | null;
   auth_user_id: string | null;
+  refusal_code: string | null;
+  refused_account_id: string | null;
   accepted: boolean;
 };
 
@@ -48,7 +51,7 @@ type Overview = {
   prior_attempts: PriorAttempt[];
 };
 
-type Action = "prepare" | "send" | "reconcile" | "close";
+type Action = "prepare" | "send" | "reconcile" | "refuse" | "close";
 
 const attemptLabel: Record<string, string> = {
   prepared: "Prepared, not sent",
@@ -65,6 +68,7 @@ const dispatchLabel: Record<string, string> = {
   started: "Reserved before the Auth call",
   unknown: "Unknown — reconcile before any further dispatch",
   provider_accepted: "Auth accepted the invitation (delivery not asserted)",
+  failed: "Refused by Auth — nothing sent",
 };
 
 const uuidPattern =
@@ -244,6 +248,22 @@ export function VendorInvitation({
     setAuthUserId("");
   };
 
+  const refuse = async (attemptId: string) => {
+    await run(
+      "refuse",
+      { attempt_id: attemptId, auth_user_id: authUserId.trim() },
+      (next) =>
+        next.attempt?.attempt_id === attemptId &&
+        next.attempt.dispatch_state === "failed",
+      {
+        title: "Auth refusal recorded",
+        description:
+          "The attempt is closed as failed. Nothing was sent and no account was linked.",
+      },
+    );
+    setAuthUserId("");
+  };
+
   const close = (attemptId: string, status: "revoked" | "expired") =>
     async (reason: string) => {
       await run(
@@ -339,7 +359,24 @@ export function VendorInvitation({
               label="Auth identity"
               value={attempt.auth_user_id ?? "Not recorded"}
             />
+            {attempt.refused_account_id && (
+              <Fact
+                label="Existing account"
+                value={attempt.refused_account_id}
+              />
+            )}
           </dl>
+
+          {attempt.dispatch_state === "failed" &&
+            attempt.refusal_code === "email_exists" && (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Auth refused this invitation because the recipient address
+                already holds a confirmed account. Nothing was sent and the
+                attempt is closed. Link that account by account ID in the
+                Provider account panel; a new invitation to this address would
+                be refused again.
+              </p>
+            )}
 
           {attempt.live && (
             <div className="flex flex-col gap-3">
@@ -359,14 +396,16 @@ export function VendorInvitation({
               {attempt.dispatch_state === "unknown" && (
                 <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
                   <p className="text-xs leading-5">
-                    The provider result is unknown. Reconcile it with the exact
-                    Auth user ID; it cannot be closed simply to release another
-                    send.
+                    The provider result is unknown. Enter the exact Auth user ID
+                    for the recipient address. Reconcile if Auth invited that
+                    account for this dispatch; record a refusal if the account
+                    already existed, confirmed, before it. It cannot be closed
+                    simply to release another send.
                   </p>
                   <FormField
                     label="Auth user ID"
                     required
-                    help="Read from the Auth provider. The database verifies it against the recorded recipient and invitation timing."
+                    help="Read from the Auth provider. The database verifies it against the recorded recipient and the dispatch time."
                     error={
                       authUserId && !uuidPattern.test(authUserId.trim())
                         ? "Enter the exact Auth user ID."
@@ -391,6 +430,16 @@ export function VendorInvitation({
                     consequence="Records the verified Auth identity as the provider receipt. The database rejects an identity that does not match the recorded recipient."
                     confirmLabel="Reconcile"
                     onConfirm={() => reconcile(attempt.attempt_id)}
+                  />
+                  <ConfirmAction
+                    disabled={busy || !uuidPattern.test(authUserId.trim())}
+                    confirmationTone="commitment"
+                    triggerLabel="Record Auth refusal"
+                    title="Record this invitation as refused by Auth?"
+                    entity={businessName}
+                    consequence="Closes the attempt as failed. The database accepts only an account that held the recipient address, confirmed, before this dispatch and was not invited after it. Links no account and grants no vendor access."
+                    confirmLabel="Record refusal"
+                    onConfirm={() => refuse(attempt.attempt_id)}
                   />
                 </div>
               )}
