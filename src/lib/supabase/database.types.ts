@@ -5489,6 +5489,7 @@ export type Database = {
         Args: { p_at: string; p_contractor: string }
         Returns: boolean
       }
+      vendor_evidence_renewal_queue: { Args: never; Returns: Json }
       vendor_finalize_cutover: {
         Args: { p_reason: string }
         Returns: undefined
@@ -5521,6 +5522,7 @@ export type Database = {
         Args: { p_application: string }
         Returns: Json
       }
+      vendor_own_evidence_renewal: { Args: never; Returns: Json }
       vendor_prepare_invitation: {
         Args: { p_contractor: string; p_expires: string; p_key: string }
         Returns: string

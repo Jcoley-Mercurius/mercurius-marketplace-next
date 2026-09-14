@@ -80,6 +80,13 @@ and the redirect allowlist. The recipient link is the site's own `/set-password`
 PHASE-5-HOSTED-INVITATION-DELIVERY.md. Hosted arming (Resend SMTP, Auth URLs/template,
 secrets, deploy) and hosted acceptance are owner-authorized steps not yet performed.
 
+TRACE-072 adds the MPS §9 compliance expiry queue: operators see live providers' evidence
+expiring within 30 days or lapsed, the activation checklist flags items due for renewal,
+and vendors see their own notices. A lapse is flagged only and changes no status (owner
+decisions 2026-09-13); the existing eligibility gate still removes a lapsed provider from
+matching and holds ACH preparation, which awaits owner confirmation. Renewed documents
+arriving outside the application are the next slice. See PHASE-5-EVIDENCE-RENEWAL.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

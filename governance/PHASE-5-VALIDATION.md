@@ -723,3 +723,56 @@ Not performed: hosted SMTP/Auth/gateway round-trip, a real invitation or mailbox
 hosted refusal contract, a full isolated-stack start from `prepare-phase5-local.mjs` (the
 script was run and copies `supabase/templates`; the same CLI version loaded the template
 in the throwaway stack), CI on this branch. Codex code review is the open gate.
+
+## TRACE-072 — Compliance expiry queue and renewal notices — 2026-09-13
+
+Branch `codex/phase5-evidence-renewal`, based on `main` `d307ba0`, isolated synthetic
+stack only. Scope and decisions are in PHASE-5-EVIDENCE-RENEWAL.md.
+
+Database: 970 pgTAP assertions across 30 suites pass, 34 of them new, after a clean reset
+and replay. Suite 039 covers access (anon and `service_role` refused both readbacks, the
+private selection refused to clients, a vendor refused the operator queue, a non-vendor
+account refused vendor notices); the 30-day window with the transaction-fixed clock
+(evidence at exactly 30 days listed, 30 days plus one second not); lapsed and expiring
+states, soonest expiry first; review and rejected providers excluded; a replaced lapsed
+item not listed beside its replacement; a suspended provider listed with its status;
+eligibility false for a lapse and true while only expiring; no evidence references in the
+queue; a lapsed provider still `active` at the same revision; checklist `renewal_due`
+(inside the window, outside it, no expiry, lapsed, and under review) and
+`renewal_notice_days`; vendor notices limited to the caller's provider with only item,
+expiry and state, a lapsed notice, and an empty list for a vendor without a provider;
+a state fingerprint proving every readback wrote nothing; and renewal through the
+existing checklist command removing the entry, restoring eligibility, and a `renew`
+decision keeping the provider active at the next revision. Suite 036 passes unchanged
+against the replaced checklist readback.
+
+Mutation check: changing the window comparison from `<=` to `<` in the migration failed
+three suite 039 assertions; the migration was restored and the full replay passes.
+
+Concurrency: no write command was added. The checklist evidence, activation role, account
+link and invitation binding scripts were re-run against this branch and pass.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm audit --omit=dev` (0 vulnerabilities) pass. 95 unit tests pass, 11 of them new
+(day wording at hour boundaries, never "0 days" left, unreadable dates, labels). The
+production build, with the CI synthetic public variables, generates 59 pages including
+`/admin/compliance/renewals`. 150 browser cases pass, 11 of them new: the queue at light
+320px and dark 1440px with axe (`wcag2a/2aa/21aa/22aa`), no page overflow and the
+sidebar marking only Compliance Expiry current; provider links, next actions and the
+Lapsed filter; the strict-matching rebinding step shown only for license and insurance;
+empty and error-with-retry states; the checklist "Renewal due" badge with axe; the vendor
+lapsed notice at light 320px and dark 1440px with axe and no overflow; the expiring
+notice; and no notice when there is nothing to renew or the readback fails.
+`database.types.ts` was regenerated; the diff is two added function signatures. Existing
+vendor and admin browser cases are unchanged: the fixture's default 503 for the new
+vendor readback exercises the silent path. Screenshots were reviewed; table status pills
+were set not to wrap.
+
+Characterized from code only: `vendor_is_eligible` also gates weekly ACH preparation
+(`20260905003000_manual_ach.sql`) and replacement payee reconciliation
+(`20260905014000_replacement_commercial_reconciliation.sql`), so a lapse holds payout
+preparation. No existing suite asserts the `Vendor onboarding hold` refusal; that is a
+test gap, not evidence.
+
+Not performed: hosted PostgREST round-trip, real providers or documents, manual
+screen-reader review, CI on this branch. Codex code review is the open gate.
