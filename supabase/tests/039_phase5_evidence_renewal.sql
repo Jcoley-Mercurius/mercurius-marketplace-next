@@ -162,6 +162,25 @@ select is(public.vendor_own_evidence_renewal()->'items','[]'::jsonb,'A vendor ac
 reset role;
 select is(pg_temp.state(),(select v from snap where k='before'),'Every readback wrote nothing');
 
+-- Payout eligibility (owner decision 2026-09-13): a qualification lapse does not hold
+-- payouts; lapsed payout onboarding, suspension and review still do.
+reset role;
+select is(public.vendor_is_eligible('a7200000-0000-4000-8000-000000000002'),false,'A lapsed license removes matching eligibility');
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000002'),true,'A lapsed license does not hold payouts');
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000001'),true,'An active provider with current evidence is payout eligible');
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000003'),false,'Suspension still holds payouts');
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000005'),false,'A provider under review is not payout eligible');
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000006'),false,'A rejected provider is not payout eligible');
+select pg_temp.replace_evidence('a7200000-0000-4000-8000-000000000004','bank_authorization',now()-interval '1 day');
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000004'),false,'Lapsed payout onboarding still holds payouts');
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000004',now()-interval '2 days'),true,'Payout onboarding holds only once it has lapsed');
+update public.vendor_applications set business_name='Synthetic renewal provider 1 revised' where id='a7300000-0000-4000-8000-000000000001';
+select is(private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000001'),false,'A superseded application version still holds payouts');
+set local role authenticated;
+select throws_ok($$select private.vendor_payout_eligible('a7200000-0000-4000-8000-000000000002')$$,
+ '42501','permission denied for schema private','Payout eligibility is not a client function');
+reset role;
+
 -- Renewal clears the entry through the existing checklist command and decision.
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"a7100000-0000-4000-8000-000000000001"}',true);
 set local role authenticated;

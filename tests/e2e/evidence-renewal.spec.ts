@@ -51,7 +51,7 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     await expect(list).toBeVisible();
     await expect(list.getByText("Lapsed 2 days ago")).toBeVisible();
     await expect(list.getByText("Expires in 10 days")).toBeVisible();
-    await expect(list.getByText("Matching and payout on hold").first()).toBeVisible();
+    await expect(list.getByText("Matching on hold").first()).toBeVisible();
     await expect(page.getByText("it does not suspend them", { exact: false })).toBeVisible();
     await expect(page.getByRole("region", { name: "Queue totals" }).getByText("Expiring within 30 days")).toBeVisible();
     expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
@@ -128,7 +128,7 @@ test("the activation checklist flags current evidence that is due for renewal", 
   await expect(dialog.getByText("9 of 9 current")).toBeVisible();
   await expect(dialog.getByText("Renewal due", { exact: true })).toHaveCount(1);
   await expect(dialog.getByText("Expires within 30 days.", { exact: false })).toBeVisible();
-  await expect(dialog.getByText("it does not change the provider's status", { exact: false })).toBeVisible();
+  await expect(dialog.getByText("it does not change the provider's status or hold payouts, except when payout onboarding lapses", { exact: false })).toBeVisible();
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(tags).analyze()).violations).toEqual([]);
 });
 
@@ -149,7 +149,8 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     await expect(notice).toBeVisible();
     await expect(notice.getByText("Insurance · Lapsed 2 days ago", { exact: false })).toBeVisible();
     await expect(notice.getByText("License · Expires in 10 days", { exact: false })).toBeVisible();
-    await expect(notice.getByText("Mercurius cannot send you new job requests and payouts wait until it is renewed", { exact: false })).toBeVisible();
+    await expect(notice.getByText("While required evidence has lapsed, Mercurius cannot send you new job requests. Send your renewed documents to Mercurius.")).toBeVisible();
+    await expect(notice.getByText("Payouts are held", { exact: false })).toHaveCount(0);
     await expect(notice.getByRole("link", { name: "Contact Mercurius" })).toHaveAttribute("href", "/contact");
     expect((await new AxeBuilder({ page }).include("#main-content > div:first-child").withTags(tags).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
@@ -157,12 +158,29 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
   });
 }
 
+test("vendor notice says payouts are held only for lapsed payout onboarding", async ({ page }) => {
+  await vendorNotice(page, [{ kind: "bank_authorization", expires_at: at(-1.5), state: "lapsed" }]);
+  await syntheticSession(page.context(), "vendor");
+  await page.goto("/vendor/jobs");
+  const notice = page.getByRole("region", { name: "Compliance documents have lapsed" });
+  await expect(notice.getByText("Payout onboarding · Lapsed 1 day ago", { exact: false })).toBeVisible();
+  await expect(notice.getByText("Payouts are held until your payout onboarding is renewed.", { exact: false })).toBeVisible();
+});
+
+test("the queue notes the payout hold only for lapsed payout onboarding", async ({ page }) => {
+  await queue(page, { entries: [lapsedEntry, { ...lapsedEntry, evidence_id: "00000000-0000-4000-8000-000000000083", kind: "bank_authorization", requirement_version: "payout-v1" }] });
+  await openQueue(page, "light", 1440);
+  const table = page.getByRole("table", { name: "Evidence needing renewal" });
+  await expect(table.getByText("Payouts are held until payout onboarding is renewed.")).toHaveCount(1);
+  await expect(page.getByText("it does not suspend them or hold payouts, except lapsed payout onboarding", { exact: false })).toBeVisible();
+});
+
 test("vendor expiring notice asks for renewal before the lapse", async ({ page }) => {
   await vendorNotice(page, [{ kind: "license", expires_at: at(20), state: "expiring" }]);
   await syntheticSession(page.context(), "vendor");
   await page.goto("/vendor/jobs");
   const notice = page.getByRole("region", { name: "Compliance documents need renewal" });
-  await expect(notice.getByText("Send your renewed documents to Mercurius before they expire.", { exact: false })).toBeVisible();
+  await expect(notice.getByText("Send your renewed documents to Mercurius before they expire to keep receiving new job requests.")).toBeVisible();
 });
 
 test("vendors without renewal notices, or whose notice cannot load, see nothing", async ({ page }) => {

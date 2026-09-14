@@ -142,6 +142,26 @@ insert into f values('hold',public.money_place_hold((select id from f where key=
 select throws_ok($$select public.money_payable((select id from f where key='obligation'))$$,'P0001','Unresolved payout hold','Dispute stays held after 48h');
 select public.money_resolve_hold((select id from f where key='hold'),'51000000-0000-4000-8000-000000000003','Resolved','synthetic-resolution');
 select is(public.money_payable((select id from f where key='obligation')),7800::bigint,'Resolution retains original confirmation clock');
+-- TRACE-072 owner decision: a qualification lapse removes matching, not payouts; a lapsed
+-- payout onboarding item still holds. Rolled back so the batch below is unchanged.
+create function pg_temp.lapse(p_contractor uuid,p_kind text) returns void language sql as $$
+ insert into public.vendor_compliance_evidence(contractor_id,application_version_id,kind,requirement_version,evidence_ref,accepted_at,expires_at,reviewed_by,supersedes)
+ select e.contractor_id,e.application_version_id,e.kind,e.requirement_version,e.evidence_ref,now()-interval '2 years',now()-interval '1 day',e.reviewed_by,e.id
+ from public.vendor_compliance_evidence e where e.contractor_id=p_contractor and e.kind=p_kind
+  and not exists(select 1 from public.vendor_compliance_evidence n where n.supersedes=e.id) $$;
+savepoint payout_lapse;
+select pg_temp.lapse('52000000-0000-4000-8000-000000000001','license');
+select pg_temp.lapse('52000000-0000-4000-8000-000000000001','insurance');
+select is(public.vendor_is_eligible('52000000-0000-4000-8000-000000000001'),false,'Lapsed license and insurance remove matching eligibility');
+select is(public.money_payable((select id from f where key='obligation')),7800::bigint,'Lapsed license and insurance do not hold the payout');
+select pg_temp.lapse('52000000-0000-4000-8000-000000000001','bank_authorization');
+select throws_ok($$select public.money_payable((select id from f where key='obligation'))$$,'P0001','Vendor onboarding hold','Lapsed payout onboarding holds the payout');
+rollback to savepoint payout_lapse;
+savepoint payout_suspension;
+update public.vendor_onboarding set status='suspended' where contractor_id='52000000-0000-4000-8000-000000000001';
+select throws_ok($$select public.money_payable((select id from f where key='obligation'))$$,'P0001','Vendor onboarding hold','Suspension still holds the payout');
+rollback to savepoint payout_suspension;
+select is(public.money_payable((select id from f where key='obligation')),7800::bigint,'Payout restored after the lapse checks roll back');
 select pg_temp.approve(jsonb_build_object('operation','ach','period',current_date,'obligations',array[(select id from f where key='obligation')],'bank_ref','private-bank-form','reason','Synthetic weekly ACH'));
 insert into f values('batch',public.money_prepare_ach(current_date,array[(select id from f where key='obligation')],'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004','private-bank-form','Synthetic weekly ACH'));
 insert into f select 'ach-item',id from public.money_ach_items where batch_id=(select id from f where key='batch');

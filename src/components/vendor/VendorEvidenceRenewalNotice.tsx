@@ -38,6 +38,8 @@ export function VendorEvidenceRenewalNotice() {
 
   if (!notice || notice.items.length === 0) return null;
   const lapsed = notice.items.some((item) => item.state === "lapsed");
+  // Owner decision 2026-09-13: only lapsed payout onboarding holds payouts.
+  const payoutHeld = notice.items.some((item) => item.state === "lapsed" && item.kind === "bank_authorization");
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6 md:px-8">
@@ -66,8 +68,8 @@ export function VendorEvidenceRenewalNotice() {
               </ul>
               <p className="text-xs leading-5 text-foreground">
                 {lapsed
-                  ? "While required evidence has lapsed, Mercurius cannot send you new job requests and payouts wait until it is renewed. Send your renewed documents to Mercurius."
-                  : "Send your renewed documents to Mercurius before they expire. Once evidence lapses, new job requests stop and payouts wait until it is renewed."}
+                  ? `While required evidence has lapsed, Mercurius cannot send you new job requests.${payoutHeld ? " Payouts are held until your payout onboarding is renewed." : ""} Send your renewed documents to Mercurius.`
+                  : "Send your renewed documents to Mercurius before they expire to keep receiving new job requests."}
               </p>
             </div>
           </div>

@@ -768,11 +768,27 @@ vendor and admin browser cases are unchanged: the fixture's default 503 for the 
 vendor readback exercises the silent path. Screenshots were reviewed; table status pills
 were set not to wrap.
 
-Characterized from code only: `vendor_is_eligible` also gates weekly ACH preparation
-(`20260905003000_manual_ach.sql`) and replacement payee reconciliation
-(`20260905014000_replacement_commercial_reconciliation.sql`), so a lapse holds payout
-preparation. No existing suite asserts the `Vendor onboarding hold` refusal; that is a
-test gap, not evidence.
+Payout forward fix (owner decision 2026-09-13, migration `20260913002000`): 987 pgTAP
+assertions across 30 suites pass after a clean reset and replay, 17 more than above.
+Suite 039 asserts `private.vendor_payout_eligible` directly: a lapsed license keeps payout
+eligibility while `vendor_is_eligible` is false; current, suspended, review, rejected,
+lapsed payout onboarding (and the same evidence before its lapse), a superseded
+application version, and client access refused. Suite 020 asserts through the live
+`money_payable`, inside savepoints so its later batch is unchanged: lapsed license and
+insurance still pay 7800, then lapsed payout onboarding and suspension each refuse with
+`Vendor onboarding hold`. Suite 027 asserts a replacement with a lapsed license still
+reconciles as payee and one with lapsed payout onboarding refuses with
+`Replacement vendor onboarding hold`, also rolled back. With the forward-fix migration
+removed from the isolated copy, suites 020, 027 and 039 each fail on the old holds; the
+restored replay passes. All nine concurrency scripts pass in CI order, including payout
+and provider-refund, followed by a clean replay.
+
+Wording now says a lapse removes matching and holds payouts only for payout onboarding.
+Lint, typecheck, build (59 pages), 95 unit tests, secret scan and 0 audit findings pass.
+Browser: 152 cases, 13 in the renewal spec (2 new: payout note only for lapsed payout
+onboarding, in the queue and the vendor notice). One full run had a single failure in the
+unrelated `mds.spec.ts` "sheet and dialog close on Escape and restore trigger focus"; it
+passed in the previous full run and 3 of 3 isolated reruns, recorded as a timing flake.
 
 Not performed: hosted PostgREST round-trip, real providers or documents, manual
 screen-reader review, CI on this branch. Codex code review is the open gate.

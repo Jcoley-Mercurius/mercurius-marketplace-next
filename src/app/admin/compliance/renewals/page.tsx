@@ -93,7 +93,7 @@ export default function ComplianceExpiryPage() {
     <PageHeader
       eyebrow="Provider compliance"
       title="Compliance expiry"
-      description={`Evidence for active and suspended providers that expires within ${queue?.notice_days ?? 30} days or has lapsed. Lapsed evidence takes the provider out of matching and holds payout preparation until it is renewed; it does not suspend them.`}
+      description={`Evidence for active and suspended providers that expires within ${queue?.notice_days ?? 30} days or has lapsed. Lapsed evidence takes the provider out of matching until it is renewed; it does not suspend them or hold payouts, except lapsed payout onboarding.`}
       actions={refresh}
     />
   );
@@ -158,7 +158,7 @@ export default function ComplianceExpiryPage() {
         <span className="flex flex-col gap-0.5">
           <span>{entry.onboarding_status === "active" ? "Active" : "Suspended"}</span>
           <span className="text-xs text-muted-foreground">
-            {entry.eligible ? "Onboarding evidence current" : "Matching and payout on hold"}
+            {entry.eligible ? "Onboarding evidence current" : "Matching on hold"}
           </span>
         </span>
       ),
@@ -173,6 +173,11 @@ export default function ComplianceExpiryPage() {
               ? "Record renewed evidence in the activation checklist, then record renewal."
               : `Collect renewed evidence before ${formatRenewalDate(entry.expires_at)}.`}
           </span>
+          {entry.kind === "bank_authorization" && (
+            <span className="text-xs text-muted-foreground">
+              {entry.state === "lapsed" ? "Payouts are held until payout onboarding is renewed." : "Payouts will be held if payout onboarding lapses."}
+            </span>
+          )}
           {queue.cutover_enforced && ["license", "insurance"].includes(entry.kind) && (
             <span className="text-xs text-muted-foreground">
               Strict matching is on: bind the renewed document to its service areas in Provider compliance.

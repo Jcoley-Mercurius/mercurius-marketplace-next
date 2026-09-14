@@ -73,6 +73,25 @@ select throws_ok($$select public.money_reconcile_replacement((select id from f w
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"91000000-0000-4000-8000-000000000003"}',true);
 select public.money_approve_review('91000000-0000-4000-8000-000000000002',pg_temp.reconcile_command(),'Independent replacement payee review');
 reset role;
+-- TRACE-072 owner decision: a replacement's lapsed qualification does not hold payee
+-- reconciliation; lapsed payout onboarding does. Both checks roll back.
+create function pg_temp.lapse(p_contractor uuid,p_kind text) returns void language sql as $$
+ insert into public.vendor_compliance_evidence(contractor_id,application_version_id,kind,requirement_version,evidence_ref,accepted_at,expires_at,reviewed_by,supersedes)
+ select e.contractor_id,e.application_version_id,e.kind,e.requirement_version,e.evidence_ref,now()-interval '2 years',now()-interval '1 day',e.reviewed_by,e.id
+ from public.vendor_compliance_evidence e where e.contractor_id=p_contractor and e.kind=p_kind
+  and not exists(select 1 from public.vendor_compliance_evidence n where n.supersedes=e.id) $$;
+savepoint replacement_license_lapse;
+select pg_temp.lapse('92000000-0000-4000-8000-000000000002','license');
+select is((public.money_reconcile_replacement((select id from f where key='operation'),(select id from f where key='decision'),
+ '91000000-0000-4000-8000-000000000002','91000000-0000-4000-8000-000000000003','Assign paid agreement to accepted replacement')).replacement_contractor_id,
+ '92000000-0000-4000-8000-000000000002'::uuid,'A replacement with a lapsed license can still be reconciled as payee');
+rollback to savepoint replacement_license_lapse;
+savepoint replacement_bank_lapse;
+select pg_temp.lapse('92000000-0000-4000-8000-000000000002','bank_authorization');
+select throws_ok($$select public.money_reconcile_replacement((select id from f where key='operation'),(select id from f where key='decision'),
+ '91000000-0000-4000-8000-000000000002','91000000-0000-4000-8000-000000000003','Assign paid agreement to accepted replacement')$$,
+ 'P0001','Replacement vendor onboarding hold','A replacement with lapsed payout onboarding is held');
+rollback to savepoint replacement_bank_lapse;
 insert into f values('reconciliation',(public.money_reconcile_replacement((select id from f where key='operation'),(select id from f where key='decision'),
  '91000000-0000-4000-8000-000000000002','91000000-0000-4000-8000-000000000003','Assign paid agreement to accepted replacement')).id);
 select is((select replacement_contractor_id from public.money_replacement_reconciliations where id=(select id from f where key='reconciliation')),

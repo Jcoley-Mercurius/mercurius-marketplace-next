@@ -426,7 +426,7 @@ export function VendorOnboardingChecklist({
             </div>
             {item.state === "current" && item.renewal_due && (
               <p className="text-xs leading-5 text-muted-foreground">
-                Expires within {checklist.renewal_notice_days ?? 30} days. Record renewed evidence before it lapses. A lapsed item makes the checklist incomplete, which takes an active provider out of matching and holds payout preparation; it does not change the provider&apos;s status.
+                Expires within {checklist.renewal_notice_days ?? 30} days. Record renewed evidence before it lapses. A lapsed item makes the checklist incomplete, which takes an active provider out of matching; it does not change the provider&apos;s status or hold payouts, except when payout onboarding lapses.
               </p>
             )}
             {item.evidence_id && (
