@@ -1,31 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { invitationDeliverySite } from "./delivery.ts";
 
 const uuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-// Shipping this adapter cannot send real mail: only an explicitly enabled local
-// Supabase stack and loopback site may dispatch. Hosted rollout is a later gate.
-function localDispatchEnabled(url: string, site: string) {
-  try {
-    const backend = new URL(url);
-    const target = new URL(site);
-    return (
-      Deno.env.get("MERCURIUS_INVITATION_MODE") === "local-test" &&
-      backend.protocol === "http:" &&
-      ["127.0.0.1", "localhost", "kong"].includes(backend.hostname) &&
-      target.protocol === "http:" &&
-      ["127.0.0.1", "localhost"].includes(target.hostname) &&
-      !target.username &&
-      !target.password &&
-      target.pathname === "/" &&
-      !target.search &&
-      !target.hash
-    );
-  } catch {
-    return false;
-  }
-}
 Deno.serve(async (request) => {
   const json = (body: unknown, status = 200) =>
     Response.json(body, { status, headers: corsHeaders });
@@ -46,8 +25,9 @@ Deno.serve(async (request) => {
     return json({ error: "Invalid request" }, 400);
   }
   const url = Deno.env.get("SUPABASE_URL") ?? "";
-  const site = Deno.env.get("SITE_URL") ?? "";
-  if (body.action === "send" && !localDispatchEnabled(url, site))
+  // Dispatch is off unless an explicit, pinned delivery mode matches this environment.
+  const site = invitationDeliverySite((name) => Deno.env.get(name));
+  if (body.action === "send" && !site)
     return json({ error: "INVITATION_DELIVERY_DISABLED", emailed: false }, 503);
   try {
     const admin = createClient(
@@ -172,6 +152,8 @@ Deno.serve(async (request) => {
         ? json({ error: "INVITATION_REFUSAL_NOT_PROVEN" }, 409)
         : json({ status: "failed", refusal: "email_exists", dispatched: false });
     }
+    if (!site)
+      return json({ error: "INVITATION_DELIVERY_DISABLED", emailed: false }, 503);
     const claim = await client.rpc("vendor_claim_invitation", {
       p_attempt: attempt,
     });
@@ -202,9 +184,15 @@ Deno.serve(async (request) => {
     const redirect = new URL("/set-password", site);
     redirect.searchParams.set("invitation", attempt);
     try {
+      // `invitation_attempt` is read only while Auth renders the reviewed email
+      // template, which builds the recipient's link from the project's Site URL. It
+      // is not an authorization input: acceptance re-verifies the attempt server-side.
       const invited = await admin.auth.admin.inviteUserByEmail(
         claim.data.recipient_email,
-        { redirectTo: redirect.toString() },
+        {
+          redirectTo: redirect.toString(),
+          data: { invitation_attempt: attempt },
+        },
       );
       // Auth's structured refusal of an address that already holds a confirmed
       // account is definite: no user was created and nothing was sent. Every other
