@@ -34,6 +34,8 @@ type Item = {
   accepted_at: string | null;
   expires_at: string | null;
   state: "missing" | "current" | "expired" | "superseded_version";
+  // TRACE-072: current evidence inside the renewal notice window.
+  renewal_due?: boolean;
 };
 
 type Checklist = {
@@ -51,6 +53,7 @@ type Checklist = {
   account_reviewed: boolean;
   account_email: string | null;
   vendor_role_held: boolean;
+  renewal_notice_days?: number;
   items: Item[];
   events: {
     revision: number;
@@ -410,10 +413,22 @@ export function VendorOnboardingChecklist({
           <li key={item.kind} className="space-y-1 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium">{itemLabel[item.kind]}</span>
-              <Badge variant={item.state === "current" ? "secondary" : "outline"}>
-                {stateLabel[item.state]}
-              </Badge>
+              <span className="flex flex-wrap gap-1.5">
+                {item.state === "current" && item.renewal_due && (
+                  <Badge variant="outline" className="border-status-warning bg-status-warning-bg text-status-warning">
+                    Renewal due
+                  </Badge>
+                )}
+                <Badge variant={item.state === "current" ? "secondary" : "outline"}>
+                  {stateLabel[item.state]}
+                </Badge>
+              </span>
             </div>
+            {item.state === "current" && item.renewal_due && (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Expires within {checklist.renewal_notice_days ?? 30} days. Record renewed evidence before it lapses. A lapsed item makes the checklist incomplete, which takes an active provider out of matching; it does not change the provider&apos;s status or hold payouts, except when payout onboarding lapses.
+              </p>
+            )}
             {item.evidence_id && (
               <p className="break-words text-xs leading-5 text-muted-foreground">
                 {item.requirement_version} · {item.evidence_ref} · reviewed{" "}

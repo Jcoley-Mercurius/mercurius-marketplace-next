@@ -723,3 +723,72 @@ Not performed: hosted SMTP/Auth/gateway round-trip, a real invitation or mailbox
 hosted refusal contract, a full isolated-stack start from `prepare-phase5-local.mjs` (the
 script was run and copies `supabase/templates`; the same CLI version loaded the template
 in the throwaway stack), CI on this branch. Codex code review is the open gate.
+
+## TRACE-072 — Compliance expiry queue and renewal notices — 2026-09-13
+
+Branch `codex/phase5-evidence-renewal`, based on `main` `d307ba0`, isolated synthetic
+stack only. Scope and decisions are in PHASE-5-EVIDENCE-RENEWAL.md.
+
+Database: 970 pgTAP assertions across 30 suites pass, 34 of them new, after a clean reset
+and replay. Suite 039 covers access (anon and `service_role` refused both readbacks, the
+private selection refused to clients, a vendor refused the operator queue, a non-vendor
+account refused vendor notices); the 30-day window with the transaction-fixed clock
+(evidence at exactly 30 days listed, 30 days plus one second not); lapsed and expiring
+states, soonest expiry first; review and rejected providers excluded; a replaced lapsed
+item not listed beside its replacement; a suspended provider listed with its status;
+eligibility false for a lapse and true while only expiring; no evidence references in the
+queue; a lapsed provider still `active` at the same revision; checklist `renewal_due`
+(inside the window, outside it, no expiry, lapsed, and under review) and
+`renewal_notice_days`; vendor notices limited to the caller's provider with only item,
+expiry and state, a lapsed notice, and an empty list for a vendor without a provider;
+a state fingerprint proving every readback wrote nothing; and renewal through the
+existing checklist command removing the entry, restoring eligibility, and a `renew`
+decision keeping the provider active at the next revision. Suite 036 passes unchanged
+against the replaced checklist readback.
+
+Mutation check: changing the window comparison from `<=` to `<` in the migration failed
+three suite 039 assertions; the migration was restored and the full replay passes.
+
+Concurrency: no write command was added. The checklist evidence, activation role, account
+link and invitation binding scripts were re-run against this branch and pass.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm audit --omit=dev` (0 vulnerabilities) pass. 95 unit tests pass, 11 of them new
+(day wording at hour boundaries, never "0 days" left, unreadable dates, labels). The
+production build, with the CI synthetic public variables, generates 59 pages including
+`/admin/compliance/renewals`. 150 browser cases pass, 11 of them new: the queue at light
+320px and dark 1440px with axe (`wcag2a/2aa/21aa/22aa`), no page overflow and the
+sidebar marking only Compliance Expiry current; provider links, next actions and the
+Lapsed filter; the strict-matching rebinding step shown only for license and insurance;
+empty and error-with-retry states; the checklist "Renewal due" badge with axe; the vendor
+lapsed notice at light 320px and dark 1440px with axe and no overflow; the expiring
+notice; and no notice when there is nothing to renew or the readback fails.
+`database.types.ts` was regenerated; the diff is two added function signatures. Existing
+vendor and admin browser cases are unchanged: the fixture's default 503 for the new
+vendor readback exercises the silent path. Screenshots were reviewed; table status pills
+were set not to wrap.
+
+Payout forward fix (owner decision 2026-09-13, migration `20260913002000`): 987 pgTAP
+assertions across 30 suites pass after a clean reset and replay, 17 more than above.
+Suite 039 asserts `private.vendor_payout_eligible` directly: a lapsed license keeps payout
+eligibility while `vendor_is_eligible` is false; current, suspended, review, rejected,
+lapsed payout onboarding (and the same evidence before its lapse), a superseded
+application version, and client access refused. Suite 020 asserts through the live
+`money_payable`, inside savepoints so its later batch is unchanged: lapsed license and
+insurance still pay 7800, then lapsed payout onboarding and suspension each refuse with
+`Vendor onboarding hold`. Suite 027 asserts a replacement with a lapsed license still
+reconciles as payee and one with lapsed payout onboarding refuses with
+`Replacement vendor onboarding hold`, also rolled back. With the forward-fix migration
+removed from the isolated copy, suites 020, 027 and 039 each fail on the old holds; the
+restored replay passes. All nine concurrency scripts pass in CI order, including payout
+and provider-refund, followed by a clean replay.
+
+Wording now says a lapse removes matching and holds payouts only for payout onboarding.
+Lint, typecheck, build (59 pages), 95 unit tests, secret scan and 0 audit findings pass.
+Browser: 152 cases, 13 in the renewal spec (2 new: payout note only for lapsed payout
+onboarding, in the queue and the vendor notice). One full run had a single failure in the
+unrelated `mds.spec.ts` "sheet and dialog close on Escape and restore trigger focus"; it
+passed in the previous full run and 3 of 3 isolated reruns, recorded as a timing flake.
+
+Not performed: hosted PostgREST round-trip, real providers or documents, manual
+screen-reader review, CI on this branch. Codex code review is the open gate.

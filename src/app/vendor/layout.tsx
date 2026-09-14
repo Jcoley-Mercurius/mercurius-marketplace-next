@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2, Menu } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { VendorEvidenceRenewalNotice } from "@/components/vendor/VendorEvidenceRenewalNotice";
 import { VendorSidebar } from "@/components/vendor/VendorSidebar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -60,7 +61,7 @@ export default function VendorLayout({ children }: { children: ReactNode }) {
           </Sheet>
           <div className="ml-3 lg:ml-0"><p className="text-sm font-medium">Vendor Portal</p><p className="text-xs text-muted-foreground">Manage your Mercurius business</p></div>
         </header>
-        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1"><VendorEvidenceRenewalNotice />{children}</main>
       </div>
     </div>
   );
