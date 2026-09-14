@@ -214,6 +214,9 @@ Commit a secret-free `.env.example` and validate it with a typed schema. At mini
 | `OWNER_NOTIFICATION_EMAIL` | Server config/PII | preview/prod | Vercel |
 | `TURNSTILE_SECRET_KEY` | Server secret | preview/prod | Vercel |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Browser-safe | preview/prod | Vercel |
+| `MERCURIUS_INVITATION_MODE` | Edge Function config | unset everywhere except an armed environment | Supabase |
+| `MERCURIUS_INVITATION_PROJECT_REF` | Edge Function config | hosted only, when armed | Supabase |
+| `MERCURIUS_INVITATION_SITE_ORIGIN` | Edge Function config | hosted only, when armed | Supabase |
 | Observability variables | Mixed | preview/prod | Vercel/Supabase |
 
 Rules:
@@ -223,6 +226,9 @@ Rules:
 - Secret rotation procedures identify dependent deployments and webhook endpoints.
 - Missing required values fail with one actionable message before route prerender or request handling.
 - HMAC signing should use a dedicated versioned secret rather than reuse the Supabase service-role credential.
+- Provider invitation dispatch stays off unless `MERCURIUS_INVITATION_MODE` is set, and in
+  `hosted` mode the two pins must match the running `SUPABASE_URL` and `SITE_URL`, so a copied
+  secret set or a preview deployment cannot invite real providers (TRACE-071).
 
 ## 10. Payment architecture
 

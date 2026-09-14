@@ -239,15 +239,84 @@ if (name === "vendor-invite") {
     if (url.pathname === "/auth/v1/user") return json({ id: operator });
     if (url.pathname === "/rest/v1/rpc/has_role") return json(true);
   };
-  Deno.test("invitation dispatch: disabled and hosted modes never reach Auth", async () => {
-    calls=[]; unexpected=[]; route=undefined;
-    let response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
-    equal(response.status,503); await response.body?.cancel(); equal(calls,[]);
-    fixture.MERCURIUS_INVITATION_MODE="local-test";
-    const local=fixture.SUPABASE_URL; fixture.SUPABASE_URL="https://synthetic.supabase.co";
-    response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
-    equal(response.status,503); await response.body?.cancel(); equal(calls,[]);
-    fixture.SUPABASE_URL=local; delete fixture.MERCURIUS_INVITATION_MODE;
+  // TRACE-071. Synthetic project ref and site; neither names a real deployment.
+  const hostedRef="syntheticref00000001";
+  const hosted={MERCURIUS_INVITATION_MODE:"hosted",MERCURIUS_INVITATION_PROJECT_REF:hostedRef,
+    MERCURIUS_INVITATION_SITE_ORIGIN:"https://app.example.test",
+    SUPABASE_URL:`https://${hostedRef}.supabase.co`,SITE_URL:"https://app.example.test"};
+  const delivery=["MERCURIUS_INVITATION_MODE","MERCURIUS_INVITATION_PROJECT_REF","MERCURIUS_INVITATION_SITE_ORIGIN","SUPABASE_URL","SITE_URL"] as const;
+  const baseline:Record<string,string|undefined>=Object.fromEntries(delivery.map(key=>[key,fixture[key]]));
+  const withDelivery=async(overrides:Record<string,string|undefined>,run:()=>Promise<void>)=>{
+    for(const key of delivery){const value=key in overrides?overrides[key]:baseline[key]; if(value===undefined)delete fixture[key]; else fixture[key]=value;}
+    try{await run();}finally{for(const key of delivery){const value=baseline[key]; if(value===undefined)delete fixture[key]; else fixture[key]=value;}}
+  };
+  Deno.test("invitation dispatch: disabled, unknown and mismatched delivery modes never reach Auth", async () => {
+    const off:[string,Record<string,string|undefined>][]=[
+      ["unset",{}],
+      ["unknown mode",{...hosted,MERCURIUS_INVITATION_MODE:"production"}],
+      ["local-test against a hosted project",{MERCURIUS_INVITATION_MODE:"local-test",SUPABASE_URL:hosted.SUPABASE_URL}],
+      ["local-test with a hosted site",{MERCURIUS_INVITATION_MODE:"local-test",SITE_URL:hosted.SITE_URL}],
+      ["hosted without a project pin",{...hosted,MERCURIUS_INVITATION_PROJECT_REF:undefined}],
+      ["hosted without a site pin",{...hosted,MERCURIUS_INVITATION_SITE_ORIGIN:undefined}],
+      ["hosted against another project",{...hosted,SUPABASE_URL:"https://otherref000000000001.supabase.co"}],
+      ["hosted with a malformed pin",{...hosted,MERCURIUS_INVITATION_PROJECT_REF:"synthetic-ref",SUPABASE_URL:"https://synthetic-ref.supabase.co"}],
+      ["hosted on a nonstandard project port",{...hosted,SUPABASE_URL:`https://${hostedRef}.supabase.co:8443`}],
+      ["hosted over HTTP",{...hosted,SUPABASE_URL:`http://${hostedRef}.supabase.co`}],
+      ["hosted through a custom Auth domain",{...hosted,SUPABASE_URL:"https://auth.example.test"}],
+      ["hosted against a local stack",{...hosted,SUPABASE_URL:"http://127.0.0.1:55421"}],
+      ["hosted with a preview site",{...hosted,SITE_URL:"https://preview.example.test"}],
+      ["hosted with an HTTP site",{...hosted,SITE_URL:"http://app.example.test",MERCURIUS_INVITATION_SITE_ORIGIN:"http://app.example.test"}],
+      ["hosted with a site path",{...hosted,SITE_URL:"https://app.example.test/portal"}],
+      ["hosted with a site query",{...hosted,SITE_URL:"https://app.example.test/?next=https://attacker.invalid"}],
+      ["hosted with a site port",{...hosted,SITE_URL:"https://app.example.test:8443",MERCURIUS_INVITATION_SITE_ORIGIN:"https://app.example.test:8443"}],
+      ["hosted with a pin that is not an origin",{...hosted,MERCURIUS_INVITATION_SITE_ORIGIN:"https://app.example.test/"}],
+      ["hosted with a loopback site",{...hosted,SITE_URL:"https://localhost",MERCURIUS_INVITATION_SITE_ORIGIN:"https://localhost"}],
+      ["hosted with an IP site",{...hosted,SITE_URL:"https://203.0.113.7",MERCURIUS_INVITATION_SITE_ORIGIN:"https://203.0.113.7"}],
+    ];
+    for(const [label,overrides] of off) await withDelivery(overrides,async()=>{
+      calls=[]; unexpected=[]; route=undefined;
+      const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+      if(response.status!==503)throw new Error(`${label}: expected 503, got ${response.status}`);
+      equal(await response.json(),{error:"INVITATION_DELIVERY_DISABLED",emailed:false});
+      if(calls.length)throw new Error(`${label}: reached ${calls.join(", ")}`);
+    });
+  });
+  Deno.test("invitation dispatch: pinned hosted mode redirects to the pinned site and records the receipt", async () => {
+    await withDelivery(hosted,async()=>{
+      calls=[]; unexpected=[]; const order:string[]=[];
+      route=(url,init)=>{
+        const auth=operatorRoute(url); if(auth)return auth;
+        if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation"){order.push("claim");return json({claimed:true,recipient_email:"recipient@example.invalid"});}
+        if(url.pathname==="/auth/v1/invite"){
+          order.push("invite"); const sent=JSON.parse(String(init?.body));
+          equal(sent.email,"recipient@example.invalid"); equal(sent.data,{invitation_attempt:attempt});
+          equal(url.searchParams.get("redirect_to"),`https://app.example.test/set-password?invitation=${attempt}`);
+          return json({user:{id:recipient}});
+        }
+        if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation"){order.push("receipt");equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_auth_user:recipient,p_actor:operator});return json(null);}
+      };
+      const response=await request({action:"send",attempt_id:attempt,email:"attacker@example.invalid",origin:"https://attacker.invalid",redirect_to:"https://attacker.invalid/set-password"},{Authorization:"Bearer synthetic-user-token"});
+      equal(response.status,200); equal(await response.json(),{attempt_id:attempt,status:"provider_accepted",delivered:false,activated:false});
+      equal(order,["claim","invite","receipt"]);
+    });
+  });
+  Deno.test("invitation dispatch: hosted mode keeps the refusal and unknown contracts", async () => {
+    const replies:[()=>Response,string,string[]][]=[
+      [()=>json({code:422,error_code:"email_exists",msg:"synthetic"},422),"failed",["refuse"]],
+      [()=>{throw new Error("Synthetic lost hosted response");},"unknown",["unknown"]],
+    ];
+    for(const [reply,expected,writes] of replies) await withDelivery(hosted,async()=>{
+      calls=[]; unexpected=[]; const order:string[]=[];
+      route=(url,init)=>{
+        const auth=operatorRoute(url); if(auth)return auth;
+        if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
+        if(url.pathname==="/auth/v1/invite"){order.push("invite");return reply();}
+        if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");return json(null);}
+        if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation"){order.push("unknown");equal(JSON.parse(String(init?.body)).p_auth_user,null);return json(null);}
+      };
+      const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+      equal(response.status,409); equal((await response.json()).status,expected); equal(order,["invite",...writes]);
+    });
   });
   Deno.test("invitation dispatch: reserves first, uses snapshot recipient, and cannot resend", async () => {
     calls=[]; unexpected=[]; fixture.MERCURIUS_INVITATION_MODE="local-test";
@@ -256,7 +325,10 @@ if (name === "vendor-invite") {
       const auth=operatorRoute(url); if(auth)return auth;
       if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation") {order.push("claim"); const first=!claimed; claimed=true; return json({claimed:first,recipient_email:"recipient@example.invalid",status:"submitted"});}
       if(url.pathname==="/auth/v1/invite") {
-        order.push("invite"); equal(JSON.parse(String(init?.body)).email,"recipient@example.invalid");
+        order.push("invite"); const sent=JSON.parse(String(init?.body));
+        equal(sent.email,"recipient@example.invalid");
+        // The template builds the recipient link from Site URL plus this attempt.
+        equal(sent.data,{invitation_attempt:attempt});
         equal(url.searchParams.get("redirect_to"),`http://localhost:3000/set-password?invitation=${attempt}`);
         return json({user:{id:recipient}});
       }

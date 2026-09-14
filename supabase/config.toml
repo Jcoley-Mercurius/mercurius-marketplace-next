@@ -14,6 +14,24 @@ port = 55423
 [local_smtp]
 port = 55424
 
+# TRACE-071. Local mirror of the hosted provider-invitation settings; every other
+# Auth setting keeps the CLI default. site_url is what the invitation template builds
+# the recipient's link from, so it must be the site itself. The allowlist entry covers
+# the redirect the handler still passes, which no reviewed template renders today.
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/set-password?invitation=*"]
+
+# Owner decision 2026-09-13: provider onboarding needs longer than the 1-hour default
+# to set a password. 3 hours. This is the email link lifetime, not the operator-entered
+# invitation expiry.
+[auth.email]
+otp_expiry = 10800
+
+[auth.email.template.invite]
+subject = "Set up your Mercurius provider account"
+content_path = "./supabase/templates/provider-invitation.html"
+
 [analytics]
 port = 55427
 

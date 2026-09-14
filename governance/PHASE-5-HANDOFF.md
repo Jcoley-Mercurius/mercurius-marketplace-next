@@ -72,6 +72,14 @@ read-only operator readback and an operator-entered expiry that has no default. 
 PHASE-5-INVITATION-OPERATIONS.md. Hosted delivery, existing-account linking and
 renewal/retention operations remain open gates; nothing here activates a provider.
 
+TRACE-071 lets `vendor-invite` dispatch from a hosted project once the owner arms
+`MERCURIUS_INVITATION_MODE=hosted` with project-ref and site-origin pins that must match
+the running environment, and tracks the invite email template, its 3-hour link lifetime
+and the redirect allowlist. The recipient link is the site's own `/set-password` carrying
+`token_hash`, so mail scanners cannot consume it. See
+PHASE-5-HOSTED-INVITATION-DELIVERY.md. Hosted arming (Resend SMTP, Auth URLs/template,
+secrets, deploy) and hosted acceptance are owner-authorized steps not yet performed.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

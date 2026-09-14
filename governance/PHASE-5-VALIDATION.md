@@ -655,3 +655,71 @@ and command, from `supabase gen types` against the migrated stack.
 
 Not performed: hosted Auth/PostgREST round-trip, real invitations or accounts, manual
 screen-reader review, CI on this branch. Codex code review is the open gate.
+
+## TRACE-071 — Hosted invitation delivery mode — 2026-09-12, revised 2026-09-13
+
+Branch `codex/phase5-hosted-invitation-delivery`, based on `main` `6bdcff3`. Scope,
+decisions and the hosted arming runbook are in PHASE-5-HOSTED-INVITATION-DELIVERY.md.
+No hosted project, secret, Auth setting, deployment or real address was touched. The
+2026-09-13 owner decisions (3-hour email link lifetime, a scanner-proof recipient link,
+MTS environment entries) are implemented and re-verified below.
+
+Edge: `scripts/check-edge.sh` passes for all 11 functions; `scripts/test-edge.sh` passes
+for every function, `vendor-invite` 15 cases. The former "disabled and hosted modes never
+reach Auth" case is rewritten as a table of 20 configurations that must each return
+`503 INVITATION_DELIVERY_DISABLED` with no network call: unset, unknown mode, local-test
+against a hosted project or site, hosted missing either pin, another project, a malformed
+ref, a nonstandard project port, HTTP, a custom Auth domain, a local stack, a preview site,
+an HTTP site, a site path, query or port, a pin with a trailing slash, a loopback site and
+an IP site. Two new cases: pinned hosted mode claims, invites the snapshot recipient with
+redirect `https://<pinned site>/set-password?invitation=<attempt>` and
+`data.invitation_attempt` while ignoring caller `email`/`origin`/`redirect_to`, and records
+the receipt; and hosted mode keeps the `422 email_exists` refusal (recorded failed) and
+lost-response (recorded unknown, no retry) contracts. Both send cases assert the invite
+metadata the template reads. The unchanged local-test cases still pass.
+
+Guard mutation check: each of the 12 conditions in `delivery.ts` (project hostname, site
+origin match, pin-is-origin, loopback, IP literal, site port, ref format, project port,
+path, query, protocol, and the hosted branch itself) was disabled in turn; every mutant
+failed the suite. The first pass left the ref-format, project-port and query guards
+uncovered; cases were added until each mutant failed. The module was restored and compared
+byte-for-byte.
+
+Local Auth round-trips: a separate throwaway stack (Supabase CLI 2.116.0, project
+`mercurius-trace071-auth`, no migrations or data) started from this branch's
+`config.toml` and template; synthetic users were deleted and the stack stopped without a
+backup after each run. Tokens and links were not printed.
+
+1. First design (`{{ .ConfirmationURL }}`, allowlist-dependent): the stack's non-secret
+   GoTrue environment differed from the existing isolated stack only in the invite
+   subject, invite template and allowlist. Four invitations: the allowlisted
+   `/set-password?invitation=<id>` landed intact; a redirect on the Site URL's own host
+   landed intact without an allowlist entry; a non-allowlisted path and a hostile origin
+   both fell back to the Site URL root, dropping the attempt ID.
+2. Template probe: `{{ .RedirectTo }}` is the Auth-validated redirect — the hostile origin
+   was replaced with the Site URL — and `{{ .TokenHash }}` is available. Appending to
+   `{{ .RedirectTo }}` was therefore rejected: the fallback has no query string, so the
+   rendered link was malformed (observed as an invalid URL).
+3. Final design (`{{ .SiteURL }}` + `{{ .Data.invitation_attempt }}` + `{{ .TokenHash }}`):
+   `GOTRUE_MAILER_OTP_EXP=10800` confirmed in the container. Three invitations —
+   allowlisted, non-allowlisted and hostile-origin requested redirects — each produced the
+   same well-formed link to `http://localhost:3000/set-password` carrying the attempt,
+   `type=invite` and a token hash, never Auth's verify URL, so a requested redirect can no
+   longer influence the recipient's link. Every email carried the reviewed subject, no
+   unrendered placeholder or remote asset, the non-activation statement, and the same link
+   in the button and the fallback address. The attempt was stored as invite metadata.
+   Scanner simulation: a GET of the link caused no Auth request and no additional mail;
+   the recipient's `verifyOtp` POST then returned a session with the email confirmed, and
+   an immediate reuse was refused with `otp_expired`.
+
+Application: `npm run scan:secrets`, `npm run lint`, `npm run typecheck`,
+`npm run audit:prod` (0 vulnerabilities) and 84 unit tests (including the Edge function
+contract) pass. No application, migration or browser-facing code changed, so the SQL
+suites, concurrency scripts, build and browser suites were not re-run. `/set-password`
+already handled `token_hash` with `type=invite`, so the new link uses an existing,
+browser-tested path.
+
+Not performed: hosted SMTP/Auth/gateway round-trip, a real invitation or mailbox, the
+hosted refusal contract, a full isolated-stack start from `prepare-phase5-local.mjs` (the
+script was run and copies `supabase/templates`; the same CLI version loaded the template
+in the throwaway stack), CI on this branch. Codex code review is the open gate.
