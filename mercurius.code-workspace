@@ -1,0 +1,22 @@
+{
+  "folders": [
+    {
+      "name": "Mercurius",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/.next/**": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.next": true,
+      "**/coverage": true,
+      "**/playwright-report": true,
+      "**/test-results": true
+    },
+    "typescript.tsdk": "node_modules/typescript/lib"
+  }
+}

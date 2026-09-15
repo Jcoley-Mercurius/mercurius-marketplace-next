@@ -1,0 +1,334 @@
+# Agent handoff — 2026-09-15
+
+Each section carries its own date; the repository checkpoint below was taken on
+2026-09-10 and the latest slice checkpoint is the TRACE-063 forward fix.
+
+## Repository checkpoint
+
+- GitHub checked on 2026-09-10: latest merged PR is [#15, provider compliance operations](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/15), merged 2026-09-08.
+- Synced base: `d815e900b158a5a4283c0aa073f872cc57e1eeb9` (`origin/main`).
+- Working branch: `codex/vscode-system-setup`, rebased 2026-09-15 onto main `0d761f3`
+  (PR #27 merged) and committed for its own PR.
+- Local `main` was fast-forwarded from `94d608a` to the merged base.
+- Recheck `git status --short --branch` and remote state before assuming this snapshot is current.
+
+## Preserved older work
+
+The pre-sync vendor edits, lockfile edits and untracked vendor components/temporary
+compile route are saved in the Git stash named
+`pre-vscode-sync-2026-09-10 vendor WIP at 94d608a`.
+It was `stash@{0}` when created; use `git stash list` to locate it by name later.
+It has not been reapplied over the newer implementation. Inspect/reconcile it in
+an isolated recovery branch based on `94d608a` if those changes are needed.
+Do not drop the stash until its contents have been reviewed. Existing ignored
+local environment files were preserved and have not been validated for runtime use.
+
+## Product checkpoint
+
+PR #15 implements TRACE-062: admin compliance operations, version-bound private
+document review/binding, evidence reuse, and protected provider decisions.
+[The slice report](../../governance/PHASE-5-COMPLIANCE-OPERATIONS.md) defines its
+limits. [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md) and
+[validation](../../governance/PHASE-5-VALIDATION.md) remain the detailed evidence.
+
+Phase 5 is open. Invitation/Auth provisioning, delivery/acceptance receipts,
+renewal/retention operations, tax/promotions, recurring automation, finance
+operations and authorized integration/manual acceptance remain follow-ups.
+Phase 6 has not started according to the combined roadmap. Merged code is not
+production activation or blanket phase acceptance.
+
+## This slice
+
+Bring the merged system into this local folder and provide a portable VS Code
+workspace, tasks, concise system map and agent entry points. No product rules,
+application code, database migrations or provider configuration are changed by
+the editor setup additions.
+
+Next: choose one remaining Phase 5 item from the governing handoff and inspect
+its existing contracts before implementation. Do not treat historical checklists
+as current branch/merge status; reconcile them with the latest slice evidence.
+
+## Local verification
+
+- Workspace/extension/task JSON parses; every task maps to an existing npm script.
+- Relative links in the agent guide/handoff resolve; `git diff --check` passes.
+- `npm ci --cache /tmp/mercurius-npm-cache --no-audit --no-fund` passed.
+- `npm run scan:secrets`, `npm run lint`, and the current-source `npm run typecheck` passed.
+- `npm run test:unit` passed: 7 test files, 84 tests.
+- Initial TypeScript check found stale `.next/dev/types` referencing the stashed
+  temporary route. Generated type directories were archived under
+  `/tmp/mercurius-pre-sync-next-ibnyrxp_`; the original build cache remains.
+  A partial full-cache copy also remains in that temporary directory.
+- No dev server, browser verification, database tests, production build or external
+  integration acceptance was performed for this documentation/editor slice.
+
+## Current slice — TRACE-064 (2026-09-10, awaiting Codex review)
+
+- Branch `codex/phase5-dependency-security` at `ce5527b`, base `d815e90`, worktree
+  `../mercurius-dependency-security`. PR #17 open; final-head CI passed all three jobs.
+- The fix was merged into PR #16's branch (`23f1150`, owner request 2026-09-11);
+  append-only governance conflicts kept both TRACE-063 and TRACE-064. PR #16
+  final-head CI (run 34561827113) passed all three jobs.
+- 2026-09-11 16:29 UTC: owner merged PR #16 (main `5a3bffe`, tree identical to
+  `23f1150`); PR #17 closed as merged because its commit was already included.
+  Governance text written before the merge still says "draft PR #16" / "must
+  incorporate"; refresh it in the next slice.
+- TRACE-065 (start onboarding review) has since been implemented; see its own
+  section below.
+- Why: post-merge advisories (critical Next.js) fail the unchanged `audit:prod`
+  CI gate on main and on draft PR #16 (TRACE-063 invitations, head `65198f1`).
+- Change: next/eslint-config-next 16.3.0 → 16.3.4; lockfile-only sharp 0.35.4,
+  js-yaml 4.3.2, hono 4.13.7. No app, schema, Edge or configuration change.
+- Evidence: `governance/PHASE-5-DEPENDENCY-SECURITY.md` and the TRACE-064 section of
+  `governance/PHASE-5-VALIDATION.md`.
+- Open: post-merge Codex review of TRACE-063/064; shadcn dependency-classification
+  decision. Merging is not phase acceptance or production activation.
+- Next: see the TRACE-065 section below.
+
+## Current slice — TRACE-065 (2026-09-12, awaiting Codex code review)
+
+- Branch `codex/phase5-onboarding-intake` at `b2dadf2`, base main `5a3bffe`, worktree
+  `../mercurius-onboarding-intake`. PR #18 converted from the design proposal to the
+  implementation PR and marked ready for review.
+- Owner authorized implementation without waiting for a separate Codex design
+  confirmation; both 2026-09-11 Codex design corrections are implemented as written,
+  so Codex review of this slice is a code review.
+- Change: migration `20260911001000` adds the private, immutable
+  `vendor_onboarding_review_starts` request table and the creation-only
+  `vendor_start_onboarding_review`, plus operator-only
+  `vendor_onboarding_intake_status` readback. The Applications queue replaces the
+  disabled legacy approve action with a reason-required ConfirmAction gated on server
+  readback. No Auth user, role, email, invitation, evidence, activation or public
+  listing results from the command.
+- Evidence: `governance/PHASE-5-ONBOARDING-INTAKE.md` and the TRACE-065 section of
+  `governance/PHASE-5-VALIDATION.md`. Locally: 582 SQL assertions across 23 suites
+  (64 new), new different-key/same-key start concurrency script wired into CI, clean
+  reset and replay, 84 unit tests, 58-page build, 79 browser cases (5 new).
+- Final-head CI on `b2dadf2` (run 34693678032) passed all three jobs, including the
+  new onboarding concurrency step. The earlier red checks on PR #18 are the
+  push-triggered run cancelled by the workflow's concurrency group.
+- Open: Codex code review of PR #18; decision on applications with
+  no intake version (fail closed today, no backfill invented); pre-existing
+  dark-theme contrast defect in the Applications table; default contractor columns at
+  activation. Merging is not phase acceptance or production activation.
+- Next: invitation operator UI (operator-entered expiry, no default), then
+  existing-account linking.
+
+## Current slice — TRACE-066 (2026-09-12, awaiting Codex code review)
+
+- Branch `codex/phase5-invitation-operations` at `2540744`, base main `f47ac84`,
+  worktree `../mercurius-invitation-operations`. **Merged as PR #19 on 2026-09-12
+  (main `717877d`).** The "not pushed" and "awaiting review" wording below predates
+  that merge.
+- PR #18 merged on 2026-09-12 (main `f47ac84`), so TRACE-065 is in and this slice
+  builds on it rather than on `b2dadf2`.
+- Change: migration `20260912001000` adds the read-only, operator-only
+  `vendor_invitation_overview` readback. The Applications dialog gains a Provider
+  invitation panel wiring the existing `vendor-invite` prepare/send/reconcile/close
+  commands, each behind ConfirmAction and each confirmed by re-reading the server.
+  Invitation expiry is operator-entered with no default, and the preparation key is
+  derived from it so a retry replays. The blocked legacy resend/sync controls are
+  removed; the recovered invite columns stay as labelled history. No transport,
+  Edge, environment or delivery-mode change; dispatch stays disabled by default.
+- Evidence: `governance/PHASE-5-INVITATION-OPERATIONS.md` and the TRACE-066 section
+  of `governance/PHASE-5-VALIDATION.md`. Locally: 626 SQL assertions across 24
+  suites (44 new), all four concurrency scripts unchanged and passing, clean reset
+  and replay, 84 unit tests, 58-page build, 90 browser cases (11 new), zero audit
+  findings.
+- Second commit `2540744` fixes a 320px reflow defect this slice surfaced and
+  corrects an earlier misdiagnosis of it. `DialogContent`'s single grid track was
+  `auto`, so the `datetime-local` control's 271px intrinsic minimum widened the
+  whole dialog; the track is now `minmax(0,1fr)`. It is not the `DialogFooter`
+  bleed first blamed — `offsetWidth` equals `clientWidth`, so no scrollbar is
+  involved. Shared primitive, so every dialog is affected; all 90 browser cases
+  pass. Edge gates now run locally on pinned Deno 2.9.6 (installed at
+  `~/.deno/bin`): 11 functions type-check clean, 44 handler tests pass.
+- Pushed as PR #19. Final-head CI on `2540744` (run 34699048634) passed all three
+  jobs; the red checks on the PR are the push-triggered run cancelled by the
+  workflow's concurrency group. CodeRabbit produced only a free-plan summary, not a
+  line-by-line review, so it is not review evidence.
+- Open: Codex code review. The TRACE-065 dark-theme contrast defect in
+  the queue table is unchanged. The `@visual` suite has no Linux baselines (only
+  `-win32` is tracked), so it cannot compare here; adopting baselines is a separate
+  decision. Merging is not phase acceptance or production activation.
+- Next: TRACE-067, implemented below.
+
+## Current slice — TRACE-067 (2026-09-12, implemented, unpushed)
+
+- Branch `codex/phase5-account-linking` at `105a64e`, base main `717877d`, worktree
+  `../mercurius-account-linking`. **Merged as PR #20 on 2026-09-12 (main `8f4ca0d`).**
+- Owner instruction 2026-09-12: implement the next Phase 5 slice; Codex reviews after
+  the phase or on request rather than gating the design. The four design decisions are
+  recorded in the slice report for review, not presented as pre-approved.
+- Change: migration `20260912002000` adds the immutable `vendor_account_link_decisions`
+  log, the reviewed `vendor_link_existing_account` and `vendor_release_linked_account`
+  commands, the operator-only `vendor_account_link_overview` readback, and a partial
+  unique index on `contractors(user_id)`. The identity is verified by ID against the
+  recipient in the bound application snapshot; no email directory is searched anywhere
+  in the slice. The legacy `admin_link_contractor_to_user` / `admin_unlink_contractor`
+  lose their `authenticated` grant and fail closed, and the ungated vendor-detail card
+  is replaced by the reviewed panel, mounted there and in the Applications dialog.
+- Linking grants no role, accepts no evidence, activates no provider and lists nothing.
+- Evidence: `governance/PHASE-5-ACCOUNT-LINKING.md` and the TRACE-067 section of
+  `governance/PHASE-5-VALIDATION.md`. Locally: 704 SQL assertions across 25 suites
+  (78 new), a new three-race concurrency script wired into CI, clean reset and replay,
+  84 unit tests, 58-page build, 103 browser cases (13 new), 0 audit findings, Edge
+  gates unchanged.
+- Open: **activation grants no vendor role** — `vendor_decide_onboarding('activate')`
+  never inserted one, and removing the legacy grant makes that the only path, so a
+  linked and activated provider still has no vendor access. It needs its own slice and
+  is the next blocking question for provider access. The TRACE-065 dark-theme contrast
+  defect is unchanged. Codex code review is open.
+- Next: the vendor role grant at activation.
+
+## Current slice — TRACE-068 (2026-09-12, PR #21 open)
+
+- Branch `codex/phase5-activation-role` at `51a9fcc`, base main `8f4ca0d`, worktree
+  `../mercurius-activation-role`. PR #21 open; pull-request CI run 34718397577 passed
+  all three jobs (the red push run 34718383193 was cancelled by the concurrency group).
+- Owner relayed Codex's go-ahead. Owner answered two semantics questions: a provider
+  with no reviewed account activates without a grant; suspension keeps the role.
+- Change: migration `20260912003000` makes `vendor_decide_onboarding('activate')` grant
+  `vendor` to the live reviewed link after re-proving it (refuses a changed/unconfirmed
+  binding), records every outcome in immutable `vendor_role_decisions`, and makes
+  `vendor_release_linked_account` withdraw only an activation-owned grant. Account panel
+  reports the role state. Forward-fixes TRACE-067 live-link ordering (identity column).
+- Evidence: `governance/PHASE-5-ACTIVATION-ROLE.md` and the TRACE-068 section of
+  `governance/PHASE-5-VALIDATION.md`. Locally: 753 SQL assertions across 26 suites (49
+  new), new concurrency script wired into CI, clean reset and replay, 84 unit tests,
+  58-page build, 107 browser cases (4 new), 0 audit findings, Edge gates unchanged.
+- Open: Codex code review; rejection-after-activation keeps the role (owner decision);
+  invitation-path providers get no portal access until accepted invitations are bound;
+  account deletion vs. role audit rows; final-head CI.
+- Next: see TRACE-069 below.
+
+## Current slice — TRACE-069 (2026-09-12, draft PR #22, stacked on #21)
+
+- Branch `codex/phase5-onboarding-decisions` at `20f0a4c`, based on TRACE-068 `51a9fcc`,
+  worktree `../mercurius-onboarding-decisions`. Draft PR #22 targets
+  `codex/phase5-activation-role`; retarget to `main` after #21 merges.
+- Owner decision 2026-09-12: license/insurance are recorded against a reviewed
+  application document with an operator-entered expiry (the workbench's scoped binding
+  needs packages, which exist only after activation).
+- Change: migration `20260912004000` adds read-only `vendor_onboarding_checklist`,
+  idempotent `vendor_record_checklist_evidence` with an immutable request log, and
+  revokes client execute on the raw `vendor_record_evidence`. New "Activation checklist"
+  panel (Applications dialog and vendor detail) records evidence and runs
+  activate/suspend/renew/reject behind readback-gated ConfirmAction.
+- Evidence: `governance/PHASE-5-ONBOARDING-CHECKLIST.md` and the TRACE-069 section of
+  `PHASE-5-VALIDATION.md`. Locally: 811 SQL assertions across 27 suites (58 new), new
+  concurrency script in CI, clean reset and replay, 84 unit tests, 58-page build, 121
+  browser cases (14 new), 0 audit findings.
+- Open: Codex review of #21 and #22; CI on #22; document sufficiency; structured
+  evidence references (owner decision); rejection-after-activation role policy.
+- Next: bind accepted invitations to the provider under review, so invited providers
+  receive the vendor role at activation.
+
+## Current slice — TRACE-070 (2026-09-12, PR #24 open)
+
+- Branch `codex/phase5-invitation-binding` at `126fec1`, based on `20f0a4c` (TRACE-069),
+  worktree `../mercurius-invitation-binding`. PR #24 targets `main`.
+- **TRACE-069 landed:** PR #23 (only `20f0a4c`, CI run 34725307231 green) merged to
+  `main` as `14f82fe` on 2026-09-12. PR #24 now differs from `main` only by `126fec1`;
+  its pull-request CI run 34726679013 passed all three jobs (red run 34726598257 is the
+  cancelled push run). **Merging #24 was refused by the agent permission classifier
+  (merge without review) and awaits the owner or Codex review.**
+- GitHub cleanup 2026-09-12: 21 remote `codex/*` branches fully contained in `main` were
+  deleted, including the stale `codex/phase5-activation-role` (content identical to
+  `main`). Kept: `codex/phase5-invitation-binding` (PR #24) and the non-codex
+  `v0/*` and `coderabbit/*` branches, which are merged but were created by other tools.
+  Local worktrees and their local branches are untouched.
+- Change: `vendor_bind_invited_account` binds the account named by the acceptance receipt
+  as a reviewed link, so activation grants invited providers `vendor` unchanged.
+  Recovery fix (owner direction): re-inviting a recipient who already accepted would
+  wedge an unreconcilable, unclosable `unknown` attempt; prepare and claim now refuse it
+  and the panels direct the operator to link by account ID.
+- Evidence: `governance/PHASE-5-INVITATION-BINDING.md` and the TRACE-070 section of
+  `PHASE-5-VALIDATION.md`. Locally: 883 SQL assertions across 28 suites (72 new), all
+  eight concurrency scripts in CI order, clean reset and replay, 84 unit tests, 58-page
+  build, 134 browser cases (13 new), 0 audit findings.
+- Open: merge #24 after review; general Auth-refusal `unknown` wedge (TRACE-063)
+  for addresses with an account outside this provider's receipts; rejection-after-
+  activation role policy; account deletion vs role/link audit rows.
+- Next: fix the TRACE-063 Auth-refusal wedge (definitive refusals recordable as failed
+  and closable). Done on `codex/phase5-auth-refusal`; see below.
+
+## Current slice — TRACE-063 forward fix (2026-09-12, awaiting review)
+
+- Branch `codex/phase5-auth-refusal`, base `main` `26900eb` (PR #24 merged), worktree
+  `../mercurius-auth-refusal`. Commit `97a423e`; PR #25 open; pull-request CI run 34731584926 passed all three jobs (red run 34731571398 is the cancelled push run).
+- Change: migration `20260912006000` records Auth's definite `422 email_exists` refusal as a
+  terminal `failed` attempt through service-only `vendor_refuse_invitation` (handler report
+  on a started reservation, or an account read back by ID that held the address, confirmed,
+  before dispatch). Edge `send` refusal branch and `refuse` action; panel explains refusals
+  and offers "Record Auth refusal" for unknown attempts. Recovery is linking the existing
+  account by ID.
+- Evidence: `governance/PHASE-5-INVITATION-REFUSAL.md` and the forward-fix section of
+  `PHASE-5-VALIDATION.md`. Locally: 936 SQL assertions across 29 suites (53 new), new
+  concurrency script in CI, all nine scripts in CI order, clean reset and replay, 13
+  `vendor-invite` Edge cases (4 new), real handler round-trip against local Auth, 84 unit
+  tests, 58-page build, 139 browser cases (5 new), 0 audit findings.
+- **Merged as PR #25** (main `6bdcff3`); see TRACE-071 below.
+- Open: commit/PR and CI; Codex review; hosted refusal contract; owner question on
+  re-inviting unconfirmed existing accounts; rejection-after-activation role policy;
+  account deletion vs audit rows.
+
+## Current slice — TRACE-071 hosted invitation delivery (2026-09-12, revised 2026-09-13, uncommitted)
+
+- Branch `codex/phase5-hosted-invitation-delivery`, base main `6bdcff3`, worktree
+  `../mercurius-hosted-invitation-delivery`. Not committed or pushed.
+- Change: `vendor-invite` gains a `hosted` delivery mode (`delivery.ts`) that dispatches
+  only when `MERCURIUS_INVITATION_PROJECT_REF` and `MERCURIUS_INVITATION_SITE_ORIGIN`
+  match `SUPABASE_URL` and `SITE_URL`; anything else stays `INVITATION_DELIVERY_DISABLED`.
+  Tracked invite template `supabase/templates/provider-invitation.html`; local
+  `config.toml` mirrors the subject/template/expiry/allowlist; hosted arming runbook. No
+  migration, app, product-rule, hosted secret, Auth setting or deployment change.
+- Owner decisions 2026-09-13, implemented: Auth email-link lifetime 3 hours
+  (`otp_expiry = 10800`); the recipient link is the site's own `/set-password` with
+  `token_hash` and the attempt passed as invite metadata, which `/set-password` verifies
+  by POST so a mail scanner's GET cannot burn it; MTS §9 lists the three invitation
+  variables. Hosted Resend/SMTP setup is owner work, deliberately not attempted.
+- Findings: earlier local round-trips never had the invitation redirect on the allowlist
+  (Auth falls back to the Site URL root and drops the attempt ID); and appending to
+  `{{ .RedirectTo }}` renders a malformed link on that fallback, which is why the link is
+  built from `{{ .SiteURL }}` plus invite metadata.
+- Evidence: `governance/PHASE-5-HOSTED-INVITATION-DELIVERY.md`, TRACE-071 section of
+  `PHASE-5-VALIDATION.md`. 15 `vendor-invite` Edge cases (20-config disabled table, hosted
+  dispatch with invite metadata, hosted refusal/unknown), all 12 guard mutants killed,
+  three local Auth/mail-sink round-trips (including the scanner GET that consumes no
+  token and a refused reuse), lint/types/secrets/audit and 84 unit tests. SQL, build and
+  browser suites not re-run (no code in their scope changed).
+- Open: owner-authorized hosted arming and acceptance (Resend SMTP, Auth URLs/template/
+  expiry, secrets, deploy, one invitation to an owner mailbox), tracked as owner work;
+  whether operators need a reviewed reissue command when a link outlives its 3 hours;
+  Codex review; commit/PR/CI. Owner asked to hold the commit until these updates landed.
+- **Merged as PR #26** (main `d307ba0`); the "not committed" wording above predates that.
+
+## Current slice — TRACE-072 compliance expiry (2026-09-13, merged as PR #27)
+
+- Branch `codex/phase5-evidence-renewal`, base main `d307ba0`, worktree
+  `../mercurius-evidence-renewal`. PR #27 at `f57d46d` (`b5355f5` slice, `f57d46d`
+  payout forward fix). **Merged 2026-09-14 (main `0d761f3`).**
+- Owner decisions 2026-09-13: 30-day notice; a lapse flags only (no status change);
+  lapsed qualifications remove matching but do not hold payouts (lapsed payout onboarding
+  and suspension still hold; migration `20260913002000`, `private.vendor_payout_eligible`);
+  renewed-document upload outside the application is the next slice.
+- Change: migration `20260913001000` adds read-only `vendor_evidence_renewal_queue`
+  (operator), `vendor_own_evidence_renewal` (vendor; item/expiry/state only) and checklist
+  `renewal_due`. New `/admin/compliance/renewals` queue, "Renewal due" checklist badge,
+  vendor-portal notice. No write command, table or scheduler.
+- Evidence: `governance/PHASE-5-EVIDENCE-RENEWAL.md` and the TRACE-072 section of
+  `PHASE-5-VALIDATION.md`. 987 SQL assertions across 30 suites (51 new; window mutant
+  killed; payout cases fail without the fix), clean reset/replay, all nine concurrency
+  scripts, 95 unit tests (11 new), 59-page build, 152 browser cases (one unrelated
+  `mds.spec.ts` Escape/focus flake, passed 3/3 on rerun), lint/types/secrets, 0 audit.
+- Open: Codex review.
+- Next: private renewal-document upload bound to the provider.
+
+## Workflow update — 2026-09-10
+
+Owner assigned Codex architecture and code review, with Claude implementing the
+slices. The managed Next.js block now lives in `CLAUDE.md`; its `@AGENTS.md` import
+preserves shared Mercurius authority. The installed Next.js generator recognizes
+this placement and retains the block there. Shared role instructions and the agent
+guide reflect this workflow.

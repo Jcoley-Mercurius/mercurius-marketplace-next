@@ -4,6 +4,10 @@ Mercurius is an owner-operated, managed home-services marketplace for Lee County
 
 The repository is undergoing an evidence-driven rebuild. Do not treat inherited behavior as approved product truth.
 
+## Work with the agent in VS Code
+
+Open `mercurius.code-workspace`, then start with the [agent workspace guide](./docs/agent/README.md) and [current handoff](./docs/agent/HANDOFF.md). The workspace includes development and quality tasks; all approved system documents retain their existing paths.
+
 ## Governing documents
 
 Read these before changing product behavior or architecture:
