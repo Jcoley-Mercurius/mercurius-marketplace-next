@@ -52,3 +52,9 @@ Phase 5 IDs start at 050 to avoid the unmerged Phase 4 traceability range.
 See PHASE-5-HANDOFF.md for acceptance gates and dependencies. No Phase 5 phase-complete claim.
 
 Status values: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `COMPLETE`, `DEPRECATED`.
+
+## Developer workspace
+
+| ID | Requirement | Implementation | Acceptance evidence | Status |
+|---|---|---|---|---|
+| DEV-001 | Bring the approved Mercurius system into the local VS Code agent workflow (owner request 2026-09-10; MTS delivery architecture) | `mercurius.code-workspace`, `.vscode/`, `docs/agent/`, AGENTS/README entry points; base synced to PR #27 (main `0d761f3`) | `docs/agent/HANDOFF.md`; workspace JSON, npm script references, local documentation links and whitespace checks | COMPLETE |

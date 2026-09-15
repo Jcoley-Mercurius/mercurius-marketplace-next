@@ -1,13 +1,3 @@
-<!-- BEGIN:nextjs-agent-rules -->
-
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
-
 # Mercurius implementation authority
 
 This is an inherited production-intent marketplace. Repository behavior is evidence; it is not permission to redefine the product.
@@ -22,6 +12,23 @@ Read these authorities before implementation work:
 6. `roadmap/MERCURIUS-REBUILD-ROADMAP.md`
 
 Authority order is **MPS → MDS → MTS → implementation evidence**. When files conflict, stop and record the conflict; do not silently choose whichever existing code path is easiest.
+
+## Architecture, implementation, and review
+
+- Codex is the lead architect and code reviewer: define bounded slices, identify
+  governing requirements and acceptance criteria, and review implementation diffs
+  and verification evidence.
+- Claude implements the slices: follow the agreed scope, update code and relevant
+  tests/documentation, and return a reviewable diff with exact verification results
+  and unresolved issues.
+- Claude-specific implementation guidance, including the managed Next.js rules,
+  lives in `CLAUDE.md`, which imports this shared authority file.
+- Before reviewing Next.js code, Codex also reads the framework guidance in
+  `CLAUDE.md` and the relevant installed Next.js documentation.
+- Keep implementation and review tied to the same roadmap slice and traceability
+  entry. Record findings and fixes without treating review as phase acceptance or
+  production activation.
+- The owner's explicit task instructions may adjust this division of work.
 
 ## Required working behavior
 
@@ -45,3 +52,14 @@ Authority order is **MPS → MDS → MTS → implementation evidence**. When fil
 - Customer payment: customers pay Mercurius; Mercurius remits provider proceeds.
 - Provider payout: weekly direct ACH, eligible 48 hours after homeowner-confirmed completion; disputes held; no Stripe Connect payout design.
 - Full policy details live in `governance/CONFIGURATION-DECISIONS.md`.
+
+## Agent workspace navigation
+
+- Start with `docs/agent/README.md` for the folder map and local workflow, and
+  `docs/agent/HANDOFF.md` for the dated checkpoint. Verify branch/status before edits.
+- The navigation docs do not supersede the six authorities above or their gates.
+- After reading the authorities, load only the slice-specific implementation and
+  evidence needed. Search targeted directories; avoid bulk-loading historical
+  audits, generated schema, lockfiles, or vendored skills without a concrete need.
+- Keep the handoff concise: base commit, bounded scope, evidence, unresolved gates,
+  and next action. Do not duplicate product policy into session notes.

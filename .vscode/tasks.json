@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Mercurius: dev",
+      "type": "npm",
+      "script": "dev",
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "Mercurius: lint",
+      "type": "npm",
+      "script": "lint",
+      "problemMatcher": []
+    },
+    {
+      "label": "Mercurius: typecheck",
+      "type": "npm",
+      "script": "typecheck",
+      "problemMatcher": []
+    },
+    {
+      "label": "Mercurius: test:unit",
+      "type": "npm",
+      "script": "test:unit",
+      "problemMatcher": []
+    },
+    {
+      "label": "Mercurius: scan:secrets",
+      "type": "npm",
+      "script": "scan:secrets",
+      "problemMatcher": []
+    },
+    {
+      "label": "Mercurius: build",
+      "type": "npm",
+      "script": "build",
+      "problemMatcher": [],
+      "options": {
+        "env": {
+          "MERCURIUS_BUILD_WORKERS": "1"
+        }
+      }
+    },
+    {
+      "label": "Mercurius: check",
+      "type": "npm",
+      "script": "check",
+      "problemMatcher": [],
+      "options": {
+        "env": {
+          "MERCURIUS_BUILD_WORKERS": "1"
+        }
+      }
+    }
+  ]
+}
