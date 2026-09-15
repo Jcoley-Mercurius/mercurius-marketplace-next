@@ -40,6 +40,8 @@ export function VendorEvidenceRenewalNotice() {
   const lapsed = notice.items.some((item) => item.state === "lapsed");
   // Owner decision 2026-09-13: only lapsed payout onboarding holds payouts.
   const payoutHeld = notice.items.some((item) => item.state === "lapsed" && item.kind === "bank_authorization");
+  // TRACE-073: license and insurance renewals can be uploaded in the portal.
+  const uploadable = notice.items.some((item) => item.kind === "license" || item.kind === "insurance");
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6 md:px-8">
@@ -68,14 +70,21 @@ export function VendorEvidenceRenewalNotice() {
               </ul>
               <p className="text-xs leading-5 text-foreground">
                 {lapsed
-                  ? `While required evidence has lapsed, Mercurius cannot send you new job requests.${payoutHeld ? " Payouts are held until your payout onboarding is renewed." : ""} Send your renewed documents to Mercurius.`
-                  : "Send your renewed documents to Mercurius before they expire to keep receiving new job requests."}
+                  ? `While required evidence has lapsed, Mercurius cannot send you new job requests.${payoutHeld ? " Payouts are held until your payout onboarding is renewed." : ""} ${uploadable ? "Upload your renewed documents for review." : "Send your renewed documents to Mercurius."}`
+                  : `${uploadable ? "Upload your renewed documents" : "Send your renewed documents to Mercurius"} before they expire to keep receiving new job requests.`}
               </p>
             </div>
           </div>
-          <Link href="/contact" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full shrink-0 bg-background sm:w-auto")}>
-            Contact Mercurius
-          </Link>
+          <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto">
+            {uploadable && (
+              <Link href="/vendor/compliance" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full bg-background sm:w-auto")}>
+                Upload renewed documents
+              </Link>
+            )}
+            <Link href="/contact" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full bg-background sm:w-auto")}>
+              Contact Mercurius
+            </Link>
+          </div>
         </div>
       </section>
     </div>

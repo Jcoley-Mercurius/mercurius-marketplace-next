@@ -87,6 +87,15 @@ decisions 2026-09-13); a lapsed provider leaves matching, but payouts are held o
 payout onboarding lapses (forward fix `20260913002000`, owner decision 2026-09-13). Renewed documents
 arriving outside the application are the next slice. See PHASE-5-EVIDENCE-RENEWAL.md.
 
+TRACE-073 lets a provider (vendor portal) or an operator (on the provider's behalf) submit a
+renewed license or insurance document bound to the provider rather than the application.
+The database verifies the stored object and caps undecided submissions; an operator
+accepts one by recording it as checklist evidence, or declines it with a note the provider
+sees. No application revision, re-review, status or role change follows. The slice also
+removes the legacy policy that let anyone upload into the private bucket (owner decisions
+2026-09-15). File retention and malware scanning remain gates. See
+PHASE-5-RENEWAL-DOCUMENTS.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

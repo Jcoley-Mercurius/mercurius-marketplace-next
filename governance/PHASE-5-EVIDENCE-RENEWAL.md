@@ -124,8 +124,8 @@ table, write command, trigger or scheduler. Item 6 is the payout forward fix.
 - **Payout hold for other non-current states.** Decision 4 names lapses. A provider whose
   application was superseded or closed is no longer `active`-on-current-version and stays
   held, as before; confirm if that should change.
-- **Next slice — renewal documents.** A private renewal-document channel bound to the
-  provider, not the application, so a renewed certificate does not trigger re-review.
+- **Renewal documents** — implemented as TRACE-073 (PHASE-5-RENEWAL-DOCUMENTS.md): a
+  private channel bound to the provider, so a renewed certificate does not trigger re-review.
 - Codex code review; hosted PostgREST round-trip; CI on the final head.
 - No automated reminder email or scheduler (MPS §10 notification contract).
 - Public trust wording (MPS §6.7 badges) is marketing copy, not per-provider badges; no

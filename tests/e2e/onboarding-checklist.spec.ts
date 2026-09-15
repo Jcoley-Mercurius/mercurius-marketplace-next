@@ -72,7 +72,7 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
 test("license evidence is an application document with a required expiry", async ({ page }) => {
   const dialog = await openChecklist(page);
   await dialog.getByLabel("Checklist item (required)", { exact: true }).selectOption("license");
-  const document = dialog.getByLabel("Application document (required)", { exact: true });
+  const document = dialog.getByLabel("Document (required)", { exact: true });
   await expect(document.locator("option")).toHaveText(["Select a document", "license.pdf", "insurance.pdf"]);
   await expect(dialog.getByLabel("Expires (required)", { exact: true })).toHaveValue("");
   await expect(dialog.getByLabel("Reviewed at (required)", { exact: true })).toHaveValue("");

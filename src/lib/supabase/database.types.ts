@@ -4704,6 +4704,98 @@ export type Database = {
           },
         ]
       }
+      vendor_renewal_document_decisions: {
+        Row: {
+          actor: string
+          business_key: string
+          created_at: string
+          document_id: string
+          evidence_id: string | null
+          note: string | null
+          outcome: string
+        }
+        Insert: {
+          actor: string
+          business_key: string
+          created_at?: string
+          document_id: string
+          evidence_id?: string | null
+          note?: string | null
+          outcome: string
+        }
+        Update: {
+          actor?: string
+          business_key?: string
+          created_at?: string
+          document_id?: string
+          evidence_id?: string | null
+          note?: string | null
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_renewal_document_decisions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_renewal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_renewal_document_decisions_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_compliance_evidence"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_renewal_documents: {
+        Row: {
+          contractor_id: string
+          created_at: string
+          file_name: string
+          id: string
+          kind: string
+          mime_type: string
+          size_bytes: number
+          storage_path: string
+          submitted_as: string
+          submitted_by: string
+        }
+        Insert: {
+          contractor_id: string
+          created_at?: string
+          file_name: string
+          id?: string
+          kind: string
+          mime_type: string
+          size_bytes: number
+          storage_path: string
+          submitted_as: string
+          submitted_by: string
+        }
+        Update: {
+          contractor_id?: string
+          created_at?: string
+          file_name?: string
+          id?: string
+          kind?: string
+          mime_type?: string
+          size_bytes?: number
+          storage_path?: string
+          submitted_as?: string
+          submitted_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_renewal_documents_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
+          },
+        ]
+      }
       vendor_requirement_evidence: {
         Row: {
           bound_at: string
@@ -5423,6 +5515,10 @@ export type Database = {
         Args: { p_contractor: string }
         Returns: Json
       }
+      vendor_authorize_renewal_upload: {
+        Args: { p_contractor?: string; p_kind: string }
+        Returns: Json
+      }
       vendor_begin_review: {
         Args: { p_contractor: string; p_version: string }
         Returns: undefined
@@ -5485,6 +5581,10 @@ export type Database = {
         Args: { _job_id: string; _reason?: string }
         Returns: undefined
       }
+      vendor_decline_renewal_document: {
+        Args: { p_document: string; p_key: string; p_note: string }
+        Returns: Json
+      }
       vendor_evidence_current: {
         Args: { p_at: string; p_contractor: string }
         Returns: boolean
@@ -5523,6 +5623,7 @@ export type Database = {
         Returns: Json
       }
       vendor_own_evidence_renewal: { Args: never; Returns: Json }
+      vendor_own_renewal_documents: { Args: never; Returns: Json }
       vendor_prepare_invitation: {
         Args: { p_contractor: string; p_expires: string; p_key: string }
         Returns: string
@@ -5603,6 +5704,11 @@ export type Database = {
         }
         Returns: Json
       }
+      vendor_renewal_document_overview: {
+        Args: { p_contractor: string }
+        Returns: Json
+      }
+      vendor_renewal_document_queue: { Args: never; Returns: Json }
       vendor_require_operator: { Args: never; Returns: string }
       vendor_start_onboarding_review: {
         Args: {
@@ -5611,6 +5717,10 @@ export type Database = {
           p_key: string
           p_reason: string
         }
+        Returns: Json
+      }
+      vendor_submit_renewal_document: {
+        Args: { p_contractor?: string; p_path: string }
         Returns: Json
       }
     }
