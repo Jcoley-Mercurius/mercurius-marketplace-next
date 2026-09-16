@@ -103,6 +103,12 @@ provider-level retention hold stops quarantine and deletion. Never-submitted upl
 application documents remain outside retention (owner decisions 2026-09-15). See
 PHASE-5-RENEWAL-RETENTION.md.
 
+TRACE-075 adds the finance reconciliation readback: finance operators see each invoice's
+charges, refunds, earnings and payouts checked against the journals, the MPS §5.5 funds state
+with every hold reason, Stripe readback state and an exceptions queue at `/admin/finance`.
+Read-only; operator commands, scheduled readback and bank statement import remain. It surfaces
+that an unsupported Stripe event holds every payout. See PHASE-5-FINANCE-RECONCILIATION.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

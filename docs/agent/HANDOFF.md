@@ -347,6 +347,24 @@ as current branch/merge status; reconcile them with the latest slice evidence.
 - Next: choose between retention for never-submitted uploads/application documents (needs a
   clock decision) and another Phase 5 gate (tax/promotions, recurring automation, finance).
 
+## Current slice — TRACE-075 finance reconciliation (2026-09-16, PR open)
+
+- TRACE-074 merged as PR #30 (main `d422816`).
+- Branch `codex/phase5-finance-reconciliation`, base main `d422816`, worktree
+  `../mercurius-finance-reconciliation`. Committed and pushed; PR open against `main`.
+- Owner direction 2026-09-16: finance operations (charges, refunds, earnings, payouts). Scope
+  and decisions D1–D5 are implementer choices recorded for review.
+- Change: migration `20260916001000` adds read-only `money_finance_reconciliation` (finance
+  authority) with 13 per-invoice ledger checks, funds state mirroring `money_payable`, Stripe
+  readback state, account totals and exceptions. New `/admin/finance` page and nav entry.
+- Evidence: `governance/PHASE-5-FINANCE-RECONCILIATION.md` and the TRACE-075 section of
+  `PHASE-5-VALIDATION.md`. 1295 SQL assertions (113 new, 12 guard mutants killed), clean
+  reset, 115 unit tests, build, 184/190 browser cases (6 `@visual` without Linux baselines),
+  lint/types/secrets, 0 audit.
+- Open: Codex review; CI; owner question on the global unsupported-event payout hold.
+- Next: finance operator command gateway (authenticated actor, second-person approval,
+  ConfirmAction) for refunds, holds, readbacks and ACH outcomes.
+
 ## Workflow update — 2026-09-10
 
 Owner assigned Codex architecture and code review, with Claude implementing the

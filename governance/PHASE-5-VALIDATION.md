@@ -947,3 +947,46 @@ diff is additive only. Edge gates were not re-run (no Edge change).
 
 Not performed: hosted deployment or round trip, CI on this branch, real providers or documents,
 manual screen-reader review. Codex code review is the open gate.
+
+## TRACE-075 — Finance reconciliation readback — 2026-09-16
+
+Branch `codex/phase5-finance-reconciliation`, base `main` `d422816`; isolated synthetic stack
+only. Scope and decisions are in PHASE-5-FINANCE-RECONCILIATION.md.
+
+Baseline before change: 1182 pgTAP assertions across 32 suites (TRACE-074 evidence).
+
+Database: 1295 pgTAP assertions across 33 suites pass after a clean reset; 113 are new in suite
+042. It covers access (no user, homeowner and admin without finance authority refused; the
+private row builder closed to clients; no anon grant); a clean full payment (capture counter,
+attempts and journals, 15% fee excluding tax and tip, 85% plus tips proceeds, payable ledger,
+eligible funds, no customer identity returned); deposit only; the 48-hour window with its
+eligibility time; no confirmation; a partial refund pending, prepared and settled (fee and
+proceeds on retained amounts, tax liability, hold released); Stripe readback mismatch, match,
+reviewed resolution; a weekly ACH statement through prepared, submitted, unknown, failed, retry,
+settled and returned (payable and bank ledgers, no bank reference anywhere in the readback);
+a chargeback open, lost and allocated (suspense, clearing, retained fee); payout hold,
+suspension, a flagged checkout, a failed capture event linked to its obligation, and an
+unsupported event holding every payout; funds-state parity with `money_payable` for every
+unscheduled fixture; ledger-wide debits equal credits; the readback writes no completion
+evidence; and detection of a stray fee transfer, drifted capture and refund counters, a payout
+posted without settlement and a missing earnings journal (tampering rolled back).
+
+Mutation check (local harness, not committed, functions replaced on the running synthetic
+database and restored): fee rate, payout onboarding hold, 48-hour window, global event hold,
+finance authority check, bank ledger sign, unknown bank outcome treated as paid, pending refund
+hold, refund counter check, chargeback hold, provider payable check and a bank reference leak
+each failed suite 042; the restored functions pass all 113.
+
+Concurrency: no script added; the slice adds only a stable read function and no write path.
+Existing scripts were not re-run because no kernel they exercise changed.
+
+Application: `npm run scan:secrets`, `lint`, `typecheck` pass; 115 unit tests (7 new); build
+with CI's synthetic public variables (`/admin/finance` static); `audit:prod` 0 findings;
+generated database types differ only by the new RPC. Browser: 184 cases pass, including 8 new
+finance cases (light 320px and dark 1440px with axe and reflow, filters and payout detail,
+global event banner, empty ledger, permission state, retry, truncation). The 6 `@visual` cases
+fail for lack of Linux baselines, as in earlier slices; the auto-written Linux snapshots were
+deleted, not adopted. Screenshots were reviewed; a mid-word wrap in exception detail was fixed
+before the final run.
+
+Not performed: CI, hosted or Stripe/bank verification, human screen-reader review.
