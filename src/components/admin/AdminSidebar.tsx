@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, BarChart3, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, MapPin, MessageSquare, Receipt, Shield, ShieldCheck, Sparkles, Star, Ticket, TrendingUp, UserCheck, Zap } from "lucide-react";
+import { AlertTriangle, Archive, BarChart3, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, MapPin, MessageSquare, Receipt, Shield, ShieldCheck, Sparkles, Star, Ticket, TrendingUp, UserCheck, Zap } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ const navigation = [
   { label: "Vendors", href: "/admin/vendors", icon: UserCheck },
   { label: "Provider Compliance", href: "/admin/compliance", icon: ShieldCheck },
   { label: "Compliance Expiry", href: "/admin/compliance/renewals", icon: CalendarClock },
+  { label: "Document Retention", href: "/admin/compliance/retention", icon: Archive },
   { label: "Homeowners", href: "/admin/homeowners", icon: House },
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Service Catalog", href: "/admin/catalog", icon: BookOpen },

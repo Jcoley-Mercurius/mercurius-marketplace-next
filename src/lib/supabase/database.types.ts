@@ -4796,6 +4796,50 @@ export type Database = {
           },
         ]
       }
+      vendor_renewal_retention_actions: {
+        Row: {
+          action: string
+          actor: string
+          business_key: string
+          created_at: string
+          document_id: string
+          id: string
+          reason: string
+          sequence: number
+          under_hold: boolean
+        }
+        Insert: {
+          action: string
+          actor: string
+          business_key: string
+          created_at?: string
+          document_id: string
+          id?: string
+          reason: string
+          sequence?: never
+          under_hold: boolean
+        }
+        Update: {
+          action?: string
+          actor?: string
+          business_key?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+          reason?: string
+          sequence?: never
+          under_hold?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_renewal_retention_actions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_renewal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_requirement_evidence: {
         Row: {
           bound_at: string
@@ -4839,6 +4883,47 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vendor_compliance_requirements"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_retention_hold_events: {
+        Row: {
+          action: string
+          actor: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          id: string
+          reason: string
+          sequence: number
+        }
+        Insert: {
+          action: string
+          actor: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          id?: string
+          reason: string
+          sequence?: never
+        }
+        Update: {
+          action?: string
+          actor?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          sequence?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_retention_hold_events_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_onboarding"
+            referencedColumns: ["contractor_id"]
           },
         ]
       }
@@ -5585,6 +5670,7 @@ export type Database = {
         Args: { p_document: string; p_key: string; p_note: string }
         Returns: Json
       }
+      vendor_document_retention_queue: { Args: never; Returns: Json }
       vendor_evidence_current: {
         Args: { p_at: string; p_contractor: string }
         Returns: boolean
@@ -5624,9 +5710,22 @@ export type Database = {
       }
       vendor_own_evidence_renewal: { Args: never; Returns: Json }
       vendor_own_renewal_documents: { Args: never; Returns: Json }
+      vendor_place_retention_hold: {
+        Args: { p_contractor: string; p_key: string; p_reason: string }
+        Returns: Json
+      }
       vendor_prepare_invitation: {
         Args: { p_contractor: string; p_expires: string; p_key: string }
         Returns: string
+      }
+      vendor_prepare_renewal_retention: {
+        Args: {
+          p_action: string
+          p_document: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
       }
       vendor_record_checklist_evidence: {
         Args: {
@@ -5675,6 +5774,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      vendor_record_renewal_retention: {
+        Args: {
+          p_action: string
+          p_document: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       vendor_record_requirement_document: {
         Args: {
           p_accepted: string
@@ -5702,6 +5810,10 @@ export type Database = {
           p_key: string
           p_reason: string
         }
+        Returns: Json
+      }
+      vendor_release_retention_hold: {
+        Args: { p_contractor: string; p_key: string; p_reason: string }
         Returns: Json
       }
       vendor_renewal_document_overview: {

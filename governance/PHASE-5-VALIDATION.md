@@ -865,3 +865,85 @@ document label, the notice's upload link and wording, and a sidebar-scoped absen
 
 Not performed: hosted round trip, CI on this branch, real providers or documents, email
 delivery, manual screen-reader review. Codex code review is the open gate.
+
+## TRACE-074 — Retention of declined renewal documents — 2026-09-15, completed 2026-09-16
+
+Branch `codex/phase5-renewal-retention`, implemented on TRACE-073 `819b468` and rebased onto
+`main` `bbb0482` after PR #29 merged (main added only editor and agent-navigation files, so
+the results below stand); isolated synthetic stack only. Scope and owner decisions are in PHASE-5-RENEWAL-RETENTION.md.
+
+Baseline before change: 1071 pgTAP assertions across 31 suites (TRACE-073 evidence).
+
+Database: 1182 pgTAP assertions across 32 suites pass after a clean reset and again after the
+post-concurrency replay; 111 are new in suite 041. It covers the quarantine bucket (private,
+named by no storage policy; an operator client cannot list, write or move a file into it);
+access (anon and `service_role` refused, helpers and both tables closed to clients, a vendor
+refused on every command and the queue, the vendor readback unchanged); the queue before any
+step (due at exactly 90 days and not one second earlier, quarantined list, file location
+including a file removed outside the workflow, window end dates, reported periods, no holds;
+reading writes nothing); prepare refusals (inside the window, undecided, accepted, unknown
+document and action, reason and key required, restore or delete of a retained document,
+deletion one second short of 14 days) and prepared buckets, with preparing writing nothing;
+record (not before the move, missing file, window re-checked, changed size in quarantine, a
+file in both buckets, then recorded; exact replay; changed reason, other document and other
+operator conflict; no second quarantine; overview and queue reflect it); deletion (not while
+the file exists, period re-checked even after an early removal, recorded, terminal, one
+deletion per document); restore (not before the file is back, recorded, due again,
+re-quarantine allowed); holds (reason, key and onboarding required, nothing to release, place,
+replay, key reuse conflict, no second hold, queue and overview report it, quarantine and
+deletion refused for every document of the provider, a completed quarantine and a completed
+deletion recorded under hold, restore allowed, release, no second release, periods open again,
+re-placement); undecided and accepted documents carry no retention fields; a fingerprint
+proving no submission, decision, evidence, status, revision, application version, role or
+listing changed; immutability and check constraints. Suite 001's Phase 5 RPC-only table lists
+gain the two new private tables, as earlier slices did.
+
+Mutation check (local harness, not committed): the 90-day and 14-day boundaries (`>` to `>=`),
+the prepare hold refusal, the completed-step hold exception, the quarantine size check, the
+deletion storage check, the latest-hold-event rule and the replay actor check each failed suite
+041; restored functions pass all 111. A first harness run under-counted because psql's aligned
+output hid TAP lines and aborted transactions went to stderr; it was corrected before these
+results.
+
+Concurrency: new `phase5-renewal-retention-concurrency.mjs`, wired into CI after the renewal
+document script: eight same-key records of one quarantine write once; eight distinct-key
+records across two operators write once; a four-hold/four-record race yields exactly one hold
+and one quarantine; eight prepares under hold are all refused. All eleven scripts pass in CI
+order, followed by a clean replay. An assertion comparing transaction IDs to infer commit order
+was removed as unsound (IDs are assigned when a lock wait starts); suite 041 asserts
+`under_hold` deterministically.
+
+Round trip (local only, not committed): `next dev` against the isolated stack with local Auth
+and Storage, synthetic `example.invalid` accounts and synthetic bytes; past decline and
+quarantine times are fixture rows. 32 checks pass — 401/403/400 refusals; a 10-day-old decline
+refused and unmoved; quarantine byte-for-byte in the quarantine bucket; replay without moving;
+operator client can neither open the quarantined file nor reach or remove from the quarantine
+bucket; deletion refused inside 14 days; restore with identical bytes readable again;
+re-quarantine; permanent deletion after 15 days leaving neither bucket holding the file; replay;
+no restore after deletion; hold through the API refusing quarantine (nothing moved) and
+deletion; an unrecorded move shown by storage location, then recorded under hold on retry;
+release reopening quarantine; overview states; vendor readback without retention or storage
+fields; one ledger row per confirmed step; no decision, status, revision or application version
+change. Local Storage (v1.70.3) confirmed the cross-bucket move; the route logged the expected
+404 warning on the interrupted-move retry.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and `npm run
+audit:prod` (0 vulnerabilities) pass; `git diff --check` is clean. 108 unit tests pass, 7 new
+(storage step per action, action mismatch, no deletion from document storage or foreign
+buckets, renewal paths only, action mapping, days until deletion). The production build with the
+CI synthetic public variables generates 64 routes including `/admin/compliance/retention` and
+the retention API route. Browser: 175 of 182 cases pass, including all 9 new (queue at light
+320px and dark 1440px with axe, no overflow and the sidebar entry current; quarantine with
+required reason, request shape and reread confirmation; deletion warning and refusal kept open;
+an unconfirming reread reported; hold release; load error with retry; checklist retention badges
+with Open only for retained files, with axe; hold placement from the checklist confirmed by
+reread). The 7 failures: six `@visual` cases with no Linux baselines (pre-existing; generated
+Linux images were discarded) and the TRACE-073 operator-upload case failing at teardown with a
+mocked fetch still in flight. Rerunning the renewal-documents, retention and evidence-renewal
+specs three times each: 110 of 111 pass, the upload case 3/3; one TRACE-072 queue case failed
+once on axe contrast of the Refresh button captured while disabled during load, passing the
+other two runs (this slice does not change that page). `database.types.ts` was regenerated; the
+diff is additive only. Edge gates were not re-run (no Edge change).
+
+Not performed: hosted deployment or round trip, CI on this branch, real providers or documents,
+manual screen-reader review. Codex code review is the open gate.
