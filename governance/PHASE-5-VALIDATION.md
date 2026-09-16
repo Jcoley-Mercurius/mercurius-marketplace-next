@@ -792,3 +792,76 @@ passed in the previous full run and 3 of 3 isolated reruns, recorded as a timing
 
 Not performed: hosted PostgREST round-trip, real providers or documents, manual
 screen-reader review, CI on this branch. Codex code review is the open gate.
+
+## TRACE-073 — Renewal documents bound to the provider — 2026-09-15
+
+Branch `codex/phase5-renewal-documents`, based on `main` `0d761f3`, isolated synthetic
+stack only. Scope and owner decisions are in PHASE-5-RENEWAL-DOCUMENTS.md.
+
+Baseline before change: 987 pgTAP assertions across 30 suites passed after a clean reset.
+
+Database: 1071 pgTAP assertions across 31 suites pass after a clean reset and again after
+the post-concurrency replay; 84 are new in suite 040. It covers the removed anonymous
+policy (policy absent; anonymous and signed-in direct inserts refused); access (anon and
+`service_role` refused, private helpers and both tables closed to clients, non-vendor,
+unlinked vendor and vendor-naming-a-provider refused, review and unknown providers
+refused, suspended provider and operator allowed); submission (missing object, another
+provider's path, an application path, another item, a stored disallowed type, an object
+over 10 MB, name/type/size taken from storage, same-submitter replay, another submitter
+refused, operator on behalf); a state fingerprint proving submissions and declines change
+no evidence, request, onboarding status or revision, application version, role or listing;
+the five-undecided limit per item on both authorization and submission, freed by a
+decline; decline (operator only, key and note required, unknown document, trimmed note,
+exact replay, changed-note conflict, already decided); acceptance through the checklist
+command (declined, wrong item, other provider and missing expiry refused; accepted as
+current license evidence no longer due; exact replay; accepted again refused; application
+documents still accepted; one decision naming the evidence under the request key; no
+status, revision or application version change; eligibility kept); a stale acceptance
+writing neither decision nor evidence; operator overview and queue contents; vendor
+readbacks limited to the caller with no path, evidence or reviewer and with the decline
+note; readbacks writing nothing; immutability and both table check constraints.
+Suite 001's Phase 5 RPC-only table list gains the two new private tables, as earlier slices
+did. Suite 036 passes unchanged against the replaced checklist command.
+
+Mutation check: removing the decided check on acceptance, the open limit, the provider path
+check or the stored-type check each failed suite 040 (2, 2, 1 and 1 assertions); restored
+functions pass all 84.
+
+Concurrency: new `phase5-renewal-document-concurrency.mjs`, wired into CI after the refusal
+script: eight same-path submissions record once; eight different paths stop at exactly five;
+an eight-way race of four acceptances and four declines records exactly one decision with
+matching evidence rows and no onboarding change. Standalone runs saw both outcomes (accept
+three times, decline once). All ten scripts pass in CI order, followed by a clean replay.
+A first CI-order run failed because the new script's fixture IDs collided with the
+invitation-binding script's; the prefix was changed and the sequence re-run.
+
+Round trip (local only, not committed): `next dev` against the isolated stack with local
+Auth and Storage, synthetic `example.invalid` accounts, 22 checks pass — 401/403/400 route
+refusals; a vendor grant at the expected path; direct signed upload; submission recorded with
+type and size read from Storage metadata; replay; another submitter refused; vendor cannot
+read or upload directly; anonymous `applications/` upload refused by Storage; a type-lying
+upload never becomes a submission; missing object refused; operator upload on behalf and
+signed-link read of the submitted bytes; decline and acceptance through PostgREST named
+arguments; eligibility restored with the provider still `active` at the same revision and one
+application version; vendor readback of states and note without private fields. The owner
+notification ran once, for the provider submission only, and logged the missing Resend
+configuration; no email was sent.
+
+Application: `npm run lint`, `npm run typecheck`, `npm run scan:secrets` and
+`npm audit --omit=dev` (0 vulnerabilities) pass. 101 unit tests pass, 6 new (path shape
+against the database pattern, extension from verified type, long and non-Latin names,
+identifier refusal, kind guard, sizes). The production build with the CI synthetic public
+variables generates 62 routes including `/vendor/compliance` and both API routes. 167
+browser cases pass, 15 new: vendor page at light 320px and dark 1440px with axe, no overflow
+and the sidebar entry current; the three-step upload with exact request shapes and readback
+confirmation; server refusal shown; wrong file type refused before any request; the limit
+message; closed uploads with Contact; load error with retry; operator section at light 320px
+and dark 1440px with axe and no dialog overflow; decline requiring a provider note with the
+request shape; acceptance via grouped document options with the acceptance consequence and
+request shape; operator upload request shape; no upload under review; and the Compliance
+Expiry awaiting-review list at 320px and 1440px with axe. Existing specs were updated for the
+document label, the notice's upload link and wording, and a sidebar-scoped absence check.
+`database.types.ts` was regenerated; the diff is additive only. Screenshots were reviewed.
+
+Not performed: hosted round trip, CI on this branch, real providers or documents, email
+delivery, manual screen-reader review. Codex code review is the open gate.

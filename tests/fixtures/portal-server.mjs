@@ -103,6 +103,12 @@ const server = createServer(async (request, response) => {
     recipient_email: "applicant@example.invalid", recipient_valid: true, account_linked: false, recipient_account_id: null,
     attempt: null, prior_attempts: [],
   });
+  // TRACE-073 renewal documents: empty by default; specs override per case.
+  if (url.pathname === "/rest/v1/rpc/vendor_renewal_document_overview") return send({
+    contractor_id: body.p_contractor, onboarding_status: "review", open_limit: 5, documents: [],
+  });
+  if (url.pathname === "/rest/v1/rpc/vendor_renewal_document_queue") return send({ evaluated_at: new Date().toISOString(), entries: [] });
+  if (url.pathname === "/rest/v1/rpc/vendor_own_renewal_documents") return send({ accepting: false, open_limit: 5, documents: [] });
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {

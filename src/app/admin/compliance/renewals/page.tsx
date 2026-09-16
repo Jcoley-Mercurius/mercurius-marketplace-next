@@ -14,6 +14,7 @@ import {
   renewalTiming,
   type RenewalState,
 } from "@/lib/evidenceRenewal";
+import { renewalDocumentKindLabel, type RenewalDocumentKind } from "@/lib/renewalDocuments";
 import { cn } from "@/lib/utils";
 
 // TRACE-072 MPS §9 compliance expiry queue. Read-only: renewal is recorded in the
@@ -43,6 +44,18 @@ type Queue = {
 
 type Filter = "all" | RenewalState;
 
+// TRACE-073: undecided renewal submissions across providers.
+type PendingDocument = {
+  id: string;
+  contractor_id: string;
+  name: string;
+  onboarding_status: string;
+  kind: RenewalDocumentKind;
+  file_name: string;
+  submitted_as: "provider" | "operator";
+  created_at: string;
+};
+
 const stateTone: Record<RenewalState, string> = {
   expiring: "border-status-warning bg-status-warning-bg text-status-warning",
   lapsed: "border-status-danger bg-status-danger-bg text-status-danger",
@@ -62,10 +75,24 @@ export default function ComplianceExpiryPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
+  const [pending, setPending] = useState<PendingDocument[] | null>(null);
+  const [pendingError, setPendingError] = useState("");
+
+  const loadPending = useCallback(async () => {
+    try {
+      const { data, error: rpcError } = await createClient().rpc("vendor_renewal_document_queue");
+      if (rpcError) throw rpcError;
+      setPending((data as unknown as { entries: PendingDocument[] }).entries);
+      setPendingError("");
+    } catch (reason) {
+      setPendingError(messageOf(reason, "Renewal documents awaiting review could not be loaded."));
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    void loadPending();
     try {
       const { data, error: rpcError } = await createClient().rpc("vendor_evidence_renewal_queue");
       if (rpcError) throw rpcError;
@@ -75,7 +102,7 @@ export default function ComplianceExpiryPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadPending]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -124,6 +151,64 @@ export default function ComplianceExpiryPage() {
   const lapsed = queue.entries.filter((entry) => entry.state === "lapsed").length;
   const expiring = queue.entries.length - lapsed;
   const rows = filter === "all" ? queue.entries : queue.entries.filter((entry) => entry.state === filter);
+
+  const pendingColumns: DataColumn<PendingDocument>[] = [
+    {
+      key: "provider",
+      label: "Provider",
+      render: (document) => (
+        <Link
+          href={`/admin/vendors/${document.contractor_id}`}
+          className="font-medium text-foreground underline underline-offset-4 hover:text-accent"
+        >
+          {document.name}
+        </Link>
+      ),
+    },
+    { key: "document", label: "Document", render: (document) => `${renewalDocumentKindLabel[document.kind]} · ${document.file_name}` },
+    {
+      key: "submitted",
+      label: "Submitted",
+      render: (document) => (
+        <span className="flex flex-col gap-0.5">
+          <span>{formatRenewalDate(document.created_at)}</span>
+          <span className="text-xs text-muted-foreground">
+            {document.submitted_as === "provider" ? "By the provider" : "Uploaded by an operator"}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "next",
+      label: "Next action",
+      render: () => "Open the provider's activation checklist to review, then accept it as evidence or decline it with a note.",
+    },
+  ];
+
+  const pendingSection = (
+    <section aria-labelledby="pending-renewal-documents" className="space-y-3">
+      <h2 id="pending-renewal-documents" className="text-lg font-semibold">
+        Renewal documents awaiting review{pending ? ` (${pending.length})` : ""}
+      </h2>
+      {pendingError ? (
+        <p role="alert" className="text-sm text-destructive">{pendingError}</p>
+      ) : !pending ? (
+        <p role="status" className="text-sm text-muted-foreground">Loading renewal documents...</p>
+      ) : pending.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No renewal documents are awaiting review.</p>
+      ) : (
+        <div className="overflow-hidden rounded-xl border bg-card">
+          <ResponsiveDataList
+            label="Renewal documents awaiting review"
+            rows={pending}
+            columns={pendingColumns}
+            rowKey={(document) => document.id}
+            rowLabel={(document) => `${document.name} · ${renewalDocumentKindLabel[document.kind]}`}
+          />
+        </div>
+      )}
+    </section>
+  );
 
   const columns: DataColumn<Entry>[] = [
     {
@@ -227,6 +312,10 @@ export default function ComplianceExpiryPage() {
           </Button>
         ))}
       </div>
+
+      {pendingSection}
+
+      <h2 className="text-lg font-semibold">Evidence needing renewal</h2>
 
       {queue.entries.length === 0 ? (
         <PageState

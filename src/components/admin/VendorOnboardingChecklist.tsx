@@ -9,6 +9,8 @@ import { ConfirmAction } from "@/components/ui/confirm-action";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { renewalDocumentKindLabel } from "@/lib/renewalDocuments";
+import { VendorRenewalDocuments, type RenewalOverview } from "@/components/admin/VendorRenewalDocuments";
 
 // TRACE-069 operator surface for the MPS §8 activation checklist and onboarding
 // decisions. Every decision is the server's: evidence is recorded through
@@ -85,8 +87,8 @@ const referenceHelp: Record<Kind, string> = {
   identity: "Where the verification is recorded, such as a case or ticket reference.",
   agreement: "The accepted agreement record. Put the agreement version in the requirement version.",
   coverage: "The review record for the approved services and ZIP codes.",
-  license: "Select the reviewed application document.",
-  insurance: "Select the reviewed application document.",
+  license: "Select the reviewed application document or a renewal document awaiting review.",
+  insurance: "Select the reviewed application document or a renewal document awaiting review.",
   bank_authorization:
     "A reference to where the authorization is held. Never enter account or routing numbers.",
   profile_pricing: "The review record for the profile and pricing claims.",
@@ -174,6 +176,9 @@ export function VendorOnboardingChecklist({
   const [accepted, setAccepted] = useState("");
   const [expires, setExpires] = useState("");
   const [nonce] = useState(() => crypto.randomUUID());
+  // TRACE-073: renewal submissions load separately so a failure never hides the checklist.
+  const [renewals, setRenewals] = useState<RenewalOverview | null>(null);
+  const [renewalError, setRenewalError] = useState("");
 
   const read = useCallback(async () => {
     const { data, error } = await createClient().rpc("vendor_onboarding_checklist", {
@@ -183,14 +188,31 @@ export function VendorOnboardingChecklist({
     return data as unknown as Checklist;
   }, [contractorId]);
 
+  const readRenewals = useCallback(async () => {
+    try {
+      const { data, error } = await createClient().rpc("vendor_renewal_document_overview", {
+        p_contractor: contractorId,
+      });
+      if (error) throw error;
+      const next = data as unknown as RenewalOverview;
+      setRenewals(next);
+      setRenewalError("");
+      return next;
+    } catch (error) {
+      setRenewalError(messageOf(error, "Renewal documents could not be loaded."));
+      return null;
+    }
+  }, [contractorId]);
+
   const refresh = useCallback(async () => {
     setLoadError("");
+    void readRenewals();
     try {
       setChecklist(await read());
     } catch (error) {
       setLoadError(messageOf(error, "The checklist could not be loaded."));
     }
-  }, [read]);
+  }, [read, readRenewals]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0);
@@ -202,7 +224,7 @@ export function VendorOnboardingChecklist({
     async (
       // The Supabase RPC builder is a thenable, not a Promise.
       call: () => PromiseLike<{ error: { message: string } | null }>,
-      confirmed: (next: Checklist) => boolean,
+      confirmed: (next: Checklist) => boolean | Promise<boolean>,
       success: { title: string; description: string },
     ) => {
       setPending(true);
@@ -211,7 +233,7 @@ export function VendorOnboardingChecklist({
         if (error) throw new Error(error.message);
         const next = await read();
         setChecklist(next);
-        if (!confirmed(next)) {
+        if (!(await confirmed(next))) {
           throw new Error(
             "The server did not confirm this change. Review the current checklist before retrying.",
           );
@@ -234,6 +256,12 @@ export function VendorOnboardingChecklist({
   const acceptedIso = toIso(accepted);
   const expiresIso = toIso(expires);
   const needsDocument = kind !== "" && documentKinds.includes(kind);
+  const pendingRenewals = (renewals?.documents ?? []).filter(
+    (document) => document.state === "submitted" && document.kind === kind,
+  );
+  const selectedRenewal = needsDocument
+    ? pendingRenewals.find((document) => document.storage_path === reference) ?? null
+    : null;
   const acceptedError = !accepted
     ? ""
     : !acceptedIso
@@ -284,6 +312,7 @@ export function VendorOnboardingChecklist({
     if (!checklist || kind === "" || !evidenceKey) return;
     const previous = selected?.evidence_id ?? null;
     const entered = { requirement: requirement.trim(), reference: reference.trim() };
+    const renewalId = selectedRenewal?.id ?? null;
     await run(
       () =>
         createClient().rpc("vendor_record_checklist_evidence", {
@@ -296,17 +325,21 @@ export function VendorOnboardingChecklist({
           p_supersedes: previous ?? undefined,
           p_key: evidenceKey,
         }),
-      (next) => {
+      async (next) => {
         const item = next.items.find((candidate) => candidate.kind === kind);
-        return Boolean(
+        const recorded = Boolean(
           item?.evidence_id &&
             item.evidence_id !== previous &&
             item.requirement_version === entered.requirement &&
             item.evidence_ref === entered.reference,
         );
+        if (!recorded || !renewalId) return recorded;
+        const overview = await readRenewals();
+        const accepted = overview?.documents.find((document) => document.id === renewalId);
+        return accepted?.state === "accepted" && accepted.evidence_id === item?.evidence_id;
       },
       {
-        title: "Checklist evidence recorded",
+        title: renewalId ? "Renewal document accepted" : "Checklist evidence recorded",
         description: `${itemLabel[kind]}. No decision, role or listing followed.`,
       },
     );
@@ -479,7 +512,7 @@ export function VendorOnboardingChecklist({
                 )}
               </FormField>
               <FormField
-                label={needsDocument ? "Application document" : "Evidence reference"}
+                label={needsDocument ? "Document" : "Evidence reference"}
                 required
                 help={referenceHelp[kind]}
               >
@@ -493,13 +526,26 @@ export function VendorOnboardingChecklist({
                       onChange={(event) => setReference(event.target.value)}
                     >
                       <option value="">
-                        {checklist.documents.length ? "Select a document" : "No documents in this application"}
+                        {checklist.documents.length || pendingRenewals.length ? "Select a document" : "No documents available"}
                       </option>
-                      {checklist.documents.map((path) => (
-                        <option key={path} value={path}>
-                          {path.split("/").at(-1)}
-                        </option>
-                      ))}
+                      {checklist.documents.length > 0 && (
+                        <optgroup label="Application documents">
+                          {checklist.documents.map((path) => (
+                            <option key={path} value={path}>
+                              {path.split("/").at(-1)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {pendingRenewals.length > 0 && (
+                        <optgroup label="Renewal documents awaiting review">
+                          {pendingRenewals.map((document) => (
+                            <option key={document.id} value={document.storage_path}>
+                              {document.file_name} ({new Date(document.created_at).toLocaleDateString()})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   ) : (
                     <Input
@@ -557,6 +603,9 @@ export function VendorOnboardingChecklist({
                   (selected?.evidence_id
                     ? "Supersedes the current evidence for this item, which stays in history. "
                     : "") +
+                  (selectedRenewal
+                    ? `Accepts the ${renewalDocumentKindLabel[selectedRenewal.kind].toLowerCase()} renewal document ${selectedRenewal.file_name}, which the provider will see as accepted. `
+                    : "") +
                   "Records the evidence against the reviewed application revision. It activates nothing, grants no role and publishes no listing."
                 }
                 confirmLabel="Record"
@@ -566,6 +615,15 @@ export function VendorOnboardingChecklist({
           )}
         </div>
       )}
+
+      <VendorRenewalDocuments
+        contractorId={contractorId}
+        businessName={businessName}
+        overview={renewals}
+        loadError={renewalError}
+        disabled={busy}
+        reread={readRenewals}
+      />
 
       {status !== "rejected" && (
         <div className="space-y-3 border-t border-border pt-4">

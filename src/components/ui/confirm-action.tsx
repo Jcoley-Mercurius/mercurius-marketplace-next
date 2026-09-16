@@ -7,9 +7,10 @@ import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
 
 /** UI duplicate guard only. The caller still owns server authorization/idempotency. */
-export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, disabled = false, confirmationTone = "destructive", onConfirm }: {
+export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, reasonLabel = "Reason", reasonHelp = "Explain why this change is needed.", disabled = false, confirmationTone = "destructive", onConfirm }: {
   triggerLabel: string; title: string; consequence: string; entity: string;
   confirmLabel: string; requireReason?: boolean; disabled?: boolean;
+  reasonLabel?: string; reasonHelp?: string;
   onConfirm: (reason: string) => Promise<void>;
   confirmationTone?: "destructive" | "commitment";
 }) {
@@ -54,7 +55,7 @@ export function ConfirmAction({ triggerLabel, title, consequence, entity, confir
           <AlertDialog.Title className="text-xl font-semibold">{title}</AlertDialog.Title>
           <p className="font-medium break-words">{entity}</p>
           <AlertDialog.Description className="text-sm text-muted-foreground">{consequence}</AlertDialog.Description>
-          {requireReason && <FormField label="Reason" required help="Explain why this change is needed.">{(control) => <Textarea {...control} value={reason} maxLength={1000} disabled={pending} onChange={(event) => setReason(event.target.value)} />}</FormField>}
+          {requireReason && <FormField label={reasonLabel} required help={reasonHelp}>{(control) => <Textarea {...control} value={reason} maxLength={1000} disabled={pending} onChange={(event) => setReason(event.target.value)} />}</FormField>}
           {error && <p ref={errorRef} tabIndex={-1} role="alert" className="text-sm text-destructive">{error}</p>}
           <p role="status" className="text-sm">{pending ? "Confirming action…" : ""}</p>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
