@@ -96,6 +96,13 @@ removes the legacy policy that let anyone upload into the private bucket (owner 
 2026-09-15). File retention and malware scanning remain gates. See
 PHASE-5-RENEWAL-DOCUMENTS.md.
 
+TRACE-074 applies CFG-011 retention to declined renewal documents: 90 days after the decline
+an operator may move the file to a private quarantine bucket, restore it, or after 14 days in
+quarantine delete it permanently, each step recorded only once storage confirms it. A
+provider-level retention hold stops quarantine and deletion. Never-submitted uploads and
+application documents remain outside retention (owner decisions 2026-09-15). See
+PHASE-5-RENEWAL-RETENTION.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

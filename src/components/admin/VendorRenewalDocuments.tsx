@@ -18,11 +18,14 @@ import {
   type RenewalDocumentState,
 } from "@/lib/renewalDocuments";
 import { uploadRenewalDocument } from "@/lib/renewalDocumentUpload";
+import { retentionStateLabel, type RetentionState } from "@/lib/renewalRetention";
 import { VENDOR_DOCUMENT_ACCEPT, VENDOR_DOCUMENT_BUCKET, validateVendorDocument } from "@/lib/vendorApplicationDocuments";
 
 // TRACE-073 operator surface for renewal submissions, inside the activation checklist.
 // Accepting happens in the checklist form (it records the evidence); this section opens,
 // declines and uploads on the provider's behalf. Every change is confirmed by rereading.
+// TRACE-074 adds the provider's retention hold and each declined file's retention state;
+// quarantine, restore and deletion run from Admin → Document Retention.
 
 export type RenewalDocument = {
   id: string;
@@ -38,12 +41,16 @@ export type RenewalDocument = {
   note: string | null;
   decided_at: string | null;
   evidence_id: string | null;
+  // TRACE-074, declined documents only.
+  retention_state?: RetentionState;
+  retention_ends_at?: string;
 };
 
 export type RenewalOverview = {
   contractor_id: string;
   onboarding_status: "review" | "active" | "suspended" | "rejected" | null;
   open_limit: number;
+  retention_hold?: { reason: string; placed_at: string } | null;
   documents: RenewalDocument[];
 };
 
@@ -83,6 +90,7 @@ export function VendorRenewalDocuments({
   const [uploading, setUploading] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
   const [nonce] = useState(() => crypto.randomUUID());
+  const [holdGeneration, setHoldGeneration] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const accepting = overview?.onboarding_status === "active" || overview?.onboarding_status === "suspended";
@@ -124,6 +132,28 @@ export function VendorRenewalDocuments({
       });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const changeHold = (action: "place" | "release") => async (reason: string) => {
+    try {
+      const { error } = await createClient().rpc(
+        action === "place" ? "vendor_place_retention_hold" : "vendor_release_retention_hold",
+        { p_contractor: contractorId, p_reason: reason, p_key: `retention-hold-${action}:${nonce}:${holdGeneration}` },
+      );
+      if (error) throw new Error(error.message);
+      const next = await reread();
+      if (Boolean(next?.retention_hold) !== (action === "place")) {
+        throw new Error("The server did not confirm the hold. Review the provider before retrying.");
+      }
+      // A later change on this page is a new request, not a replay of this one.
+      setHoldGeneration((value) => value + 1);
+      toast.success(action === "place" ? "Retention hold placed" : "Retention hold released", { description: businessName });
+    } catch (error) {
+      toast.error(action === "place" ? "Hold could not be placed" : "Hold could not be released", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+      throw error;
     }
   };
 
@@ -171,9 +201,14 @@ export function VendorRenewalDocuments({
                 <span className="min-w-0 break-words text-sm font-medium">
                   {renewalDocumentKindLabel[document.kind]} · {document.file_name}
                 </span>
-                <Badge variant="outline" className={stateTone[document.state]}>
-                  {renewalDocumentStateLabel[document.state]}
-                </Badge>
+                <span className="flex flex-wrap gap-2">
+                  <Badge variant="outline" className={stateTone[document.state]}>
+                    {renewalDocumentStateLabel[document.state]}
+                  </Badge>
+                  {document.retention_state && document.retention_state !== "retained" && (
+                    <Badge variant="outline">{retentionStateLabel[document.retention_state]}</Badge>
+                  )}
+                </span>
               </div>
               <p className="break-words text-xs leading-5 text-muted-foreground">
                 {document.submitted_as === "provider" ? "Submitted by the provider" : "Uploaded by an operator"} ·{" "}
@@ -184,6 +219,7 @@ export function VendorRenewalDocuments({
                 <p className="break-words text-xs leading-5 text-foreground">Note to provider: {document.note}</p>
               )}
               <div className="flex flex-wrap items-start gap-2">
+                {(document.retention_state ?? "retained") === "retained" ? (
                 <Button
                   size="sm"
                   variant="outline"
@@ -195,6 +231,13 @@ export function VendorRenewalDocuments({
                   <ExternalLink />
                   Open
                 </Button>
+                ) : (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {document.retention_state === "deleted"
+                      ? "The file was deleted under the retention policy. This record remains."
+                      : "The file is in quarantine and cannot be opened. Restore it from Document Retention."}
+                  </p>
+                )}
                 {document.state === "submitted" && (
                   <ConfirmAction
                     disabled={busy}
@@ -213,6 +256,47 @@ export function VendorRenewalDocuments({
             </li>
           ))}
         </ul>
+      )}
+
+      {overview && (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium">{overview.retention_hold ? "Retention hold in force" : "No retention hold"}</p>
+              <p className="break-words text-xs leading-5 text-muted-foreground">
+                {overview.retention_hold
+                  ? `${overview.retention_hold.reason} · placed ${formatDateTime(overview.retention_hold.placed_at)}. Declined documents for this provider cannot be quarantined or deleted.`
+                  : "Declined documents are kept 90 days, then may be quarantined and deleted from Document Retention. Place a hold when an investigation or legal hold applies."}
+              </p>
+            </div>
+            {overview.retention_hold ? (
+              <ConfirmAction
+                disabled={busy}
+                requireReason
+                reasonHelp="Recorded with the release. Explain why the hold no longer applies."
+                triggerLabel="Release hold"
+                title="Release this retention hold?"
+                entity={businessName}
+                consequence="Quarantine and permanent deletion open again for this provider's declined documents once their periods end."
+                confirmLabel="Release hold"
+                onConfirm={changeHold("release")}
+              />
+            ) : (
+              <ConfirmAction
+                disabled={busy}
+                requireReason
+                reasonHelp="Recorded with the hold and shown to operators. Name the investigation or legal hold."
+                triggerLabel="Place hold"
+                title="Place a retention hold?"
+                entity={businessName}
+                consequence="Stops quarantine and permanent deletion of this provider's declined renewal documents until an operator releases the hold. Nothing else about the provider changes."
+                confirmLabel="Place hold"
+                confirmationTone="commitment"
+                onConfirm={changeHold("place")}
+              />
+            )}
+          </div>
+        </div>
       )}
 
       {overview && accepting && (

@@ -325,6 +325,28 @@ as current branch/merge status; reconcile them with the latest slice evidence.
 - Open: Codex review.
 - Next: private renewal-document upload bound to the provider.
 
+## Current slice — TRACE-074 renewal document retention (2026-09-16, PR open)
+
+- TRACE-073 renewal-document upload merged as PR #29 (main `bbb0482`).
+- Branch `codex/phase5-renewal-retention`, base main `bbb0482`, worktree
+  `../mercurius-renewal-retention`.
+- Owner decisions 2026-09-15: CFG-011 applies to declined renewal documents only, 90 days
+  from the decline; operator-run queue, no scheduler; provider-level retention hold; quarantine,
+  then permanent deletion after 14 days (value to confirm at review).
+- Change: migration `20260915002000` (private quarantine bucket, immutable hold events and
+  retention actions, prepare/record commands that record only what `storage.objects` shows,
+  hold commands, retention queue). Route `/api/renewal-documents/retention`; new
+  `/admin/compliance/retention`; checklist hold control and retention badges.
+- Evidence: `governance/PHASE-5-RENEWAL-RETENTION.md` and the TRACE-074 section of
+  `PHASE-5-VALIDATION.md`. 1182 SQL assertions (111 new, eight guard mutants killed), all
+  eleven concurrency scripts, clean reset/replay, 32-check local route/Storage round trip,
+  108 unit tests, build, 175/182 browser cases (six `@visual` without Linux baselines, one
+  teardown flake passed 3/3 on rerun), lint/types/secrets, 0 audit.
+- Open: Codex review; CI; 14-day confirmation; never-submitted uploads and application
+  documents outside retention; operator `DELETE` policy on `vendor-documents`.
+- Next: choose between retention for never-submitted uploads/application documents (needs a
+  clock decision) and another Phase 5 gate (tax/promotions, recurring automation, finance).
+
 ## Workflow update — 2026-09-10
 
 Owner assigned Codex architecture and code review, with Claude implementing the
