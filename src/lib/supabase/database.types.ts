@@ -5258,6 +5258,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      money_finance_reconciliation: { Args: never; Returns: Json }
       money_flag_checkout: {
         Args: { p_attempt: string; p_code: string }
         Returns: undefined
