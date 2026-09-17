@@ -365,6 +365,30 @@ as current branch/merge status; reconcile them with the latest slice evidence.
 - Next: finance operator command gateway (authenticated actor, second-person approval,
   ConfirmAction) for refunds, holds, readbacks and ACH outcomes.
 
+## Current slice — TRACE-076 finance operator commands, part 1 (2026-09-17, PR open)
+
+- TRACE-075 merged as PR #31 (main `3f98939`).
+- Branch `codex/phase5-finance-commands`, base main `3f98939`, worktree
+  `../mercurius-finance-commands`. Committed and pushed; PR open.
+- Owner direction 2026-09-16: part 1 of the finance operator command gateway (refund send and
+  readback, payout holds, Stripe readback record/resolve, event replay/exclusion) with
+  ConfirmAction; propose the actor and approval design for Codex review. Owner decision: keep
+  the global unsupported-event payout hold.
+- Change: migration `20260916002000` adds `authenticated` gateway commands whose actor is always
+  `auth.uid()`, an immutable request → different-operator approval → requester execution flow
+  bound to the exact command, readback and refund-readback attribution, and
+  `money_finance_operations`. `refund-invoice` gains a Stripe readback action. The
+  `/admin/finance` page gains the FinanceCommands panel. Kernels are unchanged.
+- Evidence: `governance/PHASE-5-FINANCE-COMMANDS.md` (design G1–G9) and the TRACE-076 section of
+  `PHASE-5-VALIDATION.md`. SQL 043 has 132 assertions (14 guard mutants killed); the full
+  regression passes; a new concurrency script is in CI with all twelve passing in order;
+  57 Edge cases (7 new); 125 unit tests; build; 191/198 browser cases (6 `@visual` without Linux baselines, one unrelated fixture flake passing 3/3 on rerun), finance specs 16/16; 0 audit findings.
+- Open: Codex design and code review (G3 two-person hold release, G9 request expiry or
+  withdrawal); CI; `paymentFunctionError` loses Edge error codes (shared helper, own fix);
+  a stuck `reconcile` refund cannot be re-sent; part 2 (refund authorization, chargeback
+  allocation, ACH preparation, bank outcomes, retry).
+- Next: CI and Codex review of the PR; then part 2.
+
 ## Workflow update — 2026-09-10
 
 Owner assigned Codex architecture and code review, with Claude implementing the

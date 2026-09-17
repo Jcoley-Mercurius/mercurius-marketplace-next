@@ -127,6 +127,105 @@ if (["checkout-request", "create-checkout"].includes(name)) {
     delete fixture.MERCURIUS_MONEY_MODE;
   });
 }
+if (name === "refund-invoice") {
+  // TRACE-076: the verified token names the actor; a body field never does.
+  const operator = "10000000-0000-4000-8000-000000000076";
+  const authorization = "10000000-0000-4000-8000-000000000077";
+  const withMoney = async (run: () => Promise<void>) => {
+    fixture.MERCURIUS_MONEY_MODE = "test"; fixture.STRIPE_SECRET_KEY = "sk_test_" + "synthetic-no-network";
+    try { await run(); } finally { delete fixture.MERCURIUS_MONEY_MODE; fixture.STRIPE_SECRET_KEY = "synthetic-stripe-key-for-runtime-tests"; }
+  };
+  const target = (overrides: Record<string, unknown> = {}) => ({ authorization_id: authorization, payment_id: "pi_synthetic", amount: 2140, attempt_status: "pending", provider_reference: null, settled: false, ...overrides });
+  const bodyOf = (init?: RequestInit) => JSON.parse(String(init?.body));
+
+  Deno.test("refund send: the actor is the verified user, not a body field", () => withMoney(async () => {
+    calls = []; unexpected = [];
+    const actors: string[] = [];
+    route = (url, init) => {
+      if (url.pathname === "/auth/v1/user") return json({ id: operator });
+      if (url.pathname === "/rest/v1/rpc/money_prepare_refund") { actors.push(bodyOf(init).p_actor); return json({ status: "reconcile" }); }
+    };
+    const response = await request({ authorization_id: authorization, p_actor: "10000000-0000-4000-8000-000000000099", actor: "10000000-0000-4000-8000-000000000099" }, { Authorization: "Bearer synthetic-operator" });
+    equal(response.status, 200); equal((await response.json()).status, "reconcile");
+    equal(actors, [operator]);
+    equal(calls.some(call => call.includes("/v1/refunds")), false);
+  }));
+
+  Deno.test("refund readback: finance refusal makes no Stripe call", () => withMoney(async () => {
+    calls = []; unexpected = [];
+    route = (url) => {
+      if (url.pathname === "/auth/v1/user") return json({ id: operator });
+      if (url.pathname === "/rest/v1/rpc/money_refund_readback_target") return json({ code: "42501", message: "Restricted finance authority required", details: null, hint: null }, 403);
+    };
+    const response = await request({ action: "readback", authorization_id: authorization }, { Authorization: "Bearer synthetic-admin" });
+    equal(response.status, 403); equal((await response.json()).error, "FINANCE_AUTHORITY_REQUIRED");
+    equal(calls, ["GET /auth/v1/user", "POST /rest/v1/rpc/money_refund_readback_target"]);
+  }));
+
+  Deno.test("refund readback: an unsent refund is not read back", () => withMoney(async () => {
+    calls = []; unexpected = [];
+    route = (url) => {
+      if (url.pathname === "/auth/v1/user") return json({ id: operator });
+      if (url.pathname === "/rest/v1/rpc/money_refund_readback_target") return json(target({ attempt_status: "not_started" }));
+    };
+    const response = await request({ action: "readback", authorization_id: authorization }, { Authorization: "Bearer synthetic-operator" });
+    equal(response.status, 409); equal((await response.json()).error, "REFUND_NOT_SENT");
+    equal(calls.length, 2);
+  }));
+
+  Deno.test("refund readback: a known reference is retrieved and recorded for the verified user", () => withMoney(async () => {
+    calls = []; unexpected = [];
+    const recorded: unknown[] = [];
+    route = (url, init) => {
+      if (url.pathname === "/auth/v1/user") return json({ id: operator });
+      if (url.pathname === "/rest/v1/rpc/money_refund_readback_target") { equal(bodyOf(init).p_actor, operator); return json(target({ provider_reference: "re_synthetic" })); }
+      if (url.pathname === "/v1/refunds/re_synthetic") return json({ id: "re_synthetic", object: "refund", amount: 2140, status: "succeeded", payment_intent: "pi_synthetic", metadata: { money_authorization_id: authorization } });
+      if (url.pathname === "/rest/v1/rpc/money_record_refund_readback") { recorded.push(bodyOf(init)); return json({ attempt_status: "pending", settled: false }); }
+    };
+    const response = await request({ action: "readback", authorization_id: authorization, p_actor: "10000000-0000-4000-8000-000000000099" }, { Authorization: "Bearer synthetic-operator" });
+    equal(response.status, 200);
+    equal(await response.json(), { status: "pending", settled: false, found: true, refund_id: "re_synthetic", provider_status: "succeeded" });
+    equal(recorded, [{ p_authorization: authorization, p_actor: operator, p_reference: "re_synthetic", p_status: "succeeded", p_amount: 2140 }]);
+    equal(calls.filter(call => call.startsWith("POST /v1/")), []);
+  }));
+
+  Deno.test("refund readback: no refund at Stripe records not found", () => withMoney(async () => {
+    calls = []; unexpected = [];
+    const recorded: unknown[] = [];
+    route = (url, init) => {
+      if (url.pathname === "/auth/v1/user") return json({ id: operator });
+      if (url.pathname === "/rest/v1/rpc/money_refund_readback_target") return json(target({ attempt_status: "reconcile" }));
+      if (url.pathname === "/v1/refunds") {
+        equal(url.searchParams.get("payment_intent"), "pi_synthetic");
+        return json({ object: "list", has_more: false, data: [{ id: "re_other", object: "refund", amount: 500, status: "succeeded", payment_intent: "pi_synthetic", metadata: { money_authorization_id: "10000000-0000-4000-8000-000000000098" } }] });
+      }
+      if (url.pathname === "/rest/v1/rpc/money_record_refund_readback") { recorded.push(bodyOf(init)); return json({ attempt_status: "reconcile", settled: false }); }
+    };
+    const response = await request({ action: "readback", authorization_id: authorization }, { Authorization: "Bearer synthetic-operator" });
+    equal(response.status, 200); equal((await response.json()).found, false);
+    equal(recorded, [{ p_authorization: authorization, p_actor: operator, p_reference: null, p_status: null, p_amount: null }]);
+  }));
+
+  Deno.test("refund readback: a refund for another payment records nothing", () => withMoney(async () => {
+    calls = []; unexpected = [];
+    route = (url) => {
+      if (url.pathname === "/auth/v1/user") return json({ id: operator });
+      if (url.pathname === "/rest/v1/rpc/money_refund_readback_target") return json(target({ provider_reference: "re_synthetic" }));
+      if (url.pathname === "/v1/refunds/re_synthetic") return json({ id: "re_synthetic", object: "refund", amount: 2140, status: "succeeded", payment_intent: "pi_elsewhere", metadata: { money_authorization_id: authorization } });
+    };
+    const response = await request({ action: "readback", authorization_id: authorization }, { Authorization: "Bearer synthetic-operator" });
+    equal(response.status, 409); equal((await response.json()).error, "REFUND_PROVIDER_MISMATCH");
+    equal(calls.some(call => call.includes("money_record_refund_readback")), false);
+  }));
+
+  Deno.test("refund readback: an unknown action is refused before any lookup", () => withMoney(async () => {
+    calls = []; unexpected = [];
+    route = (url) => url.pathname === "/auth/v1/user" ? json({ id: operator }) : undefined;
+    const response = await request({ action: "mark_settled", authorization_id: authorization }, { Authorization: "Bearer synthetic-operator" });
+    equal(response.status, 400); await response.body?.cancel();
+    equal(calls, ["GET /auth/v1/user"]);
+  }));
+}
 if (name === 'stripe-webhook') {
   Deno.test('signed webhook commits minimized receipt before failure, then replays', async () => {
     fixture.MERCURIUS_MONEY_MODE='test'; fixture.STRIPE_SECRET_KEY='sk_test_'+'synthetic-no-network';

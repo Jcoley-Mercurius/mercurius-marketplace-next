@@ -2088,6 +2088,32 @@ export type Database = {
           },
         ]
       }
+      money_readback_entries: {
+        Row: {
+          actor: string
+          created_at: string
+          observation_id: string
+        }
+        Insert: {
+          actor: string
+          created_at?: string
+          observation_id: string
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          observation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_readback_entries_observation_id_fkey"
+            columns: ["observation_id"]
+            isOneToOne: true
+            referencedRelation: "money_reconciliation"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_reconciliation: {
         Row: {
           created_at: string
@@ -2361,6 +2387,47 @@ export type Database = {
           },
         ]
       }
+      money_refund_readbacks: {
+        Row: {
+          actor: string
+          authorization_id: string
+          created_at: string
+          found: boolean
+          id: string
+          provider_reference: string | null
+          provider_status: string | null
+          readback_sequence: number
+        }
+        Insert: {
+          actor: string
+          authorization_id: string
+          created_at?: string
+          found: boolean
+          id?: string
+          provider_reference?: string | null
+          provider_status?: string | null
+          readback_sequence?: never
+        }
+        Update: {
+          actor?: string
+          authorization_id?: string
+          created_at?: string
+          found?: boolean
+          id?: string
+          provider_reference?: string | null
+          provider_status?: string | null
+          readback_sequence?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_readbacks_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_attempts"
+            referencedColumns: ["authorization_id"]
+          },
+        ]
+      }
       money_refunds: {
         Row: {
           authorization_id: string
@@ -2514,6 +2581,85 @@ export type Database = {
           requested_by?: string
         }
         Relationships: []
+      }
+      money_review_executions: {
+        Row: {
+          actor: string
+          approver: string
+          created_at: string
+          request_id: string
+        }
+        Insert: {
+          actor: string
+          approver: string
+          created_at?: string
+          request_id: string
+        }
+        Update: {
+          actor?: string
+          approver?: string
+          created_at?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_review_executions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "money_review_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_review_requests: {
+        Row: {
+          business_key: string
+          command: Json
+          command_hash: string
+          created_at: string
+          evidence: string | null
+          id: string
+          obligation_id: string | null
+          operation: string
+          reason: string
+          requested_by: string
+          subject: string
+        }
+        Insert: {
+          business_key: string
+          command: Json
+          command_hash: string
+          created_at?: string
+          evidence?: string | null
+          id?: string
+          obligation_id?: string | null
+          operation: string
+          reason: string
+          requested_by: string
+          subject: string
+        }
+        Update: {
+          business_key?: string
+          command?: Json
+          command_hash?: string
+          created_at?: string
+          evidence?: string | null
+          id?: string
+          obligation_id?: string | null
+          operation?: string
+          reason?: string
+          requested_by?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_review_requests_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       money_snapshots: {
         Row: {
@@ -5258,10 +5404,52 @@ export type Database = {
         }
         Returns: undefined
       }
+      money_finance_operations: { Args: never; Returns: Json }
       money_finance_reconciliation: { Args: never; Returns: Json }
       money_flag_checkout: {
         Args: { p_attempt: string; p_code: string }
         Returns: undefined
+      }
+      money_operator_approve_review: {
+        Args: { p_reason: string; p_request: string }
+        Returns: Json
+      }
+      money_operator_execute_review: {
+        Args: { p_request: string }
+        Returns: Json
+      }
+      money_operator_place_hold: {
+        Args: {
+          p_evidence: string
+          p_key: string
+          p_obligation: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      money_operator_record_readback: {
+        Args: {
+          p_currency: string
+          p_evidence: string
+          p_key: string
+          p_obligation: string
+          p_observed: number
+        }
+        Returns: Json
+      }
+      money_operator_replay_event: {
+        Args: { p_event: string; p_reason: string }
+        Returns: Json
+      }
+      money_operator_request_review: {
+        Args: {
+          p_evidence?: string
+          p_key: string
+          p_operation: string
+          p_reason: string
+          p_subject: string
+        }
+        Returns: Json
       }
       money_payable: { Args: { p_obligation: string }; Returns: number }
       money_place_hold: {
@@ -5427,6 +5615,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      money_record_refund_readback: {
+        Args: {
+          p_actor: string
+          p_amount: number
+          p_authorization: string
+          p_reference: string
+          p_status: string
+        }
+        Returns: Json
+      }
       money_record_refund_result: {
         Args: {
           p_amount: number
@@ -5435,6 +5633,10 @@ export type Database = {
           p_status: string
         }
         Returns: undefined
+      }
+      money_refund_readback_target: {
+        Args: { p_actor: string; p_authorization: string }
+        Returns: Json
       }
       money_replay_event: {
         Args: { p_actor: string; p_event: string; p_reason: string }

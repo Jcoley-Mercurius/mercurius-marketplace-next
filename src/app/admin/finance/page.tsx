@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { FinanceCommands } from "@/components/admin/FinanceCommands";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageState } from "@/components/ui/page-state";
@@ -28,8 +29,8 @@ import {
 } from "@/lib/financeReconciliation";
 import { cn } from "@/lib/utils";
 
-// TRACE-075 finance reconciliation. Read-only: refunds, holds, readbacks and ACH outcomes
-// are recorded through the reviewed finance kernels, not from this page.
+// TRACE-075 finance reconciliation readback, with the TRACE-076 operator commands for refunds,
+// payout holds, Stripe readbacks and events. Chargeback allocation and ACH outcomes are not here.
 
 type Filter = "attention" | "all" | FundsState;
 
@@ -93,7 +94,7 @@ export default function FinanceReconciliationPage() {
     <PageHeader
       eyebrow="Finance"
       title="Finance reconciliation"
-      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The platform fee is ${data?.fee_percent ?? 15}% of retained service, excluding tax and tips. This page records nothing: refunds, holds, Stripe readbacks and bank outcomes go through the reviewed finance process.`}
+      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The platform fee is ${data?.fee_percent ?? 15}% of retained service, excluding tax and tips. Commands below are recorded as you; releases, readback resolutions and event exclusions need a second finance operator. Chargeback allocation and bank outcomes are not recorded here.`}
       actions={
         <Button variant="outline" disabled={loading} onClick={() => void load()}>
           <RefreshCw />
@@ -295,6 +296,8 @@ export default function FinanceReconciliationPage() {
           </div>
         )}
       </section>
+
+      <FinanceCommands obligations={data.obligations} onChanged={load} />
 
       <section aria-labelledby="finance-invoices" className="space-y-3">
         <h2 id="finance-invoices" className="text-lg font-semibold">Invoices</h2>
