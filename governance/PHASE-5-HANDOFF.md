@@ -109,6 +109,15 @@ with every hold reason, Stripe readback state and an exceptions queue at `/admin
 Read-only; operator commands, scheduled readback and bank statement import remain. It surfaces
 that an unsupported Stripe event holds every payout. See PHASE-5-FINANCE-RECONCILIATION.md.
 
+TRACE-076 adds part 1 of the finance operator command gateway on `/admin/finance`: payout hold
+placement and two-person release, Stripe readback record and two-person resolution, event
+replay and two-person exclusion, and reviewed refund send and Stripe readback. The actor is the
+signed-in session (or the Auth-verified token in `refund-invoice`), never an input; second-person
+commands bind a stored exact command approved by a different finance operator in their own
+session. The owner kept the global unsupported-event payout hold (2026-09-16). Refund
+authorization, chargeback allocation and ACH commands remain for part 2. See
+PHASE-5-FINANCE-COMMANDS.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

@@ -990,3 +990,75 @@ deleted, not adopted. Screenshots were reviewed; a mid-word wrap in exception de
 before the final run.
 
 Not performed: CI, hosted or Stripe/bank verification, human screen-reader review.
+
+## TRACE-076 — Finance operator command gateway, part 1 — 2026-09-17
+
+Branch `codex/phase5-finance-commands`, base `main` `3f98939`; isolated synthetic stack only.
+Design, scope and decisions G1–G9 are in PHASE-5-FINANCE-COMMANDS.md. Owner decision
+2026-09-16: the global unsupported-event payout hold is kept.
+
+Baseline before change: 1295 pgTAP assertions across 33 suites (TRACE-075 evidence).
+
+Database: 1427 pgTAP assertions across 34 suites pass after a clean reset (and again as CI's
+clean replay after the committed concurrency fixtures); 132 are new in suite 043.
+Suite 043 runs the commands on the `authenticated` role and covers: grants (gateway callable,
+kernels and refund readback functions service-only, no gateway function takes an actor or
+approver); access (no user, homeowner and admin without finance authority refused, including a
+browser call to the hold kernel with another operator as actor); hold placement (validation,
+session actor, key replay, conflicts including another operator's key, payout stopped, refusal on
+an ACH statement); hold release (evidence required, unsupported/malformed/unknown subjects,
+canonical subject replay, no execution without approval, no self-approval through the gateway
+or the kernel, an approval of a different reason not counting, admin without authority refused,
+approver cannot execute, an approver who lost authority no longer counting, execution replay,
+kernel and gateway audit rows, payout payable again, immutability, completed hold refused);
+readbacks (validation, mismatch opens the hold, attribution, replay and amount/evidence
+conflicts, mismatch and superseded readbacks not resolvable, recorder cannot approve even
+through a direct kernel approval, a third operator approves, an approved resolution going stale
+when money moves, resolution clears the hold); events (unfailed and processed events not
+excludable, replay validation and attribution, the unsupported event holding every payout
+until a two-person exclusion lifts it, excluded event not replayable, an event with ledger
+effects not approvable); refund readback functions (finance authority, no attempt created by
+the target read, not sent, not found, found with Stripe status, known reference not overwritten,
+amount mismatch refused by the kernel, Stripe success not settling, attribution, send permission
+per author/approver, no operator identities returned).
+
+Mutation check (local harness, not committed; each function replaced on the running synthetic
+database and restored): requester approving own command, recorder approving a resolution,
+recorder approval counted at execution, approver executing, approver without authority counted,
+hold on an ACH statement, another operator replaying a hold key, replay of a processed event,
+outdated readback resolvable, event with effects excludable, operations without finance check,
+refund target without finance check, not-found overwriting a known refund reference, and readback
+replay ignoring evidence. On the first run the approver-authority and readback-evidence mutants
+survived; three assertions were added, and all 14 then failed suite 043. Restored functions pass
+all 132.
+
+Concurrency: new `scripts/phase5-finance-command-concurrency.mjs`, wired into CI after the
+retention script. As separate signed-in sessions: five same-key hold placements make one hold;
+two approved releases of one hold, one held open by a sleeping executor, make one release and one
+execution (the others refused as completed); four same-key readbacks make one attributed
+observation; a resolution racing a new mismatching readback never leaves the hold closed; three
+executions of one approved exclusion make one exclusion; no other event changed and no journal was
+posted. Its first run found that a late readback committed between the gateway check and the
+kernel lock surfaced as a raw kernel refusal; execution now locks the kernel's row before
+checking. After the fix it passed three times on fresh resets (a fourth run was lost when the
+session ended) and once more after the eleven existing scripts in CI order, all twelve passing on
+a clean reset; both race-4 orderings were observed (resolution first once, readback first three
+times).
+
+Edge: all 11 functions type-check on Deno 2.9.6; 57 handler cases pass, including 7 new
+`refund-invoice` cases (send actor from the verified token despite body fields, finance refusal
+with no Stripe call, unsent refund, retrieval by reference recorded for the verified user,
+not-found recorded from a payment's refund list, a refund for another payment recorded nothing,
+unknown action refused before lookup).
+
+Application: `scan:secrets`, `lint`, `typecheck` pass; 125 unit tests (10 new); build with CI's
+synthetic public variables; generated database types differ only by the new tables and RPCs
+(additive diff); `audit:prod` 0 findings. Browser: 191 of 198 cases pass. The 6 `@visual` cases fail for lack of Linux baselines, as in earlier slices, and the auto-written snapshots were deleted, not adopted. One unrelated account-linking case failed on a synthetic portal-fixture socket hang-up and passed 3/3 on rerun. The finance specs (8 new, 8 existing) pass: light
+320px and dark 1440px with axe and reflow, approval with note and no actor field, requester run
+with a refusal shown in operator words, hold placement with key reuse on retry, an unconfirmed
+readback reported as not done, refund send reporting money not activated, event replay wording.
+Screenshots were reviewed. Browser work found that `paymentFunctionError` loses Edge error codes
+(finding recorded; the panel reads the response itself).
+
+Not performed: CI, hosted or Stripe test-mode/bank verification, a live
+`refund-invoice` round trip against local Auth and Stripe, human screen-reader review.
