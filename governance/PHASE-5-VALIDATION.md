@@ -1236,3 +1236,114 @@ reviewed: no horizontal scroll, and forms and lists stack at 320px.
 
 Not performed: CI, Edge checks (no Edge change), owner bank workflow or statement acceptance,
 hosted verification, human screen-reader review.
+
+## TRACE-079 — ACH transfer withdrawal and replacement statements — 2026-09-21
+
+Branch `codex/phase5-replacement-statements`, base `main` `7f696e1` (PR #34 merged); isolated
+synthetic stack only. Design W1–W7, the owner's two decisions and the review questions are in
+PHASE-5-ACH-REPLACEMENT.md.
+
+Baseline before change: 1708 pgTAP assertions across 36 suites passed on `7f696e1` after a clean
+reset. With the migration applied and no test changes, all 36 suites passed unchanged.
+
+Database: 1856 pgTAP assertions across 37 suites pass after a clean reset, and again as CI's clean
+replay after all committed concurrency fixtures. Suite 046 is new (148 assertions). It covers:
+
+- grants: the request callable; kernel, blocker, helpers and the withdrawal table closed; no
+  service-role update on withdrawals;
+- characterization of the block this slice removes: a refund, a chargeback allocation, a hold and
+  a second batch refused while the payout is on a statement; the kernel and a direct insert
+  refused a second live statement;
+- access and validation: reason, evidence, key, unknown transfer; the generic request refuses
+  withdrawals;
+- refusals: submitted and unknown (`bank_outcome_open`) and settled (`paid`) transfers;
+- a prepared transfer's review: the stored command bound to `prepared`, trimmed replay and
+  conflict, what the approver sees, no self-approval, no unapproved run, approver cannot run,
+  replay;
+- what the withdrawal records: operators, previous status, reason, the `withdrawn` event and key;
+  no journal; immutability;
+- a withdrawn transfer refused by the unchanged record and retry kernels and by the gateway
+  (`withdrawn`, `completed`);
+- off the statement: ready again with the statement it replaces; reconciliation `eligible` with
+  no live statement and one withdrawn; a hold placed and released;
+- the replacement: the approver sees what it replaces; `replaces_item_id` set; one live item; a
+  second replacement refused; readback weeks; reconciliation `scheduled`, then `paid` once with
+  only the replacement counted;
+- a returned transfer: withdrawal adds no journal; replacement settles; net paid is one payout;
+  provider payable cleared; no reconciliation issue;
+- a refund after withdrawal: allowed, settled, and the replacement pays the reduced amount
+  (7800 cents against the withdrawn 9500);
+- a lost chargeback allocated once the transfer is withdrawn;
+- a changed bank authorization: a prepared and a failed transfer, both withdrawable, replaced with
+  the new authorization and sendable;
+- staleness: a retry makes a withdrawal `completed`; a submission makes one `status_changed`; an
+  expired one cannot be approved;
+- the kernel: refuses a submitted transfer, an approval for another status, an unapproved command,
+  a different withdrawal of the same transfer and an already-retried attempt; replays a recorded
+  withdrawal;
+- no full bank reference or customer identity returned.
+
+Mutation check (local harness, not committed): each mutant replaced one function body from the
+migration in the isolated database, ran suites 045 and 046, and restored the original. 25 of 26
+mutants were killed. They covered:
+
+- the withdrawal blocker's checks;
+- the kernel's status, state, latest-attempt, replay and review checks, and its status update;
+- the chain trigger's refusal and predecessor link;
+- the live-item filter;
+- each W4 predicate: the refund blocker and trigger, hold, chargeback blocker and kernel, and
+  batch terms;
+- the record and retry `withdrawn` checks;
+- the reconciliation live item and the ready-list filter;
+- the request blocker branch, and the status binding at request time.
+
+The survivor removes the blocker's failure-evidence check. It is equivalent: the unchanged
+`money_record_ach` writes the matching event before setting `failed` or `returned`, so that state
+cannot exist without evidence. The kernel keeps the same check.
+
+The first harness run under-reported kills. psql prints errors to stderr and exits 0, and an
+aborted transaction prints no `not ok`, so it counted crashing mutants as survivors. The corrected
+harness compares passing counts with the baseline and reads stderr. The figures above are from
+the corrected run.
+
+Concurrency: new `scripts/phase5-ach-replacement-concurrency.mjs`, wired into CI after the
+TRACE-078 script. Its weeks start at +140 days: both scripts share CI's database, and weeks cannot
+overlap. Each call is a separate signed-in session:
+
+- a withdrawal holding the lock while an operator records the submission: withdrawn, the
+  submission refused with `withdrawn`, and no submitted event;
+- a submission holding the lock while an approved withdrawal runs: submitted, and the withdrawal
+  refused with `status_changed`;
+- three runs each of two approved withdrawals of one transfer: one withdrawal, one `withdrawn`
+  event and one execution;
+- a withdrawal holding the lock while an approved retry of the same failed transfer runs: the
+  retry is refused with `withdrawn` and no new attempt exists;
+- after a withdrawal, two approved batches for different weeks both containing the payout, one
+  holding the lock: one replacement, and the other refused with `on_ach_statement`;
+- every payout has at most one live statement; no race posted a bank journal.
+
+All 15 scripts passed in CI order on a clean reset. The new script also passed three more times
+alone on clean resets.
+
+Application: `scan:secrets`, `lint` and `typecheck` pass. 138 unit tests pass (3 new cases, plus
+extended existing ones). They cover withdrawal gating by status, blocker and open request;
+withdrawal where a bank change blocks sending and retry; withdrawal details typed to their
+operation; and withdrawal refusal wording. The existing replacement-wording expectation was
+updated. The build passes with CI's synthetic public variables (65 pages). Regenerated database
+types differ by additions, plus the obligation relationship on statement items, which is no longer
+one-to-one. `audit:prod` has 0 findings.
+
+Browser: 204 of 204 non-visual cases pass (`test:a11y`):
+
+- the themed layout cases at 320px light and 1440px dark now include a withdrawn, replaced
+  transfer, a ready payout replacing a withdrawn statement, and a batch heading with its withdrawn
+  total, under axe and the no-horizontal-scroll check;
+- new: a withdrawal request sends transfer, evidence, reason and key with no actor field, lists
+  only withdrawable transfers, and warns about paying twice; an approver sees the transfer, its
+  failure evidence and reference hint before approving.
+
+ACH section screenshots at 1440px dark and 320px light were reviewed. The withdrawal form fields
+have labels distinct from the bank outcome form's.
+
+Not performed: CI, Edge checks (no Edge change), owner bank workflow or statement acceptance,
+hosted verification, human screen-reader review.

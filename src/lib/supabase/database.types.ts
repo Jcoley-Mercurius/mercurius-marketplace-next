@@ -1316,6 +1316,7 @@ export type Database = {
           id: string
           obligation_id: string
           platform_fee: number
+          replaces_item_id: string | null
           service_retained: number
           snapshot_id: string
           tip_retained: number
@@ -1330,6 +1331,7 @@ export type Database = {
           id?: string
           obligation_id: string
           platform_fee: number
+          replaces_item_id?: string | null
           service_retained: number
           snapshot_id: string
           tip_retained: number
@@ -1344,6 +1346,7 @@ export type Database = {
           id?: string
           obligation_id?: string
           platform_fee?: number
+          replaces_item_id?: string | null
           service_retained?: number
           snapshot_id?: string
           tip_retained?: number
@@ -1373,8 +1376,15 @@ export type Database = {
           {
             foreignKeyName: "money_ach_items_obligation_id_fkey"
             columns: ["obligation_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_items_replaces_item_id_fkey"
+            columns: ["replaces_item_id"]
+            isOneToOne: true
+            referencedRelation: "money_ach_items"
             referencedColumns: ["id"]
           },
           {
@@ -1382,6 +1392,57 @@ export type Database = {
             columns: ["snapshot_id"]
             isOneToOne: false
             referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_ach_withdrawals: {
+        Row: {
+          approved_by: string
+          attempt_id: string
+          created_at: string
+          evidence: string
+          id: string
+          item_id: string
+          previous_status: string
+          reason: string
+          requested_by: string
+        }
+        Insert: {
+          approved_by: string
+          attempt_id: string
+          created_at?: string
+          evidence: string
+          id?: string
+          item_id: string
+          previous_status: string
+          reason: string
+          requested_by: string
+        }
+        Update: {
+          approved_by?: string
+          attempt_id?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          item_id?: string
+          previous_status?: string
+          reason?: string
+          requested_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_ach_withdrawals_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: true
+            referencedRelation: "money_ach_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_withdrawals_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "money_ach_items"
             referencedColumns: ["id"]
           },
         ]
@@ -5569,6 +5630,15 @@ export type Database = {
         Args: { p_attempt: string; p_key: string; p_reason: string }
         Returns: Json
       }
+      money_operator_request_ach_withdrawal: {
+        Args: {
+          p_attempt: string
+          p_evidence: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       money_operator_request_cancellation_refund: {
         Args: {
           p_key: string
@@ -5849,6 +5919,17 @@ export type Database = {
       }
       money_retry_ach: {
         Args: { p_actor: string; p_approver: string; p_item: string }
+        Returns: string
+      }
+      money_withdraw_ach: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_attempt: string
+          p_evidence: string
+          p_reason: string
+          p_status: string
+        }
         Returns: string
       }
       notify_user: {

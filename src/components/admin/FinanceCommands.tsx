@@ -28,6 +28,7 @@ import {
   reissueBlockerLabel,
   retryDetails,
   reviewAction,
+  withdrawalDetails,
   reviewStateLabel,
   type Components,
   type FinanceOperations,
@@ -64,6 +65,7 @@ const executeConsequence: Record<ReviewOperation, string> = {
   chargeback_allocation: "Allocates the lost chargeback to service, tax and tip in the ledger and reduces provider proceeds and the platform fee to match. It cannot be undone here.",
   ach_preparation: "Prepares the weekly ACH statement for these payouts at these amounts, with you as author and the approver as reviewer. Nothing is sent: record each submission here immediately before sending it at the bank.",
   ach_retry: "Prepares a new attempt for this transfer at its statement amount. Nothing is sent: record the submission here immediately before sending it at the bank.",
+  ach_withdrawal: "Withdraws this transfer from its statement, with you as author and the approver as reviewer. It can then never be sent, retried or given a bank outcome. The payout returns to the ready list, where a later weekly batch prepares its replacement statement at its current amount and bank authorization.",
 };
 
 export function FinanceCommands({
@@ -214,20 +216,28 @@ export function FinanceCommands({
   const reviewEntity = (request: ReviewRequest) => {
     const batch = batchDetails(request);
     const retry = retryDetails(request);
+    const withdrawal = withdrawalDetails(request);
     const money = moneyDetails(request);
     if (request.operation === "event_exclusion") {
       return `${request.subject}${request.obligation_id ? ` · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : ""}`;
     }
     if (batch) return `Week of ${formatDay(batch.period_start)} · ${batch.items.length} payout${batch.items.length === 1 ? "" : "s"}`;
     if (retry) return `${invoiceLabel(request.obligation_id, request.invoice_number)} · ${retry.payee_name ?? "Provider"} · attempt ${retry.attempt_number} ${retry.status}`;
+    if (withdrawal) {
+      return `${invoiceLabel(request.obligation_id, request.invoice_number)} · ${withdrawal.payee_name ?? "Provider"} · week of ${formatDay(withdrawal.period_start)} · attempt ${withdrawal.attempt_number} ${withdrawal.status}`;
+    }
     return money?.dispute_id ? `${money.dispute_id} · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : invoiceLabel(request.obligation_id, request.invoice_number);
   };
   const reviewAmounts = (request: ReviewRequest) => {
     const batch = batchDetails(request);
     const retry = retryDetails(request);
+    const withdrawal = withdrawalDetails(request);
     const money = moneyDetails(request);
     if (batch) return `${formatCents(batch.total)} · bank batch ${batch.bank_ref}`;
     if (retry) return formatCents(retry.amount);
+    if (withdrawal) {
+      return `${formatCents(withdrawal.amount)}${withdrawal.bank_reference_hint ? ` · reference ends ${withdrawal.bank_reference_hint}` : ""}${withdrawal.bank_evidence ? ` · bank showed: ${withdrawal.bank_evidence}` : ""}`;
+    }
     return money ? `${money.payment_id ? `${money.payment_id} · ` : ""}${formatCents(money.service + money.tax + money.tip)} (${components(money)})` : null;
   };
 
@@ -237,7 +247,7 @@ export function FinanceCommands({
         <div>
           <h2 id="finance-commands" className="text-lg font-semibold">Finance commands</h2>
           <p className="text-sm text-muted-foreground">
-            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch and retrying a failed transfer need a second operator too. Placing and releasing a payout hold and recording a bank outcome need one operator.
+            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch, retrying a failed transfer and withdrawing a transfer from its statement need a second operator too. Placing and releasing a payout hold and recording a bank outcome need one operator.
           </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => void refresh()}><RefreshCw />Refresh commands</Button>
@@ -247,7 +257,7 @@ export function FinanceCommands({
       <div className="space-y-3">
         <h3 className="font-medium">Second-person reviews ({ops.requests.filter((item) => item.state !== "executed").length} open)</h3>
         {ops.requests.length === 0 ? (
-          <PageState kind="empty" title="No review requests" description="Requests to prepare ACH batches, retry transfers, authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
+          <PageState kind="empty" title="No review requests" description="Requests to prepare ACH batches, retry or withdraw transfers, authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -269,6 +279,7 @@ export function FinanceCommands({
                           {batchDetails(item)!.items.map((payout) => (
                             <li key={payout.obligation_id}>
                               {invoiceLabel(payout.obligation_id, payout.invoice_number)} · {payout.payee_name ?? "Provider"} · {formatCents(payout.amount)}
+                              {payout.replaces && <> · replaces the withdrawn week of {formatDay(payout.replaces.period_start)} ({formatCents(payout.replaces.amount)})</>}
                               {payout.blocker && <> · {blockerLabel[payout.blocker]}</>}
                             </li>
                           ))}
@@ -357,7 +368,7 @@ export function FinanceCommands({
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-3 rounded-xl border bg-card p-4">
           <h3 className="font-medium">Place a payout hold</h3>
-          <p className="text-sm text-muted-foreground">Stops ACH preparation for one invoice. A payout already on an ACH statement cannot be held.</p>
+          <p className="text-sm text-muted-foreground">Stops ACH preparation for one invoice. A payout on an ACH statement cannot be held unless its transfer is withdrawn first.</p>
           <FormField label="Invoice" required>
             {(control) => (
               <select {...control} className={selectClass} value={holdInvoice} disabled={busy} onChange={(event) => setHoldInvoice(event.target.value)}>

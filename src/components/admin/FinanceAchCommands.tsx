@@ -14,12 +14,14 @@ import {
   blockerLabel,
   canRecordOutcome,
   canRequestRetry,
+  canRequestWithdrawal,
   formatDay,
   weekEnd,
   type AchItem,
   type AchOutcome,
   type FinanceOperations,
   type ReviewOperation,
+  type WithdrawableStatus,
 } from "@/lib/financeCommands";
 import { formatCents } from "@/lib/financeReconciliation";
 import { createClient } from "@/lib/supabase/client";
@@ -27,6 +29,8 @@ import { createClient } from "@/lib/supabase/client";
 // TRACE-078 weekly ACH. Mercurius sends each transfer from its own bank; this panel records
 // permission and evidence only. A batch and a retry need a second finance operator; a bank
 // outcome needs one. Recording a submission re-checks the payout, so it comes before sending.
+// TRACE-079: a second operator also approves withdrawing a transfer the bank does not hold, so a
+// later weekly batch can prepare its replacement statement.
 
 const selectClass =
   "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
@@ -37,6 +41,12 @@ const outcomeConsequence: Record<AchOutcome, string> = {
   failed: "Records the failure. The payout can then be retried once a second finance operator approves.",
   unknown: "Records that the bank has not shown an outcome. An unknown transfer is never retried; record its outcome when the bank shows it.",
   returned: "Records the return and reverses the payout in the ledger. The payout can then be retried once a second finance operator approves.",
+};
+
+const withdrawalConsequence: Record<WithdrawableStatus, string> = {
+  prepared: "Takes this unsent transfer off its statement. Check the bank portal first: if it was sent, withdrawing it and preparing a replacement would pay the provider twice.",
+  failed: "Takes this failed transfer off its statement instead of retrying it, for example because the provider's bank authorization changed.",
+  returned: "Takes this returned transfer off its statement instead of retrying it, for example because the provider's bank authorization changed.",
 };
 
 type SubmitRequest = (
@@ -73,6 +83,8 @@ export function FinanceAchCommands({
   const [outcome, setOutcome] = useState<AchOutcome | "">("");
   const [bankReference, setBankReference] = useState("");
   const [bankEvidence, setBankEvidence] = useState("");
+  const [withdrawTransfer, setWithdrawTransfer] = useState("");
+  const [withdrawEvidence, setWithdrawEvidence] = useState("");
 
   const selectable = ach.ready.filter((payout) => payout.blocker === null && payout.open_request_id === null);
   const chosen = selectable.filter((payout) => selected.includes(payout.obligation_id));
@@ -84,6 +96,8 @@ export function FinanceAchCommands({
   const recordable = items.filter(canRecordOutcome);
   const item = recordable.find((candidate) => candidate.attempt_id === transfer);
   const referenceRequired = outcome === "submitted" && !item?.bank_reference_hint;
+  const withdrawable = items.filter(canRequestWithdrawal);
+  const withdrawing = withdrawable.find((candidate) => candidate.attempt_id === withdrawTransfer);
   const itemLabel = (payout: AchItem) =>
     `${label(payout.invoice_number, payout.obligation_id)} · ${payout.payee_name ?? "Provider"} · ${formatCents(payout.amount)}`;
 
@@ -126,6 +140,11 @@ export function FinanceAchCommands({
                             <span className="text-xs text-muted-foreground">
                               {payout.open_request_id ? "Already in a requested batch; see reviews" : payout.blocker ? blockerLabel[payout.blocker] : `Eligible since ${new Date(payout.eligible_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`}
                             </span>
+                            {payout.replaces && (
+                              <span className="text-xs text-muted-foreground tabular-nums">
+                                Replaces the withdrawn statement for the week of {formatDay(payout.replaces.period_start)} ({formatCents(payout.replaces.amount)})
+                              </span>
+                            )}
                           </span>
                         </label>
                       </li>
@@ -217,6 +236,53 @@ export function FinanceAchCommands({
             }}
           />
         </div>
+
+        <div className="space-y-3 rounded-xl border bg-card p-4">
+          <h4 className="font-medium">Withdraw a transfer from its statement</h4>
+          <p className="text-sm text-muted-foreground">
+            For a transfer the bank does not hold: never sent, failed or returned. The payout then goes on a later weekly batch at its current amount and bank authorization. A submitted, unknown or settled transfer cannot be withdrawn. A second finance operator approves.
+          </p>
+          <FormField label="Transfer to withdraw" required>
+            {(control) => (
+              <select {...control} className={selectClass} value={withdrawTransfer} disabled={busy || withdrawable.length === 0} onChange={(event) => setWithdrawTransfer(event.target.value)}>
+                <option value="">{withdrawable.length ? "Select a transfer" : "No transfer can be withdrawn"}</option>
+                {withdrawable.map((payout) => <option key={payout.attempt_id} value={payout.attempt_id}>{itemLabel(payout)} · {achStatusLabel[payout.status]}</option>)}
+              </select>
+            )}
+          </FormField>
+          <FormField
+            label="What the bank shows"
+            required
+            help={!withdrawing
+              ? "For an unsent transfer, that no transfer went out; for a failed or returned one, the failure or return. Never account details."
+              : withdrawing.status === "prepared"
+                ? "What the bank portal shows: that no transfer went out for this payout. Never account details."
+                : "What the bank shows for the failure or return. Never account details."}
+          >
+            {(control) => <Input {...control} value={withdrawEvidence} maxLength={1000} disabled={busy || !withdrawing} onChange={(event) => setWithdrawEvidence(event.target.value)} />}
+          </FormField>
+          <ConfirmAction
+            disabled={busy || !withdrawing || !withdrawEvidence.trim()}
+            requireReason
+            reasonLabel="Withdrawal reason"
+            reasonHelp="Why this transfer should not be sent or retried, for example a changed bank authorization or an agreed refund."
+            confirmationTone="commitment"
+            triggerLabel="Request withdrawal"
+            title="Request withdrawal of this transfer?"
+            entity={withdrawing ? `${itemLabel(withdrawing)} · attempt ${withdrawing.attempt_number} ${achStatusLabel[withdrawing.status].toLowerCase()}` : ""}
+            consequence={withdrawing
+              ? `${withdrawalConsequence[withdrawing.status as WithdrawableStatus]} A different finance operator must approve it within 24 hours; you then run it. If the transfer's bank status changes first, it cannot run.`
+              : ""}
+            confirmLabel="Request withdrawal"
+            onConfirm={(reason) => {
+              const payout = withdrawing!;
+              const evidence = withdrawEvidence.trim();
+              return submitRequest("ach_withdrawal", itemLabel(payout), () => createClient().rpc("money_operator_request_ach_withdrawal", {
+                p_attempt: payout.attempt_id, p_reason: reason, p_evidence: evidence, p_key: commandKey(`ach-withdrawal:${payout.attempt_id}`),
+              })).then(() => { setWithdrawTransfer(""); setWithdrawEvidence(""); });
+            }}
+          />
+        </div>
       </div>
 
       {ach.batches.length === 0 ? (
@@ -225,6 +291,7 @@ export function FinanceAchCommands({
         <div key={batch.batch_id} className="space-y-2">
           <h4 className="font-medium tabular-nums">
             Week of {formatDay(batch.period_start)} · {batch.items.length} payout{batch.items.length === 1 ? "" : "s"} · {formatCents(batch.total)}
+            {batch.withdrawn_total > 0 && <> · {formatCents(batch.withdrawn_total)} withdrawn</>}
           </h4>
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -240,6 +307,7 @@ export function FinanceAchCommands({
                     <span className="flex flex-col gap-0.5 tabular-nums [overflow-wrap:anywhere]">
                       <span className="font-medium">{label(payout.invoice_number, payout.obligation_id)} · {formatCents(payout.amount)}</span>
                       <span className="text-xs text-muted-foreground">{payout.payee_name ?? "Provider"}</span>
+                      {payout.replaces_period && <span className="text-xs text-muted-foreground">Replaces the withdrawn week of {formatDay(payout.replaces_period)}</span>}
                     </span>
                   ),
                 },
@@ -249,10 +317,18 @@ export function FinanceAchCommands({
                   render: (payout) => (
                     <span className="flex flex-col gap-0.5 [overflow-wrap:anywhere]">
                       <span>{achStatusLabel[payout.status]}{payout.attempt_number > 1 ? ` · attempt ${payout.attempt_number}` : ""}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {payout.bank_reference_hint ? `Reference ends ${payout.bank_reference_hint}` : "No bank reference yet"}
-                        {payout.last_event && ` · ${payout.last_event.evidence} · ${payout.last_event.by_me ? "recorded by you" : "recorded by another operator"}`}
-                      </span>
+                      {payout.withdrawal ? (
+                        <span className="text-xs text-muted-foreground">
+                          Was {achStatusLabel[payout.withdrawal.previous_status].toLowerCase()}
+                          {payout.bank_reference_hint && ` · reference ends ${payout.bank_reference_hint}`}
+                          {` · ${payout.withdrawal.reason} · bank showed: ${payout.withdrawal.evidence} · ${payout.withdrawal.by_me ? "you requested or approved it" : "requested and approved by other operators"}`}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {payout.bank_reference_hint ? `Reference ends ${payout.bank_reference_hint}` : "No bank reference yet"}
+                          {payout.last_event && ` · ${payout.last_event.evidence} · ${payout.last_event.by_me ? "recorded by you" : "recorded by another operator"}`}
+                        </span>
+                      )}
                     </span>
                   ),
                 },
@@ -260,12 +336,18 @@ export function FinanceAchCommands({
                   key: "next",
                   label: "Next step",
                   render: (payout) => {
+                    if (payout.status === "withdrawn") {
+                      return payout.replaced_in
+                        ? `Replaced in the week of ${formatDay(payout.replaced_in)}`
+                        : "Off this statement; a later weekly batch prepares its replacement";
+                    }
+                    if (payout.open_withdrawal_request_id) return "Withdrawal requested; see reviews";
                     const blocker = payout.status === "prepared" ? payout.submit_blocker : payout.retry_blocker;
                     if (blocker) return <span className="text-muted-foreground">{blockerLabel[blocker]}</span>;
                     if (payout.status === "prepared") return "Record the submission, then send it at the bank";
                     if (payout.status === "submitted" || payout.status === "unknown") return "Record what the bank shows";
                     if (payout.status === "settled") return "Paid";
-                    return payout.open_retry_request_id ? "Retry requested; see reviews" : "Can be retried";
+                    return payout.open_retry_request_id ? "Retry requested; see reviews" : "Can be retried or withdrawn";
                   },
                 },
                 {

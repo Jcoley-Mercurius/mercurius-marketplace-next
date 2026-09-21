@@ -62,7 +62,10 @@ export type ObligationReconciliation = {
     returned: number;
     payable: number;
     payable_ledger: number;
+    /** The live statement; null when there is none or every statement was withdrawn. */
     statement: { amount: number; period_start: string; attempt_number: number; bank_status: BankStatus } | null;
+    /** Statements withdrawn from this payout (TRACE-079). */
+    withdrawn_statements: number;
   };
   chargebacks: { suspense: number; suspense_ledger: number; lost: number };
   processor_costs: number;
@@ -255,7 +258,7 @@ export function exceptionPresentation(exception: FinanceException): { title: str
         ? { title: "Bank outcome unknown", action: "Confirm the transfer with the bank. Do not resend it." }
         : {
             title: exception.status === "returned" ? "Transfer returned" : "Transfer failed",
-            action: "Record the bank's confirmation, then retry the statement with a second reviewer.",
+            action: "Record the bank's confirmation, then retry the transfer or withdraw it for a replacement statement, each with a second reviewer.",
           };
   }
 }

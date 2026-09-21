@@ -7,6 +7,7 @@ import {
   canReadBackRefund,
   canRecordOutcome,
   canRequestRetry,
+  canRequestWithdrawal,
   canReissueRefund,
   canSendRefund,
   commandErrorMessage,
@@ -17,12 +18,13 @@ import {
   retryDetails,
   reviewAction,
   weekEnd,
+  withdrawalDetails,
   type AchItem,
   type PendingRefund,
   type ReviewRequest,
 } from "../../src/lib/financeCommands";
 
-// TRACE-076/077/078: wording and gating only. The database decides authority, approvers and actionability.
+// TRACE-076/077/078/079: wording and gating only. The database decides authority, approvers and actionability.
 const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   request_id: "00000000-0000-4000-8000-000000000761",
   operation: "hold_resolution",
@@ -176,6 +178,11 @@ const achItem = (overrides: Partial<AchItem> = {}): AchItem => ({
   submit_blocker: null,
   retry_blocker: null,
   open_retry_request_id: null,
+  withdraw_blocker: null,
+  open_withdrawal_request_id: null,
+  withdrawal: null,
+  replaced_in: null,
+  replaces_period: null,
   ...overrides,
 });
 
@@ -187,6 +194,7 @@ describe("weekly ACH", () => {
     expect(achOutcomes("settled")).toEqual(["returned"]);
     expect(achOutcomes("failed")).toEqual([]);
     expect(achOutcomes("returned")).toEqual([]);
+    expect(achOutcomes("withdrawn")).toEqual([]);
   });
 
   it("records a submission only while the payout is still payable", () => {
@@ -194,6 +202,7 @@ describe("weekly ACH", () => {
     expect(canRecordOutcome(achItem({ submit_blocker: "payout_hold" }))).toBe(false);
     expect(canRecordOutcome(achItem({ status: "unknown" }))).toBe(true);
     expect(canRecordOutcome(achItem({ status: "failed" }))).toBe(false);
+    expect(canRecordOutcome(achItem({ status: "withdrawn" }))).toBe(false);
   });
 
   it("offers a retry only for a failed or returned transfer with nothing blocking it", () => {
@@ -202,6 +211,26 @@ describe("weekly ACH", () => {
     expect(canRequestRetry(achItem({ status: "unknown" }))).toBe(false);
     expect(canRequestRetry(achItem({ status: "failed", retry_blocker: "bank_authorization_changed" }))).toBe(false);
     expect(canRequestRetry(achItem({ status: "failed", open_retry_request_id: "00000000-0000-4000-8000-000000000784" }))).toBe(false);
+    expect(canRequestRetry(achItem({ status: "withdrawn" }))).toBe(false);
+  });
+
+  it("offers a withdrawal only for a transfer the bank does not hold, with nothing blocking it", () => {
+    expect(canRequestWithdrawal(achItem())).toBe(true);
+    expect(canRequestWithdrawal(achItem({ status: "failed" }))).toBe(true);
+    expect(canRequestWithdrawal(achItem({ status: "returned" }))).toBe(true);
+    for (const status of ["submitted", "unknown", "settled", "withdrawn"] as const) {
+      expect(canRequestWithdrawal(achItem({ status }))).toBe(false);
+    }
+    expect(canRequestWithdrawal(achItem({ withdraw_blocker: "status_changed" }))).toBe(false);
+    expect(canRequestWithdrawal(achItem({ open_withdrawal_request_id: "00000000-0000-4000-8000-000000000785" }))).toBe(false);
+  });
+
+  it("offers a withdrawal where a changed bank authorization stops sending and retrying", () => {
+    const blocked = achItem({ status: "failed", retry_blocker: "bank_authorization_changed" });
+    expect(canRequestRetry(blocked)).toBe(false);
+    expect(canRequestWithdrawal(blocked)).toBe(true);
+    expect(canRecordOutcome(achItem({ submit_blocker: "statement_stale" }))).toBe(false);
+    expect(canRequestWithdrawal(achItem({ submit_blocker: "statement_stale" }))).toBe(true);
   });
 
   it("counts a week as seven calendar days without time zone drift", () => {
@@ -218,15 +247,32 @@ describe("weekly ACH", () => {
     const refund = request({ operation: "refund_authorization", details: { payment_id: "pi_1", service: 100, tax: 0, tip: 0 } });
     expect(moneyDetails(refund)?.payment_id).toBe("pi_1");
     expect(batchDetails(refund)).toBeNull();
+    expect(withdrawalDetails(refund)).toBeNull();
+    const withdrawal = request({ operation: "ach_withdrawal", details: {
+      item_id: "00000000-0000-4000-8000-000000000786", attempt_number: 2, status: "failed", current_status: "failed", amount: 9500,
+      payee_name: "Synthetic payee", invoice_number: "M5-1", period_start: "2026-09-21", bank_reference_hint: "0111", bank_evidence: "R03",
+    } });
+    expect(withdrawalDetails(withdrawal)?.status).toBe("failed");
+    expect(retryDetails(withdrawal)).toBeNull();
+    expect(batchDetails(withdrawal)).toBeNull();
   });
 
   it("words ACH refusals for operators", () => {
-    expect(commandErrorMessage("Bank outcome not recordable: bank_authorization_changed")).toContain("needs a replacement statement");
+    expect(commandErrorMessage("Bank outcome not recordable: bank_authorization_changed")).toContain("Withdraw the transfer with a second operator");
     expect(commandErrorMessage("Bank outcome not recordable: payout_hold")).toContain("payout hold is open");
     expect(commandErrorMessage("Finance review not actionable: period_taken")).toBe("An ACH batch already covers part of this week.");
     expect(commandErrorMessage("Finance review not actionable: bank_outcome_open")).toContain("never retried");
     expect(commandErrorMessage("Bank batch reference of up to 200 characters required")).toContain("bank's reference");
     expect(commandErrorMessage("Bank outcome idempotency conflict")).toContain("already submitted with different details");
     expect(commandErrorMessage("Bank outcome not recordable: something_new")).toContain("Refresh the page");
+  });
+
+  it("words withdrawal refusals for operators", () => {
+    expect(commandErrorMessage("Bank outcome not recordable: withdrawn")).toContain("withdrawn from its statement");
+    expect(commandErrorMessage("Finance review not actionable: withdrawn")).toContain("replacement");
+    expect(commandErrorMessage("Finance review not actionable: status_changed")).toContain("bank status changed");
+    expect(commandErrorMessage("Finance review not actionable: paid")).toContain("cannot be withdrawn");
+    expect(commandErrorMessage("Finance review not actionable: on_ach_statement")).toContain("withdraw an unsent, failed or returned transfer");
+    expect(commandErrorMessage("Payout already on an ACH statement; withdraw its transfer before a replacement")).toContain("withdraw");
   });
 });

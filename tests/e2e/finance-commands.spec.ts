@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-076/077/078 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
+// TRACE-076/077/078/079 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
 // Stripe object, bank transfer or operator identity is represented.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const now = "2026-09-16T15:00:00.000Z";
@@ -16,7 +16,7 @@ const row = {
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [{ payment_id: "pi_synthetic", mode: "full", amount: 11700 }] },
   refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 1 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
-  payout: { funds_state: "held", not_eligible: [], held: ["payout_hold"], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null },
+  payout: { funds_state: "held", not_eligible: [], held: ["payout_hold"], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null, withdrawn_statements: 0 },
   chargebacks: { suspense: 0, suspense_ledger: 0, lost: 0 }, processor_costs: 0,
   readback: { state: "mismatch", observed: 11600, expected: 11700, recorded_at: now }, reconciliation_open: true, issues: [],
 };
@@ -40,14 +40,16 @@ const myApproved = {
 const myWaiting = { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000883", requested_by_me: true, reason: "Second release reason" };
 const payee = { payee_id: "00000000-0000-4000-8000-000000000851", payee_name: "Synthetic Payee Services" };
 const ready = [
-  { obligation_id: obligation, invoice_number: invoice, ...payee, amount: 9500, eligible_at: now, blocker: null, open_request_id: null },
-  { obligation_id: "00000000-0000-4000-8000-000000000862", invoice_number: "M5-0000000862", ...payee, amount: 4250, eligible_at: now, blocker: null, open_request_id: null },
-  { obligation_id: "00000000-0000-4000-8000-000000000863", invoice_number: "M5-0000000863", ...payee, amount: 3000, eligible_at: now, blocker: "bank_authorization_ambiguous", open_request_id: null },
+  { obligation_id: obligation, invoice_number: invoice, ...payee, amount: 9500, eligible_at: now, replaces: null, blocker: null, open_request_id: null },
+  { obligation_id: "00000000-0000-4000-8000-000000000862", invoice_number: "M5-0000000862", ...payee, amount: 4250, eligible_at: now,
+    replaces: { item_id: "00000000-0000-4000-8000-000000000910", period_start: "2026-09-07", amount: 5000, previous_status: "prepared", withdrawn_at: now }, blocker: null, open_request_id: null },
+  { obligation_id: "00000000-0000-4000-8000-000000000863", invoice_number: "M5-0000000863", ...payee, amount: 3000, eligible_at: now, replaces: null, blocker: "bank_authorization_ambiguous", open_request_id: null },
 ];
 const achItem = {
   item_id: "00000000-0000-4000-8000-000000000900", obligation_id: "00000000-0000-4000-8000-000000000864", invoice_number: "M5-0000000864", payee_name: payee.payee_name,
   amount: 9500, attempt_id: "00000000-0000-4000-8000-000000000901", attempt_number: 1, status: "prepared", bank_reference_hint: null, last_event: null,
   submit_blocker: null, retry_blocker: null, open_retry_request_id: null,
+  withdraw_blocker: null, open_withdrawal_request_id: null, withdrawal: null, replaced_in: null, replaces_period: null,
 };
 const failedItem = {
   ...achItem, item_id: "00000000-0000-4000-8000-000000000902", obligation_id: "00000000-0000-4000-8000-000000000865", invoice_number: "M5-0000000865",
@@ -58,14 +60,25 @@ const staleItem = {
   ...achItem, item_id: "00000000-0000-4000-8000-000000000904", obligation_id: "00000000-0000-4000-8000-000000000866", invoice_number: "M5-0000000866",
   attempt_id: "00000000-0000-4000-8000-000000000905", submit_blocker: "bank_authorization_changed",
 };
-const achBatch = { batch_id: "00000000-0000-4000-8000-000000000906", period_start: "2026-09-14", period_end: "2026-09-21", created_by_me: true, approved_by_me: false, created_at: now, total: 28500, items: [achItem, failedItem, staleItem] };
+const withdrawnItem = {
+  ...achItem, item_id: "00000000-0000-4000-8000-000000000911", obligation_id: "00000000-0000-4000-8000-000000000867", invoice_number: "M5-0000000867",
+  attempt_id: "00000000-0000-4000-8000-000000000912", status: "withdrawn",
+  last_event: { status: "withdrawn", evidence: "Bank portal: no ACH line for this payee", by_me: true, created_at: now },
+  withdrawal: { previous_status: "prepared", reason: "Refund agreed before sending", evidence: "Bank portal: no ACH line for this payee", by_me: true, created_at: now },
+  replaced_in: "2026-09-21",
+};
+const achBatch = {
+  batch_id: "00000000-0000-4000-8000-000000000906", period_start: "2026-09-14", period_end: "2026-09-21", created_by_me: true, approved_by_me: false, created_at: now,
+  total: 38000, withdrawn_total: 9500, items: [achItem, failedItem, staleItem, withdrawnItem],
+};
 const ach = { next_period_start: "2026-09-21", ready, batches: [achBatch] };
 const theirBatch = {
   ...theirRequest, request_id: "00000000-0000-4000-8000-000000000907", operation: "ach_preparation", subject: "2026-09-21", obligation_id: null, invoice_number: null,
   reason: "Weekly ACH", evidence: null,
   details: { period_start: "2026-09-21", period_end: "2026-09-28", bank_ref: "BANK-BATCH-0921", total: 13750, items: [
-    { obligation_id: obligation, amount: 9500, invoice_number: invoice, payee_name: payee.payee_name, blocker: null },
-    { obligation_id: "00000000-0000-4000-8000-000000000862", amount: 4250, invoice_number: "M5-0000000862", payee_name: payee.payee_name, blocker: null },
+    { obligation_id: obligation, amount: 9500, invoice_number: invoice, payee_name: payee.payee_name, replaces: null, blocker: null },
+    { obligation_id: "00000000-0000-4000-8000-000000000862", amount: 4250, invoice_number: "M5-0000000862", payee_name: payee.payee_name,
+      replaces: { item_id: "00000000-0000-4000-8000-000000000910", period_start: "2026-09-07", amount: 5000, previous_status: "prepared", withdrawn_at: now }, blocker: null },
   ] },
 };
 const operations = {
@@ -119,6 +132,9 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     const batch = width < 1280 ? page.getByRole("list", { name: "ACH batch for the week of Sep 14, 2026" }) : page.getByRole("table", { name: "ACH batch for the week of Sep 14, 2026" });
     await expect(batch.getByText("Reference ends 0111", { exact: false })).toBeVisible();
     await expect(batch.getByRole("button", { name: "Request retry" })).toHaveCount(1);
+    await expect(batch.getByText("Replaced in the week of Sep 21, 2026")).toBeVisible();
+    await expect(page.getByText("Replaces the withdrawn statement for the week of Sep 7, 2026 ($50.00)")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Week of Sep 14, 2026 · 4 payouts · \$380\.00 · \$95\.00 withdrawn/ })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: /M5-0000000863/ })).toBeDisabled();
     expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
@@ -407,6 +423,7 @@ test("a submission needs a bank reference and evidence, and a refusal says not t
   });
   await openPage(page, () => ({ ...operations, ach: { ...ach, batches: [{ ...achBatch, items: [calls > 1 ? { ...achItem, status: "submitted", bank_reference_hint: "0222" } : achItem, failedItem, staleItem] }] } }));
   const transfer = page.getByLabel("Transfer (required)");
+  // The placeholder and the one sendable transfer; failed, stale and withdrawn ones take no outcome here.
   await expect(transfer.locator("option")).toHaveCount(2);
   await transfer.selectOption(achItem.attempt_id);
   await page.getByLabel("Outcome (required)").selectOption("submitted");
@@ -457,4 +474,53 @@ test("an approver sees each payout, the total and the bank batch reference befor
   await reviews.getByRole("button", { name: "Approve", exact: true }).click();
   const confirm = page.getByRole("alertdialog", { name: "Approve: prepare weekly ach batch?" });
   await expect(confirm.getByText("for $137.50 · bank batch BANK-BATCH-0921", { exact: false })).toBeVisible();
+});
+
+test("an unsent transfer is withdrawn through a reviewed request with bank evidence and a reason", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_ach_withdrawal", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000913", replay: false } }));
+  let requested = false;
+  await openPage(page, () => ({ ...operations, requests: requested
+    ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000913", operation: "ach_withdrawal", subject: staleItem.attempt_id,
+      obligation_id: staleItem.obligation_id, invoice_number: staleItem.invoice_number, requested_by_me: true, reason: "Provider changed bank", evidence: "Bank portal: nothing sent",
+      details: { item_id: staleItem.item_id, attempt_number: 1, status: "prepared", current_status: "prepared", amount: 9500, payee_name: payee.payee_name,
+        invoice_number: staleItem.invoice_number, period_start: "2026-09-14", bank_reference_hint: null, bank_evidence: null } }]
+    : operations.requests }));
+  const batch = page.getByRole("table", { name: "ACH batch for the week of Sep 14, 2026" });
+  await expect(batch.getByText("Withdraw the transfer with a second operator", { exact: false })).toBeVisible();
+  const transfer = page.getByLabel("Transfer to withdraw (required)");
+  // The placeholder plus the prepared, failed and stale transfers; never the withdrawn one.
+  await expect(transfer.locator("option")).toHaveCount(4);
+  await transfer.selectOption(staleItem.attempt_id);
+  const trigger = page.getByRole("button", { name: "Request withdrawal" });
+  await expect(trigger).toBeDisabled();
+  await page.getByLabel("What the bank shows (required)").fill("Bank portal: nothing sent");
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Request withdrawal of this transfer?" });
+  await expect(confirm.getByText("would pay the provider twice", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Provider changed bank");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_ach_withdrawal");
+  requested = true;
+  await confirm.getByRole("button", { name: "Request withdrawal", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_attempt: staleItem.attempt_id, p_reason: "Provider changed bank", p_evidence: "Bank portal: nothing sent" });
+  expect(typeof payload.p_key).toBe("string");
+  noActor(payload);
+  await expect(confirm).toBeHidden();
+  await expect(page.getByLabel("What the bank shows (required)")).toHaveValue("");
+});
+
+test("an approver sees the transfer, its status and what the bank showed before approving a withdrawal", async ({ page }) => {
+  const theirWithdrawal = {
+    ...theirRequest, request_id: "00000000-0000-4000-8000-000000000914", operation: "ach_withdrawal", subject: failedItem.attempt_id,
+    obligation_id: failedItem.obligation_id, invoice_number: failedItem.invoice_number, reason: "Provider changed bank", evidence: "Bank shows R03 return code",
+    details: { item_id: failedItem.item_id, attempt_number: 1, status: "failed", current_status: "failed", amount: 9500, payee_name: payee.payee_name,
+      invoice_number: failedItem.invoice_number, period_start: "2026-09-14", bank_reference_hint: "0111", bank_evidence: "Bank rejected: account closed" },
+  };
+  await openPage(page, () => ({ ...operations, requests: [theirWithdrawal] }));
+  const reviews = page.getByRole("table", { name: "Second-person reviews" });
+  await expect(reviews.getByText("M5-0000000865 · Synthetic Payee Services · week of Sep 14, 2026 · attempt 1 failed")).toBeVisible();
+  await expect(reviews.getByText("$95.00 · reference ends 0111 · bank showed: Bank rejected: account closed")).toBeVisible();
+  await reviews.getByRole("button", { name: "Approve", exact: true }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Approve: withdraw ach transfer?" });
+  await expect(confirm.getByText('"Provider changed bank" with evidence "Bank shows R03 return code"', { exact: false })).toBeVisible();
 });

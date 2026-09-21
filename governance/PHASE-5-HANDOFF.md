@@ -136,6 +136,14 @@ bound to the failed attempt, and never after its bank authorization changed. Rep
 statements, withdrawal of a prepared attempt and already-paid recovery remain open. See
 PHASE-5-FINANCE-ACH.md.
 
+TRACE-079 lets finance operators withdraw a transfer the bank does not hold (prepared, failed or
+returned) from its statement. A different operator approves the withdrawal, which is bound to the
+transfer's status, and the requester runs it. The payout then goes on a replacement statement in a
+later weekly batch through the unchanged preparation kernel, which re-proves amount, payee and bank
+authorization. A payout is on at most one live statement, and refunds, chargeback allocation and
+holds work once its transfer is withdrawn. Payee reassignment stays closed. Already-paid recovery
+remains open. See PHASE-5-ACH-REPLACEMENT.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

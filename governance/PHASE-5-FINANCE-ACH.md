@@ -140,6 +140,7 @@ provisioning finance operators; hosted deployment; changing G5 (see findings).
 - A prepared attempt cannot be withdrawn. If its amount or the provider's bank authorization
   changes, it stays blocked (`statement_stale`, `bank_authorization_changed`) until the
   replacement-statement workflow exists.
+  *TRACE-079 (PHASE-5-ACH-REPLACEMENT.md) adds reviewed withdrawal and replacement statements.*
 - An `unknown` outcome has no deadline. It holds its payout until the bank shows an outcome.
 - The eligibility mirror duplicates the kernel predicates, as TRACE-075 does. A future kernel
   change must update both.

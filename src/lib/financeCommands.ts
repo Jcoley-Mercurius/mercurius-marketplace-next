@@ -1,4 +1,4 @@
-// TRACE-076/077/078 presentation for the finance operator command gateway. The database decides who
+// TRACE-076/077/078/079 presentation for the finance operator command gateway. The database decides who
 // may act, what is actionable and which approver counts; this module only words its answers.
 // Amounts are integer cents.
 
@@ -10,7 +10,8 @@ export type ReviewOperation =
   | "cancellation_refund"
   | "chargeback_allocation"
   | "ach_preparation"
-  | "ach_retry";
+  | "ach_retry"
+  | "ach_withdrawal";
 export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale" | "expired";
 export type ReviewBlocker =
   | "not_found"
@@ -35,7 +36,7 @@ export type ReviewBlocker =
   | "refund_pending"
   | "allocation_invalid"
   | AchBlocker;
-/** Why a payout cannot be batched, sent or retried, or a bank outcome recorded (TRACE-078). */
+/** Why a payout cannot be batched, sent, retried or withdrawn, or a bank outcome recorded (TRACE-078/079). */
 export type AchBlocker =
   | "awaiting_confirmation"
   | "replacement_reconciliation"
@@ -61,7 +62,10 @@ export type AchBlocker =
   | "transition_invalid"
   | "bank_reference_required"
   | "bank_reference_conflict"
-  | "bank_reference_used";
+  | "bank_reference_used"
+  | "withdrawn"
+  | "status_changed"
+  | "paid";
 export type ReissueBlocker =
   | "refund_not_sent"
   | "refund_settled"
@@ -74,12 +78,27 @@ export type Components = { service: number; tax: number; tip: number };
 export type RefundAttemptStatus = "not_started" | "prepared" | "pending" | "succeeded" | "failed" | "reconcile";
 
 export type MoneyDetails = Components & { payment_id?: string; dispute_id?: string };
+/** The withdrawn statement a payout's next statement replaces (TRACE-079). */
+export type WithdrawnStatement = {
+  item_id: string;
+  period_start: string;
+  amount: number;
+  previous_status: WithdrawableStatus;
+  withdrawn_at: string;
+};
 export type AchBatchDetails = {
   period_start: string;
   period_end: string;
   bank_ref: string;
   total: number;
-  items: { obligation_id: string; amount: number; invoice_number: string | null; payee_name: string | null; blocker: ReviewBlocker | null }[];
+  items: {
+    obligation_id: string;
+    amount: number;
+    invoice_number: string | null;
+    payee_name: string | null;
+    replaces: WithdrawnStatement | null;
+    blocker: ReviewBlocker | null;
+  }[];
 };
 export type AchRetryDetails = {
   item_id: string;
@@ -88,6 +107,20 @@ export type AchRetryDetails = {
   amount: number;
   payee_name: string | null;
   period_start: string;
+};
+export type AchWithdrawalDetails = {
+  item_id: string;
+  attempt_number: number;
+  /** The status the request withdraws; it goes stale if the transfer moves on first. */
+  status: WithdrawableStatus;
+  current_status: AchStatus;
+  amount: number;
+  payee_name: string | null;
+  invoice_number: string | null;
+  period_start: string;
+  bank_reference_hint: string | null;
+  /** What the bank showed when the failure or return was recorded. */
+  bank_evidence: string | null;
 };
 
 export type ReviewRequest = {
@@ -98,7 +131,7 @@ export type ReviewRequest = {
   invoice_number: string | null;
   reason: string;
   evidence: string | null;
-  details: MoneyDetails | AchBatchDetails | AchRetryDetails | null;
+  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | null;
   requested_by_me: boolean;
   approved_by_me: boolean;
   recorded_by_me: boolean;
@@ -184,8 +217,10 @@ export type LostChargeback = {
   created_at: string;
 };
 
-export type AchStatus = "prepared" | "submitted" | "unknown" | "settled" | "failed" | "returned";
-export type AchOutcome = Exclude<AchStatus, "prepared">;
+export type AchStatus = "prepared" | "submitted" | "unknown" | "settled" | "failed" | "returned" | "withdrawn";
+export type AchOutcome = Exclude<AchStatus, "prepared" | "withdrawn">;
+/** Transfers the bank does not hold, which a reviewed withdrawal can take off their statement. */
+export type WithdrawableStatus = "prepared" | "failed" | "returned";
 
 export type ReadyPayout = {
   obligation_id: string;
@@ -194,6 +229,8 @@ export type ReadyPayout = {
   payee_name: string | null;
   amount: number;
   eligible_at: string;
+  /** Set when an earlier statement for this payout was withdrawn; the next batch replaces it. */
+  replaces: WithdrawnStatement | null;
   blocker: ReviewBlocker | null;
   open_request_id: string | null;
 };
@@ -213,6 +250,13 @@ export type AchItem = {
   submit_blocker: ReviewBlocker | null;
   retry_blocker: ReviewBlocker | null;
   open_retry_request_id: string | null;
+  withdraw_blocker: ReviewBlocker | null;
+  open_withdrawal_request_id: string | null;
+  withdrawal: { previous_status: WithdrawableStatus; reason: string; evidence: string; by_me: boolean; created_at: string } | null;
+  /** The week of the statement that replaced this withdrawn one, if any. */
+  replaced_in: string | null;
+  /** The week of the withdrawn statement this one replaces, if any. */
+  replaces_period: string | null;
 };
 
 export type AchBatch = {
@@ -223,6 +267,7 @@ export type AchBatch = {
   approved_by_me: boolean;
   created_at: string;
   total: number;
+  withdrawn_total: number;
   items: AchItem[];
 };
 
@@ -249,6 +294,7 @@ export const operationLabel: Record<ReviewOperation, string> = {
   chargeback_allocation: "Allocate lost chargeback",
   ach_preparation: "Prepare weekly ACH batch",
   ach_retry: "Retry ACH transfer",
+  ach_withdrawal: "Withdraw ACH transfer",
 };
 
 export const reviewStateLabel: Record<ReviewState, string> = {
@@ -279,7 +325,7 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   deposit_service_only: "Only a deposit was collected, so the refund can include service only.",
   refund_exceeds_components: "It is more than the service, tax or tip still refundable on this invoice.",
   refund_exceeds_payment: "It is more than is still refundable on this payment.",
-  on_ach_statement: "The payout is already on an ACH statement. Work the bank outcome first.",
+  on_ach_statement: "The payout is already on an ACH statement. Work the bank outcome first, or withdraw an unsent, failed or returned transfer.",
   chargeback_open: "A chargeback is open or its loss is not allocated. Resolve the chargeback first.",
   not_eligible: "The cancellation policy produces no refund that can be computed for this payment.",
   no_refund_due: "The cancellation policy gives no refund for this payment.",
@@ -303,8 +349,8 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   bank_authorization_ambiguous: "The provider has more than one current bank authorization. Resolve it in compliance first.",
   payable_changed: "A payout amount changed after this was requested. Request the batch again.",
   payee_changed: "A payout's provider changed after this was requested. Request the batch again.",
-  bank_authorization_changed: "The provider's bank authorization changed. This statement cannot be sent or retried; it needs a replacement statement, which is not available yet.",
-  statement_stale: "The payable amount no longer matches the statement. It cannot be sent or retried; it needs a replacement statement, which is not available yet.",
+  bank_authorization_changed: "The provider's bank authorization changed. This statement cannot be sent or retried. Withdraw the transfer with a second operator; a later weekly batch then prepares a replacement statement.",
+  statement_stale: "The payable amount no longer matches the statement. It cannot be sent or retried. Withdraw the transfer with a second operator; a later weekly batch then prepares a replacement statement.",
   period_taken: "An ACH batch already covers part of this week.",
   bank_outcome_open: "The bank outcome is not failed or returned. Record it first; an unknown outcome is never retried.",
   failure_evidence_missing: "The failure has no recorded bank evidence.",
@@ -312,6 +358,9 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   bank_reference_required: "Enter the bank reference for this transfer.",
   bank_reference_conflict: "That reference differs from the one recorded when the transfer was submitted.",
   bank_reference_used: "That reference is already recorded for another transfer.",
+  withdrawn: "The transfer was withdrawn from its statement. A later weekly batch prepares its replacement.",
+  status_changed: "The transfer's bank status changed after this was requested. Refresh the page and request it again if it still applies.",
+  paid: "The transfer settled. A settled transfer cannot be withdrawn; record a return if the bank shows one.",
 };
 
 export const achStatusLabel: Record<AchStatus, string> = {
@@ -321,6 +370,7 @@ export const achStatusLabel: Record<AchStatus, string> = {
   settled: "Settled",
   failed: "Failed",
   returned: "Returned after settlement",
+  withdrawn: "Withdrawn from this statement",
 };
 
 export const achOutcomeLabel: Record<AchOutcome, string> = {
@@ -349,6 +399,12 @@ export function canRequestRetry(item: AchItem) {
   return (item.status === "failed" || item.status === "returned") && item.retry_blocker === null && item.open_retry_request_id === null;
 }
 
+/** Whether a withdrawal of this transfer can be requested from this session (TRACE-079). */
+export function canRequestWithdrawal(item: AchItem) {
+  return (item.status === "prepared" || item.status === "failed" || item.status === "returned")
+    && item.withdraw_blocker === null && item.open_withdrawal_request_id === null;
+}
+
 /** A YYYY-MM-DD date as a calendar day, never shifted by the viewer's time zone. */
 export const formatDay = (value: string) =>
   new Date(`${value}T00:00:00Z`).toLocaleDateString("en-US", { dateStyle: "medium", timeZone: "UTC" });
@@ -366,6 +422,8 @@ export const batchDetails = (request: ReviewRequest): AchBatchDetails | null =>
   request.operation === "ach_preparation" ? (request.details as AchBatchDetails | null) : null;
 export const retryDetails = (request: ReviewRequest): AchRetryDetails | null =>
   request.operation === "ach_retry" ? (request.details as AchRetryDetails | null) : null;
+export const withdrawalDetails = (request: ReviewRequest): AchWithdrawalDetails | null =>
+  request.operation === "ach_withdrawal" ? (request.details as AchWithdrawalDetails | null) : null;
 
 export const reissueBlockerLabel: Record<ReissueBlocker, string> = {
   refund_not_sent: "It has not been sent to Stripe.",
@@ -438,7 +496,7 @@ const refusals: [RegExp, string][] = [
   [/Only the requesting finance operator/, "Only the operator who requested this command can run it."],
   [/Separate authenticated approval of exact financial command required/, "A different finance operator must approve this exact command before it can run."],
   [/idempotency conflict/i, "This form was already submitted with different details. Refresh and start again."],
-  [/Payout already on an ACH statement/, "This payout is already on an ACH statement, so a hold cannot stop it. Work the bank outcome instead."],
+  [/Payout already on an ACH statement/, "This payout is already on an ACH statement, so a hold cannot stop it. Work the bank outcome, or withdraw an unsent, failed or returned transfer first."],
   [/Stripe event already processed/, "Stripe's event was already processed. Nothing was replayed."],
   [/Excluded event requires/, "This event was excluded, so it cannot be replayed."],
   [/Finance review subject not found|Finance obligation not found|Stripe event not found|Finance review request not found/, "It no longer exists. Refresh the page."],
