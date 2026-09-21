@@ -2303,6 +2303,7 @@ export type Database = {
           created_at: string
           idempotency_key: string
           payment_id: string
+          prepared_at: string | null
           provider_reference: string | null
           status: string
         }
@@ -2312,6 +2313,7 @@ export type Database = {
           created_at?: string
           idempotency_key: string
           payment_id: string
+          prepared_at?: string | null
           provider_reference?: string | null
           status?: string
         }
@@ -2321,6 +2323,7 @@ export type Database = {
           created_at?: string
           idempotency_key?: string
           payment_id?: string
+          prepared_at?: string | null
           provider_reference?: string | null
           status?: string
         }
@@ -2425,6 +2428,57 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "money_refund_attempts"
             referencedColumns: ["authorization_id"]
+          },
+        ]
+      }
+      money_refund_reissues: {
+        Row: {
+          actor: string
+          authorization_id: string
+          created_at: string
+          generation: number
+          id: string
+          idempotency_key: string
+          previous_key: string
+          readback_id: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          authorization_id: string
+          created_at?: string
+          generation: number
+          id?: string
+          idempotency_key: string
+          previous_key: string
+          readback_id: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          authorization_id?: string
+          created_at?: string
+          generation?: number
+          id?: string
+          idempotency_key?: string
+          previous_key?: string
+          readback_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_reissues_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_attempts"
+            referencedColumns: ["authorization_id"]
+          },
+          {
+            foreignKeyName: "money_refund_reissues_readback_id_fkey"
+            columns: ["readback_id"]
+            isOneToOne: true
+            referencedRelation: "money_refund_readbacks"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2606,6 +2660,45 @@ export type Database = {
             foreignKeyName: "money_review_executions_request_id_fkey"
             columns: ["request_id"]
             isOneToOne: true
+            referencedRelation: "money_review_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_review_request_approvals: {
+        Row: {
+          approval_id: string
+          approved_by: string
+          created_at: string
+          reason: string
+          request_id: string
+        }
+        Insert: {
+          approval_id: string
+          approved_by: string
+          created_at?: string
+          reason: string
+          request_id: string
+        }
+        Update: {
+          approval_id?: string
+          approved_by?: string
+          created_at?: string
+          reason?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_review_request_approvals_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "money_review_approvals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_review_request_approvals_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
             referencedRelation: "money_review_requests"
             referencedColumns: ["id"]
           },
@@ -5437,8 +5530,49 @@ export type Database = {
         }
         Returns: Json
       }
+      money_operator_reissue_refund: {
+        Args: { p_authorization: string; p_reason: string }
+        Returns: Json
+      }
+      money_operator_release_hold: {
+        Args: { p_evidence: string; p_hold: string; p_reason: string }
+        Returns: Json
+      }
       money_operator_replay_event: {
         Args: { p_event: string; p_reason: string }
+        Returns: Json
+      }
+      money_operator_request_cancellation_refund: {
+        Args: {
+          p_key: string
+          p_operation: string
+          p_payment: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      money_operator_request_chargeback: {
+        Args: {
+          p_dispute: string
+          p_key: string
+          p_reason: string
+          p_service: number
+          p_tax: number
+          p_tip: number
+        }
+        Returns: Json
+      }
+      money_operator_request_refund: {
+        Args: {
+          p_key: string
+          p_obligation: string
+          p_payment: string
+          p_policy: string
+          p_reason: string
+          p_service: number
+          p_tax: number
+          p_tip: number
+        }
         Returns: Json
       }
       money_operator_request_review: {
@@ -5510,6 +5644,7 @@ export type Database = {
           created_at: string
           idempotency_key: string
           payment_id: string
+          prepared_at: string | null
           provider_reference: string | null
           status: string
         }

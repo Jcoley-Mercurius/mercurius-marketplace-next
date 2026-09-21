@@ -1062,3 +1062,74 @@ Screenshots were reviewed. Browser work found that `paymentFunctionError` loses 
 
 Not performed: CI, hosted or Stripe test-mode/bank verification, a live
 `refund-invoice` round trip against local Auth and Stripe, human screen-reader review.
+
+## TRACE-077 — Finance operator commands, part 2A: refunds and chargebacks — 2026-09-21
+
+Branch `codex/phase5-finance-refunds`, base `main` `f945910` (PR #32 merged); isolated synthetic
+stack only. Design R1–R6 and the owner decisions of 2026-09-17 (G3 one-operator hold release,
+G9 24-hour expiry, refund dual review as is) are in PHASE-5-FINANCE-REFUNDS.md.
+
+Baseline before change: 1427 pgTAP assertions across 34 suites (TRACE-076 evidence). With the
+migration applied and no test changes, only suite 043's hold release section failed (it used the
+retired two-person release); the other 33 suites passed unchanged.
+
+Database: 1534 pgTAP assertions across 35 suites pass after a clean reset, and again as CI's
+clean replay after all committed concurrency fixtures. Suite 044 is new (126 assertions). Suite 043
+now has 113: its hold release section tests the one-operator release (retired request refused,
+reason/evidence/unknown hold/authority refusals, release by an operator who did not place the
+hold, same-operator replay, different or other-operator release refused, payable again); the
+second-person approval mechanics it used to exercise through hold release moved to 044.
+Suite 044 covers: grants (new commands callable, kernels and helpers service-only, new evidence
+tables unreadable); access; refund validation and blockers (payment not captured, over
+components, chargeback open) with nothing stored on refusal; the reviewed refund flow (trimmed
+replay, amount conflict, details and 24-hour `expires_at`, no run without approval, no
+self-approval, a direct kernel approval of the identical command not counting, authority,
+approver cannot run, lost authority, request approval immutable, run and replay, kernel author
+and approver, payout held, send permission); the window (approval a minute before expiry,
+expired at exactly 24 hours with no blocker, approve and key replay refused, new request allowed,
+an approval written after the window not an approver, an approved request expiring before it
+runs); staleness when another refund takes the components; cancellation refunds (listing with
+policy amounts, unknown, malformed, not eligible, no refund due, request, run bound to the
+cancellation with both operators, replay, completed, `amount_changed` after an adjustment, an
+expired request's approval not carrying over to an identical new request); lost chargebacks
+(listing with retained components, unknown, zero, partial and over-component allocations refused,
+run with both operators, hold cleared, completed); and reissue (validation, not sent, not
+uncertain, readback required, readback too early, third operator refused, generation 2 by the
+approver, replay, conflicts, new key and same amount, 23-hour window restarting at the reissue,
+immutability, no settlement and no new authorization).
+
+Mutation check (local harness, not committed; each mutant injected inside the suite's rolled-back
+transaction): 18 guard mutants, 17 fail suites 043/044 — approver ignoring the window, approver
+matching approvals by hash only, execute/approve/key replay ignoring expiry, a 25-hour window,
+refund blocker ignoring disputes, cancellation ignoring amount changes, chargeback allowing a
+partial allocation, reissue ignoring an early readback, reissue by any operator, reissue replay
+ignoring the actor, prepare using `created_at`, release replay ignoring the actor, hold release
+still reviewed, self-approval, expired state dropped. The survivor, "reissue ignores a found
+readback", is equivalent: a found readback always records Stripe's reference and moves the
+attempt out of `reconcile`, so the guard is a backstop that cannot be reached.
+
+Concurrency: new `scripts/phase5-finance-refund-concurrency.mjs`, wired into CI after the part 1
+script. As separate signed-in sessions: three runs of one approved refund make one authorization
+and one execution; two approved refunds that together exceed the service subtotal, one held by a
+sleeping executor, authorize only the holder and refuse the other with
+`refund_exceeds_components`; a policy cancellation refund racing a manual refund on the same
+invoice goes stale with `amount_changed` and never oversubscribes; three runs of one approved
+chargeback allocation make one allocation and one journal; author and approver reissuing at once
+make one reissue with the generation 2 key. The part 1 script's release race now races
+one-operator releases (lock holder wins; others refused as already released). All 13 scripts
+passed in CI order on a clean reset.
+
+Application: `scan:secrets`, `lint`, `typecheck` pass; 129 unit tests (4 new: expired request,
+reissue gating, chargeback allocation sums; new refusal wording); build with CI's synthetic public
+variables; generated database types differ only by additions; `audit:prod` 0 findings. Browser:
+198 of 198 non-visual cases pass (`test:a11y`). The finance spec has 6 new cases — one-operator
+release, refund request with exact cents and policy, cancellation refund sending no amounts,
+chargeback allocation sum validation, expired request with no action, reissue — and the existing
+approval case now approves a refund showing its amounts and expiry. The portal fixture's
+`money_finance_operations` response gained the two new lists; without them the reconciliation
+spec's page failed, which is the contract change working as intended. Screenshots were reviewed;
+they led to correcting the page intro (it still said releases need a second operator) and
+aligning the amount inputs.
+
+Not performed: CI, Edge checks (no Edge change), hosted or Stripe test-mode verification of send,
+readback and reissue, human screen-reader review.

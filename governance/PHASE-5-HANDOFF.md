@@ -118,6 +118,15 @@ session. The owner kept the global unsupported-event payout hold (2026-09-16). R
 authorization, chargeback allocation and ACH commands remain for part 2. See
 PHASE-5-FINANCE-COMMANDS.md.
 
+TRACE-077 adds part 2A. Owner decisions 2026-09-17: one finance operator releases a payout hold;
+reviewed requests and their approvals expire after 24 hours; refund authorization keeps its
+existing dual review. Finance operators request reviewed refunds, CFG-006/007 cancellation
+refunds (amounts from the recorded cancellation) and lost-chargeback allocations, which a
+different operator approves and the requester runs through the unchanged kernels. A refund
+stuck with an uncertain Stripe outcome can be reissued under a new key once a Stripe readback
+taken 24 hours after preparation finds no refund. ACH preparation, bank outcomes and retry
+remain for part 2B. See PHASE-5-FINANCE-REFUNDS.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

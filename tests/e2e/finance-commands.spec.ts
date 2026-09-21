@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-076 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
+// TRACE-076/077 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
 // Stripe object, bank transfer or operator identity is represented.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const now = "2026-09-16T15:00:00.000Z";
@@ -26,14 +26,16 @@ const reconciliation = {
   exceptions: [], obligations: [row],
 };
 const hold = { hold_id: "00000000-0000-4000-8000-000000000871", obligation_id: obligation, invoice_number: invoice, reason: "Quality complaint", evidence: "Ticket 4412", placed_by_me: false, created_at: now };
+const expires = "2026-09-17T15:00:00.000Z";
 const theirRequest = {
-  request_id: "00000000-0000-4000-8000-000000000881", operation: "hold_resolution", subject: hold.hold_id, obligation_id: obligation, invoice_number: invoice,
-  reason: "Complaint closed", evidence: "Ticket 4412 closed", requested_by_me: false, approved_by_me: false, recorded_by_me: false,
-  state: "awaiting_approval", blocker: null, created_at: now, executed_at: null,
+  request_id: "00000000-0000-4000-8000-000000000881", operation: "refund_authorization", subject: obligation, obligation_id: obligation, invoice_number: invoice,
+  reason: "Rework agreed", evidence: "Ticket 4412 rework", details: { payment_id: "pi_synthetic", service: 2000, tax: 140, tip: 0 },
+  requested_by_me: false, approved_by_me: false, recorded_by_me: false,
+  state: "awaiting_approval", blocker: null, created_at: now, expires_at: expires, executed_at: null,
 };
 const myApproved = {
   ...theirRequest, request_id: "00000000-0000-4000-8000-000000000882", operation: "event_exclusion", subject: "evt_synthetic_unsupported", obligation_id: null, invoice_number: null,
-  reason: "Informational event", evidence: "Stripe shows metadata-only update", requested_by_me: true, state: "approved",
+  reason: "Informational event", evidence: "Stripe shows metadata-only update", details: null, requested_by_me: true, state: "approved",
 };
 const myWaiting = { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000883", requested_by_me: true, reason: "Second release reason" };
 const operations = {
@@ -44,7 +46,11 @@ const operations = {
     observed: 11600, expected: 11700, currency: "usd", evidence: "Stripe pi_synthetic", attributed: true, recorded_by_me: true, recorded_at: now, resolution_blocker: "readback_mismatch" }],
   events: [{ event_id: "evt_synthetic_unsupported", event_type: "reconciliation_required", status: "failed", attempts: 1, holds_all_payouts: true, exclusion_blocker: null, received_at: now }],
   refunds: [{ authorization_id: "00000000-0000-4000-8000-000000000892", obligation_id: obligation, invoice_number: invoice, payment_id: "pi_synthetic", amount: 2140,
-    attempt_status: "not_started", provider_reference: null, can_send: true, last_readback: null, created_at: now }],
+    attempt_status: "not_started", provider_reference: null, can_send: true, generation: 1, reissue_blocker: null, last_readback: null, created_at: now }],
+  cancellations: [{ operation_id: "00000000-0000-4000-8000-000000000893", kind: "customer_cancel", payment_id: "pi_synthetic_cancel", obligation_id: obligation, invoice_number: invoice,
+    refund_percent: 50, service: 5000, tax: 350, tip: 500, blocker: null, open_request_id: null, cancelled_at: now }],
+  chargebacks: [{ dispute_id: "dp_synthetic", obligation_id: obligation, payment_id: "pi_synthetic", amount: 1000, invoice_number: invoice,
+    retained: { service: 10000, tax: 700, tip: 1000 }, blocker: null, open_request_id: null, created_at: now }],
 };
 
 test.beforeEach(async ({ page }) => {
@@ -90,8 +96,9 @@ test("a second operator approves the exact request with a note and no actor fiel
   await page.route("**/rpc/money_operator_approve_review", route => { approved = true; return route.fulfill({ json: { request_id: theirRequest.request_id, approval_id: "synthetic" } }); });
   await openPage(page, () => ({ ...operations, requests: [{ ...theirRequest, approved_by_me: approved }, myApproved, myWaiting] }));
   await page.getByRole("table", { name: "Second-person reviews" }).getByRole("button", { name: "Approve", exact: true }).click();
-  const confirm = page.getByRole("alertdialog", { name: "Approve: release payout hold?" });
-  await expect(confirm.getByText('"Complaint closed" with evidence "Ticket 4412 closed"', { exact: false })).toBeVisible();
+  const confirm = page.getByRole("alertdialog", { name: "Approve: authorize refund?" });
+  await expect(confirm.getByText('"Rework agreed" with evidence "Ticket 4412 rework" for pi_synthetic · $21.40', { exact: false })).toBeVisible();
+  await expect(confirm.getByText("expires", { exact: false })).toBeVisible();
   await expect(confirm.getByRole("button", { name: "Approve", exact: true })).toBeDisabled();
   await confirm.getByRole("textbox").fill("Read ticket 4412 closure");
   const sent = page.waitForRequest("**/rpc/money_operator_approve_review");
@@ -204,4 +211,127 @@ test("an event replay needs a reason and says an unsupported event will fail aga
   await confirm.getByRole("button", { name: "Replay", exact: true }).click();
   expect((await sent).postDataJSON()).toEqual({ p_event: "evt_synthetic_unsupported", p_reason: "Webhook outage recovery" });
   await expect(confirm).toBeHidden();
+});
+
+test("one operator releases a hold with evidence and reason, and no actor field", async ({ page }) => {
+  let released = false;
+  await page.route("**/rpc/money_operator_release_hold", route => { released = true; return route.fulfill({ json: { hold_id: hold.hold_id, replay: false } }); });
+  await openPage(page, () => ({ ...operations, holds: released ? [] : [hold] }));
+  await page.getByLabel("Hold (required)").selectOption(hold.hold_id);
+  const trigger = page.getByRole("button", { name: "Release hold" });
+  await expect(trigger).toBeDisabled();
+  await page.getByLabel("Release evidence (required)").fill("Ticket 4412 closed");
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Release this payout hold?" });
+  await expect(confirm.getByText("Releases the hold under your name now.", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Complaint closed");
+  const sent = page.waitForRequest("**/rpc/money_operator_release_hold");
+  await confirm.getByRole("button", { name: "Release hold", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toEqual({ p_hold: hold.hold_id, p_reason: "Complaint closed", p_evidence: "Ticket 4412 closed" });
+  noActor(payload);
+  await expect(confirm).toBeHidden();
+  await expect(page.getByText("No payout hold is open.", { exact: false })).toBeVisible();
+});
+
+test("a refund request sends exact cents, payment and policy, and needs a policy reference", async ({ page }) => {
+  let requested = false;
+  await page.route("**/rpc/money_operator_request_refund", route => { requested = true; return route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000894", replay: false } }); });
+  await openPage(page, () => ({ ...operations, requests: requested
+    ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000894", requested_by_me: true }]
+    : operations.requests }));
+  const trigger = page.getByRole("button", { name: "Request refund" });
+  await page.getByLabel("Refund invoice (required)").selectOption(obligation);
+  await page.getByLabel("Payment (required)").selectOption("pi_synthetic");
+  await page.getByLabel("Refund service (USD)").fill("20");
+  await page.getByLabel("Refund tax (USD)").fill("1.4");
+  await expect(trigger).toBeDisabled();
+  await page.getByLabel("Policy reference (required)").fill("Ticket 4412 rework");
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Request this refund?" });
+  await expect(confirm.getByText("M5-0000000861 · pi_synthetic · $21.40")).toBeVisible();
+  await confirm.getByRole("textbox").fill("Rework agreed");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_refund");
+  await confirm.getByRole("button", { name: "Request refund", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toEqual({ p_obligation: obligation, p_payment: "pi_synthetic", p_service: 2000, p_tax: 140, p_tip: 0,
+    p_policy: "Ticket 4412 rework", p_reason: "Rework agreed", p_key: expect.stringContaining(`refund:${obligation}:pi_synthetic`) });
+  noActor(payload);
+  await expect(confirm).toBeHidden();
+  await expect(page.getByLabel("Policy reference (required)")).toHaveValue("");
+});
+
+test("a cancellation refund is requested with the policy amounts, never operator amounts", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_cancellation_refund", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000895", replay: false } }));
+  let requested = false;
+  page.on("request", request => { if (request.url().includes("money_operator_request_cancellation_refund")) requested = true; });
+  await openPage(page, () => ({ ...operations, requests: requested
+    ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000895", operation: "cancellation_refund", requested_by_me: true }]
+    : operations.requests }));
+  const list = page.getByRole("table", { name: "Cancellation refunds due" });
+  await expect(list.getByText("50% · $58.50")).toBeVisible();
+  await list.getByRole("button", { name: "Request policy refund" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Request this cancellation refund?" });
+  await expect(confirm.getByText("The amounts come from the recorded cancellation, not from you.", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Customer cancelled 25 hours ahead");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_cancellation_refund");
+  await confirm.getByRole("button", { name: "Request refund", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toEqual({ p_operation: operations.cancellations[0].operation_id, p_payment: "pi_synthetic_cancel",
+    p_reason: "Customer cancelled 25 hours ahead", p_key: expect.any(String) });
+  noActor(payload);
+  await expect(confirm).toBeHidden();
+});
+
+test("a chargeback allocation must add up to the loss before it can be requested", async ({ page }) => {
+  let requested = false;
+  await page.route("**/rpc/money_operator_request_chargeback", route => { requested = true; return route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000896", replay: false } }); });
+  await openPage(page, () => ({ ...operations, requests: requested
+    ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000896", operation: "chargeback_allocation", requested_by_me: true }]
+    : operations.requests }));
+  await page.getByLabel("Chargeback (required)").selectOption("dp_synthetic");
+  await expect(page.getByText("Lost $10.00 · retained service $100.00 · tax $7.00 · tip $10.00")).toBeVisible();
+  const trigger = page.getByRole("button", { name: "Request allocation" });
+  await page.getByLabel("Chargeback service (USD)").fill("9");
+  await expect(page.getByText("Service, tax and tip must add up to the chargeback.")).toBeVisible();
+  await expect(trigger).toBeDisabled();
+  await page.getByLabel("Chargeback tip (USD)").fill("1");
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Request this chargeback allocation?" });
+  await confirm.getByRole("textbox").fill("Lost at Stripe");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_chargeback");
+  await confirm.getByRole("button", { name: "Request allocation", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toEqual({ p_dispute: "dp_synthetic", p_service: 900, p_tax: 0, p_tip: 100, p_reason: "Lost at Stripe", p_key: expect.any(String) });
+  noActor(payload);
+  await expect(confirm).toBeHidden();
+});
+
+test("an expired request offers no action and says why", async ({ page }) => {
+  await openPage(page, () => ({ ...operations, requests: [{ ...myApproved, state: "expired" }] }));
+  const reviews = page.getByRole("table", { name: "Second-person reviews" });
+  await expect(reviews.getByText("Expired", { exact: true })).toBeVisible();
+  await expect(reviews.getByText("Not run within 24 hours. Request it again if it still applies.")).toBeVisible();
+  await expect(reviews.getByRole("button")).toHaveCount(0);
+});
+
+test("an uncertain refund is reissued with a reason once the server allows it", async ({ page }) => {
+  let generation = 1;
+  const uncertain = { ...operations.refunds[0], attempt_status: "reconcile", last_readback: { found: false, provider_status: null, by_me: true, created_at: now } };
+  await page.route("**/rpc/money_operator_reissue_refund", route => { generation = 2; return route.fulfill({ json: { authorization_id: uncertain.authorization_id, generation: 2, replay: false } }); });
+  await openPage(page, () => ({ ...operations, refunds: [generation === 1 ? uncertain : { ...uncertain, attempt_status: "prepared", generation: 2 }] }));
+  await page.getByRole("button", { name: "Reissue refund" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Reissue this refund?" });
+  await expect(confirm.getByText("It never changes the amount.", { exact: false })).toBeVisible();
+  await expect(confirm.getByRole("button", { name: "Reissue", exact: true })).toBeDisabled();
+  await confirm.getByRole("textbox").fill("Stripe shows no refund for pi_synthetic");
+  const sent = page.waitForRequest("**/rpc/money_operator_reissue_refund");
+  await confirm.getByRole("button", { name: "Reissue", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toEqual({ p_authorization: uncertain.authorization_id, p_reason: "Stripe shows no refund for pi_synthetic" });
+  noActor(payload);
+  await expect(confirm).toBeHidden();
+  await expect(page.getByRole("table", { name: "Unsettled refunds" }).getByText("reissued (send 2)", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send refund to Stripe" })).toBeVisible();
 });

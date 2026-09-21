@@ -110,7 +110,7 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/vendor_renewal_document_queue") return send({ evaluated_at: new Date().toISOString(), entries: [] });
   if (url.pathname === "/rest/v1/rpc/vendor_own_renewal_documents") return send({ accepting: false, open_limit: 5, documents: [] });
   // TRACE-076 finance commands: nothing open by default; specs override per case.
-  if (url.pathname === "/rest/v1/rpc/money_finance_operations") return send({ evaluated_at: new Date().toISOString(), requests: [], holds: [], readbacks: [], events: [], refunds: [] });
+  if (url.pathname === "/rest/v1/rpc/money_finance_operations") return send({ evaluated_at: new Date().toISOString(), requests: [], holds: [], readbacks: [], events: [], refunds: [], cancellations: [], chargebacks: [] });
   // TRACE-074 document retention: empty by default; specs override per case.
   if (url.pathname === "/rest/v1/rpc/vendor_document_retention_queue") return send({
     evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14, due: [], quarantined: [], holds: [],
