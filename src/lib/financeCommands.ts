@@ -1,4 +1,4 @@
-// TRACE-076/077 presentation for the finance operator command gateway. The database decides who
+// TRACE-076/077/078 presentation for the finance operator command gateway. The database decides who
 // may act, what is actionable and which approver counts; this module only words its answers.
 // Amounts are integer cents.
 
@@ -8,7 +8,9 @@ export type ReviewOperation =
   | "hold_resolution"
   | "refund_authorization"
   | "cancellation_refund"
-  | "chargeback_allocation";
+  | "chargeback_allocation"
+  | "ach_preparation"
+  | "ach_retry";
 export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale" | "expired";
 export type ReviewBlocker =
   | "not_found"
@@ -31,7 +33,35 @@ export type ReviewBlocker =
   | "amount_changed"
   | "dispute_not_lost"
   | "refund_pending"
-  | "allocation_invalid";
+  | "allocation_invalid"
+  | AchBlocker;
+/** Why a payout cannot be batched, sent or retried, or a bank outcome recorded (TRACE-078). */
+export type AchBlocker =
+  | "awaiting_confirmation"
+  | "replacement_reconciliation"
+  | "dispute_hold"
+  | "confirmation_conflict"
+  | "payment_incomplete"
+  | "chargeback_hold"
+  | "reconciliation_hold"
+  | "provider_event_hold"
+  | "confirmation_window"
+  | "payout_hold"
+  | "refund_hold"
+  | "payout_onboarding"
+  | "no_payable"
+  | "bank_authorization_ambiguous"
+  | "payable_changed"
+  | "payee_changed"
+  | "bank_authorization_changed"
+  | "statement_stale"
+  | "period_taken"
+  | "bank_outcome_open"
+  | "failure_evidence_missing"
+  | "transition_invalid"
+  | "bank_reference_required"
+  | "bank_reference_conflict"
+  | "bank_reference_used";
 export type ReissueBlocker =
   | "refund_not_sent"
   | "refund_settled"
@@ -43,6 +73,23 @@ export type ReissueBlocker =
 export type Components = { service: number; tax: number; tip: number };
 export type RefundAttemptStatus = "not_started" | "prepared" | "pending" | "succeeded" | "failed" | "reconcile";
 
+export type MoneyDetails = Components & { payment_id?: string; dispute_id?: string };
+export type AchBatchDetails = {
+  period_start: string;
+  period_end: string;
+  bank_ref: string;
+  total: number;
+  items: { obligation_id: string; amount: number; invoice_number: string | null; payee_name: string | null; blocker: ReviewBlocker | null }[];
+};
+export type AchRetryDetails = {
+  item_id: string;
+  attempt_number: number;
+  status: AchStatus;
+  amount: number;
+  payee_name: string | null;
+  period_start: string;
+};
+
 export type ReviewRequest = {
   request_id: string;
   operation: ReviewOperation;
@@ -51,7 +98,7 @@ export type ReviewRequest = {
   invoice_number: string | null;
   reason: string;
   evidence: string | null;
-  details: (Components & { payment_id?: string; dispute_id?: string }) | null;
+  details: MoneyDetails | AchBatchDetails | AchRetryDetails | null;
   requested_by_me: boolean;
   approved_by_me: boolean;
   recorded_by_me: boolean;
@@ -137,6 +184,50 @@ export type LostChargeback = {
   created_at: string;
 };
 
+export type AchStatus = "prepared" | "submitted" | "unknown" | "settled" | "failed" | "returned";
+export type AchOutcome = Exclude<AchStatus, "prepared">;
+
+export type ReadyPayout = {
+  obligation_id: string;
+  invoice_number: string | null;
+  payee_id: string;
+  payee_name: string | null;
+  amount: number;
+  eligible_at: string;
+  blocker: ReviewBlocker | null;
+  open_request_id: string | null;
+};
+
+export type AchItem = {
+  item_id: string;
+  obligation_id: string;
+  invoice_number: string | null;
+  payee_name: string | null;
+  amount: number;
+  attempt_id: string;
+  attempt_number: number;
+  status: AchStatus;
+  /** The last four characters of the bank reference; the full reference is never returned. */
+  bank_reference_hint: string | null;
+  last_event: { status: AchStatus; evidence: string; by_me: boolean; created_at: string } | null;
+  submit_blocker: ReviewBlocker | null;
+  retry_blocker: ReviewBlocker | null;
+  open_retry_request_id: string | null;
+};
+
+export type AchBatch = {
+  batch_id: string;
+  period_start: string;
+  period_end: string;
+  created_by_me: boolean;
+  approved_by_me: boolean;
+  created_at: string;
+  total: number;
+  items: AchItem[];
+};
+
+export type AchOperations = { next_period_start: string | null; ready: ReadyPayout[]; batches: AchBatch[] };
+
 export type FinanceOperations = {
   evaluated_at: string;
   requests: ReviewRequest[];
@@ -146,6 +237,7 @@ export type FinanceOperations = {
   refunds: PendingRefund[];
   cancellations: CancellationRefund[];
   chargebacks: LostChargeback[];
+  ach: AchOperations;
 };
 
 export const operationLabel: Record<ReviewOperation, string> = {
@@ -155,6 +247,8 @@ export const operationLabel: Record<ReviewOperation, string> = {
   refund_authorization: "Authorize refund",
   cancellation_refund: "Authorize cancellation refund",
   chargeback_allocation: "Allocate lost chargeback",
+  ach_preparation: "Prepare weekly ACH batch",
+  ach_retry: "Retry ACH transfer",
 };
 
 export const reviewStateLabel: Record<ReviewState, string> = {
@@ -193,7 +287,85 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   dispute_not_lost: "The chargeback is not recorded as lost.",
   refund_pending: "A refund on this invoice has not settled. Settle it before allocating the chargeback.",
   allocation_invalid: "The allocation must equal the chargeback and stay within the retained service, tax and tip.",
+  awaiting_confirmation: "The homeowner has not confirmed completion, or the confirmation does not match the job.",
+  replacement_reconciliation: "The replacement provider's payout needs its reviewed reconciliation first.",
+  dispute_hold: "A dispute or appeal on this job is open.",
+  confirmation_conflict: "Recorded completion evidence conflicts with the homeowner's confirmation. Reconcile it first.",
+  payment_incomplete: "The invoice is not fully paid.",
+  chargeback_hold: "A chargeback on this payment is open.",
+  reconciliation_hold: "A Stripe readback hold is open on this invoice.",
+  provider_event_hold: "An unprocessed Stripe event holds this payout.",
+  confirmation_window: "Less than 48 hours have passed since the homeowner confirmed completion.",
+  payout_hold: "A payout hold is open. Release it first if its cause is cleared.",
+  refund_hold: "A refund on this invoice has not settled.",
+  payout_onboarding: "The provider's payout onboarding or bank authorization is not current.",
+  no_payable: "Nothing is payable to the provider.",
+  bank_authorization_ambiguous: "The provider has more than one current bank authorization. Resolve it in compliance first.",
+  payable_changed: "A payout amount changed after this was requested. Request the batch again.",
+  payee_changed: "A payout's provider changed after this was requested. Request the batch again.",
+  bank_authorization_changed: "The provider's bank authorization changed. This statement cannot be sent or retried; it needs a replacement statement, which is not available yet.",
+  statement_stale: "The payable amount no longer matches the statement. It cannot be sent or retried; it needs a replacement statement, which is not available yet.",
+  period_taken: "An ACH batch already covers part of this week.",
+  bank_outcome_open: "The bank outcome is not failed or returned. Record it first; an unknown outcome is never retried.",
+  failure_evidence_missing: "The failure has no recorded bank evidence.",
+  transition_invalid: "That outcome does not follow the transfer's current status. Refresh the page.",
+  bank_reference_required: "Enter the bank reference for this transfer.",
+  bank_reference_conflict: "That reference differs from the one recorded when the transfer was submitted.",
+  bank_reference_used: "That reference is already recorded for another transfer.",
 };
+
+export const achStatusLabel: Record<AchStatus, string> = {
+  prepared: "Prepared, not sent",
+  submitted: "Submitted at the bank",
+  unknown: "Outcome unknown",
+  settled: "Settled",
+  failed: "Failed",
+  returned: "Returned after settlement",
+};
+
+export const achOutcomeLabel: Record<AchOutcome, string> = {
+  submitted: "Submitted",
+  settled: "Settled",
+  failed: "Failed",
+  unknown: "Outcome unknown",
+  returned: "Returned",
+};
+
+/** The bank outcomes that can follow a transfer's current status (money_record_ach transitions). */
+export function achOutcomes(status: AchStatus): AchOutcome[] {
+  if (status === "prepared") return ["submitted"];
+  if (status === "submitted" || status === "unknown") return ["settled", "failed", "unknown"];
+  if (status === "settled") return ["returned"];
+  return [];
+}
+
+/** Whether a bank outcome can be recorded now. A prepared transfer must still be payable to be sent. */
+export function canRecordOutcome(item: AchItem) {
+  return item.status === "prepared" ? item.submit_blocker === null : achOutcomes(item.status).length > 0;
+}
+
+/** Whether a retry of a failed or returned transfer can be requested from this session. */
+export function canRequestRetry(item: AchItem) {
+  return (item.status === "failed" || item.status === "returned") && item.retry_blocker === null && item.open_retry_request_id === null;
+}
+
+/** A YYYY-MM-DD date as a calendar day, never shifted by the viewer's time zone. */
+export const formatDay = (value: string) =>
+  new Date(`${value}T00:00:00Z`).toLocaleDateString("en-US", { dateStyle: "medium", timeZone: "UTC" });
+
+/** The exclusive end of a seven-day week that starts on a YYYY-MM-DD date. */
+export function weekEnd(start: string): string {
+  const day = new Date(`${start}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + 7);
+  return day.toISOString().slice(0, 10);
+}
+
+export const moneyDetails = (request: ReviewRequest): MoneyDetails | null =>
+  ["refund_authorization", "cancellation_refund", "chargeback_allocation"].includes(request.operation) ? (request.details as MoneyDetails | null) : null;
+export const batchDetails = (request: ReviewRequest): AchBatchDetails | null =>
+  request.operation === "ach_preparation" ? (request.details as AchBatchDetails | null) : null;
+export const retryDetails = (request: ReviewRequest): AchRetryDetails | null =>
+  request.operation === "ach_retry" ? (request.details as AchRetryDetails | null) : null;
 
 export const reissueBlockerLabel: Record<ReissueBlocker, string> = {
   refund_not_sent: "It has not been sent to Stripe.",
@@ -277,12 +449,21 @@ const refusals: [RegExp, string][] = [
   [/Only the refund's author or approver can reissue/, "Only the refund's author or approver can reissue it."],
   [/Service, tax and tip amounts in cents required/, "Enter service, tax and tip amounts, greater than zero in total."],
   [/Stripe payment required/, "Choose the Stripe payment to refund."],
+  [/Weekly period start required/, "Choose the date the week starts."],
+  [/Between 1 and 500 payouts required/, "Choose between 1 and 500 payouts."],
+  [/Bank batch reference of up to 200 characters required/, "Enter the bank's reference for this batch, up to 200 characters."],
+  [/Bank reference of up to 200 characters required/, "Enter a bank reference of up to 200 characters, or leave it blank to use the recorded one."],
+  [/Bank outcome required/, "Choose the bank outcome."],
+  [/Bank attempt not found/, "It no longer exists. Refresh the page."],
+  [/Evidence of up to 1000 characters required/, "Enter evidence of up to 1000 characters."],
 ];
 
 /** Operator wording for a gateway refusal. Unknown database text is not shown verbatim. */
 export function commandErrorMessage(message: string): string {
   const blocker = /Finance review not actionable: ([a-z_]+)/.exec(message)?.[1];
   if (blocker && blocker in blockerLabel) return blockerLabel[blocker as ReviewBlocker];
+  const bank = /Bank outcome not recordable: ([a-z_]+)/.exec(message)?.[1];
+  if (bank && bank in blockerLabel) return blockerLabel[bank as ReviewBlocker];
   const reissue = /Refund reissue not allowed: ([a-z_]+)/.exec(message)?.[1];
   if (reissue && reissue in reissueBlockerLabel) return reissueBlockerLabel[reissue as ReissueBlocker];
   for (const [pattern, text] of refusals) if (pattern.test(message)) return text;

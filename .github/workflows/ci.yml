@@ -62,6 +62,8 @@ jobs:
         run: node scripts/phase5-finance-command-concurrency.mjs
       - name: Concurrent finance refund and chargeback commands
         run: node scripts/phase5-finance-refund-concurrency.mjs
+      - name: Concurrent ACH batch, bank outcome and retry commands
+        run: node scripts/phase5-finance-ach-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay

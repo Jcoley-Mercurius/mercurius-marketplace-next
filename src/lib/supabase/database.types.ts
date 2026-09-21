@@ -2717,6 +2717,7 @@ export type Database = {
           reason: string
           requested_by: string
           subject: string
+          terms: Json | null
         }
         Insert: {
           business_key: string
@@ -2730,6 +2731,7 @@ export type Database = {
           reason: string
           requested_by: string
           subject: string
+          terms?: Json | null
         }
         Update: {
           business_key?: string
@@ -2743,6 +2745,7 @@ export type Database = {
           reason?: string
           requested_by?: string
           subject?: string
+          terms?: Json | null
         }
         Relationships: [
           {
@@ -5520,6 +5523,16 @@ export type Database = {
         }
         Returns: Json
       }
+      money_operator_record_ach: {
+        Args: {
+          p_attempt: string
+          p_bank_ref: string
+          p_evidence: string
+          p_key: string
+          p_status: string
+        }
+        Returns: Json
+      }
       money_operator_record_readback: {
         Args: {
           p_currency: string
@@ -5540,6 +5553,20 @@ export type Database = {
       }
       money_operator_replay_event: {
         Args: { p_event: string; p_reason: string }
+        Returns: Json
+      }
+      money_operator_request_ach: {
+        Args: {
+          p_bank_ref: string
+          p_key: string
+          p_obligations: string[]
+          p_period: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      money_operator_request_ach_retry: {
+        Args: { p_attempt: string; p_key: string; p_reason: string }
         Returns: Json
       }
       money_operator_request_cancellation_refund: {

@@ -412,6 +412,23 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   failed-refund recovery; `paymentFunctionError`; part 2B (ACH preparation, bank outcomes, retry).
 - Next: part 2B after review.
 
+## Current slice — TRACE-078 finance commands, part 2B (2026-09-21, PR open)
+
+- PR #33 (TRACE-077) merged 2026-09-21 (main `da94fd8`); the "PR open" wording above predates it.
+- Branch `codex/phase5-finance-ach`, base main `da94fd8`, worktree `../mercurius-finance-ach`.
+- Owner direction 2026-09-21: part 2B (ACH preparation, bank outcomes, retry) after #33 merged.
+- Change: migration `20260921001000`: a reviewed weekly batch request bound to each payout's
+  amount, payee and bank authorization; one-operator bank outcomes where submission re-proves
+  eligibility before sending; a reviewed retry bound to the failed attempt; an `ach` readback
+  with reference hints only. Kernels unchanged. New FinanceAchCommands section.
+- Evidence: `governance/PHASE-5-FINANCE-ACH.md` (B1–B8) and the TRACE-078 section of
+  `PHASE-5-VALIDATION.md`. 1708 SQL assertions across 36 suites (045 new, 174), 30/30 mutants
+  killed, 14 concurrency scripts in CI order, 135 unit tests, build, 202/202 non-visual browser
+  cases, 0 audit findings.
+- Open: Codex review (one-operator settlement, reference before sending, G5 holds on statement
+  payouts); CI; replacement statements and prepared-attempt withdrawal; already-paid recovery.
+- Next: CI and Codex review of the PR.
+
 ## Workflow update — 2026-09-10
 
 Owner assigned Codex architecture and code review, with Claude implementing the
