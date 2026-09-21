@@ -94,7 +94,7 @@ export default function FinanceReconciliationPage() {
     <PageHeader
       eyebrow="Finance"
       title="Finance reconciliation"
-      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The platform fee is ${data?.fee_percent ?? 15}% of retained service, excluding tax and tips. Commands below are recorded as you; releases, readback resolutions and event exclusions need a second finance operator. Chargeback allocation and bank outcomes are not recorded here.`}
+      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The platform fee is ${data?.fee_percent ?? 15}% of retained service, excluding tax and tips. Commands below are recorded as you; refunds, chargeback allocations, readback resolutions and event exclusions need a second finance operator within 24 hours. Bank outcomes are not recorded here.`}
       actions={
         <Button variant="outline" disabled={loading} onClick={() => void load()}>
           <RefreshCw />

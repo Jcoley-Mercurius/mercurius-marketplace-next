@@ -365,7 +365,11 @@ as current branch/merge status; reconcile them with the latest slice evidence.
 - Next: finance operator command gateway (authenticated actor, second-person approval,
   ConfirmAction) for refunds, holds, readbacks and ACH outcomes.
 
-## Current slice — TRACE-076 finance operator commands, part 1 (2026-09-17, PR open)
+## Current slice — TRACE-076 finance operator commands, part 1 (2026-09-17, merged as PR #32)
+
+- **Merged 2026-09-17 14:44 UTC as PR #32 (main `f945910`)** on owner instruction, after both
+  final-head CI runs passed (the push run's one unrelated `invitation-binding` browser failure,
+  "Response has been disposed", passed on rerun). "PR open" wording below predates the merge.
 
 - TRACE-075 merged as PR #31 (main `3f98939`).
 - Branch `codex/phase5-finance-commands`, base main `3f98939`, worktree
@@ -388,6 +392,25 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   a stuck `reconcile` refund cannot be re-sent; part 2 (refund authorization, chargeback
   allocation, ACH preparation, bank outcomes, retry).
 - Next: CI and Codex review of the PR; then part 2.
+
+## Current slice — TRACE-077 finance commands, part 2A (2026-09-21, PR open)
+
+- Branch `codex/phase5-finance-refunds`, base main `f945910`, worktree `../mercurius-finance-refunds`.
+- Owner direction 2026-09-17: merge PR #32 after final CI (done), then start part 2A. Answers:
+  G3 hold release needs one operator; G9 requests and approvals expire after 24 hours; refund
+  authorization keeps its existing dual review.
+- Change: migration `20260917001000`: one-operator hold release; 24-hour request window with
+  approvals bound to their request; reviewed refund, cancellation refund and chargeback requests
+  through unchanged kernels; reissue of a `reconcile` refund after a not-found Stripe readback
+  taken 24 hours after preparation (only kernel change: `money_prepare_refund` window). Panel
+  gains release, refund form, cancellation list, chargeback form, expiry and reissue.
+- Evidence: `governance/PHASE-5-FINANCE-REFUNDS.md` (R1–R6) and the TRACE-077 section of
+  `PHASE-5-VALIDATION.md`. 1534 SQL assertions across 35 suites (044 new, 126), 17/18 mutants
+  killed (1 equivalent), 13 concurrency scripts in CI order, 129 unit tests, build, 198/198
+  non-visual browser cases, 0 audit findings.
+- Open: Codex review (R1 authority note on MPS high-risk, R5 single-operator reissue); CI;
+  failed-refund recovery; `paymentFunctionError`; part 2B (ACH preparation, bank outcomes, retry).
+- Next: part 2B after review.
 
 ## Workflow update — 2026-09-10
 

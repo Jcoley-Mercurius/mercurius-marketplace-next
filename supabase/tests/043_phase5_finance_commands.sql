@@ -4,7 +4,7 @@ select no_plan();
 -- TRACE-076 synthetic fixtures only. Covers the finance operator command gateway: the actor
 -- is the signed-in user, second-person commands bind an exact stored command approved by a
 -- different finance operator in their own session, and every command reaches the unchanged
--- kernel. Kernel entry points moved behind adapters are granted temporarily, as 042 does.
+-- kernel. TRACE-077 made hold release a one-operator command. Kernel entry points moved behind adapters are granted temporarily, as 042 does.
 insert into auth.users(id,email,email_confirmed_at) values
  ('a7610000-0000-4000-8000-000000000001','commands-homeowner@example.invalid',now()),
  ('a7610000-0000-4000-8000-000000000002','commands-operator-a@example.invalid',now()),
@@ -142,64 +142,30 @@ select pg_temp.as_user('a7610000-0000-4000-8000-000000000002');
 set local role authenticated;
 select throws_ok($$select public.money_operator_place_hold(pg_temp.id('statement'),'Late complaint','Ticket 2','cmd-hold-statement')$$,'55000','Payout already on an ACH statement; a hold cannot stop it','A payout already on a statement cannot be held');
 
--- Hold release: two operators, exact command, requester executes.
-select throws_ok($$select public.money_operator_request_review('hold_resolution',pg_temp.id('hold-1')::text,'Complaint closed','cmd-release-1',null)$$,'22023','Evidence of up to 1000 characters required','A hold release needs evidence');
+-- Hold release: one finance operator (owner decision G3, TRACE-077). The reviewed release request
+-- is retired; suite 044 covers second-person approval mechanics on reviewed refunds.
+select throws_ok($$select public.money_operator_request_review('hold_resolution',pg_temp.id('hold-1')::text,'Complaint closed','cmd-release-1','Ticket 1 closed')$$,'22023','A payout hold is released by one finance operator; release it directly','Hold release is no longer a reviewed request');
 select throws_ok($$select public.money_operator_request_review('payout_release','x','r','cmd-bad-op','e')$$,'22023','Unsupported finance review','Unsupported operations are refused');
-select throws_ok($$select public.money_operator_request_review('hold_resolution','not-a-uuid','r','cmd-bad-subject','e')$$,'P0002','Finance review subject not found','A malformed hold ID is refused');
-select throws_ok($$select public.money_operator_request_review('hold_resolution',gen_random_uuid()::text,'r','cmd-missing-hold','e')$$,'P0002','Finance review subject not found','An unknown hold is refused');
-insert into f select 'release-1',(public.money_operator_request_review('hold_resolution',upper(pg_temp.id('hold-1')::text),'Complaint closed','cmd-release-1','Ticket 1 closed')->>'request_id')::uuid;
-select is((public.money_operator_request_review('hold_resolution',pg_temp.id('hold-1')::text,'Complaint closed','cmd-release-1','Ticket 1 closed')->>'request_id')::uuid,pg_temp.id('release-1'),'The same request key replays, with the subject canonicalized');
-select throws_ok($$select public.money_operator_request_review('hold_resolution',pg_temp.id('hold-1')::text,'Other reason','cmd-release-1','Ticket 1 closed')$$,'23505','Review request idempotency conflict','The same request key with a different command conflicts');
-select is(pg_temp.request_of(pg_temp.id('release-1'))->>'state','awaiting_approval','The request awaits approval');
-select is((pg_temp.request_of(pg_temp.id('release-1'))->>'requested_by_me')::boolean,true,'The requester sees it as theirs');
-select throws_ok($$select public.money_operator_execute_review(pg_temp.id('release-1'))$$,'42501','Separate authenticated approval of exact financial command required','Execution without approval is refused');
-select throws_ok($$select public.money_operator_approve_review(pg_temp.id('release-1'),'Self review')$$,'42501','A different finance operator must approve this command','The requester cannot approve their own command');
--- A self-approval through the older kernel entry point does not count either.
-select throws_ok($$select command from public.money_review_requests$$,'42501',null,'Browser roles cannot read stored commands directly');
-select throws_ok($$select public.money_approve_review('a7610000-0000-4000-8000-000000000002',jsonb_build_object('operation','hold_resolution','hold',pg_temp.id('hold-1'),'reason','Complaint closed','evidence','Ticket 1 closed'),'Self')$$,'23514',null,'The requester cannot self-approve through the kernel');
-reset role;
--- An approval of a different command (another reason) does not satisfy this request.
-select pg_temp.kernel_approve(private.money_review_command('hold_resolution',pg_temp.id('hold-1')::text,'Complaint closed early','Ticket 1 closed'));
-select pg_temp.as_user('a7610000-0000-4000-8000-000000000002');
-set local role authenticated;
-select is(pg_temp.request_of(pg_temp.id('release-1'))->>'state','awaiting_approval','An approval of a different command does not count');
-select throws_ok($$select public.money_operator_execute_review(pg_temp.id('release-1'))$$,'42501','Separate authenticated approval of exact financial command required','A near-match approval cannot execute');
+select throws_ok($$select public.money_operator_request_review('event_exclusion','evt_cmd_missing','r','cmd-missing-event','e')$$,'P0002','Finance review subject not found','An unknown event is refused');
+select throws_ok($$select public.money_operator_release_hold(pg_temp.id('hold-1'),'Complaint closed',' ')$$,'22023','Evidence of up to 1000 characters required','A hold release needs evidence');
+select throws_ok($$select public.money_operator_release_hold(pg_temp.id('hold-1'),' ','Ticket 1 closed')$$,'22023','Reason of up to 1000 characters required','A hold release needs a reason');
+select throws_ok($$select public.money_operator_release_hold(gen_random_uuid(),'Complaint closed','Ticket 1 closed')$$,'P0002','Payout hold not found','An unknown hold is refused');
 select pg_temp.as_user('a7610000-0000-4000-8000-000000000004');
-select throws_ok($$select public.money_operator_approve_review(pg_temp.id('release-1'),'Looks fine')$$,'42501','Restricted finance authority required','An admin without finance authority cannot approve');
+select throws_ok($$select public.money_operator_release_hold(pg_temp.id('hold-1'),'Complaint closed','Ticket 1 closed')$$,'42501','Restricted finance authority required','An admin without finance authority cannot release a hold');
+select throws_ok($$select command from public.money_review_requests$$,'42501',null,'Browser roles cannot read stored commands directly');
+-- Operator B, who did not place the hold, releases it alone.
 select pg_temp.as_user('a7610000-0000-4000-8000-000000000003');
-select throws_ok($$select public.money_operator_approve_review(pg_temp.id('release-1'),' ')$$,'22023','Reason of up to 1000 characters required','Approval needs a reason');
-select throws_ok($$select public.money_operator_approve_review(gen_random_uuid(),'Looks fine')$$,'P0002','Finance review request not found','An unknown request is refused');
-select isnt((public.money_operator_approve_review(pg_temp.id('release-1'),'Ticket verified closed')->>'approval_id'),null,'Operator B approves in their own session');
-select lives_ok($$select public.money_operator_approve_review(pg_temp.id('release-1'),'Ticket verified closed')$$,'A repeated approval by the same operator is harmless');
-select is((pg_temp.request_of(pg_temp.id('release-1'))->>'approved_by_me')::boolean,true,'The approver sees their approval');
-select throws_ok($$select public.money_operator_execute_review(pg_temp.id('release-1'))$$,'42501','Only the requesting finance operator can execute this command','The approver cannot execute the requester''s command');
+select is((public.money_operator_release_hold(pg_temp.id('hold-1'),'Complaint closed','Ticket 1 closed')->>'replay')::boolean,false,'One finance operator releases the hold');
+select is((public.money_operator_release_hold(pg_temp.id('hold-1'),'Complaint closed','Ticket 1 closed')->>'replay')::boolean,true,'The same release replays');
+select throws_ok($$select public.money_operator_release_hold(pg_temp.id('hold-1'),'Other reason','Ticket 1 closed')$$,'55000','Payout hold already released','A different release of a released hold is refused');
 select pg_temp.as_user('a7610000-0000-4000-8000-000000000002');
-select is(pg_temp.request_of(pg_temp.id('release-1'))->>'state','approved','The requester sees it approved');
-reset role;
-savepoint lost_authority;
-delete from public.money_authorities where user_id='a7610000-0000-4000-8000-000000000003';
-set local role authenticated;
-select is(pg_temp.request_of(pg_temp.id('release-1'))->>'state','awaiting_approval','An approver who lost finance authority no longer counts');
-select throws_ok($$select public.money_operator_execute_review(pg_temp.id('release-1'))$$,'42501','Separate authenticated approval of exact financial command required','An approval by a former finance operator cannot execute');
-reset role;
-rollback to savepoint lost_authority;
-select pg_temp.as_user('a7610000-0000-4000-8000-000000000002');
-set local role authenticated;
-select is((public.money_operator_execute_review(pg_temp.id('release-1'))->>'replay')::boolean,false,'The requester executes the approved release');
-select is((public.money_operator_execute_review(pg_temp.id('release-1'))->>'replay')::boolean,true,'Executing again replays without a second effect');
-select is(pg_temp.request_of(pg_temp.id('release-1'))->>'state','executed','The request reads executed');
+select throws_ok($$select public.money_operator_release_hold(pg_temp.id('hold-1'),'Complaint closed','Ticket 1 closed')$$,'55000','Payout hold already released','Another operator cannot replay someone else''s release');
 select is(jsonb_array_length(pg_temp.ops()->'holds'),0,'No open hold remains');
 reset role;
-select is((select actor from public.money_hold_resolutions where hold_id=pg_temp.id('hold-1')),'a7610000-0000-4000-8000-000000000002'::uuid,'The release actor is the requester');
-select is((select approver from public.money_review_executions where request_id=pg_temp.id('release-1')),'a7610000-0000-4000-8000-000000000003'::uuid,'The gateway records the approver of the release');
+select is((select actor from public.money_hold_resolutions where hold_id=pg_temp.id('hold-1')),'a7610000-0000-4000-8000-000000000003'::uuid,'The release actor is the session user');
 select is(pg_temp.payable_ok('hold'),true,'The released payout is payable again');
-select throws_ok($$update public.money_review_executions set approver=actor$$,'55000',null,'Execution evidence is immutable');
-select throws_ok($$delete from public.money_review_requests$$,'55000',null,'Review requests are immutable');
-
--- A second request for the same, now released hold goes stale and cannot execute.
 select pg_temp.as_user('a7610000-0000-4000-8000-000000000002');
 set local role authenticated;
-select throws_ok($$select public.money_operator_request_review('hold_resolution',pg_temp.id('hold-1')::text,'Again','cmd-release-2','Again')$$,'55000','Finance review not actionable: completed','A released hold cannot be requested again');
 
 -- Stripe readback: one operator records; a match needs a two-person resolution.
 select throws_ok($$select public.money_operator_record_readback(pg_temp.id('readback'),-1,'usd','Stripe pi_cmd_readback','cmd-rb-neg')$$,'22023','Observed amount in cents required','A negative observation is refused');

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  allocationError,
   canReadBackRefund,
+  canReissueRefund,
   canSendRefund,
   commandErrorMessage,
   parseCents,
@@ -11,7 +13,7 @@ import {
   type ReviewRequest,
 } from "../../src/lib/financeCommands";
 
-// TRACE-076: wording and gating only. The database decides authority, approvers and actionability.
+// TRACE-076/077: wording and gating only. The database decides authority, approvers and actionability.
 const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   request_id: "00000000-0000-4000-8000-000000000761",
   operation: "hold_resolution",
@@ -20,12 +22,14 @@ const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   invoice_number: "M5-0000000763",
   reason: "Complaint closed",
   evidence: "Ticket 1 closed",
+  details: null,
   requested_by_me: false,
   approved_by_me: false,
   recorded_by_me: false,
   state: "awaiting_approval",
   blocker: null,
   created_at: "2026-09-16T15:00:00.000Z",
+  expires_at: "2026-09-17T15:00:00.000Z",
   executed_at: null,
   ...overrides,
 });
@@ -39,6 +43,8 @@ const refund = (overrides: Partial<PendingRefund> = {}): PendingRefund => ({
   attempt_status: "not_started",
   provider_reference: null,
   can_send: true,
+  generation: 1,
+  reissue_blocker: null,
   last_readback: null,
   created_at: "2026-09-16T15:00:00.000Z",
   ...overrides,
@@ -65,6 +71,15 @@ describe("review actions", () => {
     });
     expect(reviewAction(request({ state: "executed" })).kind).toBe("none");
   });
+
+  it("offers nothing on an expired request, even an approved one of mine", () => {
+    for (const overrides of [{}, { requested_by_me: true, state: "expired" as const }]) {
+      expect(reviewAction(request({ ...overrides, state: "expired" }))).toEqual({
+        kind: "none",
+        note: "Not run within 24 hours. Request it again if it still applies.",
+      });
+    }
+  });
 });
 
 describe("refund actions", () => {
@@ -79,6 +94,24 @@ describe("refund actions", () => {
   it("reads back only refunds that were sent", () => {
     expect(canReadBackRefund(refund())).toBe(false);
     expect(canReadBackRefund(refund({ attempt_status: "reconcile" }))).toBe(true);
+  });
+
+  it("reissues only an uncertain refund the server allows, for its author or approver", () => {
+    expect(canReissueRefund(refund({ attempt_status: "reconcile" }))).toBe(true);
+    expect(canReissueRefund(refund({ attempt_status: "reconcile", reissue_blocker: "readback_too_early" }))).toBe(false);
+    expect(canReissueRefund(refund({ attempt_status: "reconcile", can_send: false }))).toBe(false);
+    expect(canReissueRefund(refund({ attempt_status: "prepared" }))).toBe(false);
+  });
+});
+
+describe("chargeback allocation", () => {
+  const retained = { service: 10000, tax: 700, tip: 1000 };
+  it("accepts parts that add up to the loss within retained components", () => {
+    expect(allocationError(1000, retained, { service: 800, tax: 100, tip: 100 })).toBeNull();
+  });
+  it("refuses a partial or excessive split", () => {
+    expect(allocationError(1000, retained, { service: 900, tax: 0, tip: 0 })).toContain("add up");
+    expect(allocationError(1001, retained, { service: 0, tax: 0, tip: 1001 })).toContain("more than");
   });
 });
 
@@ -101,6 +134,11 @@ describe("error wording", () => {
     expect(commandErrorMessage("A different finance operator must approve this command")).toContain("different finance operator");
     expect(commandErrorMessage("Finance review not actionable: event_has_effects")).toBe("The event already moved money in the ledger, so it cannot be excluded.");
     expect(commandErrorMessage("Hold idempotency conflict")).toContain("different details");
+    expect(commandErrorMessage("Finance review request expired; request it again")).toContain("expired");
+    expect(commandErrorMessage("Finance review not actionable: amount_changed")).toBe("The policy amount changed after this was requested. Request it again.");
+    expect(commandErrorMessage("Refund reissue not allowed: readback_too_early")).toContain("24 hours");
+    expect(commandErrorMessage("Refund reissue idempotency conflict")).toContain("different details");
+    expect(commandErrorMessage("Payout hold already released")).toBe("This hold was already released.");
   });
 
   it("never shows unknown database text", () => {

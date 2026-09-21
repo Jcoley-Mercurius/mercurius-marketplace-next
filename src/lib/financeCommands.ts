@@ -1,9 +1,15 @@
-// TRACE-076 presentation for the finance operator command gateway. The database decides who
+// TRACE-076/077 presentation for the finance operator command gateway. The database decides who
 // may act, what is actionable and which approver counts; this module only words its answers.
 // Amounts are integer cents.
 
-export type ReviewOperation = "event_exclusion" | "reconciliation_resolution" | "hold_resolution";
-export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale";
+export type ReviewOperation =
+  | "event_exclusion"
+  | "reconciliation_resolution"
+  | "hold_resolution"
+  | "refund_authorization"
+  | "cancellation_refund"
+  | "chargeback_allocation";
+export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale" | "expired";
 export type ReviewBlocker =
   | "not_found"
   | "completed"
@@ -12,7 +18,29 @@ export type ReviewBlocker =
   | "readback_mismatch"
   | "readback_outdated"
   | "readback_superseded"
-  | "not_open";
+  | "not_open"
+  | "refund_amount_invalid"
+  | "payment_not_captured"
+  | "deposit_service_only"
+  | "refund_exceeds_components"
+  | "refund_exceeds_payment"
+  | "on_ach_statement"
+  | "chargeback_open"
+  | "not_eligible"
+  | "no_refund_due"
+  | "amount_changed"
+  | "dispute_not_lost"
+  | "refund_pending"
+  | "allocation_invalid";
+export type ReissueBlocker =
+  | "refund_not_sent"
+  | "refund_settled"
+  | "refund_not_uncertain"
+  | "refund_found_at_stripe"
+  | "readback_required"
+  | "readback_too_early";
+
+export type Components = { service: number; tax: number; tip: number };
 export type RefundAttemptStatus = "not_started" | "prepared" | "pending" | "succeeded" | "failed" | "reconcile";
 
 export type ReviewRequest = {
@@ -23,12 +51,14 @@ export type ReviewRequest = {
   invoice_number: string | null;
   reason: string;
   evidence: string | null;
+  details: (Components & { payment_id?: string; dispute_id?: string }) | null;
   requested_by_me: boolean;
   approved_by_me: boolean;
   recorded_by_me: boolean;
   state: ReviewState;
   blocker: ReviewBlocker | null;
   created_at: string;
+  expires_at: string;
   executed_at: string | null;
 };
 
@@ -77,7 +107,33 @@ export type PendingRefund = {
   attempt_status: RefundAttemptStatus;
   provider_reference: string | null;
   can_send: boolean;
+  generation: number;
+  reissue_blocker: ReissueBlocker | null;
   last_readback: { found: boolean; provider_status: string | null; by_me: boolean; created_at: string } | null;
+  created_at: string;
+};
+
+export type CancellationRefund = Components & {
+  operation_id: string;
+  kind: "customer_cancel" | "provider_cancel" | "no_show";
+  payment_id: string;
+  obligation_id: string;
+  invoice_number: string | null;
+  refund_percent: number;
+  blocker: ReviewBlocker | null;
+  open_request_id: string | null;
+  cancelled_at: string;
+};
+
+export type LostChargeback = {
+  dispute_id: string;
+  obligation_id: string;
+  payment_id: string;
+  amount: number;
+  invoice_number: string | null;
+  retained: Components;
+  blocker: ReviewBlocker | null;
+  open_request_id: string | null;
   created_at: string;
 };
 
@@ -88,12 +144,17 @@ export type FinanceOperations = {
   readbacks: OpenReadback[];
   events: UnprocessedEvent[];
   refunds: PendingRefund[];
+  cancellations: CancellationRefund[];
+  chargebacks: LostChargeback[];
 };
 
 export const operationLabel: Record<ReviewOperation, string> = {
   event_exclusion: "Exclude Stripe event",
   reconciliation_resolution: "Resolve Stripe readback",
   hold_resolution: "Release payout hold",
+  refund_authorization: "Authorize refund",
+  cancellation_refund: "Authorize cancellation refund",
+  chargeback_allocation: "Allocate lost chargeback",
 };
 
 export const reviewStateLabel: Record<ReviewState, string> = {
@@ -101,6 +162,13 @@ export const reviewStateLabel: Record<ReviewState, string> = {
   approved: "Approved",
   executed: "Done",
   stale: "No longer applies",
+  expired: "Expired",
+};
+
+export const cancellationKindLabel: Record<CancellationRefund["kind"], string> = {
+  customer_cancel: "Customer cancellation",
+  provider_cancel: "Provider cancellation, no replacement",
+  no_show: "Provider no-show, no replacement",
 };
 
 export const blockerLabel: Record<ReviewBlocker, string> = {
@@ -112,6 +180,28 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   readback_outdated: "Money moved since this readback. Record a new one.",
   readback_superseded: "A newer readback was recorded. Resolve that one instead.",
   not_open: "No reconciliation hold is open for this invoice.",
+  refund_amount_invalid: "Enter a service, tax and tip amount greater than zero in total.",
+  payment_not_captured: "That payment was not captured on this invoice.",
+  deposit_service_only: "Only a deposit was collected, so the refund can include service only.",
+  refund_exceeds_components: "It is more than the service, tax or tip still refundable on this invoice.",
+  refund_exceeds_payment: "It is more than is still refundable on this payment.",
+  on_ach_statement: "The payout is already on an ACH statement. Work the bank outcome first.",
+  chargeback_open: "A chargeback is open or its loss is not allocated. Resolve the chargeback first.",
+  not_eligible: "The cancellation policy produces no refund that can be computed for this payment.",
+  no_refund_due: "The cancellation policy gives no refund for this payment.",
+  amount_changed: "The policy amount changed after this was requested. Request it again.",
+  dispute_not_lost: "The chargeback is not recorded as lost.",
+  refund_pending: "A refund on this invoice has not settled. Settle it before allocating the chargeback.",
+  allocation_invalid: "The allocation must equal the chargeback and stay within the retained service, tax and tip.",
+};
+
+export const reissueBlockerLabel: Record<ReissueBlocker, string> = {
+  refund_not_sent: "It has not been sent to Stripe.",
+  refund_settled: "It has already settled.",
+  refund_not_uncertain: "Its outcome is not uncertain.",
+  refund_found_at_stripe: "Stripe has a refund for it. Read it back instead.",
+  readback_required: "Read it back from Stripe first. A reissue needs a readback that finds no refund.",
+  readback_too_early: "Read it back again: the readback must be at least 24 hours after the refund was prepared.",
 };
 
 export const refundAttemptLabel: Record<RefundAttemptStatus, string> = {
@@ -126,6 +216,7 @@ export const refundAttemptLabel: Record<RefundAttemptStatus, string> = {
 /** What the signed-in operator can do with a review request, and why not otherwise. */
 export function reviewAction(request: ReviewRequest): { kind: "approve" | "execute" | "none"; note: string } {
   if (request.state === "executed") return { kind: "none", note: "Done." };
+  if (request.state === "expired") return { kind: "none", note: "Not run within 24 hours. Request it again if it still applies." };
   if (request.state === "stale") return { kind: "none", note: request.blocker ? blockerLabel[request.blocker] : "It no longer applies." };
   if (request.requested_by_me) {
     return request.state === "approved"
@@ -144,6 +235,20 @@ export function canSendRefund(refund: PendingRefund) {
 
 export function canReadBackRefund(refund: PendingRefund) {
   return refund.attempt_status !== "not_started";
+}
+
+/** Whether an uncertain refund may be sent again under a new Stripe key from this session. */
+export function canReissueRefund(refund: PendingRefund) {
+  return refund.can_send && refund.attempt_status === "reconcile" && refund.reissue_blocker === null;
+}
+
+/** The only ways to split a lost chargeback: the three parts add up to it and stay within what is retained. */
+export function allocationError(amount: number, retained: Components, parts: Components): string | null {
+  if (parts.service + parts.tax + parts.tip !== amount) return "Service, tax and tip must add up to the chargeback.";
+  if (parts.service > retained.service || parts.tax > retained.tax || parts.tip > retained.tip) {
+    return "A part is more than the invoice still retains.";
+  }
+  return null;
 }
 
 /** Dollars typed by an operator, to integer cents. Null unless it is a plain non-negative amount. */
@@ -166,12 +271,20 @@ const refusals: [RegExp, string][] = [
   [/Excluded event requires/, "This event was excluded, so it cannot be replayed."],
   [/Finance review subject not found|Finance obligation not found|Stripe event not found|Finance review request not found/, "It no longer exists. Refresh the page."],
   [/Finance review already executed/, "It has already been done."],
+  [/Finance review request expired/, "This request was not run within 24 hours and has expired. Request it again if it still applies."],
+  [/Payout hold already released/, "This hold was already released."],
+  [/Payout hold not found|Cancellation not found|Chargeback not found|Refund authorization not found/, "It no longer exists. Refresh the page."],
+  [/Only the refund's author or approver can reissue/, "Only the refund's author or approver can reissue it."],
+  [/Service, tax and tip amounts in cents required/, "Enter service, tax and tip amounts, greater than zero in total."],
+  [/Stripe payment required/, "Choose the Stripe payment to refund."],
 ];
 
 /** Operator wording for a gateway refusal. Unknown database text is not shown verbatim. */
 export function commandErrorMessage(message: string): string {
   const blocker = /Finance review not actionable: ([a-z_]+)/.exec(message)?.[1];
   if (blocker && blocker in blockerLabel) return blockerLabel[blocker as ReviewBlocker];
+  const reissue = /Refund reissue not allowed: ([a-z_]+)/.exec(message)?.[1];
+  if (reissue && reissue in reissueBlockerLabel) return reissueBlockerLabel[reissue as ReissueBlocker];
   for (const [pattern, text] of refusals) if (pattern.test(message)) return text;
   return "The command was not completed. Refresh the page and check the current state before trying again.";
 }

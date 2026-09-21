@@ -1,4 +1,4 @@
-// Synthetic-only concurrency proof for TRACE-076; reset the isolated database afterward.
+// Synthetic-only concurrency proof for TRACE-076 (hold release per TRACE-077); reset the isolated database afterward.
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
@@ -48,26 +48,20 @@ assert(placements.every((result) => result.ok), JSON.stringify(placements));
 assert.equal(await sql("select count(*) from public.money_holds where business_key='race-hold'"), "1");
 const holdId = await sql("select id from public.money_holds where business_key='race-hold'");
 
-// 2. Two approved requests for the same hold, one executed twice while another execution holds
-// the lock: exactly one release and one execution record.
-for (const [key, reason] of [["race-release-1", "Synthetic cleared"], ["race-release-2", "Synthetic cleared again"]]) {
-  const request = await as(operatorA, `select public.money_operator_request_review('hold_resolution','${holdId}','${reason}','${key}','Synthetic closure')->>'request_id';`);
-  await as(operatorB, `select public.money_operator_approve_review('${request}','Synthetic approval');`);
-}
-const [release1, release2] = (await sql("select string_agg(id::text,',' order by business_key) from public.money_review_requests where business_key like 'race-release-%'")).split(",");
-const holder = settle(as(operatorA, `select public.money_operator_execute_review('${release2}'); select pg_sleep(2);`, "finance-release-race"));
+// 2. Two operators releasing the same hold at once, one while another release holds the lock:
+// exactly one release, attributed to the lock holder (hold release is one operator, TRACE-077).
+const holder = settle(as(operatorA, `select public.money_operator_release_hold('${holdId}','Synthetic cleared','Synthetic closure'); select pg_sleep(2);`, "finance-release-race"));
 await waitForSleep("finance-release-race");
 const releases = await Promise.all([
-  settle(as(operatorA, `select public.money_operator_execute_review('${release1}');`)),
-  settle(as(operatorA, `select public.money_operator_execute_review('${release1}');`)),
-  settle(as(operatorA, `select public.money_operator_execute_review('${release2}');`)),
+  settle(as(operatorB, `select public.money_operator_release_hold('${holdId}','Synthetic cleared','Synthetic closure');`)),
+  settle(as(operatorC, `select public.money_operator_release_hold('${holdId}','Synthetic cleared again','Synthetic closure');`)),
+  settle(as(operatorA, `select public.money_operator_release_hold('${holdId}','Synthetic cleared','Synthetic closure');`)),
   holder,
 ]);
 assert.equal(await sql(`select count(*) from public.money_hold_resolutions where hold_id='${holdId}'`), "1");
-assert.equal(await sql(`select count(*) from public.money_review_executions where request_id in ('${release1}','${release2}')`), "1");
-assert.equal(await sql(`select request_id from public.money_review_executions where request_id in ('${release1}','${release2}')`), release2, "The lock holder's release won");
+assert.equal(await sql(`select actor from public.money_hold_resolutions where hold_id='${holdId}'`), operatorA, "The lock holder's release won");
 assert(releases[3].ok && releases[2].ok, "The winner and its replay succeed");
-assert(releases.slice(0, 2).every((result) => !result.ok && /not actionable: completed/.test(result.message)), JSON.stringify(releases));
+assert(releases.slice(0, 2).every((result) => !result.ok && /Payout hold already released/.test(result.message)), JSON.stringify(releases));
 
 // 3. Four concurrent readbacks with one key make one attributed observation.
 const readbacks = await Promise.all(Array.from({ length: 4 }, () =>
@@ -102,4 +96,4 @@ assert.equal(await sql(`select count(*) from public.money_review_executions wher
 // No command touched other events, and none of these races posted a journal.
 assert.equal(await sql("select md5(string_agg(event_id||status,',' order by event_id)) from public.money_webhook_events where event_id<>'evt_cmd_race_unsupported'"), before);
 assert.equal(await sql("select count(*) from public.money_journals where evidence like 'race-%' or business_key like 'race-%'"), "0");
-console.log("PASS: same-key holds and readbacks made one row each; competing hold releases made one release; a racing mismatch kept the readback hold open; one exclusion from three executions. Reset isolated synthetic fixtures afterward.");
+console.log("PASS: same-key holds and readbacks made one row each; competing one-operator hold releases made one release; a racing mismatch kept the readback hold open; one exclusion from three executions. Reset isolated synthetic fixtures afterward.");

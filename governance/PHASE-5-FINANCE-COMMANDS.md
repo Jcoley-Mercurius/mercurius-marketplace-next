@@ -1,7 +1,8 @@
 # Phase 5 — Finance operator command gateway, part 1 (TRACE-076)
 
 **Status:** IMPLEMENTED on branch `codex/phase5-finance-commands`, based on `main` `3f98939`
-(PR #31, TRACE-075, merged). PR open, awaiting CI and Codex design and code review.
+(PR #31, TRACE-075, merged). **Merged as PR #32 on 2026-09-17 (main `f945910`)** after final-head
+CI passed; Codex design and code review remain open.
 Merging is not phase acceptance or production activation. No hosted project, Stripe account,
 bank or real money was touched.
 
@@ -70,6 +71,9 @@ Releasing held provider funds is a high-risk manual change under MPS §7 ("high-
 require second-person approval"), so G3 is stricter than the kernel. **Review question:** confirm
 hold release needs two operators.
 
+**Owner answer 2026-09-17:** hold release does not need a second operator. TRACE-077 makes it a
+one-operator command (PHASE-5-FINANCE-REFUNDS.md R1).
+
 ### G4 — Readback attribution and recorder separation
 
 The kernel observation names no actor, so `money_readback_entries` records who entered each
@@ -110,6 +114,9 @@ references or customer identities.
 Requests have no expiry or withdrawal. A request whose subject changed reads `stale` with its
 reason and cannot be approved or run. **Review question:** whether requests and approvals need an
 expiry or withdrawal.
+
+**Owner answer 2026-09-17:** requests and approvals expire after 24 hours. TRACE-077 implements
+the window and binds approvals to their request (PHASE-5-FINANCE-REFUNDS.md R2).
 
 ## Scope
 

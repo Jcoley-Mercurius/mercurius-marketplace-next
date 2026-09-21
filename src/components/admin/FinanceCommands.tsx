@@ -10,16 +10,21 @@ import { Input } from "@/components/ui/input";
 import { PageState } from "@/components/ui/page-state";
 import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
 import {
+  allocationError,
   blockerLabel,
   canReadBackRefund,
+  canReissueRefund,
   canSendRefund,
+  cancellationKindLabel,
   commandErrorMessage,
   operationLabel,
   parseCents,
   refundAttemptLabel,
   refundErrorMessage,
+  reissueBlockerLabel,
   reviewAction,
   reviewStateLabel,
+  type Components,
   type FinanceOperations,
   type PendingRefund,
   type ReviewOperation,
@@ -29,9 +34,10 @@ import { formatCents, type ObligationReconciliation } from "@/lib/financeReconci
 import { paymentFunctionError } from "@/lib/payments";
 import { createClient } from "@/lib/supabase/client";
 
-// TRACE-076 finance operator commands. The signed-in session is the actor; the database refuses
-// anyone without finance authority, binds second-person commands to their exact text and picks
-// the approver. Every command is confirmed by re-reading the server before it is reported done.
+// TRACE-076/077 finance operator commands. The signed-in session is the actor; the database refuses
+// anyone without finance authority, binds second-person commands to their exact text, expires them
+// after 24 hours and picks the approver. Every command is confirmed by re-reading the server before
+// it is reported done.
 
 const selectClass =
   "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
@@ -40,6 +46,18 @@ const formatDate = (value: string) =>
   new Date(value).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
 const shortId = (value: string) => value.slice(0, 8);
+
+const components = (parts: Components) =>
+  `service ${formatCents(parts.service)} · tax ${formatCents(parts.tax)} · tip ${formatCents(parts.tip)}`;
+
+const executeConsequence: Record<ReviewOperation, string> = {
+  hold_resolution: "Releases this payout hold. The payout still needs every other check before ACH preparation.",
+  reconciliation_resolution: "Closes the Stripe readback hold for this invoice. Other holds stay in place.",
+  event_exclusion: "Excludes this Stripe event permanently. It will never be processed or replayed, and it stops holding payouts.",
+  refund_authorization: "Authorizes this exact refund with you as author and the approver as reviewer. Nothing is sent to Stripe until one of you sends it, and the payout stays held until it settles.",
+  cancellation_refund: "Authorizes the cancellation policy refund with you as author and the approver as reviewer. Nothing is sent to Stripe until one of you sends it.",
+  chargeback_allocation: "Allocates the lost chargeback to service, tax and tip in the ledger and reduces provider proceeds and the platform fee to match. It cannot be undone here.",
+};
 
 export function FinanceCommands({
   obligations,
@@ -60,6 +78,12 @@ export function FinanceCommands({
   const [holdEvidence, setHoldEvidence] = useState("");
   const [releaseHold, setReleaseHold] = useState("");
   const [releaseEvidence, setReleaseEvidence] = useState("");
+  const [refundInvoice, setRefundInvoice] = useState("");
+  const [refundPayment, setRefundPayment] = useState("");
+  const [refundParts, setRefundParts] = useState({ service: "", tax: "", tip: "" });
+  const [refundPolicy, setRefundPolicy] = useState("");
+  const [chargebackDispute, setChargebackDispute] = useState("");
+  const [chargebackParts, setChargebackParts] = useState({ service: "", tax: "", tip: "" });
   const [readbackInvoice, setReadbackInvoice] = useState("");
   const [readbackAmount, setReadbackAmount] = useState("");
   const [readbackEvidence, setReadbackEvidence] = useState("");
@@ -148,27 +172,48 @@ export function FinanceCommands({
   const holdable = obligations.filter((row) => !row.payout.statement);
   const amountCents = parseCents(readbackAmount);
   const busy = pending;
+  const partsCents = (parts: { service: string; tax: string; tip: string }): Components | null => {
+    const service = parseCents(parts.service || "0");
+    const tax = parseCents(parts.tax || "0");
+    const tip = parseCents(parts.tip || "0");
+    return service === null || tax === null || tip === null ? null : { service, tax, tip };
+  };
+  const refundable = obligations.filter((row) => row.charges.payments.length > 0);
+  const refundRow = refundable.find((row) => row.obligation_id === refundInvoice);
+  const refundCents = partsCents(refundParts);
+  const refundTotal = refundCents ? refundCents.service + refundCents.tax + refundCents.tip : 0;
+  const chargeback = ops.chargebacks.find((item) => item.dispute_id === chargebackDispute);
+  const chargebackCents = partsCents(chargebackParts);
+  const chargebackError = chargeback && chargebackCents ? allocationError(chargeback.amount, chargeback.retained, chargebackCents) : null;
+
+  // Every second-person request confirms the same way: the new request reads back as mine.
+  const submitRequest = (operation: ReviewOperation, entity: string, call: () => PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
+    let requestId = "";
+    return run(
+      async () => {
+        const data = await accepted(call());
+        requestId = typeof data?.request_id === "string" ? data.request_id : "";
+      },
+      (next) => next.requests.some((item) => item.request_id === requestId && item.requested_by_me && item.state !== "expired"),
+      { title: "Review requested", description: `${operationLabel[operation]} · ${entity}. A different finance operator must approve it within 24 hours; then you run it.` },
+    );
+  };
 
   const requestReview = (operation: ReviewOperation, subject: string, evidence: string | null, entity: string) =>
-    async (reason: string) => {
-      const businessKey = key(`${operation}:${subject}`);
-      let requestId = "";
-      await run(
-        async () => {
-          const data = await accepted(createClient().rpc("money_operator_request_review", {
-            p_operation: operation, p_subject: subject, p_reason: reason, p_key: businessKey, p_evidence: evidence ?? undefined,
-          }));
-          requestId = typeof data?.request_id === "string" ? data.request_id : "";
-        },
-        (next) => next.requests.some((item) => item.request_id === requestId && item.requested_by_me),
-        { title: "Review requested", description: `${operationLabel[operation]} · ${entity}. A different finance operator must approve it before you run it.` },
-      );
-    };
+    (reason: string) => submitRequest(operation, entity, () => createClient().rpc("money_operator_request_review", {
+      p_operation: operation, p_subject: subject, p_reason: reason, p_key: key(`${operation}:${subject}`), p_evidence: evidence ?? undefined,
+    }));
 
   const reviewEntity = (request: ReviewRequest) =>
     request.operation === "event_exclusion"
       ? `${request.subject}${request.obligation_id ? ` · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : ""}`
-      : invoiceLabel(request.obligation_id, request.invoice_number);
+      : request.details?.dispute_id
+        ? `${request.details.dispute_id} · ${invoiceLabel(request.obligation_id, request.invoice_number)}`
+        : invoiceLabel(request.obligation_id, request.invoice_number);
+  const reviewAmounts = (request: ReviewRequest) =>
+    request.details
+      ? `${request.details.payment_id ? `${request.details.payment_id} · ` : ""}${formatCents(request.details.service + request.details.tax + request.details.tip)} (${components(request.details)})`
+      : null;
 
   return (
     <section aria-labelledby="finance-commands" className="space-y-6">
@@ -176,7 +221,7 @@ export function FinanceCommands({
         <div>
           <h2 id="finance-commands" className="text-lg font-semibold">Finance commands</h2>
           <p className="text-sm text-muted-foreground">
-            Recorded as you, with your finance authority. Releasing a hold, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session; you then run it.
+            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Placing and releasing a payout hold need one operator.
           </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => void refresh()}><RefreshCw />Refresh commands</Button>
@@ -186,7 +231,7 @@ export function FinanceCommands({
       <div className="space-y-3">
         <h3 className="font-medium">Second-person reviews ({ops.requests.filter((item) => item.state !== "executed").length} open)</h3>
         {ops.requests.length === 0 ? (
-          <PageState kind="empty" title="No review requests" description="Requests to release holds, resolve readbacks or exclude events appear here for a second operator." />
+          <PageState kind="empty" title="No review requests" description="Requests to authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -202,7 +247,11 @@ export function FinanceCommands({
                     <span className="flex flex-col gap-0.5 [overflow-wrap:anywhere]">
                       <span className="font-medium">{operationLabel[item.operation]}</span>
                       <span className="text-xs text-muted-foreground">{reviewEntity(item)}</span>
-                      <span className="text-xs text-muted-foreground">Requested {item.requested_by_me ? "by you" : "by another operator"} · {formatDate(item.created_at)}</span>
+                      {reviewAmounts(item) && <span className="text-xs tabular-nums">{reviewAmounts(item)}</span>}
+                      <span className="text-xs text-muted-foreground">
+                        Requested {item.requested_by_me ? "by you" : "by another operator"} · {formatDate(item.created_at)}
+                        {item.state !== "executed" && ` · ${item.state === "expired" ? "expired" : "expires"} ${formatDate(item.expires_at)}`}
+                      </span>
                     </span>
                   ),
                 },
@@ -242,7 +291,7 @@ export function FinanceCommands({
                           triggerLabel="Approve"
                           title={`Approve: ${operationLabel[item.operation].toLowerCase()}?`}
                           entity={reviewEntity(item)}
-                          consequence={`Approves exactly this command as a second finance operator: "${item.reason}"${item.evidence ? ` with evidence "${item.evidence}"` : ""}. Nothing changes until the requester runs it, and it cannot run if anything has changed.`}
+                          consequence={`Approves exactly this command as a second finance operator: "${item.reason}"${item.evidence ? ` with evidence "${item.evidence}"` : ""}${reviewAmounts(item) ? ` for ${reviewAmounts(item)}` : ""}. Nothing changes until the requester runs it, it cannot run if anything has changed, and it expires ${formatDate(item.expires_at)}.`}
                           confirmLabel="Approve"
                           onConfirm={(note) => run(
                             async () => { await accepted(createClient().rpc("money_operator_approve_review", { p_request: item.request_id, p_reason: note })); },
@@ -259,14 +308,8 @@ export function FinanceCommands({
                           confirmationTone={item.operation === "hold_resolution" ? "commitment" : "destructive"}
                           triggerLabel="Run approved command"
                           title={`Run: ${operationLabel[item.operation].toLowerCase()}?`}
-                          entity={reviewEntity(item)}
-                          consequence={
-                            item.operation === "hold_resolution"
-                              ? "Releases this payout hold. The payout still needs every other check before ACH preparation."
-                              : item.operation === "reconciliation_resolution"
-                                ? "Closes the Stripe readback hold for this invoice. Other holds stay in place."
-                                : "Excludes this Stripe event permanently. It will never be processed or replayed, and it stops holding payouts."
-                          }
+                          entity={reviewAmounts(item) ? `${reviewEntity(item)} · ${reviewAmounts(item)}` : reviewEntity(item)}
+                          consequence={executeConsequence[item.operation]}
                           confirmLabel="Run"
                           onConfirm={() => run(
                             async () => { await accepted(createClient().rpc("money_operator_execute_review", { p_request: item.request_id })); },
@@ -307,7 +350,7 @@ export function FinanceCommands({
             triggerLabel="Place hold"
             title="Hold this provider payout?"
             entity={invoiceLabel(holdInvoice, holdable.find((row) => row.obligation_id === holdInvoice)?.invoice_number ?? null)}
-            consequence="Stops ACH preparation for this invoice until a second finance operator approves its release. The provider is not notified by this action."
+            consequence="Stops ACH preparation for this invoice until a finance operator releases it. The provider is not notified by this action."
             confirmLabel="Place hold"
             onConfirm={(reason) => {
               const invoice = holdInvoice;
@@ -322,9 +365,9 @@ export function FinanceCommands({
         </div>
 
         <div className="space-y-3 rounded-xl border bg-card p-4">
-          <h3 className="font-medium">Request a hold release</h3>
+          <h3 className="font-medium">Release a payout hold</h3>
           <p className="text-sm text-muted-foreground">
-            {ops.holds.length === 0 ? "No payout hold is open." : `${ops.holds.length} open hold${ops.holds.length === 1 ? "" : "s"}.`} A different finance operator approves the release.
+            {ops.holds.length === 0 ? "No payout hold is open." : `${ops.holds.length} open hold${ops.holds.length === 1 ? "" : "s"}.`} One finance operator can release a hold.
           </p>
           <FormField label="Hold" required>
             {(control) => (
@@ -346,12 +389,20 @@ export function FinanceCommands({
             requireReason
             reasonLabel="Release reason"
             confirmationTone="commitment"
-            triggerLabel="Request release"
-            title="Request release of this hold?"
+            triggerLabel="Release hold"
+            title="Release this payout hold?"
             entity={invoiceLabel(ops.holds.find((hold) => hold.hold_id === releaseHold)?.obligation_id ?? null, ops.holds.find((hold) => hold.hold_id === releaseHold)?.invoice_number ?? null)}
-            consequence="Creates a review request. The hold stays in place until a different finance operator approves this exact reason and evidence and you run it."
-            confirmLabel="Request release"
-            onConfirm={(reason) => requestReview("hold_resolution", releaseHold, releaseEvidence.trim(), "payout hold")(reason).then(() => { setReleaseHold(""); setReleaseEvidence(""); })}
+            consequence="Releases the hold under your name now. The payout still needs every other check before ACH preparation."
+            confirmLabel="Release hold"
+            onConfirm={(reason) => {
+              const hold = releaseHold;
+              const evidence = releaseEvidence.trim();
+              return run(
+                async () => { await accepted(createClient().rpc("money_operator_release_hold", { p_hold: hold, p_reason: reason, p_evidence: evidence })); },
+                (next) => !next.holds.some((item) => item.hold_id === hold),
+                { title: "Payout hold released", description: "Other payout checks still apply." },
+              ).then(() => { setReleaseHold(""); setReleaseEvidence(""); });
+            }}
           />
         </div>
 
@@ -425,6 +476,164 @@ export function FinanceCommands({
             onConfirm={(reason) => requestReview("event_exclusion", excludeEvent, excludeEvidence.trim(), excludeEvent)(reason).then(() => { setExcludeEvent(""); setExcludeEvidence(""); })}
           />
         </div>
+
+        <div className="space-y-3 rounded-xl border bg-card p-4">
+          <h3 className="font-medium">Request a refund</h3>
+          <p className="text-sm text-muted-foreground">An exact refund of service, tax and tip on one captured payment, for a decision such as a dispute outcome. For a cancellation, use the policy refund below.</p>
+          <FormField label="Refund invoice" required>
+            {(control) => (
+              <select {...control} className={selectClass} value={refundInvoice} disabled={busy} onChange={(event) => { setRefundInvoice(event.target.value); setRefundPayment(""); }}>
+                <option value="">{refundable.length ? "Select an invoice" : "No invoice has a captured payment"}</option>
+                {refundable.map((row) => <option key={row.obligation_id} value={row.obligation_id}>{invoiceLabel(row.obligation_id, row.invoice_number)} · {row.payee.name ?? "Provider"}</option>)}
+              </select>
+            )}
+          </FormField>
+          <FormField label="Payment" required>
+            {(control) => (
+              <select {...control} className={selectClass} value={refundPayment} disabled={busy || !refundRow} onChange={(event) => setRefundPayment(event.target.value)}>
+                <option value="">{refundRow ? "Select a payment" : "Select an invoice first"}</option>
+                {refundRow?.charges.payments.map((payment) => <option key={payment.payment_id} value={payment.payment_id}>{payment.payment_id} · {payment.mode} · {formatCents(payment.amount)}</option>)}
+              </select>
+            )}
+          </FormField>
+          {refundRow && (
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {refundRow.terms && <>Invoice terms: {components({ service: refundRow.terms.subtotal, tax: refundRow.terms.tax, tip: refundRow.terms.tip })} · </>}refunded so far {components(refundRow.refunds)}
+            </p>
+          )}
+          <div className="grid gap-3 sm:grid-cols-3 sm:items-end">
+            {(["service", "tax", "tip"] as const).map((part) => (
+              <FormField key={part} label={`Refund ${part} (USD)`} error={refundParts[part] && parseCents(refundParts[part]) === null ? "Enter dollars and cents." : undefined}>
+                {(control) => <Input {...control} inputMode="decimal" placeholder="0.00" value={refundParts[part]} disabled={busy} onChange={(event) => setRefundParts((value) => ({ ...value, [part]: event.target.value }))} />}
+              </FormField>
+            ))}
+          </div>
+          <FormField label="Policy reference" required help="The decision this refund carries out, for example a dispute ticket or rework agreement.">
+            {(control) => <Input {...control} value={refundPolicy} maxLength={1000} disabled={busy} onChange={(event) => setRefundPolicy(event.target.value)} />}
+          </FormField>
+          <ConfirmAction
+            disabled={busy || !refundRow || !refundPayment || !refundCents || refundTotal === 0 || !refundPolicy.trim()}
+            requireReason
+            reasonLabel="Refund reason"
+            confirmationTone="commitment"
+            triggerLabel="Request refund"
+            title="Request this refund?"
+            entity={`${invoiceLabel(refundInvoice, refundRow?.invoice_number ?? null)} · ${refundPayment} · ${formatCents(refundTotal)}`}
+            consequence={`Creates a review request for ${refundCents ? components(refundCents) : ""}. A different finance operator must approve it within 24 hours; you then run it to authorize the refund. Nothing is sent to Stripe until the refund is sent.`}
+            confirmLabel="Request refund"
+            onConfirm={(reason) => {
+              const invoice = refundInvoice;
+              const payment = refundPayment;
+              const parts = refundCents!;
+              const policy = refundPolicy.trim();
+              return submitRequest("refund_authorization", invoiceLabel(invoice, refundRow?.invoice_number ?? null), () => createClient().rpc("money_operator_request_refund", {
+                p_obligation: invoice, p_payment: payment, p_service: parts.service, p_tax: parts.tax, p_tip: parts.tip,
+                p_policy: policy, p_reason: reason, p_key: key(`refund:${invoice}:${payment}`),
+              })).then(() => { setRefundInvoice(""); setRefundPayment(""); setRefundParts({ service: "", tax: "", tip: "" }); setRefundPolicy(""); });
+            }}
+          />
+        </div>
+
+        <div className="space-y-3 rounded-xl border bg-card p-4">
+          <h3 className="font-medium">Allocate a lost chargeback</h3>
+          <p className="text-sm text-muted-foreground">
+            {ops.chargebacks.length === 0 ? "No lost chargeback is waiting." : `${ops.chargebacks.length} lost chargeback${ops.chargebacks.length === 1 ? "" : "s"} to allocate.`} Split the lost principal across the service, tax and tip the invoice still retains. Dispute costs stay with Mercurius.
+          </p>
+          <FormField label="Chargeback" required>
+            {(control) => (
+              <select {...control} className={selectClass} value={chargebackDispute} disabled={busy || ops.chargebacks.length === 0} onChange={(event) => setChargebackDispute(event.target.value)}>
+                <option value="">{ops.chargebacks.length ? "Select a chargeback" : "No lost chargebacks"}</option>
+                {ops.chargebacks.map((item) => <option key={item.dispute_id} value={item.dispute_id} disabled={item.blocker !== null || item.open_request_id !== null}>{item.dispute_id} · {invoiceLabel(item.obligation_id, item.invoice_number)} · {formatCents(item.amount)}{item.open_request_id ? " (requested)" : item.blocker ? " (blocked)" : ""}</option>)}
+              </select>
+            )}
+          </FormField>
+          {chargeback && <p className="text-xs text-muted-foreground tabular-nums">Lost {formatCents(chargeback.amount)} · retained {components(chargeback.retained)}</p>}
+          <div className="grid gap-3 sm:grid-cols-3 sm:items-end">
+            {(["service", "tax", "tip"] as const).map((part) => (
+              <FormField key={part} label={`Chargeback ${part} (USD)`} error={chargebackParts[part] && parseCents(chargebackParts[part]) === null ? "Enter dollars and cents." : undefined}>
+                {(control) => <Input {...control} inputMode="decimal" placeholder="0.00" value={chargebackParts[part]} disabled={busy} onChange={(event) => setChargebackParts((value) => ({ ...value, [part]: event.target.value }))} />}
+              </FormField>
+            ))}
+          </div>
+          {chargeback && chargebackCents && chargebackError && <p className="text-sm text-muted-foreground">{chargebackError}</p>}
+          <ConfirmAction
+            disabled={busy || !chargeback || !chargebackCents || chargebackError !== null}
+            requireReason
+            reasonLabel="Allocation reason"
+            confirmationTone="commitment"
+            triggerLabel="Request allocation"
+            title="Request this chargeback allocation?"
+            entity={`${chargebackDispute} · ${chargebackCents ? components(chargebackCents) : ""}`}
+            consequence="Creates a review request. A different finance operator must approve it within 24 hours; you then run it to post the loss to the ledger."
+            confirmLabel="Request allocation"
+            onConfirm={(reason) => {
+              const dispute = chargebackDispute;
+              const parts = chargebackCents!;
+              return submitRequest("chargeback_allocation", dispute, () => createClient().rpc("money_operator_request_chargeback", {
+                p_dispute: dispute, p_service: parts.service, p_tax: parts.tax, p_tip: parts.tip, p_reason: reason, p_key: key(`chargeback:${dispute}`),
+              })).then(() => { setChargebackDispute(""); setChargebackParts({ service: "", tax: "", tip: "" }); });
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="font-medium">Cancellation refunds due ({ops.cancellations.length})</h3>
+        {ops.cancellations.length === 0 ? (
+          <PageState kind="empty" title="No cancellation refunds due" description="Cancellations whose policy gives a refund appear here. A provider cancellation appears once a no-replacement decision is recorded." />
+        ) : (
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <ResponsiveDataList
+              label="Cancellation refunds due"
+              rows={ops.cancellations}
+              rowKey={(item) => `${item.operation_id}:${item.payment_id}`}
+              rowLabel={(item) => `${invoiceLabel(item.obligation_id, item.invoice_number)} · ${item.payment_id}`}
+              columns={[
+                {
+                  key: "cancellation",
+                  label: "Cancellation",
+                  render: (item) => (
+                    <span className="flex flex-col gap-0.5 [overflow-wrap:anywhere]">
+                      <span className="font-medium">{invoiceLabel(item.obligation_id, item.invoice_number)}</span>
+                      <span className="text-xs text-muted-foreground">{cancellationKindLabel[item.kind]} · {formatDate(item.cancelled_at)}</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "refund",
+                  label: "Policy refund",
+                  render: (item) => (
+                    <span className="flex flex-col gap-0.5 tabular-nums [overflow-wrap:anywhere]">
+                      <span>{item.refund_percent}% · {formatCents(item.service + item.tax + item.tip)}</span>
+                      <span className="text-xs text-muted-foreground">{item.payment_id} · {components(item)}</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "action",
+                  label: "Action",
+                  render: (item) => item.open_request_id ? <span className="text-muted-foreground">Requested; see reviews</span>
+                    : item.blocker ? <span className="text-muted-foreground">{blockerLabel[item.blocker]}</span> : (
+                      <ConfirmAction
+                        disabled={busy}
+                        requireReason
+                        reasonLabel="Refund reason"
+                        confirmationTone="commitment"
+                        triggerLabel="Request policy refund"
+                        title="Request this cancellation refund?"
+                        entity={`${invoiceLabel(item.obligation_id, item.invoice_number)} · ${item.payment_id} · ${formatCents(item.service + item.tax + item.tip)}`}
+                        consequence={`Creates a review request for the ${item.refund_percent}% policy refund: ${components(item)}. The amounts come from the recorded cancellation, not from you. A different finance operator must approve it within 24 hours.`}
+                        confirmLabel="Request refund"
+                        onConfirm={(reason) => submitRequest("cancellation_refund", invoiceLabel(item.obligation_id, item.invoice_number), () => createClient().rpc("money_operator_request_cancellation_refund", {
+                          p_operation: item.operation_id, p_payment: item.payment_id, p_reason: reason, p_key: key(`cancellation:${item.operation_id}:${item.payment_id}`),
+                        }))}
+                      />
+                    ),
+                },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -562,7 +771,7 @@ export function FinanceCommands({
                   label: "Status",
                   render: (item) => (
                     <span className="flex flex-col gap-0.5">
-                      <span>{refundAttemptLabel[item.attempt_status]}</span>
+                      <span>{refundAttemptLabel[item.attempt_status]}{item.generation > 1 ? ` · reissued (send ${item.generation})` : ""}</span>
                       {item.last_readback && (
                         <span className="text-xs text-muted-foreground">
                           Last Stripe readback {formatDate(item.last_readback.created_at)}: {item.last_readback.found ? `Stripe status ${item.last_readback.provider_status}` : "not found at Stripe"}
@@ -578,6 +787,8 @@ export function FinanceCommands({
                     <span className="flex flex-col items-start gap-2">
                       {canSendRefund(item) && <RefundSend item={item} busy={busy} run={run} refund={refund} />}
                       {canReadBackRefund(item) && <RefundReadback item={item} busy={busy} run={run} refund={refund} />}
+                      {canReissueRefund(item) && <RefundReissue item={item} busy={busy} run={run} accepted={accepted} />}
+                      {item.attempt_status === "reconcile" && item.can_send && item.reissue_blocker && <span className="text-xs text-muted-foreground">{reissueBlockerLabel[item.reissue_blocker]}</span>}
                       {!canSendRefund(item) && !canReadBackRefund(item) && <span className="text-muted-foreground">Only the refund&apos;s author or approver can send it.</span>}
                     </span>
                   ),
@@ -597,6 +808,7 @@ type Run = (
   success: { title: string; description: string },
 ) => Promise<void>;
 type Refund = (body: Record<string, unknown>) => Promise<{ status?: string; found?: boolean; provider_status?: string | null }>;
+type Accepted = <T>(call: PromiseLike<{ data: T; error: { message: string } | null }>) => Promise<Record<string, unknown> | null>;
 
 function RefundSend({ item, busy, run, refund }: { item: PendingRefund; busy: boolean; run: Run; refund: Refund }) {
   return (
@@ -640,6 +852,30 @@ function RefundReadback({ item, busy, run, refund }: { item: PendingRefund; busy
             return !after || (after.last_readback !== null && after.last_readback.created_at !== previous);
           },
           { title: "Stripe refund read back", description: "The refund's Stripe status is recorded." },
+        );
+      }}
+    />
+  );
+}
+
+function RefundReissue({ item, busy, run, accepted }: { item: PendingRefund; busy: boolean; run: Run; accepted: Accepted }) {
+  return (
+    <ConfirmAction
+      disabled={busy}
+      requireReason
+      reasonLabel="Reissue reason"
+      reasonHelp="What the Stripe readback showed, for example no refund for this payment."
+      triggerLabel="Reissue refund"
+      title="Reissue this refund?"
+      entity={`${item.payment_id} · ${formatCents(item.amount)}`}
+      consequence="Stripe's readback found no refund, taken after its 24-hour idempotency window. This prepares the same approved amount again under a new Stripe key; send it next. It never changes the amount."
+      confirmLabel="Reissue"
+      onConfirm={(reason) => {
+        const generation = item.generation;
+        return run(
+          async () => { await accepted(createClient().rpc("money_operator_reissue_refund", { p_authorization: item.authorization_id, p_reason: reason })); },
+          (next) => next.refunds.some((candidate) => candidate.authorization_id === item.authorization_id && candidate.generation > generation && candidate.attempt_status === "prepared"),
+          { title: "Refund reissued", description: "Send it to Stripe to complete the refund." },
         );
       }}
     />
