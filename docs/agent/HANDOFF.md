@@ -1,7 +1,7 @@
-# Agent handoff — 2026-09-15
+# Agent handoff — 2026-09-21
 
 Each section carries its own date; the repository checkpoint below was taken on
-2026-09-10 and the latest slice checkpoint is the TRACE-063 forward fix.
+2026-09-10 and the latest slice checkpoint is TRACE-079.
 
 ## Repository checkpoint
 
@@ -428,6 +428,32 @@ as current branch/merge status; reconcile them with the latest slice evidence.
 - Open: Codex review (one-operator settlement, reference before sending, G5 holds on statement
   payouts); CI; replacement statements and prepared-attempt withdrawal; already-paid recovery.
 - Next: CI and Codex review of the PR.
+
+## Current slice — TRACE-079 ACH withdrawal and replacement statements (2026-09-21, PR open)
+
+- PR #34 (TRACE-078) merged 2026-09-21 (main `7f696e1`); the "PR open" wording above predates it.
+- Branch `codex/phase5-replacement-statements`, base main `7f696e1`, worktree
+  `../mercurius-replacement-statements`. Committed and pushed; PR open against `main`.
+- Owner decisions 2026-09-21: a withdrawal needs two finance operators; prepared, failed and
+  returned transfers can be withdrawn (never submitted, unknown or settled).
+- Change: migration `20260921002000`:
+  - a reviewed `money_operator_request_ach_withdrawal`, bound to the transfer and its status;
+  - the service kernel `money_withdraw_ach`, which records an immutable withdrawal and a
+    `withdrawn` event and posts no journal;
+  - a `replaces_item_id` chain trigger, so a payout has at most one live statement and its
+    replacement goes on a later weekly batch through the unchanged kernel;
+  - refund, chargeback, hold and batch guards now test a live statement. Payee reassignment stays
+    closed.
+  - The finance page gains a withdrawal form and shows withdrawn and replacement statements.
+- Evidence: `governance/PHASE-5-ACH-REPLACEMENT.md` (W1–W7) and the TRACE-079 section of
+  `PHASE-5-VALIDATION.md`:
+  - 1856 SQL assertions across 37 suites (046 new, 148); 25 of 26 mutants killed (1 equivalent);
+  - 15 concurrency scripts in CI order;
+  - 138 unit tests; build; 204/204 non-visual browser cases; 0 audit findings.
+- Open: CI; Codex review (W4 closed reassignment, W5 late outcome on a withdrawn
+  transfer); already-paid recovery; bank statement reconciliation; failed-refund recovery;
+  `paymentFunctionError`.
+- Next: CI and Codex review of the PR, then already-paid recovery.
 
 ## Workflow update — 2026-09-10
 
