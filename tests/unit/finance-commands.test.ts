@@ -1,19 +1,28 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  achOutcomes,
   allocationError,
+  batchDetails,
   canReadBackRefund,
+  canRecordOutcome,
+  canRequestRetry,
   canReissueRefund,
   canSendRefund,
   commandErrorMessage,
+  formatDay,
+  moneyDetails,
   parseCents,
   refundErrorMessage,
+  retryDetails,
   reviewAction,
+  weekEnd,
+  type AchItem,
   type PendingRefund,
   type ReviewRequest,
 } from "../../src/lib/financeCommands";
 
-// TRACE-076/077: wording and gating only. The database decides authority, approvers and actionability.
+// TRACE-076/077/078: wording and gating only. The database decides authority, approvers and actionability.
 const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   request_id: "00000000-0000-4000-8000-000000000761",
   operation: "hold_resolution",
@@ -149,5 +158,75 @@ describe("error wording", () => {
     expect(refundErrorMessage("MONEY_NOT_ACTIVATED")).toContain("not activated");
     expect(refundErrorMessage(undefined)).toContain("do not create a second refund");
     expect(refundErrorMessage("SOMETHING_ELSE")).toContain("do not create a second refund");
+  });
+});
+
+// TRACE-078: weekly ACH wording and gating.
+const achItem = (overrides: Partial<AchItem> = {}): AchItem => ({
+  item_id: "00000000-0000-4000-8000-000000000781",
+  obligation_id: "00000000-0000-4000-8000-000000000782",
+  invoice_number: "M5-0000000782",
+  payee_name: "Synthetic payee",
+  amount: 9500,
+  attempt_id: "00000000-0000-4000-8000-000000000783",
+  attempt_number: 1,
+  status: "prepared",
+  bank_reference_hint: null,
+  last_event: null,
+  submit_blocker: null,
+  retry_blocker: null,
+  open_retry_request_id: null,
+  ...overrides,
+});
+
+describe("weekly ACH", () => {
+  it("offers only the bank outcomes the kernel accepts next", () => {
+    expect(achOutcomes("prepared")).toEqual(["submitted"]);
+    expect(achOutcomes("submitted")).toEqual(["settled", "failed", "unknown"]);
+    expect(achOutcomes("unknown")).toEqual(["settled", "failed", "unknown"]);
+    expect(achOutcomes("settled")).toEqual(["returned"]);
+    expect(achOutcomes("failed")).toEqual([]);
+    expect(achOutcomes("returned")).toEqual([]);
+  });
+
+  it("records a submission only while the payout is still payable", () => {
+    expect(canRecordOutcome(achItem())).toBe(true);
+    expect(canRecordOutcome(achItem({ submit_blocker: "payout_hold" }))).toBe(false);
+    expect(canRecordOutcome(achItem({ status: "unknown" }))).toBe(true);
+    expect(canRecordOutcome(achItem({ status: "failed" }))).toBe(false);
+  });
+
+  it("offers a retry only for a failed or returned transfer with nothing blocking it", () => {
+    expect(canRequestRetry(achItem({ status: "failed" }))).toBe(true);
+    expect(canRequestRetry(achItem({ status: "returned" }))).toBe(true);
+    expect(canRequestRetry(achItem({ status: "unknown" }))).toBe(false);
+    expect(canRequestRetry(achItem({ status: "failed", retry_blocker: "bank_authorization_changed" }))).toBe(false);
+    expect(canRequestRetry(achItem({ status: "failed", open_retry_request_id: "00000000-0000-4000-8000-000000000784" }))).toBe(false);
+  });
+
+  it("counts a week as seven calendar days without time zone drift", () => {
+    expect(weekEnd("2026-09-21")).toBe("2026-09-28");
+    expect(weekEnd("2026-12-28")).toBe("2027-01-04");
+    expect(formatDay("2026-09-21")).toBe("Sep 21, 2026");
+  });
+
+  it("reads batch and retry details only for their own operations", () => {
+    const batch = request({ operation: "ach_preparation", details: { period_start: "2026-09-21", period_end: "2026-09-28", bank_ref: "BANK-1", total: 9500, items: [] } });
+    expect(batchDetails(batch)?.bank_ref).toBe("BANK-1");
+    expect(retryDetails(batch)).toBeNull();
+    expect(moneyDetails(batch)).toBeNull();
+    const refund = request({ operation: "refund_authorization", details: { payment_id: "pi_1", service: 100, tax: 0, tip: 0 } });
+    expect(moneyDetails(refund)?.payment_id).toBe("pi_1");
+    expect(batchDetails(refund)).toBeNull();
+  });
+
+  it("words ACH refusals for operators", () => {
+    expect(commandErrorMessage("Bank outcome not recordable: bank_authorization_changed")).toContain("needs a replacement statement");
+    expect(commandErrorMessage("Bank outcome not recordable: payout_hold")).toContain("payout hold is open");
+    expect(commandErrorMessage("Finance review not actionable: period_taken")).toBe("An ACH batch already covers part of this week.");
+    expect(commandErrorMessage("Finance review not actionable: bank_outcome_open")).toContain("never retried");
+    expect(commandErrorMessage("Bank batch reference of up to 200 characters required")).toContain("bank's reference");
+    expect(commandErrorMessage("Bank outcome idempotency conflict")).toContain("already submitted with different details");
+    expect(commandErrorMessage("Bank outcome not recordable: something_new")).toContain("Refresh the page");
   });
 });

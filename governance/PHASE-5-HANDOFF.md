@@ -127,6 +127,15 @@ stuck with an uncertain Stripe outcome can be reissued under a new key once a St
 taken 24 hours after preparation finds no refund. ACH preparation, bank outcomes and retry
 remain for part 2B. See PHASE-5-FINANCE-REFUNDS.md.
 
+TRACE-078 adds part 2B. Finance operators request a weekly ACH batch whose stored command is the
+kernel's exact object and whose terms bind each payout's amount, payee and bank authorization; a
+different operator approves and the requester runs it. One operator records bank outcomes;
+recording the submission re-proves the payout is payable at its statement amount and is the step
+before sending at the bank. A failed or returned transfer is retried through a reviewed request
+bound to the failed attempt, and never after its bank authorization changed. Replacement
+statements, withdrawal of a prepared attempt and already-paid recovery remain open. See
+PHASE-5-FINANCE-ACH.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

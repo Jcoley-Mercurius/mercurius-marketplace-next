@@ -9,19 +9,24 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { PageState } from "@/components/ui/page-state";
 import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
+import { FinanceAchCommands } from "@/components/admin/FinanceAchCommands";
 import {
   allocationError,
+  batchDetails,
   blockerLabel,
   canReadBackRefund,
   canReissueRefund,
   canSendRefund,
   cancellationKindLabel,
   commandErrorMessage,
+  formatDay,
+  moneyDetails,
   operationLabel,
   parseCents,
   refundAttemptLabel,
   refundErrorMessage,
   reissueBlockerLabel,
+  retryDetails,
   reviewAction,
   reviewStateLabel,
   type Components,
@@ -34,7 +39,7 @@ import { formatCents, type ObligationReconciliation } from "@/lib/financeReconci
 import { paymentFunctionError } from "@/lib/payments";
 import { createClient } from "@/lib/supabase/client";
 
-// TRACE-076/077 finance operator commands. The signed-in session is the actor; the database refuses
+// TRACE-076/077/078 finance operator commands. The signed-in session is the actor; the database refuses
 // anyone without finance authority, binds second-person commands to their exact text, expires them
 // after 24 hours and picks the approver. Every command is confirmed by re-reading the server before
 // it is reported done.
@@ -57,6 +62,8 @@ const executeConsequence: Record<ReviewOperation, string> = {
   refund_authorization: "Authorizes this exact refund with you as author and the approver as reviewer. Nothing is sent to Stripe until one of you sends it, and the payout stays held until it settles.",
   cancellation_refund: "Authorizes the cancellation policy refund with you as author and the approver as reviewer. Nothing is sent to Stripe until one of you sends it.",
   chargeback_allocation: "Allocates the lost chargeback to service, tax and tip in the ledger and reduces provider proceeds and the platform fee to match. It cannot be undone here.",
+  ach_preparation: "Prepares the weekly ACH statement for these payouts at these amounts, with you as author and the approver as reviewer. Nothing is sent: record each submission here immediately before sending it at the bank.",
+  ach_retry: "Prepares a new attempt for this transfer at its statement amount. Nothing is sent: record the submission here immediately before sending it at the bank.",
 };
 
 export function FinanceCommands({
@@ -204,16 +211,25 @@ export function FinanceCommands({
       p_operation: operation, p_subject: subject, p_reason: reason, p_key: key(`${operation}:${subject}`), p_evidence: evidence ?? undefined,
     }));
 
-  const reviewEntity = (request: ReviewRequest) =>
-    request.operation === "event_exclusion"
-      ? `${request.subject}${request.obligation_id ? ` · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : ""}`
-      : request.details?.dispute_id
-        ? `${request.details.dispute_id} · ${invoiceLabel(request.obligation_id, request.invoice_number)}`
-        : invoiceLabel(request.obligation_id, request.invoice_number);
-  const reviewAmounts = (request: ReviewRequest) =>
-    request.details
-      ? `${request.details.payment_id ? `${request.details.payment_id} · ` : ""}${formatCents(request.details.service + request.details.tax + request.details.tip)} (${components(request.details)})`
-      : null;
+  const reviewEntity = (request: ReviewRequest) => {
+    const batch = batchDetails(request);
+    const retry = retryDetails(request);
+    const money = moneyDetails(request);
+    if (request.operation === "event_exclusion") {
+      return `${request.subject}${request.obligation_id ? ` · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : ""}`;
+    }
+    if (batch) return `Week of ${formatDay(batch.period_start)} · ${batch.items.length} payout${batch.items.length === 1 ? "" : "s"}`;
+    if (retry) return `${invoiceLabel(request.obligation_id, request.invoice_number)} · ${retry.payee_name ?? "Provider"} · attempt ${retry.attempt_number} ${retry.status}`;
+    return money?.dispute_id ? `${money.dispute_id} · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : invoiceLabel(request.obligation_id, request.invoice_number);
+  };
+  const reviewAmounts = (request: ReviewRequest) => {
+    const batch = batchDetails(request);
+    const retry = retryDetails(request);
+    const money = moneyDetails(request);
+    if (batch) return `${formatCents(batch.total)} · bank batch ${batch.bank_ref}`;
+    if (retry) return formatCents(retry.amount);
+    return money ? `${money.payment_id ? `${money.payment_id} · ` : ""}${formatCents(money.service + money.tax + money.tip)} (${components(money)})` : null;
+  };
 
   return (
     <section aria-labelledby="finance-commands" className="space-y-6">
@@ -221,7 +237,7 @@ export function FinanceCommands({
         <div>
           <h2 id="finance-commands" className="text-lg font-semibold">Finance commands</h2>
           <p className="text-sm text-muted-foreground">
-            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Placing and releasing a payout hold need one operator.
+            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch and retrying a failed transfer need a second operator too. Placing and releasing a payout hold and recording a bank outcome need one operator.
           </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => void refresh()}><RefreshCw />Refresh commands</Button>
@@ -231,7 +247,7 @@ export function FinanceCommands({
       <div className="space-y-3">
         <h3 className="font-medium">Second-person reviews ({ops.requests.filter((item) => item.state !== "executed").length} open)</h3>
         {ops.requests.length === 0 ? (
-          <PageState kind="empty" title="No review requests" description="Requests to authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
+          <PageState kind="empty" title="No review requests" description="Requests to prepare ACH batches, retry transfers, authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -248,6 +264,16 @@ export function FinanceCommands({
                       <span className="font-medium">{operationLabel[item.operation]}</span>
                       <span className="text-xs text-muted-foreground">{reviewEntity(item)}</span>
                       {reviewAmounts(item) && <span className="text-xs tabular-nums">{reviewAmounts(item)}</span>}
+                      {batchDetails(item) && (
+                        <ul className="text-xs text-muted-foreground tabular-nums">
+                          {batchDetails(item)!.items.map((payout) => (
+                            <li key={payout.obligation_id}>
+                              {invoiceLabel(payout.obligation_id, payout.invoice_number)} · {payout.payee_name ?? "Provider"} · {formatCents(payout.amount)}
+                              {payout.blocker && <> · {blockerLabel[payout.blocker]}</>}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         Requested {item.requested_by_me ? "by you" : "by another operator"} · {formatDate(item.created_at)}
                         {item.state !== "executed" && ` · ${item.state === "expired" ? "expired" : "expires"} ${formatDate(item.expires_at)}`}
@@ -577,6 +603,12 @@ export function FinanceCommands({
         </div>
       </div>
 
+      {ops.ach ? (
+        <FinanceAchCommands ops={ops} busy={busy} run={run} accepted={accepted} submitRequest={submitRequest} commandKey={key} />
+      ) : (
+        <PageState kind="error" title="Weekly ACH unavailable" description="The server did not return ACH batches. Do not send transfers until this page shows them." />
+      )}
+
       <div className="space-y-3">
         <h3 className="font-medium">Cancellation refunds due ({ops.cancellations.length})</h3>
         {ops.cancellations.length === 0 ? (
@@ -802,13 +834,13 @@ export function FinanceCommands({
   );
 }
 
-type Run = (
+export type Run = (
   call: () => Promise<void>,
   confirmed: (next: FinanceOperations) => boolean,
   success: { title: string; description: string },
 ) => Promise<void>;
 type Refund = (body: Record<string, unknown>) => Promise<{ status?: string; found?: boolean; provider_status?: string | null }>;
-type Accepted = <T>(call: PromiseLike<{ data: T; error: { message: string } | null }>) => Promise<Record<string, unknown> | null>;
+export type Accepted = <T>(call: PromiseLike<{ data: T; error: { message: string } | null }>) => Promise<Record<string, unknown> | null>;
 
 function RefundSend({ item, busy, run, refund }: { item: PendingRefund; busy: boolean; run: Run; refund: Refund }) {
   return (

@@ -1133,3 +1133,106 @@ aligning the amount inputs.
 
 Not performed: CI, Edge checks (no Edge change), hosted or Stripe test-mode verification of send,
 readback and reissue, human screen-reader review.
+
+## TRACE-078 — Finance operator commands, part 2B: weekly ACH, bank outcomes and retry — 2026-09-21
+
+Branch `codex/phase5-finance-ach`, base `main` `da94fd8` (PR #33 merged); isolated synthetic
+stack only. Design B1–B8 and its review questions are in PHASE-5-FINANCE-ACH.md.
+
+Baseline before change: 1534 pgTAP assertions across 35 suites (TRACE-077 evidence). With the
+migration applied and no test changes, all 35 suites passed unchanged.
+
+Database: 1708 pgTAP assertions across 36 suites pass after a clean reset, and again as CI's
+clean replay after all committed concurrency fixtures. Suite 045 is new (174 assertions). It covers:
+
+- grants: new commands callable; kernels, helpers and ACH tables closed;
+- access for homeowners and admins without finance authority;
+- ready payouts: the 48-hour window, holds, amounts and payee, checked against `money_payable`;
+- batch validation: reason, bank reference, key, week, empty, null, over-500 and unknown payouts;
+  a payout inside the window or on hold is refused with its reason; the generic review request
+  refuses ACH;
+- the stored command: the kernel object with sorted, distinct payouts and trimmed text; subject,
+  terms, replay and conflict;
+- what the approver sees: the bank batch reference, total, each payout and the week end;
+- review rules: no self-approval; no run without approval; a direct kernel approval not counting;
+  the approver cannot run it;
+- execution: the kernel batch names requester, approver, reference and reason; items are at their
+  amounts with prepared attempts; replay;
+- readback: the next week, batch total, no batch bank reference, and a payout no longer ready;
+- weeks: an overlapping week, a payout already on a statement, and a competing batch for the same
+  week going stale;
+- terms: a changed amount, payee or bank authorization makes the batch stale, and restored terms
+  are actionable; an expired batch computes no live blockers;
+- bank outcome validation: authority, status, evidence, blank and unknown references and
+  attempts, invalid transitions, missing and reused references;
+- submission: trimmed reference, operator and namespaced key, replay and conflict; only a
+  four-character hint is returned. Submission is stopped by a late hold, a dispute, a stale
+  statement amount and a changed bank authorization;
+- later outcomes: unknown reuses the stored reference; a conflicting reference is refused; failure
+  posts no journal; settlement and return post their journals; reconciliation reads the settled
+  payout as paid; a returned transfer takes no further outcome;
+- retries: validation, the exact kernel command, the details the approver sees, approval and
+  execution with both operators, and `completed` for a retried attempt. A second retry with an
+  identical kernel command does not inherit the first approval. A hold blocks a retry; a returned
+  transfer retries; a changed bank authorization blocks a retry;
+- two current bank authorizations; conflicting completion evidence refused with the kernel
+  agreeing; no full bank reference or customer identity returned.
+
+Mutation check (local harness, not committed; each mutant injected inside the suite's rolled-back
+transaction): 30 guard mutants, and all 30 fail suite 045. They removed or bypassed:
+
+- mirror checks: the window, hold, dispute and completion-conflict checks;
+- the ready list's blocker filter;
+- term checks: on-statement, bank count, amount, payee and bank authorization;
+- the week overlap check;
+- item checks: amount and bank authorization;
+- record checks: transition, reference required, conflict and reuse, and the submission payable
+  check;
+- retry checks: completed, open outcome and payable;
+- request construction: payout sorting, and a retry subject of item instead of attempt;
+- record handling: replay evidence, key namespace and stored-reference reuse;
+- the execute and approve blocker checks;
+- the reference hint, and expired-request live blockers.
+
+On the first run the expired-request mutant survived. Batch 4's terms happened to be valid again
+when it expired, so the mutant was equivalent there. An assertion after its payout became
+blocked now kills it.
+
+Concurrency: new `scripts/phase5-finance-ach-concurrency.mjs`, wired into CI after the part 2A
+script. Each call is a separate signed-in session:
+
+- three runs of one approved batch make one batch and one execution;
+- two approved batches for different weeks sharing a payout, one held by a sleeping executor:
+  one statement, and the other is refused with `on_ach_statement`;
+- a refund authorized while a batch waits: the batch is refused with `refund_hold` and nothing is
+  prepared;
+- a hold placed while a batch holds the lock is refused as already on a statement;
+- two operators recording one submission with different references: one event, and the other is
+  refused with `transition_invalid`;
+- three runs of one approved retry plus a competing approved retry: one new attempt and one
+  execution, with the others replaying or refused as `completed`;
+- no race posted a settlement or return journal.
+
+All 14 scripts passed in CI order on a clean reset.
+
+Application: `scan:secrets`, `lint` and `typecheck` pass. 135 unit tests pass (6 new: allowed
+outcomes, submission and retry gating, week arithmetic without time zone drift, typed request
+details, ACH refusal wording). The build passes with CI's synthetic public variables. Regenerated
+database types differ only by additions. `audit:prod` has 0 findings.
+
+Browser: 202 of 202 non-visual cases pass (`test:a11y`):
+
+- the themed layout case now checks the batch list, reference hint, retry action and a blocked
+  payout checkbox;
+- new cases: a batch request sends week, payouts, reference and reason with no actor field; a
+  submission needs a reference and evidence, and a refusal shows the hold reason with the dialog
+  open; a failed transfer is retried through a reviewed request; an approver sees each payout, the
+  total and the reference.
+
+The portal fixture's `money_finance_operations` response gained `ach`. Without it the
+reconciliation spec's page failed to render. The section now shows an error state, not a page
+failure, if a readback lacks `ach`. ACH section screenshots at 1440px dark and 320px light were
+reviewed: no horizontal scroll, and forms and lists stack at 320px.
+
+Not performed: CI, Edge checks (no Edge change), owner bank workflow or statement acceptance,
+hosted verification, human screen-reader review.
