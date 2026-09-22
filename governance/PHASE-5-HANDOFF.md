@@ -144,6 +144,15 @@ authorization. A payout is on at most one live statement, and refunds, chargebac
 holds work once its transfer is withdrawn. Payee reassignment stays closed. Already-paid recovery
 remains open. See PHASE-5-ACH-REPLACEMENT.md.
 
+TRACE-080 records already-paid recovery (owner decisions 2026-09-21). A customer refund or lost
+chargeback on a settled payout now posts, and the provider's share becomes an amount they owe: the
+debit balance of that payout's provider payable. A withdrawn transfer the bank later shows as paid
+is recorded as a separate reviewed late payment; the withdrawn attempt is not changed. One guard on
+every statement, attempt and submission writer stops any transfer that would pay a provider more
+than the payout's proceeds, so a paid payout is never paid again. An amount owed is closed only by
+a reviewed repayment or a reviewed write-off to a new recovery-loss account; nothing is netted,
+debited or held. See PHASE-5-PAYOUT-RECOVERY.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

@@ -1,7 +1,7 @@
 # Agent handoff — 2026-09-21
 
 Each section carries its own date; the repository checkpoint below was taken on
-2026-09-10 and the latest slice checkpoint is TRACE-079.
+2026-09-10 and the latest slice checkpoint is TRACE-080.
 
 ## Repository checkpoint
 
@@ -454,6 +454,34 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   transfer); already-paid recovery; bank statement reconciliation; failed-refund recovery;
   `paymentFunctionError`.
 - Next: CI and Codex review of the PR, then already-paid recovery.
+
+## Current slice — TRACE-080 already-paid payout recovery (2026-09-21, PR open)
+
+- PR #35 (TRACE-079) merged 2026-09-21 (main `68f0da3`); the "PR open" wording above predates it.
+- Branch `codex/phase5-already-paid-recovery`, base main `68f0da3`, worktree
+  `../mercurius-already-paid-recovery`.
+- Owner decisions 2026-09-21: cover a refund and a lost chargeback after a settled payout and a
+  late bank payment of a withdrawn transfer; the late payment is a separate reviewed event; an
+  amount owed closes only by a reviewed repayment or write-off (two operators, part amounts); no
+  hold on the provider's other payouts.
+- Change: migration `20260921003000`:
+  - refunds and chargeback allocation now post on a settled payout; the provider's share becomes
+    the debit balance of that payout's provider payable (the amount owed);
+  - a reviewed `money_operator_request_ach_late_settlement` and kernel record a withdrawn
+    transfer the bank paid, without changing the attempt;
+  - a proceeds guard on every statement, attempt and submission writer refuses any transfer that
+    would pay more than the payout's proceeds (`already_paid`);
+  - a reviewed `money_operator_request_payout_recovery` and kernel record a repayment or a
+    write-off to the new `provider_recovery_loss` account, bound to the amount owed and a key;
+  - reconciliation counts late payments and recoveries, and lists a `provider_owes` exception;
+    the finance page gains "Amounts providers owe".
+- Evidence: `governance/PHASE-5-PAYOUT-RECOVERY.md` (R1–R8) and the TRACE-080 section of
+  `PHASE-5-VALIDATION.md`.
+- Open: CI; Codex review (R3 late payment of a returned transfer, R4 guard, R8 `reversed`); a
+  return recorded after a repayment; bank statement reconciliation; provider-facing wording;
+  failed-refund recovery; `paymentFunctionError`.
+- Next: CI and Codex review of the PR, then bank statement reconciliation or failed-refund
+  recovery.
 
 ## Workflow update — 2026-09-10
 

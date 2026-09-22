@@ -33,7 +33,8 @@ export type LedgerIssue =
   | "bank_ledger"
   | "statement_stale"
   | "chargeback_suspense"
-  | "stripe_clearing";
+  | "stripe_clearing"
+  | "recovery_ledger";
 
 export type BankStatus = "prepared" | "submitted" | "unknown" | "settled" | "failed" | "returned";
 
@@ -66,6 +67,8 @@ export type ObligationReconciliation = {
     statement: { amount: number; period_start: string; attempt_number: number; bank_status: BankStatus } | null;
     /** Statements withdrawn from this payout (TRACE-079). */
     withdrawn_statements: number;
+    /** What the provider owes after a refund, chargeback or late payment beyond the proceeds, and how it was recovered (TRACE-080). */
+    recovery: { owed: number; late_settled: number; repaid: number; written_off: number };
   };
   chargebacks: { suspense: number; suspense_ledger: number; lost: number };
   processor_costs: number;
@@ -102,7 +105,8 @@ export type FinanceException =
   | { kind: "reconciliation_open"; obligation_id: string; since: string }
   | { kind: "chargeback"; obligation_id: string; dispute_id: string; payment_id: string; amount: number; status: "open" | "lost"; since: string }
   | { kind: "payout_hold"; obligation_id: string; hold_id: string; since: string }
-  | { kind: "bank_outcome"; obligation_id: string; item_id: string; attempt_number: number; amount: number; status: "unknown" | "failed" | "returned"; since: string };
+  | { kind: "bank_outcome"; obligation_id: string; item_id: string; attempt_number: number; amount: number; status: "unknown" | "failed" | "returned"; since: string }
+  | { kind: "provider_owes"; obligation_id: string; invoice_number: string | null; payee_name: string | null; amount: number; since: string };
 
 export type LedgerAccount =
   | "stripe_clearing"
@@ -112,7 +116,8 @@ export type LedgerAccount =
   | "tax_liability"
   | "processor_expense"
   | "chargeback_suspense"
-  | "bank";
+  | "bank"
+  | "provider_recovery_loss";
 
 export type FinanceReconciliation = {
   evaluated_at: string;
@@ -129,6 +134,7 @@ export type FinanceReconciliation = {
     paid_out: number;
     processor_costs: number;
     chargeback_suspense: number;
+    provider_owed: number;
     with_issues: number;
   };
   global_event_holds: number;
@@ -187,11 +193,12 @@ export const issueLabel: Record<LedgerIssue, string> = {
   platform_fee: "Platform revenue differs from the fee on retained service",
   tax_liability: "Tax liability differs from retained tax",
   customer_advance: "Customer advance does not clear",
-  provider_payable: "Provider payable differs from proceeds less recorded payouts",
+  provider_payable: "Provider payable differs from proceeds less recorded payouts and recoveries",
   bank_ledger: "Bank postings differ from recorded settlements and returns",
   statement_stale: "ACH statement no longer matches retained amounts or payee",
   chargeback_suspense: "Chargeback suspense differs from open disputes",
   stripe_clearing: "Stripe clearing differs from charges less refunds, chargebacks and costs",
+  recovery_ledger: "Recovery loss differs from recorded write-offs",
 };
 
 export const accountLabel: Record<LedgerAccount, string> = {
@@ -203,6 +210,7 @@ export const accountLabel: Record<LedgerAccount, string> = {
   processor_expense: "Processor expense",
   chargeback_suspense: "Chargeback suspense",
   bank: "Bank",
+  provider_recovery_loss: "Provider recovery loss",
 };
 
 export function labelOf<K extends string>(labels: Record<K, string>, key: string) {
@@ -253,6 +261,11 @@ export function exceptionPresentation(exception: FinanceException): { title: str
         : { title: "Chargeback lost", action: "Allocate the lost amount to service, tax and tip with a second reviewer." };
     case "payout_hold":
       return { title: "Payout hold", action: "Resolve the hold with its reason and evidence once the cause is cleared." };
+    case "provider_owes":
+      return {
+        title: "Provider owes Mercurius",
+        action: "Ask the provider to repay, then record the repayment, or record a write-off, each with a second reviewer. Never debit the provider's bank or hold back other earnings.",
+      };
     case "bank_outcome":
       return exception.status === "unknown"
         ? { title: "Bank outcome unknown", action: "Confirm the transfer with the bank. Do not resend it." }
@@ -283,5 +296,5 @@ export function readbackLabel(readback: ObligationReconciliation["readback"]) {
 
 export function needsAttention(row: ObligationReconciliation) {
   return row.issues.length > 0 || row.payout.funds_state === "held" || row.payout.funds_state === "payout_failed"
-    || row.readback.state === "mismatch" || row.reconciliation_open;
+    || row.readback.state === "mismatch" || row.reconciliation_open || row.payout.recovery.owed > 0;
 }

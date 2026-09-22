@@ -12,8 +12,11 @@ import {
   canSendRefund,
   commandErrorMessage,
   formatDay,
+  lateSettlementDetails,
   moneyDetails,
   parseCents,
+  recoveryDetails,
+  recoveryError,
   refundErrorMessage,
   retryDetails,
   reviewAction,
@@ -24,7 +27,7 @@ import {
   type ReviewRequest,
 } from "../../src/lib/financeCommands";
 
-// TRACE-076/077/078/079: wording and gating only. The database decides authority, approvers and actionability.
+// TRACE-076/077/078/079/080: wording and gating only. The database decides authority, approvers and actionability.
 const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   request_id: "00000000-0000-4000-8000-000000000761",
   operation: "hold_resolution",
@@ -274,5 +277,42 @@ describe("weekly ACH", () => {
     expect(commandErrorMessage("Finance review not actionable: paid")).toContain("cannot be withdrawn");
     expect(commandErrorMessage("Finance review not actionable: on_ach_statement")).toContain("withdraw an unsent, failed or returned transfer");
     expect(commandErrorMessage("Payout already on an ACH statement; withdraw its transfer before a replacement")).toContain("withdraw");
+  });
+
+  it("reads late payment and recovery details only for their own operations", () => {
+    const late = request({ operation: "ach_late_settlement", details: {
+      item_id: "00000000-0000-4000-8000-000000000787", attempt_number: 1, amount: 9500, payee_name: "Synthetic payee", invoice_number: "M5-1",
+      period_start: "2026-09-14", previous_status: "prepared", withdrawn_at: "2026-09-15T12:00:00.000Z", bank_reference_hint: "0777",
+      replacement: { period_start: "2026-09-21", amount: 9500, status: "settled" },
+    } });
+    expect(lateSettlementDetails(late)?.replacement?.status).toBe("settled");
+    expect(recoveryDetails(late)).toBeNull();
+    expect(withdrawalDetails(late)).toBeNull();
+    const recovery = request({ operation: "payout_recovery", details: { kind: "write_off", amount: 700, owed: 700, owed_now: 700, payee_name: "Synthetic payee" } });
+    expect(recoveryDetails(recovery)?.kind).toBe("write_off");
+    expect(lateSettlementDetails(recovery)).toBeNull();
+    expect(moneyDetails(recovery)).toBeNull();
+  });
+});
+
+describe("already-paid recovery", () => {
+  it("allows a part recovery up to what is owed, never more or nothing", () => {
+    expect(recoveryError(1700, 1000)).toBeNull();
+    expect(recoveryError(1700, 1700)).toBeNull();
+    expect(recoveryError(1700, 1701)).toBe("That is more than the provider owes on this payout.");
+    expect(recoveryError(1700, 0)).toBe("Enter an amount greater than zero.");
+    expect(recoveryError(1700, null)).toBe("Enter an amount greater than zero.");
+  });
+
+  it("words recovery and late payment refusals for operators", () => {
+    expect(commandErrorMessage("Finance review not actionable: owed_changed")).toContain("changed after this was requested");
+    expect(commandErrorMessage("Finance review not actionable: exceeds_owed")).toBe("That is more than the provider owes on this payout.");
+    expect(commandErrorMessage("Finance review not actionable: nothing_owed")).toBe("The provider owes nothing on this payout.");
+    expect(commandErrorMessage("Finance review not actionable: not_withdrawn")).toContain("withdrawn from its statement");
+    expect(commandErrorMessage("Bank outcome not recordable: already_paid")).toContain("Do not send it");
+    expect(commandErrorMessage("Finance review not actionable: already_paid")).toContain("already paid this payout");
+    expect(commandErrorMessage("Recovery must be a repayment or a write-off")).toBe("Choose a repayment or a write-off.");
+    expect(commandErrorMessage("Recovery amount in cents required")).toBe("Enter an amount greater than zero.");
+    expect(commandErrorMessage("Payout recovery idempotency conflict")).toContain("already submitted with different details");
   });
 });

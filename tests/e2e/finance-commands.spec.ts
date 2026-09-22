@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-076/077/078/079 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
+// TRACE-076/077/078/079/080 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
 // Stripe object, bank transfer or operator identity is represented.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const now = "2026-09-16T15:00:00.000Z";
@@ -16,13 +16,14 @@ const row = {
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [{ payment_id: "pi_synthetic", mode: "full", amount: 11700 }] },
   refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 1 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
-  payout: { funds_state: "held", not_eligible: [], held: ["payout_hold"], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null, withdrawn_statements: 0 },
+  payout: { funds_state: "held", not_eligible: [], held: ["payout_hold"], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null, withdrawn_statements: 0,
+    recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0 } },
   chargebacks: { suspense: 0, suspense_ledger: 0, lost: 0 }, processor_costs: 0,
   readback: { state: "mismatch", observed: 11600, expected: 11700, recorded_at: now }, reconciliation_open: true, issues: [],
 };
 const reconciliation = {
   evaluated_at: now, fee_percent: 15, obligation_count: 1, listed_limit: 200, global_event_holds: 1, accounts: [],
-  totals: { captured: 11700, refunded: 0, platform_fee: 1500, tax: 700, provider_payable: 9500, paid_out: 0, processor_costs: 0, chargeback_suspense: 0, with_issues: 0 },
+  totals: { captured: 11700, refunded: 0, platform_fee: 1500, tax: 700, provider_payable: 9500, paid_out: 0, processor_costs: 0, chargeback_suspense: 0, provider_owed: 0, with_issues: 0 },
   exceptions: [], obligations: [row],
 };
 const hold = { hold_id: "00000000-0000-4000-8000-000000000871", obligation_id: obligation, invoice_number: invoice, reason: "Quality complaint", evidence: "Ticket 4412", placed_by_me: false, created_at: now };
@@ -49,7 +50,7 @@ const achItem = {
   item_id: "00000000-0000-4000-8000-000000000900", obligation_id: "00000000-0000-4000-8000-000000000864", invoice_number: "M5-0000000864", payee_name: payee.payee_name,
   amount: 9500, attempt_id: "00000000-0000-4000-8000-000000000901", attempt_number: 1, status: "prepared", bank_reference_hint: null, last_event: null,
   submit_blocker: null, retry_blocker: null, open_retry_request_id: null,
-  withdraw_blocker: null, open_withdrawal_request_id: null, withdrawal: null, replaced_in: null, replaces_period: null,
+  withdraw_blocker: null, open_withdrawal_request_id: null, withdrawal: null, replaced_in: null, replaces_period: null, late_settlement: null,
 };
 const failedItem = {
   ...achItem, item_id: "00000000-0000-4000-8000-000000000902", obligation_id: "00000000-0000-4000-8000-000000000865", invoice_number: "M5-0000000865",
@@ -81,6 +82,17 @@ const theirBatch = {
       replaces: { item_id: "00000000-0000-4000-8000-000000000910", period_start: "2026-09-07", amount: 5000, previous_status: "prepared", withdrawn_at: now }, blocker: null },
   ] },
 };
+// TRACE-080: one payout refunded after it was paid, and one withdrawn transfer the bank could still pay.
+const owedPayout = {
+  obligation_id: "00000000-0000-4000-8000-000000000868", invoice_number: "M5-0000000868", payee_id: payee.payee_id, payee_name: payee.payee_name,
+  owed: 1700, paid: 9500, returned: 0, late_settled: 0, repaid: 0, written_off: 0, refunded: 2000, chargebacks_lost: 0, recoveries: [], open_request_id: null,
+};
+const withdrawnTransfer = {
+  attempt_id: "00000000-0000-4000-8000-000000000914", item_id: "00000000-0000-4000-8000-000000000915", obligation_id: "00000000-0000-4000-8000-000000000869",
+  invoice_number: "M5-0000000869", payee_name: payee.payee_name, amount: 9500, attempt_number: 1, previous_status: "prepared", period_start: "2026-09-07",
+  bank_reference_hint: null, withdrawn_at: now, open_request_id: null,
+};
+const recoveries = { owed_total: 1700, owed: [owedPayout], withdrawn: [withdrawnTransfer], late_settlements: [] };
 const operations = {
   evaluated_at: now,
   requests: [theirRequest, myApproved, myWaiting],
@@ -95,6 +107,7 @@ const operations = {
   chargebacks: [{ dispute_id: "dp_synthetic", obligation_id: obligation, payment_id: "pi_synthetic", amount: 1000, invoice_number: invoice,
     retained: { service: 10000, tax: 700, tip: 1000 }, blocker: null, open_request_id: null, created_at: now }],
   ach,
+  recoveries,
 };
 
 test.beforeEach(async ({ page }) => {
@@ -133,6 +146,9 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     await expect(batch.getByText("Reference ends 0111", { exact: false })).toBeVisible();
     await expect(batch.getByRole("button", { name: "Request retry" })).toHaveCount(1);
     await expect(batch.getByText("Replaced in the week of Sep 21, 2026")).toBeVisible();
+    const owed = width < 1280 ? page.getByRole("list", { name: "Amounts providers owe" }) : page.getByRole("table", { name: "Amounts providers owe" });
+    await expect(owed.getByText("Customer refunded $20.00")).toBeVisible();
+    await expect(page.getByText("Owed now: $17.00")).toBeVisible();
     await expect(page.getByText("Replaces the withdrawn statement for the week of Sep 7, 2026 ($50.00)")).toBeVisible();
     await expect(page.getByRole("heading", { name: /Week of Sep 14, 2026 · 4 payouts · \$380\.00 · \$95\.00 withdrawn/ })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: /M5-0000000863/ })).toBeDisabled();
@@ -523,4 +539,98 @@ test("an approver sees the transfer, its status and what the bank showed before 
   await reviews.getByRole("button", { name: "Approve", exact: true }).click();
   const confirm = page.getByRole("alertdialog", { name: "Approve: withdraw ach transfer?" });
   await expect(confirm.getByText('"Provider changed bank" with evidence "Bank shows R03 return code"', { exact: false })).toBeVisible();
+});
+
+test("a repayment is requested against what the provider owes, and never for more", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_payout_recovery", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000916", replay: false } }));
+  let requested = false;
+  await openPage(page, () => ({ ...operations, requests: requested
+    ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000916", operation: "payout_recovery", subject: owedPayout.obligation_id,
+      obligation_id: owedPayout.obligation_id, invoice_number: owedPayout.invoice_number, requested_by_me: true, reason: "Provider repaid part", evidence: "Bank credit line 44",
+      details: { kind: "repayment", amount: 1000, owed: 1700, owed_now: 1700, payee_name: payee.payee_name } }]
+    : operations.requests }));
+  await page.getByLabel("Payout owed (required)").selectOption(owedPayout.obligation_id);
+  await page.getByLabel("Recovery (required)").selectOption("repayment");
+  const amount = page.getByLabel("Amount (USD) (required)");
+  await amount.fill("20.00");
+  await expect(page.getByText("That is more than the provider owes on this payout.")).toBeVisible();
+  const trigger = page.getByRole("button", { name: "Request recovery" });
+  await expect(trigger).toBeDisabled();
+  await amount.fill("10.00");
+  await page.getByLabel("Recovery evidence (required)").fill("Bank credit line 44");
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Request: repayment from the provider?" });
+  await expect(confirm.getByText("$10.00 of $17.00 owed", { exact: false })).toBeVisible();
+  await expect(confirm.getByText("only once the bank shows the credit", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Provider repaid part");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_payout_recovery");
+  requested = true;
+  await confirm.getByRole("button", { name: "Request recovery", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_obligation: owedPayout.obligation_id, p_kind: "repayment", p_amount: 1000, p_reason: "Provider repaid part", p_evidence: "Bank credit line 44" });
+  expect(typeof payload.p_key).toBe("string");
+  noActor(payload);
+  await expect(page.getByText("Review requested", { exact: true })).toBeVisible();
+});
+
+test("a late payment of a withdrawn transfer is requested with the bank reference and what the bank shows", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_ach_late_settlement", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000917", replay: false } }));
+  let requested = false;
+  await openPage(page, () => ({ ...operations, requests: requested
+    ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000917", operation: "ach_late_settlement", subject: withdrawnTransfer.attempt_id,
+      obligation_id: withdrawnTransfer.obligation_id, invoice_number: withdrawnTransfer.invoice_number, requested_by_me: true, reason: "Weekly statement check", evidence: "Statement line 12",
+      details: { item_id: withdrawnTransfer.item_id, attempt_number: 1, amount: 9500, payee_name: payee.payee_name, invoice_number: withdrawnTransfer.invoice_number,
+        period_start: "2026-09-07", previous_status: "prepared", withdrawn_at: now, bank_reference_hint: "0777", replacement: null } }]
+    : operations.requests }));
+  const transfer = page.getByLabel("Withdrawn transfer paid late (required)");
+  await expect(transfer.locator("option")).toHaveCount(2);
+  await transfer.selectOption(withdrawnTransfer.attempt_id);
+  const trigger = page.getByRole("button", { name: "Request late payment record" });
+  await expect(trigger).toBeDisabled();
+  await page.getByLabel("Reference the bank paid it under (required)").fill("TRACE-0777");
+  await page.getByLabel("Late payment evidence (required)").fill("Statement line 12");
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Record this late payment?" });
+  await expect(confirm.getByText("posted as paid to the provider", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Weekly statement check");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_ach_late_settlement");
+  requested = true;
+  await confirm.getByRole("button", { name: "Request record", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_attempt: withdrawnTransfer.attempt_id, p_bank_ref: "TRACE-0777", p_reason: "Weekly statement check", p_evidence: "Statement line 12" });
+  noActor(payload);
+  await expect(page.getByText("Review requested", { exact: true })).toBeVisible();
+});
+
+test("an approver sees that a late payment duplicates a settled replacement", async ({ page }) => {
+  const lateRequest = {
+    ...theirRequest, request_id: "00000000-0000-4000-8000-000000000918", operation: "ach_late_settlement", subject: withdrawnTransfer.attempt_id,
+    obligation_id: withdrawnTransfer.obligation_id, invoice_number: withdrawnTransfer.invoice_number, reason: "Weekly statement check", evidence: "Statement line 12",
+    details: { item_id: withdrawnTransfer.item_id, attempt_number: 1, amount: 9500, payee_name: payee.payee_name, invoice_number: withdrawnTransfer.invoice_number,
+      period_start: "2026-09-07", previous_status: "prepared", withdrawn_at: now, bank_reference_hint: "0777",
+      replacement: { period_start: "2026-09-14", amount: 9500, status: "settled" } },
+  };
+  const withdrawnPaid = { ...achItem, item_id: withdrawnTransfer.item_id, obligation_id: "00000000-0000-4000-8000-000000000870", invoice_number: "M5-0000000870",
+    attempt_id: "00000000-0000-4000-8000-000000000919", status: "withdrawn",
+    withdrawal: { previous_status: "prepared", reason: "Changed bank", evidence: "Nothing sent", by_me: false, created_at: now },
+    late_settlement: { bank_reference_hint: "0777", by_me: false, created_at: now } };
+  await openPage(page, () => ({ ...operations, requests: [lateRequest], ach: { ...ach, batches: [{ ...achBatch, items: [withdrawnPaid] }] } }));
+  const reviews = page.getByRole("table", { name: "Second-person reviews" });
+  await expect(reviews.getByText("was also paid, so the provider will owe the duplicate", { exact: false })).toBeVisible();
+  const batch = page.getByRole("table", { name: "ACH batch for the week of Sep 14, 2026" });
+  await expect(batch.getByText("The bank paid it after the withdrawal (reference ends 0777); recorded as paid")).toBeVisible();
+  await reviews.getByRole("button", { name: "Approve", exact: true }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Approve: record late payment of withdrawn transfer?" });
+  await expect(confirm.getByText("$95.00 · reference ends 0777", { exact: false })).toBeVisible();
+});
+
+test("a refund on a paid payout warns that the provider's share becomes owed", async ({ page }) => {
+  const paidRow = { ...row, payout: { ...row.payout, funds_state: "paid", held: [], paid: 9500, payable: 0, payable_ledger: 0,
+    statement: { amount: 9500, period_start: "2026-09-07", attempt_number: 1, bank_status: "settled" } } };
+  await page.route("**/rpc/money_finance_reconciliation", route => route.fulfill({ json: { ...reconciliation, obligations: [paidRow] } }));
+  await openPage(page);
+  await page.getByLabel("Refund invoice (required)").selectOption(obligation);
+  await expect(page.getByText("Their share of this refund becomes an amount they owe", { exact: false })).toBeVisible();
+  await page.getByLabel("Chargeback (required)").selectOption("dp_synthetic");
+  await expect(page.getByText("Their share of this chargeback becomes an amount they owe", { exact: false })).toBeVisible();
 });

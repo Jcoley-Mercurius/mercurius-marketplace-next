@@ -272,9 +272,10 @@ export default function FinanceReconciliationPage() {
         <Total label="Paid out" value={formatCents(data.totals.paid_out)} />
         <Total label="Processor costs" value={formatCents(data.totals.processor_costs)} />
         <Total label="Chargeback suspense" value={formatCents(data.totals.chargeback_suspense)} tone={data.totals.chargeback_suspense ? "warning" : undefined} />
+        <Total label="Owed by providers" value={formatCents(data.totals.provider_owed)} tone={data.totals.provider_owed ? "warning" : undefined} />
         <Total label="Invoices with ledger issues" value={String(data.totals.with_issues)} tone={data.totals.with_issues ? "danger" : undefined} />
         <Total label="Open exceptions" value={String(data.exceptions.length)} tone={data.exceptions.length ? "warning" : undefined} />
-        <div className="bg-card p-4 sm:col-span-2">
+        <div className="bg-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Evaluated</p>
           <p className="mt-1 text-sm font-medium">{formatDate(data.evaluated_at)}</p>
         </div>
@@ -403,6 +404,9 @@ function ExceptionDetail({ exception }: { exception: FinanceException }) {
     case "bank_outcome":
       lines.push(`ACH attempt ${exception.attempt_number}`);
       break;
+    case "provider_owes":
+      lines.push(exception.payee_name ?? "Provider");
+      break;
     default:
       break;
   }
@@ -437,7 +441,11 @@ function FundsDetail({ row }: { row: ObligationReconciliation }) {
           ))}
         </ul>
       )}
-      <span className="text-xs text-muted-foreground tabular-nums">Payable {formatCents(payout.payable_ledger)}</span>
+      {payout.recovery.owed > 0 ? (
+        <span className="text-xs font-medium text-status-warning tabular-nums">Provider owes {formatCents(payout.recovery.owed)}</span>
+      ) : (
+        <span className="text-xs text-muted-foreground tabular-nums">Payable {formatCents(payout.payable_ledger)}</span>
+      )}
     </span>
   );
 }

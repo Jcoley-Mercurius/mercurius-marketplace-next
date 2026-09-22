@@ -1,4 +1,4 @@
-// TRACE-076/077/078/079 presentation for the finance operator command gateway. The database decides who
+// TRACE-076/077/078/079/080 presentation for the finance operator command gateway. The database decides who
 // may act, what is actionable and which approver counts; this module only words its answers.
 // Amounts are integer cents.
 
@@ -11,7 +11,9 @@ export type ReviewOperation =
   | "chargeback_allocation"
   | "ach_preparation"
   | "ach_retry"
-  | "ach_withdrawal";
+  | "ach_withdrawal"
+  | "ach_late_settlement"
+  | "payout_recovery";
 export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale" | "expired";
 export type ReviewBlocker =
   | "not_found"
@@ -35,6 +37,11 @@ export type ReviewBlocker =
   | "dispute_not_lost"
   | "refund_pending"
   | "allocation_invalid"
+  | "recovery_invalid"
+  | "nothing_owed"
+  | "owed_changed"
+  | "exceeds_owed"
+  | "not_withdrawn"
   | AchBlocker;
 /** Why a payout cannot be batched, sent, retried or withdrawn, or a bank outcome recorded (TRACE-078/079). */
 export type AchBlocker =
@@ -65,7 +72,8 @@ export type AchBlocker =
   | "bank_reference_used"
   | "withdrawn"
   | "status_changed"
-  | "paid";
+  | "paid"
+  | "already_paid";
 export type ReissueBlocker =
   | "refund_not_sent"
   | "refund_settled"
@@ -123,6 +131,30 @@ export type AchWithdrawalDetails = {
   bank_evidence: string | null;
 };
 
+/** A bank payment of a withdrawn transfer shown after the withdrawal (TRACE-080). */
+export type AchLateSettlementDetails = {
+  item_id: string;
+  attempt_number: number;
+  amount: number;
+  payee_name: string | null;
+  invoice_number: string | null;
+  period_start: string;
+  previous_status: WithdrawableStatus | null;
+  withdrawn_at: string | null;
+  bank_reference_hint: string | null;
+  /** The payout's live replacement statement, if one was prepared; a settled one means a duplicate payment. */
+  replacement: { period_start: string; amount: number; status: AchStatus } | null;
+};
+export type RecoveryKind = "repayment" | "write_off";
+export type PayoutRecoveryDetails = {
+  kind: RecoveryKind;
+  amount: number;
+  /** What the provider owed when this was requested; it goes stale if that changes first. */
+  owed: number;
+  owed_now: number;
+  payee_name: string | null;
+};
+
 export type ReviewRequest = {
   request_id: string;
   operation: ReviewOperation;
@@ -131,7 +163,7 @@ export type ReviewRequest = {
   invoice_number: string | null;
   reason: string;
   evidence: string | null;
-  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | null;
+  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | AchLateSettlementDetails | PayoutRecoveryDetails | null;
   requested_by_me: boolean;
   approved_by_me: boolean;
   recorded_by_me: boolean;
@@ -257,6 +289,8 @@ export type AchItem = {
   replaced_in: string | null;
   /** The week of the withdrawn statement this one replaces, if any. */
   replaces_period: string | null;
+  /** Set when the bank showed this withdrawn transfer as paid after all (TRACE-080). */
+  late_settlement: { bank_reference_hint: string | null; by_me: boolean; created_at: string } | null;
 };
 
 export type AchBatch = {
@@ -273,6 +307,51 @@ export type AchBatch = {
 
 export type AchOperations = { next_period_start: string | null; ready: ReadyPayout[]; batches: AchBatch[] };
 
+/** A payout whose provider owes Mercurius, or that had a recent recovery (TRACE-080). */
+export type OwedPayout = {
+  obligation_id: string;
+  invoice_number: string | null;
+  payee_id: string;
+  payee_name: string | null;
+  owed: number;
+  paid: number;
+  returned: number;
+  late_settled: number;
+  repaid: number;
+  written_off: number;
+  refunded: number;
+  chargebacks_lost: number;
+  recoveries: { kind: RecoveryKind; amount: number; owed_before: number; reason: string; evidence: string; by_me: boolean; created_at: string }[];
+  open_request_id: string | null;
+};
+/** A withdrawn transfer the bank could still show as paid. */
+export type WithdrawnTransfer = {
+  attempt_id: string;
+  item_id: string;
+  obligation_id: string;
+  invoice_number: string | null;
+  payee_name: string | null;
+  amount: number;
+  attempt_number: number;
+  previous_status: WithdrawableStatus;
+  period_start: string;
+  bank_reference_hint: string | null;
+  withdrawn_at: string;
+  open_request_id: string | null;
+};
+export type LateSettlement = {
+  attempt_id: string;
+  obligation_id: string;
+  invoice_number: string | null;
+  amount: number;
+  bank_reference_hint: string | null;
+  reason: string;
+  evidence: string;
+  by_me: boolean;
+  created_at: string;
+};
+export type RecoveryOperations = { owed_total: number; owed: OwedPayout[]; withdrawn: WithdrawnTransfer[]; late_settlements: LateSettlement[] };
+
 export type FinanceOperations = {
   evaluated_at: string;
   requests: ReviewRequest[];
@@ -283,6 +362,7 @@ export type FinanceOperations = {
   cancellations: CancellationRefund[];
   chargebacks: LostChargeback[];
   ach: AchOperations;
+  recoveries: RecoveryOperations;
 };
 
 export const operationLabel: Record<ReviewOperation, string> = {
@@ -295,6 +375,13 @@ export const operationLabel: Record<ReviewOperation, string> = {
   ach_preparation: "Prepare weekly ACH batch",
   ach_retry: "Retry ACH transfer",
   ach_withdrawal: "Withdraw ACH transfer",
+  ach_late_settlement: "Record late payment of withdrawn transfer",
+  payout_recovery: "Record provider recovery",
+};
+
+export const recoveryKindLabel: Record<RecoveryKind, string> = {
+  repayment: "Repayment from the provider",
+  write_off: "Write-off absorbed by Mercurius",
 };
 
 export const reviewStateLabel: Record<ReviewState, string> = {
@@ -333,6 +420,11 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   dispute_not_lost: "The chargeback is not recorded as lost.",
   refund_pending: "A refund on this invoice has not settled. Settle it before allocating the chargeback.",
   allocation_invalid: "The allocation must equal the chargeback and stay within the retained service, tax and tip.",
+  recovery_invalid: "Choose a repayment or a write-off and an amount greater than zero.",
+  nothing_owed: "The provider owes nothing on this payout.",
+  owed_changed: "The amount the provider owes changed after this was requested. Refresh the page and request it again if it still applies.",
+  exceeds_owed: "That is more than the provider owes on this payout.",
+  not_withdrawn: "Only a transfer withdrawn from its statement takes a late payment. Record other outcomes on the transfer itself.",
   awaiting_confirmation: "The homeowner has not confirmed completion, or the confirmation does not match the job.",
   replacement_reconciliation: "The replacement provider's payout needs its reviewed reconciliation first.",
   dispute_hold: "A dispute or appeal on this job is open.",
@@ -361,6 +453,7 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   withdrawn: "The transfer was withdrawn from its statement. A later weekly batch prepares its replacement.",
   status_changed: "The transfer's bank status changed after this was requested. Refresh the page and request it again if it still applies.",
   paid: "The transfer settled. A settled transfer cannot be withdrawn; record a return if the bank shows one.",
+  already_paid: "The bank has already paid this payout, for example through a late payment of a withdrawn transfer. Do not send it; withdraw an unsent or failed transfer instead.",
 };
 
 export const achStatusLabel: Record<AchStatus, string> = {
@@ -424,6 +517,17 @@ export const retryDetails = (request: ReviewRequest): AchRetryDetails | null =>
   request.operation === "ach_retry" ? (request.details as AchRetryDetails | null) : null;
 export const withdrawalDetails = (request: ReviewRequest): AchWithdrawalDetails | null =>
   request.operation === "ach_withdrawal" ? (request.details as AchWithdrawalDetails | null) : null;
+export const lateSettlementDetails = (request: ReviewRequest): AchLateSettlementDetails | null =>
+  request.operation === "ach_late_settlement" ? (request.details as AchLateSettlementDetails | null) : null;
+export const recoveryDetails = (request: ReviewRequest): PayoutRecoveryDetails | null =>
+  request.operation === "payout_recovery" ? (request.details as PayoutRecoveryDetails | null) : null;
+
+/** Why a recovery of this amount cannot be requested, or null. The server re-checks against the ledger. */
+export function recoveryError(owed: number, amount: number | null): string | null {
+  if (amount === null || amount <= 0) return "Enter an amount greater than zero.";
+  if (amount > owed) return "That is more than the provider owes on this payout.";
+  return null;
+}
 
 export const reissueBlockerLabel: Record<ReissueBlocker, string> = {
   refund_not_sent: "It has not been sent to Stripe.",
@@ -514,6 +618,8 @@ const refusals: [RegExp, string][] = [
   [/Bank outcome required/, "Choose the bank outcome."],
   [/Bank attempt not found/, "It no longer exists. Refresh the page."],
   [/Evidence of up to 1000 characters required/, "Enter evidence of up to 1000 characters."],
+  [/Recovery must be a repayment or a write-off/, "Choose a repayment or a write-off."],
+  [/Recovery amount in cents required/, "Enter an amount greater than zero."],
 ];
 
 /** Operator wording for a gateway refusal. Unknown database text is not shown verbatim. */
