@@ -11,6 +11,7 @@ import { ResponsiveDataList, type DataColumn } from "@/components/ui/responsive-
 import { createClient } from "@/lib/supabase/client";
 import {
   accountLabel,
+  bankMovementLabel,
   bankStatusLabel,
   exceptionAmount,
   exceptionPresentation,
@@ -29,8 +30,7 @@ import {
 } from "@/lib/financeReconciliation";
 import { cn } from "@/lib/utils";
 
-// TRACE-075 finance reconciliation readback, with the TRACE-076 operator commands for refunds,
-// payout holds, Stripe readbacks and events. Chargeback allocation and ACH outcomes are not here.
+// TRACE-075 finance reconciliation readback, with the TRACE-076–081 operator commands below it.
 
 type Filter = "attention" | "all" | FundsState;
 
@@ -284,7 +284,7 @@ export default function FinanceReconciliationPage() {
       <section aria-labelledby="finance-exceptions" className="space-y-3">
         <h2 id="finance-exceptions" className="text-lg font-semibold">Exceptions ({data.exceptions.length})</h2>
         {data.exceptions.length === 0 ? (
-          <PageState kind="empty" title="No open exceptions" description="No payment, refund, chargeback, readback, hold or bank outcome needs action." />
+          <PageState kind="empty" title="No open exceptions" description="No payment, refund, chargeback, readback, hold, bank outcome or bank statement line needs action." />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -377,6 +377,8 @@ function exceptionKey(exception: FinanceException) {
     case "chargeback": return exception.dispute_id;
     case "payout_hold": return exception.hold_id;
     case "bank_outcome": return exception.item_id;
+    case "bank_line": return exception.line_id;
+    case "bank_unevidenced": return exception.movement;
     default: return exception.obligation_id;
   }
 }
@@ -406,6 +408,12 @@ function ExceptionDetail({ exception }: { exception: FinanceException }) {
       break;
     case "provider_owes":
       lines.push(exception.payee_name ?? "Provider");
+      break;
+    case "bank_line":
+      lines.push(`Statement ${exception.period_start} to ${exception.period_end}, line ${exception.line_number}`, exception.direction === "debit" ? "Debit" : "Credit");
+      break;
+    case "bank_unevidenced":
+      lines.push(bankMovementLabel[exception.movement_kind]);
       break;
     default:
       break;

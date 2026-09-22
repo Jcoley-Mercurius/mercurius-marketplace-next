@@ -1,4 +1,4 @@
-// TRACE-076/077/078/079/080 presentation for the finance operator command gateway. The database decides who
+// TRACE-076/077/078/079/080/081 presentation for the finance operator command gateway. The database decides who
 // may act, what is actionable and which approver counts; this module only words its answers.
 // Amounts are integer cents.
 
@@ -13,7 +13,8 @@ export type ReviewOperation =
   | "ach_retry"
   | "ach_withdrawal"
   | "ach_late_settlement"
-  | "payout_recovery";
+  | "payout_recovery"
+  | "bank_statement_close";
 export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale" | "expired";
 export type ReviewBlocker =
   | "not_found"
@@ -42,6 +43,9 @@ export type ReviewBlocker =
   | "owed_changed"
   | "exceeds_owed"
   | "not_withdrawn"
+  | "period_open"
+  | "statement_changed"
+  | "statement_exceptions"
   | AchBlocker;
 /** Why a payout cannot be batched, sent, retried or withdrawn, or a bank outcome recorded (TRACE-078/079). */
 export type AchBlocker =
@@ -146,6 +150,15 @@ export type AchLateSettlementDetails = {
   replacement: { period_start: string; amount: number; status: AchStatus } | null;
 };
 export type RecoveryKind = "repayment" | "write_off";
+/** A statement close binds the statement's lines and totals when it was requested (TRACE-081). */
+export type BankCloseDetails = {
+  period_start: string;
+  period_end: string;
+  lines: number;
+  debits: number;
+  credits: number;
+  exceptions_now: number;
+};
 export type PayoutRecoveryDetails = {
   kind: RecoveryKind;
   amount: number;
@@ -163,7 +176,7 @@ export type ReviewRequest = {
   invoice_number: string | null;
   reason: string;
   evidence: string | null;
-  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | AchLateSettlementDetails | PayoutRecoveryDetails | null;
+  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | AchLateSettlementDetails | PayoutRecoveryDetails | BankCloseDetails | null;
   requested_by_me: boolean;
   approved_by_me: boolean;
   recorded_by_me: boolean;
@@ -352,6 +365,78 @@ export type LateSettlement = {
 };
 export type RecoveryOperations = { owed_total: number; owed: OwedPayout[]; withdrawn: WithdrawnTransfer[]; late_settlements: LateSettlement[] };
 
+/** A recorded bank movement a statement line can evidence (TRACE-081). */
+export type BankMovementKind = "settled" | "returned" | "late" | "repayment";
+export type BankMovement = {
+  movement: string;
+  kind: BankMovementKind;
+  direction: "debit" | "credit";
+  amount: number;
+  bank_reference_hint: string | null;
+  obligation_id: string;
+  invoice_number: string | null;
+  payee_name: string | null;
+  attempt_number: number | null;
+  recorded_at: string;
+};
+export type BankLineState = "matched" | "amount_mismatch" | "dismissed" | "unmatched";
+export type BankSuggestionAction =
+  | "record_settled"
+  | "record_returned"
+  | "request_late_settlement"
+  | "match_repayment"
+  | "amount_mismatch"
+  | "outcome_conflict"
+  | "already_evidenced"
+  | "no_transfer";
+/** The actions that record through an existing command, filled in from the line. */
+export type BankResolution = Extract<BankSuggestionAction, "record_settled" | "record_returned" | "request_late_settlement">;
+export type StatementLine = {
+  line_id: string;
+  line_number: number;
+  posted_on: string;
+  direction: "debit" | "credit";
+  amount: number;
+  /** The last four characters of the bank reference; the full reference is never returned. */
+  bank_reference_hint: string;
+  state: BankLineState;
+  match: (BankMovement & { how: "reference" | "manual" }) | null;
+  suggestion: {
+    action: BankSuggestionAction;
+    attempt_id?: string;
+    status?: AchStatus;
+    obligation_id?: string;
+    amount?: number;
+    attempt_number?: number;
+    invoice_number?: string | null;
+    payee_name?: string | null;
+  } | null;
+  dismissal: { reason: string; by_me: boolean; created_at: string } | null;
+};
+export type BankStatement = {
+  statement_id: string;
+  period_start: string;
+  period_end: string;
+  created_by_me: boolean;
+  created_at: string;
+  line_count: number;
+  debit_total: number;
+  credit_total: number;
+  imports: number;
+  exceptions: number;
+  closed: { by_me: boolean; reason: string; created_at: string } | null;
+  close_blocker: ReviewBlocker | null;
+  open_request_id: string | null;
+  lines: StatementLine[];
+};
+export type StatementOperations = {
+  /** Mercurius's business day, YYYY-MM-DD. */
+  today: string;
+  statements: BankStatement[];
+  /** Recorded movements no statement line evidences, with the statement whose period covers them. */
+  unevidenced: (BankMovement & { statement_id: string | null })[];
+};
+
 export type FinanceOperations = {
   evaluated_at: string;
   requests: ReviewRequest[];
@@ -363,6 +448,7 @@ export type FinanceOperations = {
   chargebacks: LostChargeback[];
   ach: AchOperations;
   recoveries: RecoveryOperations;
+  statements: StatementOperations;
 };
 
 export const operationLabel: Record<ReviewOperation, string> = {
@@ -377,6 +463,7 @@ export const operationLabel: Record<ReviewOperation, string> = {
   ach_withdrawal: "Withdraw ACH transfer",
   ach_late_settlement: "Record late payment of withdrawn transfer",
   payout_recovery: "Record provider recovery",
+  bank_statement_close: "Close bank statement",
 };
 
 export const recoveryKindLabel: Record<RecoveryKind, string> = {
@@ -425,6 +512,9 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   owed_changed: "The amount the provider owes changed after this was requested. Refresh the page and request it again if it still applies.",
   exceeds_owed: "That is more than the provider owes on this payout.",
   not_withdrawn: "Only a transfer withdrawn from its statement takes a late payment. Record other outcomes on the transfer itself.",
+  period_open: "The statement period has not ended. Close it after its last day.",
+  statement_changed: "Lines were added to the statement after this was requested. Request the close again.",
+  statement_exceptions: "The statement has unresolved lines, or recorded bank movements in its period that no line shows. Resolve them first.",
   awaiting_confirmation: "The homeowner has not confirmed completion, or the confirmation does not match the job.",
   replacement_reconciliation: "The replacement provider's payout needs its reviewed reconciliation first.",
   dispute_hold: "A dispute or appeal on this job is open.",
@@ -521,6 +611,57 @@ export const lateSettlementDetails = (request: ReviewRequest): AchLateSettlement
   request.operation === "ach_late_settlement" ? (request.details as AchLateSettlementDetails | null) : null;
 export const recoveryDetails = (request: ReviewRequest): PayoutRecoveryDetails | null =>
   request.operation === "payout_recovery" ? (request.details as PayoutRecoveryDetails | null) : null;
+export const closeDetails = (request: ReviewRequest): BankCloseDetails | null =>
+  request.operation === "bank_statement_close" ? (request.details as BankCloseDetails | null) : null;
+
+export const bankLineStateLabel: Record<BankLineState, string> = {
+  matched: "Matched",
+  amount_mismatch: "Amount differs",
+  dismissed: "Not a payout",
+  unmatched: "Unmatched",
+};
+
+export const bankMovementKindLabel: Record<BankMovementKind, string> = {
+  settled: "Settled transfer",
+  returned: "Returned transfer",
+  late: "Late payment of a withdrawn transfer",
+  repayment: "Provider repayment",
+};
+
+/** What an unmatched line tells the operator to do. */
+export const bankSuggestionLabel: Record<BankSuggestionAction, string> = {
+  record_settled: "The bank paid this transfer. Record it settled.",
+  record_returned: "The bank returned this transfer. Record the return.",
+  request_late_settlement: "The bank paid this withdrawn transfer. Request a late payment record with a second operator.",
+  match_repayment: "Match it to the provider repayment it shows.",
+  amount_mismatch: "The bank shows a different amount from the transfer. Do not record it; escalate to the finance owner.",
+  outcome_conflict: "The bank shows something the transfer's recorded outcome contradicts. Check with the bank and escalate; nothing can be recorded from this line.",
+  already_evidenced: "Another statement line already shows this transfer. Check the bank for a duplicate.",
+  no_transfer: "No transfer has this reference. Match it to a recorded movement, or dismiss it if it is not a provider payout.",
+};
+
+export const bankResolutionLabel: Record<BankResolution, string> = {
+  record_settled: "Record settled",
+  record_returned: "Record return",
+  request_late_settlement: "Request late payment record",
+};
+
+/** A statement line resolvable through an existing command from this session. */
+export function lineResolution(line: StatementLine): BankResolution | null {
+  const action = line.state === "unmatched" ? line.suggestion?.action : undefined;
+  return action === "record_settled" || action === "record_returned" || action === "request_late_settlement" ? action : null;
+}
+
+/** Recorded movements a line could be matched to by hand: same direction and amount. */
+export function matchCandidates(line: StatementLine, movements: BankMovement[]): BankMovement[] {
+  if (line.state !== "unmatched") return [];
+  return movements.filter((movement) => movement.direction === line.direction && movement.amount === line.amount);
+}
+
+/** Whether an unmatched line may be dismissed: never one whose reference names a transfer. */
+export function canDismissLine(line: StatementLine) {
+  return line.state === "unmatched" && (line.suggestion?.action === "no_transfer" || line.suggestion?.action === "match_repayment");
+}
 
 /** Why a recovery of this amount cannot be requested, or null. The server re-checks against the ledger. */
 export function recoveryError(owed: number, amount: number | null): string | null {
@@ -620,7 +761,27 @@ const refusals: [RegExp, string][] = [
   [/Evidence of up to 1000 characters required/, "Enter evidence of up to 1000 characters."],
   [/Recovery must be a repayment or a write-off/, "Choose a repayment or a write-off."],
   [/Recovery amount in cents required/, "Enter an amount greater than zero."],
+  [/Statement period of up to 32 days required/, "Enter a statement period of up to 32 days, ending on or after its start."],
+  [/Statement period cannot start in the future/, "The statement period cannot start after today."],
+  [/Another statement already covers part of this period/, "Another statement already covers part of this period. Use its exact dates, or choose a period that does not overlap."],
+  [/Bank statement is closed/, "This statement is closed. Nothing can be added or changed."],
+  [/Bank statement not found|Statement line not found/, "It no longer exists. Refresh the page."],
+  [/Up to 1000 statement lines required/, "Import up to 1000 lines at a time."],
+  [/File fingerprint must be/, "The file could not be read. Choose it again."],
+  [/Note of up to 500 characters required/, "Enter a note of up to 500 characters."],
+  [/Reason of up to 1000 characters required/, "Enter a reason of up to 1000 characters."],
 ];
+
+const lineRefusals: Record<string, string> = {
+  line_matched: "This line is already matched. Refresh the page.",
+  dismissed: "This line was dismissed as not a payout.",
+  movement_not_found: "That recorded movement no longer exists. Refresh the page.",
+  movement_matched: "Another statement line already shows that movement.",
+  direction_mismatch: "A debit matches only a payment, and a credit only a return or repayment.",
+  amount_mismatch: "The amounts differ, so they cannot be matched.",
+  line_names_transfer: "This line's reference names a recorded transfer, so it is a payout line and cannot be dismissed.",
+  suggestion_changed: "What this line shows changed since the page loaded. Refresh and check it again.",
+};
 
 /** Operator wording for a gateway refusal. Unknown database text is not shown verbatim. */
 export function commandErrorMessage(message: string): string {
@@ -628,6 +789,17 @@ export function commandErrorMessage(message: string): string {
   if (blocker && blocker in blockerLabel) return blockerLabel[blocker as ReviewBlocker];
   const bank = /Bank outcome not recordable: ([a-z_]+)/.exec(message)?.[1];
   if (bank && bank in blockerLabel) return blockerLabel[bank as ReviewBlocker];
+  const line = /Statement line not (?:matchable|dismissable|resolvable): ([a-z_]+)/.exec(message)?.[1];
+  if (line && line in lineRefusals) return lineRefusals[line];
+  const imported = /Statement line (\d+) (?:is already imported|needs|has an invalid|is posted outside)/.exec(message);
+  if (imported) {
+    if (/is already imported/.test(message)) return `Line ${imported[1]} is already on a bank statement. Leave it out and import the rest.`;
+    if (/outside the statement period/.test(message)) return `Line ${imported[1]} is dated outside the statement period.`;
+    if (/invalid posting date/.test(message)) return `Line ${imported[1]} has a date that could not be read.`;
+    if (/posting date, direction/.test(message)) return `Line ${imported[1]} needs a date, debit or credit, amount and reference.`;
+    if (/amount/.test(message)) return `Line ${imported[1]} needs an amount greater than zero.`;
+    return `Line ${imported[1]} needs the bank's reference, up to 200 characters.`;
+  }
   const reissue = /Refund reissue not allowed: ([a-z_]+)/.exec(message)?.[1];
   if (reissue && reissue in reissueBlockerLabel) return reissueBlockerLabel[reissue as ReissueBlocker];
   for (const [pattern, text] of refusals) if (pattern.test(message)) return text;

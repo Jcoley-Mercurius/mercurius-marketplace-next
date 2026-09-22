@@ -1532,6 +1532,227 @@ export type Database = {
         }
         Relationships: []
       }
+      money_bank_line_dismissals: {
+        Row: {
+          actor: string
+          created_at: string
+          line_id: string
+          reason: string
+        }
+        Insert: {
+          actor: string
+          created_at?: string
+          line_id: string
+          reason: string
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          line_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_bank_line_dismissals_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: true
+            referencedRelation: "money_bank_statement_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_bank_line_matches: {
+        Row: {
+          actor: string
+          created_at: string
+          how: string
+          line_id: string
+          movement: string
+          reason: string | null
+        }
+        Insert: {
+          actor: string
+          created_at?: string
+          how: string
+          line_id: string
+          movement: string
+          reason?: string | null
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          how?: string
+          line_id?: string
+          movement?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_bank_line_matches_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: true
+            referencedRelation: "money_bank_statement_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_bank_statement_closes: {
+        Row: {
+          approved_by: string
+          created_at: string
+          credit_total: number
+          debit_total: number
+          line_count: number
+          reason: string
+          requested_by: string
+          statement_id: string
+        }
+        Insert: {
+          approved_by: string
+          created_at?: string
+          credit_total: number
+          debit_total: number
+          line_count: number
+          reason: string
+          requested_by: string
+          statement_id: string
+        }
+        Update: {
+          approved_by?: string
+          created_at?: string
+          credit_total?: number
+          debit_total?: number
+          line_count?: number
+          reason?: string
+          requested_by?: string
+          statement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_bank_statement_closes_statement_id_fkey"
+            columns: ["statement_id"]
+            isOneToOne: true
+            referencedRelation: "money_bank_statements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_bank_statement_imports: {
+        Row: {
+          actor: string
+          business_key: string
+          content_hash: string
+          created_at: string
+          file_fingerprint: string | null
+          id: string
+          line_count: number
+          statement_id: string
+        }
+        Insert: {
+          actor: string
+          business_key: string
+          content_hash: string
+          created_at?: string
+          file_fingerprint?: string | null
+          id?: string
+          line_count: number
+          statement_id: string
+        }
+        Update: {
+          actor?: string
+          business_key?: string
+          content_hash?: string
+          created_at?: string
+          file_fingerprint?: string | null
+          id?: string
+          line_count?: number
+          statement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_bank_statement_imports_statement_id_fkey"
+            columns: ["statement_id"]
+            isOneToOne: false
+            referencedRelation: "money_bank_statements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_bank_statement_lines: {
+        Row: {
+          amount: number
+          bank_reference: string
+          created_at: string
+          direction: string
+          id: string
+          import_id: string
+          line_number: number
+          posted_on: string
+          statement_id: string
+        }
+        Insert: {
+          amount: number
+          bank_reference: string
+          created_at?: string
+          direction: string
+          id?: string
+          import_id: string
+          line_number: number
+          posted_on: string
+          statement_id: string
+        }
+        Update: {
+          amount?: number
+          bank_reference?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          import_id?: string
+          line_number?: number
+          posted_on?: string
+          statement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_bank_statement_lines_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "money_bank_statement_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_bank_statement_lines_statement_id_fkey"
+            columns: ["statement_id"]
+            isOneToOne: false
+            referencedRelation: "money_bank_statements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_bank_statements: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          period_end: string
+          period_start: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          period_end: string
+          period_start: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+        }
+        Relationships: []
+      }
       money_chargeback_resolutions: {
         Row: {
           actor: string
@@ -5675,6 +5896,18 @@ export type Database = {
         }
         Returns: string
       }
+      money_close_bank_statement: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_credits: number
+          p_debits: number
+          p_lines: number
+          p_reason: string
+          p_statement: string
+        }
+        Returns: undefined
+      }
       money_exclude_event: {
         Args: {
           p_actor: string
@@ -5695,8 +5928,26 @@ export type Database = {
         Args: { p_reason: string; p_request: string }
         Returns: Json
       }
+      money_operator_dismiss_bank_line: {
+        Args: { p_line: string; p_reason: string }
+        Returns: Json
+      }
       money_operator_execute_review: {
         Args: { p_request: string }
+        Returns: Json
+      }
+      money_operator_import_bank_statement: {
+        Args: {
+          p_file_fingerprint: string
+          p_key: string
+          p_lines: Json
+          p_period_end: string
+          p_period_start: string
+        }
+        Returns: Json
+      }
+      money_operator_match_bank_line: {
+        Args: { p_line: string; p_movement: string; p_reason: string }
         Returns: Json
       }
       money_operator_place_hold: {
@@ -5773,6 +6024,10 @@ export type Database = {
         }
         Returns: Json
       }
+      money_operator_request_bank_statement_close: {
+        Args: { p_key: string; p_reason: string; p_statement: string }
+        Returns: Json
+      }
       money_operator_request_cancellation_refund: {
         Args: {
           p_key: string
@@ -5824,6 +6079,15 @@ export type Database = {
           p_operation: string
           p_reason: string
           p_subject: string
+        }
+        Returns: Json
+      }
+      money_operator_resolve_bank_line: {
+        Args: {
+          p_action: string
+          p_key: string
+          p_line: string
+          p_note: string
         }
         Returns: Json
       }

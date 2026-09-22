@@ -106,7 +106,31 @@ export type FinanceException =
   | { kind: "chargeback"; obligation_id: string; dispute_id: string; payment_id: string; amount: number; status: "open" | "lost"; since: string }
   | { kind: "payout_hold"; obligation_id: string; hold_id: string; since: string }
   | { kind: "bank_outcome"; obligation_id: string; item_id: string; attempt_number: number; amount: number; status: "unknown" | "failed" | "returned"; since: string }
-  | { kind: "provider_owes"; obligation_id: string; invoice_number: string | null; payee_name: string | null; amount: number; since: string };
+  | { kind: "provider_owes"; obligation_id: string; invoice_number: string | null; payee_name: string | null; amount: number; since: string }
+  /** A bank statement line that matches no recorded movement, or matches one at another amount (TRACE-081). */
+  | {
+      kind: "bank_line";
+      line_id: string;
+      statement_id: string;
+      period_start: string;
+      period_end: string;
+      line_number: number;
+      direction: "debit" | "credit";
+      amount: number;
+      state: "unmatched" | "amount_mismatch";
+      obligation_id: string | null;
+      since: string;
+    }
+  /** A recorded settlement, return, late payment or repayment no imported statement line shows (TRACE-081). */
+  | {
+      kind: "bank_unevidenced";
+      movement: string;
+      movement_kind: "settled" | "returned" | "late" | "repayment";
+      obligation_id: string;
+      direction: "debit" | "credit";
+      amount: number;
+      since: string;
+    };
 
 export type LedgerAccount =
   | "stripe_clearing"
@@ -220,6 +244,14 @@ export function labelOf<K extends string>(labels: Record<K, string>, key: string
 export const formatCents = (minor: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(minor / 100);
 
+/** What a recorded bank movement was (TRACE-081). */
+export const bankMovementLabel: Record<"settled" | "returned" | "late" | "repayment", string> = {
+  settled: "ACH transfer settled",
+  returned: "ACH transfer returned",
+  late: "Late payment of a withdrawn transfer",
+  repayment: "Provider repayment",
+};
+
 /** Title and next action for one exception. Actions describe the existing reviewed kernels. */
 export function exceptionPresentation(exception: FinanceException): { title: string; action: string } {
   switch (exception.kind) {
@@ -265,6 +297,21 @@ export function exceptionPresentation(exception: FinanceException): { title: str
       return {
         title: "Provider owes Mercurius",
         action: "Ask the provider to repay, then record the repayment, or record a write-off, each with a second reviewer. Never debit the provider's bank or hold back other earnings.",
+      };
+    case "bank_line":
+      return exception.state === "amount_mismatch"
+        ? {
+            title: "Statement amount differs",
+            action: "The bank statement shows a different amount for a recorded transfer. Do not close the statement; escalate to the finance owner.",
+          }
+        : {
+            title: "Statement line unmatched",
+            action: "Resolve it under Bank statements: record the outcome the bank shows, match it to a recorded movement, or dismiss a line that is not a provider payout.",
+          };
+    case "bank_unevidenced":
+      return {
+        title: "Not on a bank statement",
+        action: "The bank statement for this date has no line for a recorded bank movement. Import the missing line or check the recorded outcome with the bank.",
       };
     case "bank_outcome":
       return exception.status === "unknown"

@@ -153,6 +153,18 @@ than the payout's proceeds, so a paid payout is never paid again. An amount owed
 a reviewed repayment or a reviewed write-off to a new recovery-loss account; nothing is netted,
 debited or held. See PHASE-5-PAYOUT-RECOVERY.md.
 
+TRACE-081 adds bank statement reconciliation. Owner decisions 2026-09-22: the bank's CSV export is
+parsed in the operator's browser and never uploaded, only payout-related lines are imported, a line
+is evidence only, and a period is closed by a reviewed request a second finance operator approves.
+Each line holds a posting date, debit or credit, amount and bank reference — no description, payee
+or account detail — and pairs with a recorded settlement, return, late payment or repayment. A line
+the bank shows but nothing records is resolved through the existing commands with the line as their
+evidence; a repayment or a differently referenced transfer is matched by hand; a line imported by
+mistake is dismissed, never one naming a transfer. A close is refused while any line is unresolved
+or any recorded movement in the period has no line, and it fixes the statement's pairings. The
+reconciliation queue gains the unresolved lines and the movements missing from a statement. See
+PHASE-5-BANK-STATEMENTS.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
@@ -205,7 +217,9 @@ behavior characterized before replacing the five active entrypoints.
 - [ ] Authorized Stripe test delivery/readback proves timeout, retry and reconciliation
   behavior end to end. Gateway/JWT integration is tested in an authorized environment.
 - [ ] Bank forms, authorized owner workflow, statement reconciliation and failed or
-  unknown bank outcomes are demonstrated. Changed-bank/changed-amount replacement
+  unknown bank outcomes are demonstrated. TRACE-081 implements statement import,
+  matching and the reviewed period close against synthetic lines only; no real bank
+  export has been read. Changed-bank/changed-amount replacement
   statements, failed-refund reservation replacement and already-paid recovery get
   reviewed operations integration; current paths block those ambiguous actions.
 - [ ] Licensing/insurance sufficiency by category/jurisdiction, private evidence

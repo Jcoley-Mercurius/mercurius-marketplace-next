@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   accountLabel,
+  bankMovementLabel,
   bankStatusLabel,
   exceptionAmount,
   exceptionPresentation,
@@ -99,5 +100,17 @@ describe("finance reconciliation presentation", () => {
     expect(exceptionAmount(owes)).toBe(1700);
     expect(issueLabel.recovery_ledger).toBe("Recovery loss differs from recorded write-offs");
     expect(accountLabel.provider_recovery_loss).toBe("Provider recovery loss");
+  });
+  it("words bank statement exceptions without suggesting a transfer is resent", () => {
+    const line: FinanceException = { kind: "bank_line", line_id: "l", statement_id: "s", period_start: "2026-09-01", period_end: "2026-09-30",
+      line_number: 4, direction: "debit", amount: 9500, state: "unmatched", obligation_id: null, since };
+    expect(exceptionPresentation(line).title).toBe("Statement line unmatched");
+    expect(exceptionPresentation({ ...line, state: "amount_mismatch" }).title).toBe("Statement amount differs");
+    expect(exceptionPresentation({ ...line, state: "amount_mismatch" }).action).toContain("Do not close the statement");
+    expect(exceptionAmount(line)).toBe(9500);
+    const missing: FinanceException = { kind: "bank_unevidenced", movement: "settled:x", movement_kind: "settled", obligation_id: "o", direction: "debit", amount: 9500, since };
+    expect(exceptionPresentation(missing).title).toBe("Not on a bank statement");
+    expect(exceptionPresentation(missing).action).not.toMatch(/resend|retry/i);
+    expect(bankMovementLabel.late).toBe("Late payment of a withdrawn transfer");
   });
 });

@@ -11,6 +11,7 @@ import { PageState } from "@/components/ui/page-state";
 import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
 import { FinanceAchCommands } from "@/components/admin/FinanceAchCommands";
 import { FinanceRecoveryCommands } from "@/components/admin/FinanceRecoveryCommands";
+import { FinanceStatementCommands } from "@/components/admin/FinanceStatementCommands";
 import {
   allocationError,
   batchDetails,
@@ -19,6 +20,7 @@ import {
   canReissueRefund,
   canSendRefund,
   cancellationKindLabel,
+  closeDetails,
   commandErrorMessage,
   formatDay,
   lateSettlementDetails,
@@ -44,7 +46,7 @@ import { formatCents, type ObligationReconciliation } from "@/lib/financeReconci
 import { paymentFunctionError } from "@/lib/payments";
 import { createClient } from "@/lib/supabase/client";
 
-// TRACE-076/077/078/079/080 finance operator commands. The signed-in session is the actor; the database refuses
+// TRACE-076/077/078/079/080/081 finance operator commands. The signed-in session is the actor; the database refuses
 // anyone without finance authority, binds second-person commands to their exact text, expires them
 // after 24 hours and picks the approver. Every command is confirmed by re-reading the server before
 // it is reported done.
@@ -76,6 +78,7 @@ const executeConsequence: Record<ReviewOperation, string> = {
   ach_withdrawal: "Withdraws this transfer from its statement, with you as author and the approver as reviewer. It can then never be sent, retried or given a bank outcome. The payout returns to the ready list, where a later weekly batch prepares its replacement statement at its current amount and bank authorization.",
   ach_late_settlement: "Records that the bank paid this withdrawn transfer and posts it as paid to the provider, with you as author and the approver as reviewer. If a replacement was also paid, the provider then owes the duplicate; if not, no replacement can be sent. It cannot be undone here.",
   payout_recovery: "Records this repayment or write-off against what the provider owes, with you as author and the approver as reviewer. It cannot be undone here.",
+  bank_statement_close: "Closes this bank statement with you as author and the approver as reviewer, and fixes how each of its lines is matched. It then takes no more lines and cannot change.",
 };
 
 export function FinanceCommands({
@@ -229,7 +232,9 @@ export function FinanceCommands({
     const withdrawal = withdrawalDetails(request);
     const late = lateSettlementDetails(request);
     const recovery = recoveryDetails(request);
+    const close = closeDetails(request);
     const money = moneyDetails(request);
+    if (close) return `Statement ${formatDay(close.period_start)} to ${formatDay(close.period_end)}`;
     if (request.operation === "event_exclusion") {
       return `${request.subject}${request.obligation_id ? ` · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : ""}`;
     }
@@ -250,7 +255,11 @@ export function FinanceCommands({
     const withdrawal = withdrawalDetails(request);
     const late = lateSettlementDetails(request);
     const recovery = recoveryDetails(request);
+    const close = closeDetails(request);
     const money = moneyDetails(request);
+    if (close) {
+      return `${close.lines} line${close.lines === 1 ? "" : "s"} · debits ${formatCents(close.debits)} · credits ${formatCents(close.credits)}${close.exceptions_now > 0 ? ` · ${close.exceptions_now} open exception${close.exceptions_now === 1 ? "" : "s"} now` : ""}`;
+    }
     if (batch) return `${formatCents(batch.total)} · bank batch ${batch.bank_ref}`;
     if (retry) return formatCents(retry.amount);
     if (withdrawal) {
@@ -274,7 +283,7 @@ export function FinanceCommands({
         <div>
           <h2 id="finance-commands" className="text-lg font-semibold">Finance commands</h2>
           <p className="text-sm text-muted-foreground">
-            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch, retrying a failed transfer, withdrawing a transfer from its statement, recording a late payment of a withdrawn transfer and recording a provider repayment or write-off need a second operator too. Placing and releasing a payout hold and recording a bank outcome need one operator.
+            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch, retrying a failed transfer, withdrawing a transfer from its statement, recording a late payment of a withdrawn transfer and recording a provider repayment or write-off need a second operator too, and so does closing a bank statement. Placing and releasing a payout hold, recording a bank outcome, and importing, matching or dismissing bank statement lines need one operator.
           </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => void refresh()}><RefreshCw />Refresh commands</Button>
@@ -284,7 +293,7 @@ export function FinanceCommands({
       <div className="space-y-3">
         <h3 className="font-medium">Second-person reviews ({ops.requests.filter((item) => item.state !== "executed").length} open)</h3>
         {ops.requests.length === 0 ? (
-          <PageState kind="empty" title="No review requests" description="Requests to prepare ACH batches, retry or withdraw transfers, record late payments and provider recoveries, authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
+          <PageState kind="empty" title="No review requests" description="Requests to prepare ACH batches, retry or withdraw transfers, record late payments and provider recoveries, close bank statements, authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -657,6 +666,12 @@ export function FinanceCommands({
         <FinanceRecoveryCommands ops={ops} busy={busy} submitRequest={submitRequest} commandKey={key} />
       ) : (
         <PageState kind="error" title="Provider recoveries unavailable" description="The server did not return what providers owe. Refresh before recording a repayment or write-off." />
+      )}
+
+      {ops.statements ? (
+        <FinanceStatementCommands ops={ops} busy={busy} run={run} accepted={accepted} submitRequest={submitRequest} commandKey={key} />
+      ) : (
+        <PageState kind="error" title="Bank statements unavailable" description="The server did not return bank statements. Refresh before importing or closing a statement." />
       )}
 
       <div className="space-y-3">
