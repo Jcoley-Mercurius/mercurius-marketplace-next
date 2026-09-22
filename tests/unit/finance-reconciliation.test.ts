@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accountLabel,
   bankStatusLabel,
   exceptionAmount,
   exceptionPresentation,
@@ -14,7 +15,7 @@ import {
   type ObligationReconciliation,
 } from "../../src/lib/financeReconciliation";
 
-// TRACE-075: the page only words server-derived states; these cases pin that wording.
+// TRACE-075/080: the page only words server-derived states; these cases pin that wording.
 const since = "2026-09-16T12:00:00.000Z";
 const row = (patch: Partial<ObligationReconciliation> = {}): ObligationReconciliation => ({
   obligation_id: "00000000-0000-4000-8000-000000000001",
@@ -26,7 +27,8 @@ const row = (patch: Partial<ObligationReconciliation> = {}): ObligationReconcili
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [] },
   refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
-  payout: { funds_state: "eligible", not_eligible: [], held: [], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null },
+  payout: { funds_state: "eligible", not_eligible: [], held: [], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null,
+    withdrawn_statements: 0, recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0 } },
   chargebacks: { suspense: 0, suspense_ledger: 0, lost: 0 },
   processor_costs: 0,
   readback: { state: "none" },
@@ -83,5 +85,19 @@ describe("finance reconciliation presentation", () => {
     expect(exceptionPresentation({ ...event, holds_all_payouts: false }).title).toBe("Stripe event not processed");
     expect(exceptionAmount(event)).toBeNull();
     expect(exceptionPresentation({ kind: "chargeback", obligation_id: "o", dispute_id: "dp", payment_id: "pi", amount: 1000, status: "lost", since }).title).toBe("Chargeback lost");
+  });
+
+  it("flags a paid payout whose provider owes Mercurius, and never suggests a debit or netting", () => {
+    const paid = row({ payout: { ...row().payout, funds_state: "paid", paid: 9500, payable: -1700, payable_ledger: -1700,
+      recovery: { owed: 1700, late_settled: 0, repaid: 0, written_off: 0 } } });
+    expect(needsAttention(paid)).toBe(true);
+    expect(needsAttention(row({ payout: { ...paid.payout, payable: 0, payable_ledger: 0, recovery: { owed: 0, late_settled: 0, repaid: 1000, written_off: 700 } } }))).toBe(false);
+    const owes: FinanceException = { kind: "provider_owes", obligation_id: "o", invoice_number: "M5-1", payee_name: "Synthetic payee", amount: 1700, since };
+    expect(exceptionPresentation(owes).title).toBe("Provider owes Mercurius");
+    expect(exceptionPresentation(owes).action).toContain("second reviewer");
+    expect(exceptionPresentation(owes).action).toContain("Never debit the provider's bank or hold back other earnings");
+    expect(exceptionAmount(owes)).toBe(1700);
+    expect(issueLabel.recovery_ledger).toBe("Recovery loss differs from recorded write-offs");
+    expect(accountLabel.provider_recovery_loss).toBe("Provider recovery loss");
   });
 });

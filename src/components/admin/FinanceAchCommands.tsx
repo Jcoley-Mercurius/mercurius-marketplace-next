@@ -31,6 +31,8 @@ import { createClient } from "@/lib/supabase/client";
 // outcome needs one. Recording a submission re-checks the payout, so it comes before sending.
 // TRACE-079: a second operator also approves withdrawing a transfer the bank does not hold, so a
 // later weekly batch can prepare its replacement statement.
+// TRACE-080: a withdrawn transfer the bank paid after all shows its late payment here; it is
+// recorded under Amounts providers owe.
 
 const selectClass =
   "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
@@ -337,6 +339,9 @@ export function FinanceAchCommands({
                   label: "Next step",
                   render: (payout) => {
                     if (payout.status === "withdrawn") {
+                      if (payout.late_settlement) {
+                        return `The bank paid it after the withdrawal (reference ends ${payout.late_settlement.bank_reference_hint ?? "—"}); recorded as paid`;
+                      }
                       return payout.replaced_in
                         ? `Replaced in the week of ${formatDay(payout.replaced_in)}`
                         : "Off this statement; a later weekly batch prepares its replacement";

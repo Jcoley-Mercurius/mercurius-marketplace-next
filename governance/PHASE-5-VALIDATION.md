@@ -1347,3 +1347,110 @@ have labels distinct from the bank outcome form's.
 
 Not performed: CI, Edge checks (no Edge change), owner bank workflow or statement acceptance,
 hosted verification, human screen-reader review.
+
+## TRACE-080 — Already-paid payout recovery — 2026-09-21
+
+Branch `codex/phase5-already-paid-recovery`, base `main` `68f0da3` (PR #35 merged); isolated
+synthetic stack only. Design R1–R8, the owner's four decisions and the review questions are in
+PHASE-5-PAYOUT-RECOVERY.md.
+
+Baseline before change: 1856 pgTAP assertions across 37 suites passed on `68f0da3` after a clean
+reset. With the migration applied and no test changes, all 37 suites passed unchanged. That run
+used the evidence-based proceeds guard; a first, ledger-based draft failed suites 024 and 027 (see
+the slice findings).
+
+Database: 2006 pgTAP assertions across 38 suites pass after a clean reset, and again as CI's clean
+replay after all committed concurrency fixtures. Suite 047 is new (150 assertions). It covers:
+
+- grants: both requests callable by signed-in users only; kernels service-only; helpers and both
+  new tables closed; no service-role update on either table;
+- unchanged blocks: a refund and a lost chargeback still wait while a transfer is prepared,
+  submitted or failed, at the blocker, the refund trigger and the chargeback kernel (with its new
+  message);
+- a refund after the payout settled: allowed; 1700 owed (2000 less the 300 fee reduction);
+  reconciliation `paid`, payable −1700, no stale statement and no issue; a `provider_owes`
+  exception; the queue's paid, refunded and payee;
+- no hold: the same provider's other payout stays ready while they owe;
+- recovery access and validation: homeowner and plain admin refused; netting, zero, missing reason
+  or evidence, unknown payout, more than owed and nothing owed refused; the generic request refuses
+  recoveries;
+- a part repayment: the stored command bound to the amount owed and key; trimmed replay; a
+  conflicting key; what the approver sees; no self-approval or unapproved run; the row, the bank
+  and payable journal, immutability, the reconciled ledger;
+- staleness: a repayment run first makes an approved write-off `owed_changed`; a write-off then
+  closes the rest to the recovery-loss account;
+- the recovery kernel: a reused approval replays; a changed amount owed, an unapproved command and
+  a recovery when nothing is owed are refused;
+- a lost chargeback after payout: allocated; 850 owed; written off;
+- a duplicate payment: a withdrawn transfer paid late after its replacement settled. Refusals
+  cover a live transfer, a reference used elsewhere, a blank reference and an unknown transfer.
+  Checked: the stored command, the approver seeing the settled replacement and only a reference
+  hint, the row and journal, and the attempt still `withdrawn`. The provider owes 9500, both
+  payments count as paid, it reconciles, a second late payment is refused, it is repaid, and the
+  kernel replays and refuses a transfer that was not withdrawn;
+- a late payment with no replacement: the payout leaves the ready list; an earlier batch request
+  goes stale and a new one is refused (`already_paid`); reconciliation reads `paid` with nothing
+  owed; the preparation kernel is refused by the guard;
+- a late payment while a replacement waits: a mismatched reference refused; the replacement then
+  reads `already_paid`, its submission is refused by the gateway and by the kernel, and it can be
+  withdrawn;
+- a late payment after a replacement failed: its retry is refused by the gateway and the kernel;
+- totals agree between reconciliation and the queue; no full bank reference or customer identity
+  is returned.
+
+Mutation check (local harness, not committed): each mutant redefined one function from the
+migration inside suite 047's transaction, which rolled it back. A mutant counts as killed when the
+suite reports `not ok` or an error; the unmutated suite reports 150 `ok`, no `not ok` and no error.
+All 23 mutants were killed. They covered:
+
+- the proceeds guard, the received total and the readback mirror;
+- the unpaid-statement predicate (both ways), the refund trigger and the chargeback blocker;
+- each recovery blocker check;
+- the recovery kernel's owed binding, amount bound, journal account and replay key;
+- the late-payment blocker's withdrawn, reference-conflict and reference-reuse checks, and the
+  kernel's withdrawn check;
+- reconciliation's late-payment total, settled-statement staleness, late-payment funds state and
+  write-off term;
+- the amount owed.
+
+The chargeback-blocker mutant first survived. Suite 047 then gained a scheduled-chargeback case,
+which kills it.
+
+Concurrency: new `scripts/phase5-payout-recovery-concurrency.mjs`, wired into CI after the
+TRACE-079 script. Its weeks start at +210 days. Each call is a separate signed-in session:
+
+- three runs each of two approved recoveries of the whole 1700 owed, one a repayment and one a
+  write-off: one recovery, one execution, one journal, nothing owed;
+- a late payment holding the lock while an operator records its replacement's submission: the
+  late payment is recorded, and the submission is refused with `already_paid` and stays prepared;
+- a late payment holding the lock while an approved replacement batch runs: the batch is refused
+  with `already_paid`, and no second item or batch exists;
+- no payout is on two live statements, and all three race payouts reconcile with no issue.
+
+All 16 scripts passed in CI order on a clean reset. The new script also passed alone on an earlier
+clean reset, and the 15 existing scripts passed in CI order with the migration applied.
+
+Application: `scan:secrets`, `lint` and `typecheck` pass. 142 unit tests pass (4 new cases). They
+cover recovery amount bounds, late-payment and recovery details typed to their operation,
+recovery and `already_paid` refusal wording, and the owed attention rule and exception wording.
+The unit reconciliation fixture gained the new payout fields. The build passes with CI's synthetic
+public variables (65 pages). Regenerated database types are additions only. `audit:prod` has 0
+findings.
+
+Browser: 209 of 209 non-visual cases pass (`test:a11y`) on the final build:
+
+- the themed layout cases at 320px light and 1440px dark now include the owed list and its total,
+  under axe and the no-horizontal-scroll check;
+- new: a repayment is refused above the amount owed and sends obligation, kind, cents, reason,
+  evidence and key with no actor field; a late payment request sends transfer, reference, reason
+  and evidence; an approver sees that a late payment duplicates a settled replacement, and the
+  withdrawn batch row shows it; refund and chargeback forms warn on a paid payout; the
+  reconciliation page shows the owed total, exception and invoice line.
+
+The first full run found an existing case failing: its `Bank reference (required)` and
+`Transfer (required)` label lookups also matched the new form's labels. The new labels were
+renamed ("Withdrawn transfer paid late", "Reference the bank paid it under"). Recovery-section
+screenshots at 1440px dark and 320px light were reviewed.
+
+Not performed: CI, Edge checks (no Edge change), owner bank workflow or statement acceptance,
+hosted verification, human screen-reader review.

@@ -206,7 +206,8 @@ See the TRACE-079 section of PHASE-5-VALIDATION.md.
 
 - Codex design and code review (W1–W7, especially W4's closed reassignment and W5's late-outcome
   question); CI.
-- Already-paid recovery; bank statement reconciliation.
+- Already-paid recovery (TRACE-080, PHASE-5-PAYOUT-RECOVERY.md; W5: a separate reviewed late payment); bank
+  statement reconciliation.
 - Failed-refund recovery (TRACE-077); `paymentFunctionError` (TRACE-076).
 - Provisioning two finance operators.
 - Authorized owner bank workflow acceptance (CFG-008), now including a withdrawal and a

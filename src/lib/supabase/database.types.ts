@@ -1396,6 +1396,70 @@ export type Database = {
           },
         ]
       }
+      money_ach_late_settlements: {
+        Row: {
+          amount: number
+          approved_by: string
+          attempt_id: string
+          bank_reference: string
+          created_at: string
+          evidence: string
+          id: string
+          item_id: string
+          obligation_id: string
+          reason: string
+          requested_by: string
+        }
+        Insert: {
+          amount: number
+          approved_by: string
+          attempt_id: string
+          bank_reference: string
+          created_at?: string
+          evidence: string
+          id?: string
+          item_id: string
+          obligation_id: string
+          reason: string
+          requested_by: string
+        }
+        Update: {
+          amount?: number
+          approved_by?: string
+          attempt_id?: string
+          bank_reference?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          item_id?: string
+          obligation_id?: string
+          reason?: string
+          requested_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_ach_late_settlements_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: true
+            referencedRelation: "money_ach_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_late_settlements_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "money_ach_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_ach_late_settlements_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_ach_withdrawals: {
         Row: {
           approved_by: string
@@ -2078,6 +2142,66 @@ export type Database = {
             columns: ["operation_id"]
             isOneToOne: false
             referencedRelation: "job_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_payout_recoveries: {
+        Row: {
+          amount: number
+          approved_by: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          evidence: string
+          id: string
+          kind: string
+          obligation_id: string
+          owed_before: number
+          reason: string
+          requested_by: string
+        }
+        Insert: {
+          amount: number
+          approved_by: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          evidence: string
+          id?: string
+          kind: string
+          obligation_id: string
+          owed_before: number
+          reason: string
+          requested_by: string
+        }
+        Update: {
+          amount?: number
+          approved_by?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          kind?: string
+          obligation_id?: string
+          owed_before?: number
+          reason?: string
+          requested_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_payout_recoveries_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_payout_recoveries_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
             referencedColumns: ["id"]
           },
         ]
@@ -5626,6 +5750,16 @@ export type Database = {
         }
         Returns: Json
       }
+      money_operator_request_ach_late_settlement: {
+        Args: {
+          p_attempt: string
+          p_bank_ref: string
+          p_evidence: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       money_operator_request_ach_retry: {
         Args: { p_attempt: string; p_key: string; p_reason: string }
         Returns: Json
@@ -5656,6 +5790,17 @@ export type Database = {
           p_service: number
           p_tax: number
           p_tip: number
+        }
+        Returns: Json
+      }
+      money_operator_request_payout_recovery: {
+        Args: {
+          p_amount: number
+          p_evidence: string
+          p_key: string
+          p_kind: string
+          p_obligation: string
+          p_reason: string
         }
         Returns: Json
       }
@@ -5819,6 +5964,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      money_record_ach_late_settlement: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_attempt: string
+          p_bank_ref: string
+          p_evidence: string
+          p_reason: string
+        }
+        Returns: string
+      }
       money_record_completion: {
         Args: {
           p_confirmed: string
@@ -5827,6 +5983,20 @@ export type Database = {
           p_source: string
         }
         Returns: undefined
+      }
+      money_record_payout_recovery: {
+        Args: {
+          p_actor: string
+          p_amount: number
+          p_approver: string
+          p_evidence: string
+          p_key: string
+          p_kind: string
+          p_obligation: string
+          p_owed: number
+          p_reason: string
+        }
+        Returns: string
       }
       money_record_processor_cost: {
         Args: {

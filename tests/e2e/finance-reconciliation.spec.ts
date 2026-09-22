@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-075 synthetic browser evidence. The reconciliation is a mocked readback; no real
+// TRACE-075/080 synthetic browser evidence. The reconciliation is a mocked readback; no real
 // charge, refund, provider, bank transfer or Stripe object is represented.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const evaluated = "2026-09-16T15:00:00.000Z";
@@ -16,7 +16,8 @@ const base = {
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [{ payment_id: "pi_synthetic", mode: "full", amount: 11700 }] },
   refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
-  payout: { funds_state: "eligible", not_eligible: [], held: [], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null },
+  payout: { funds_state: "eligible", not_eligible: [], held: [], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null,
+    withdrawn_statements: 0, recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0 } },
   chargebacks: { suspense: 0, suspense_ledger: 0, lost: 0 },
   processor_costs: 0,
   readback: { state: "matched", observed: 11700, expected: 11700, recorded_at: "2026-09-12T15:00:00.000Z" },
@@ -49,7 +50,7 @@ const reconciliation = {
     { account: "stripe_clearing", debit: 46800, credit: 0 },
     { account: "tax_liability", debit: 0, credit: 2700 },
   ],
-  totals: { captured: 46800, refunded: 0, platform_fee: 6100, tax: 2700, provider_payable: 28400, paid_out: 9500, processor_costs: 0, chargeback_suspense: 0, with_issues: 1 },
+  totals: { captured: 46800, refunded: 0, platform_fee: 6100, tax: 2700, provider_payable: 28400, paid_out: 9500, processor_costs: 0, chargeback_suspense: 0, provider_owed: 0, with_issues: 1 },
   exceptions: [
     { kind: "ledger_mismatch", obligation_id: mismatched.obligation_id, invoice_number: mismatched.invoice_number, codes: mismatched.issues, since: "2026-09-10T15:00:00.000Z" },
     { kind: "refund_pending", obligation_id: mismatched.obligation_id, authorization_id: "00000000-0000-4000-8000-000000000781", payment_id: "pi_synthetic", amount: 2140, attempt_status: "reconcile", since: "2026-09-11T15:00:00.000Z" },
@@ -137,7 +138,7 @@ test("an unsupported Stripe event warns that every payout is held", async ({ pag
 
 test("an empty ledger explains that nothing needs action", async ({ page }) => {
   await readback(page, { obligation_count: 0, accounts: [], exceptions: [], obligations: [],
-    totals: { captured: 0, refunded: 0, platform_fee: 0, tax: 0, provider_payable: 0, paid_out: 0, processor_costs: 0, chargeback_suspense: 0, with_issues: 0 } });
+    totals: { captured: 0, refunded: 0, platform_fee: 0, tax: 0, provider_payable: 0, paid_out: 0, processor_costs: 0, chargeback_suspense: 0, provider_owed: 0, with_issues: 0 } });
   await openPage(page);
   await expect(page.getByRole("heading", { name: "No open exceptions" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "No invoices yet" })).toBeVisible();
@@ -170,4 +171,28 @@ test("a truncated list says totals still cover every invoice", async ({ page }) 
   await readback(page, { obligation_count: 250 });
   await openPage(page, "light", 1440);
   await expect(page.getByText("Showing 4 of 250 invoices", { exact: false })).toBeVisible();
+});
+
+test("a provider who owes Mercurius after a refund on a paid payout needs attention and names the recovery path", async ({ page }) => {
+  const owing = {
+    ...paid, obligation_id: "00000000-0000-4000-8000-000000000775", invoice_number: "M5-0000000775",
+    refunds: { ...base.refunds, service: 2000, settled: 1 },
+    payout: { ...paid.payout, payable: -1700, payable_ledger: -1700, recovery: { owed: 1700, late_settled: 0, repaid: 0, written_off: 0 } },
+  };
+  await readback(page, {
+    obligations: [owing, eligible],
+    totals: { ...reconciliation.totals, provider_owed: 1700 },
+    exceptions: [{ kind: "provider_owes", obligation_id: owing.obligation_id, invoice_number: owing.invoice_number, payee_name: payee.name, amount: 1700, since: evaluated }],
+  });
+  await openPage(page, "light", 1440);
+  const totals = page.getByRole("region", { name: "Ledger totals" });
+  await expect(totals.getByText("Owed by providers")).toBeVisible();
+  await expect(totals.getByText("$17.00")).toBeVisible();
+  const exceptions = page.getByRole("table", { name: "Finance exceptions" });
+  await expect(exceptions.getByText("Provider owes Mercurius", { exact: true })).toBeVisible();
+  await expect(exceptions.getByText("Never debit the provider's bank or hold back other earnings.", { exact: false })).toBeVisible();
+  const invoices = page.getByRole("table", { name: "Invoice reconciliation" });
+  await expect(page.getByRole("button", { name: "Needs attention (1)" })).toHaveAttribute("aria-pressed", "true");
+  await expect(invoices.getByText("Provider owes $17.00")).toBeVisible();
+  expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
 });
