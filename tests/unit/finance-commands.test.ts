@@ -9,6 +9,8 @@ import {
   canRequestRetry,
   canRequestWithdrawal,
   canReissueRefund,
+  canRequestRefundRelease,
+  canResendRefund,
   canSendRefund,
   canDismissLine,
   closeDetails,
@@ -22,6 +24,7 @@ import {
   recoveryDetails,
   recoveryError,
   refundErrorMessage,
+  releaseDetails,
   retryDetails,
   reviewAction,
   weekEnd,
@@ -33,7 +36,7 @@ import {
   type ReviewRequest,
 } from "../../src/lib/financeCommands";
 
-// TRACE-076/077/078/079/080/081: wording and gating only. The database decides authority, approvers and actionability.
+// TRACE-076/077/078/079/080/081/082: wording and gating only. The database decides authority, approvers and actionability.
 const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   request_id: "00000000-0000-4000-8000-000000000761",
   operation: "hold_resolution",
@@ -65,6 +68,9 @@ const refund = (overrides: Partial<PendingRefund> = {}): PendingRefund => ({
   can_send: true,
   generation: 1,
   reissue_blocker: null,
+  resend_blocker: null,
+  release_blocker: null,
+  open_release_request_id: null,
   last_readback: null,
   created_at: "2026-09-16T15:00:00.000Z",
   ...overrides,
@@ -121,6 +127,39 @@ describe("refund actions", () => {
     expect(canReissueRefund(refund({ attempt_status: "reconcile", reissue_blocker: "readback_too_early" }))).toBe(false);
     expect(canReissueRefund(refund({ attempt_status: "reconcile", can_send: false }))).toBe(false);
     expect(canReissueRefund(refund({ attempt_status: "prepared" }))).toBe(false);
+  });
+});
+
+describe("failed refund recovery", () => {
+  it("resends only a failed refund the server allows, for its author or approver", () => {
+    expect(canResendRefund(refund({ attempt_status: "failed" }))).toBe(true);
+    expect(canResendRefund(refund({ attempt_status: "failed", resend_blocker: "readback_required" }))).toBe(false);
+    expect(canResendRefund(refund({ attempt_status: "failed", can_send: false }))).toBe(false);
+    expect(canResendRefund(refund({ attempt_status: "reconcile" }))).toBe(false);
+  });
+
+  it("lets any finance operator request a release of a failed refund once, when the server allows it", () => {
+    expect(canRequestRefundRelease(refund({ attempt_status: "failed", can_send: false }))).toBe(true);
+    expect(canRequestRefundRelease(refund({ attempt_status: "failed", release_blocker: "readback_required" }))).toBe(false);
+    expect(canRequestRefundRelease(refund({ attempt_status: "failed", open_release_request_id: "00000000-0000-4000-8000-000000000765" }))).toBe(false);
+    expect(canRequestRefundRelease(refund({ attempt_status: "pending" }))).toBe(false);
+  });
+
+  it("reads a release request's refund details", () => {
+    const details = { authorization_id: "a", payment_id: "pi_1", service: 2000, tax: 0, tip: 0, amount: 2000, provider_reference: "re_1", provider_status: "failed", refund_created_at: "2026-09-22T12:00:00.000Z" };
+    expect(releaseDetails(request({ operation: "refund_release", details }))).toEqual(details);
+    expect(releaseDetails(request({ operation: "refund_authorization", details }))).toBeNull();
+  });
+
+  it("words resend and release refusals", () => {
+    expect(commandErrorMessage("Refund resend not allowed: readback_required")).toContain("failed or canceled");
+    expect(commandErrorMessage("Refund resend not allowed: refund_released")).toBe("It was released.");
+    expect(commandErrorMessage("Only the refund's author or approver can resend it")).toBe("Only the refund's author or approver can resend it.");
+    expect(commandErrorMessage("Finance review not actionable: refund_changed")).toContain("Stripe failed a different refund");
+    expect(commandErrorMessage("This Stripe refund failed on an earlier send of this refund; read back the current send")).toContain("earlier send");
+    expect(commandErrorMessage("A released refund cannot be sent again")).toContain("new refund");
+    expect(reviewAction(request({ operation: "refund_release", requested_by_me: true, state: "stale", blocker: "refund_not_failed" })).note)
+      .toContain("Read it back from Stripe");
   });
 });
 

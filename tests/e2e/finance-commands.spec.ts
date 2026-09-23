@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-076/077/078/079/080 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
+// TRACE-076/077/078/079/080/082 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
 // Stripe object, bank transfer or operator identity is represented.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const now = "2026-09-16T15:00:00.000Z";
@@ -14,7 +14,7 @@ const row = {
   payee: { contractor_id: "00000000-0000-4000-8000-000000000851", name: "Synthetic Payee Services", reassigned: false },
   terms: { subtotal: 10000, tax: 700, tip: 1000, deposit: 3000, total: 11700 },
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [{ payment_id: "pi_synthetic", mode: "full", amount: 11700 }] },
-  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 1 },
+  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 1, released: 0 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
   payout: { funds_state: "held", not_eligible: [], held: ["payout_hold"], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null, withdrawn_statements: 0,
     recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0 } },
@@ -101,7 +101,9 @@ const operations = {
     observed: 11600, expected: 11700, currency: "usd", evidence: "Stripe pi_synthetic", attributed: true, recorded_by_me: true, recorded_at: now, resolution_blocker: "readback_mismatch" }],
   events: [{ event_id: "evt_synthetic_unsupported", event_type: "reconciliation_required", status: "failed", attempts: 1, holds_all_payouts: true, exclusion_blocker: null, received_at: now }],
   refunds: [{ authorization_id: "00000000-0000-4000-8000-000000000892", obligation_id: obligation, invoice_number: invoice, payment_id: "pi_synthetic", amount: 2140,
-    attempt_status: "not_started", provider_reference: null, can_send: true, generation: 1, reissue_blocker: null, last_readback: null, created_at: now }],
+    attempt_status: "not_started", provider_reference: null, can_send: true, generation: 1, reissue_blocker: null,
+    resend_blocker: null, release_blocker: null, open_release_request_id: null, last_readback: null, created_at: now }],
+  refund_releases: [],
   cancellations: [{ operation_id: "00000000-0000-4000-8000-000000000893", kind: "customer_cancel", payment_id: "pi_synthetic_cancel", obligation_id: obligation, invoice_number: invoice,
     refund_percent: 50, service: 5000, tax: 350, tip: 500, blocker: null, open_request_id: null, cancelled_at: now }],
   chargebacks: [{ dispute_id: "dp_synthetic", obligation_id: obligation, payment_id: "pi_synthetic", amount: 1000, invoice_number: invoice,
@@ -400,8 +402,99 @@ test("an uncertain refund is reissued with a reason once the server allows it", 
   expect(payload).toEqual({ p_authorization: uncertain.authorization_id, p_reason: "Stripe shows no refund for pi_synthetic" });
   noActor(payload);
   await expect(confirm).toBeHidden();
-  await expect(page.getByRole("table", { name: "Unsettled refunds" }).getByText("reissued (send 2)", { exact: false })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Unsettled refunds" }).getByText("sent again (send 2)", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Send refund to Stripe" })).toBeVisible();
+});
+
+// TRACE-082: a refund Stripe reported failed, with the readback that shows it.
+const failedRefund = {
+  ...operations.refunds[0], attempt_status: "failed", provider_reference: "re_synthetic_failed",
+  last_readback: { found: true, provider_status: "failed", by_me: false, created_at: now },
+};
+
+test("a failed refund is resent with a reason once Stripe's readback shows it failed", async ({ page }) => {
+  let generation = 1;
+  await page.route("**/rpc/money_operator_resend_refund", route => { generation = 2; return route.fulfill({ json: { authorization_id: failedRefund.authorization_id, generation: 2, replay: false } }); });
+  await openPage(page, () => ({ ...operations, refunds: [generation === 1 ? failedRefund : { ...failedRefund, attempt_status: "prepared", provider_reference: null, generation: 2 }] }));
+  const refunds = page.getByRole("table", { name: "Unsettled refunds" });
+  await expect(refunds.getByText("Last Stripe readback", { exact: false })).toContainText("Stripe status failed");
+  await expect(refunds.getByRole("button", { name: "Send refund to Stripe" })).toHaveCount(0);
+  await refunds.getByRole("button", { name: "Resend refund" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Resend this refund?" });
+  await expect(confirm.getByText("It never changes the amount.", { exact: false })).toBeVisible();
+  await expect(confirm.getByRole("button", { name: "Resend", exact: true })).toBeDisabled();
+  await confirm.getByRole("textbox").fill("Customer updated their card");
+  const sent = page.waitForRequest("**/rpc/money_operator_resend_refund");
+  await confirm.getByRole("button", { name: "Resend", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toEqual({ p_authorization: failedRefund.authorization_id, p_reason: "Customer updated their card" });
+  noActor(payload);
+  await expect(confirm).toBeHidden();
+  await expect(refunds.getByText("sent again (send 2)", { exact: false })).toBeVisible();
+  await expect(refunds.getByRole("button", { name: "Send refund to Stripe" })).toBeVisible();
+});
+
+test("a failed refund without a failure readback offers no resend or release, and says why", async ({ page }) => {
+  await openPage(page, () => ({ ...operations, refunds: [{ ...failedRefund, last_readback: null, resend_blocker: "readback_required", release_blocker: "readback_required" }] }));
+  const refunds = page.getByRole("table", { name: "Unsettled refunds" });
+  await expect(refunds.getByText("Resending or releasing needs a readback showing this send failed or canceled.", { exact: false })).toBeVisible();
+  await expect(refunds.getByRole("button", { name: "Resend refund" })).toHaveCount(0);
+  await expect(refunds.getByRole("button", { name: "Request release" })).toHaveCount(0);
+  await expect(refunds.getByRole("button", { name: "Read back from Stripe" })).toBeVisible();
+});
+
+test("any finance operator requests the release of a failed refund with evidence and a reason", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_refund_release", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000894", replay: false } }));
+  let requested = false;
+  const mine = { ...failedRefund, can_send: false };
+  await openPage(page, () => ({
+    ...operations,
+    refunds: [requested ? { ...mine, open_release_request_id: "00000000-0000-4000-8000-000000000894" } : mine],
+    requests: requested
+      ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000894", operation: "refund_release", subject: mine.authorization_id,
+        requested_by_me: true, reason: "Card closed; refund by check agreed", evidence: "Stripe: expired_or_canceled_card",
+        details: { authorization_id: mine.authorization_id, payment_id: "pi_synthetic", service: 2000, tax: 140, tip: 0, amount: 2140,
+          provider_reference: "re_synthetic_failed", provider_status: "failed", refund_created_at: now } }]
+      : operations.requests,
+  }));
+  const refunds = page.getByRole("table", { name: "Unsettled refunds" });
+  await expect(refunds.getByRole("button", { name: "Resend refund" })).toHaveCount(0);
+  const trigger = refunds.getByRole("button", { name: "Request release" });
+  await expect(trigger).toBeDisabled();
+  await refunds.getByLabel("Release evidence (required)").fill("Stripe: expired_or_canceled_card");
+  expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Release this failed refund?" });
+  await expect(confirm.getByText("It can never be sent again.", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Card closed; refund by check agreed");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_refund_release");
+  requested = true;
+  await confirm.getByRole("button", { name: "Request release", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_authorization: mine.authorization_id, p_reason: "Card closed; refund by check agreed", p_evidence: "Stripe: expired_or_canceled_card" });
+  expect(payload.p_key).toMatch(/^finance:.+:refund-release:/);
+  noActor(payload);
+  await expect(page.getByText("Review requested", { exact: true })).toBeVisible();
+  await expect(refunds.getByText("Release requested; see reviews.")).toBeVisible();
+  await expect(refunds.getByRole("button", { name: "Request release" })).toHaveCount(0);
+});
+
+test("an approver sees the failed Stripe refund before approving a release, and released refunds are listed", async ({ page }) => {
+  const release = {
+    ...theirRequest, request_id: "00000000-0000-4000-8000-000000000895", operation: "refund_release", subject: failedRefund.authorization_id,
+    reason: "Card closed; refund by check agreed", evidence: "Stripe: expired_or_canceled_card",
+    details: { authorization_id: failedRefund.authorization_id, payment_id: "pi_synthetic", service: 2000, tax: 140, tip: 0, amount: 2140,
+      provider_reference: "re_synthetic_failed", provider_status: "canceled", refund_created_at: now },
+  };
+  const released = { authorization_id: "00000000-0000-4000-8000-000000000896", obligation_id: obligation, invoice_number: invoice, payment_id: "pi_synthetic",
+    amount: 500, provider_reference: "re_synthetic_old", reason: "Duplicate refund request", evidence: "Stripe: canceled", by_me: true, created_at: now };
+  await openPage(page, () => ({ ...operations, requests: [release], refund_releases: [released] }));
+  const reviews = page.getByRole("table", { name: "Second-person reviews" });
+  await expect(reviews.getByText("Release failed refund")).toBeVisible();
+  await expect(reviews.getByText("$21.40 (service $20.00 · tax $1.40 · tip $0.00) · Stripe refund re_synthetic_failed canceled")).toBeVisible();
+  await expect(reviews.getByRole("button", { name: "Approve", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "Failed refunds released in the last 30 days (1)" })).toBeVisible();
+  await expect(page.getByText("Stripe refund re_synthetic_old · Duplicate refund request", { exact: false })).toBeVisible();
 });
 
 test("a weekly batch sends the week, chosen payouts, bank reference and reason, and no actor field", async ({ page }) => {

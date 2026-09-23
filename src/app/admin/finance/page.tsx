@@ -201,6 +201,7 @@ export default function FinanceReconciliationPage() {
           <dd>
             {formatCents(row.refunds.service + row.refunds.tax + row.refunds.tip)}
             {row.refunds.pending > 0 ? ` (${row.refunds.pending} pending)` : ""}
+            {row.refunds.released > 0 ? ` · ${row.refunds.released} failed and released` : ""}
           </dd>
         </dl>
       ),

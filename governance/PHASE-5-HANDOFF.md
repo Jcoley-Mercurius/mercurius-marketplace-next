@@ -165,6 +165,17 @@ or any recorded movement in the period has no line, and it fixes the statement's
 reconciliation queue gains the unresolved lines and the movements missing from a statement. See
 PHASE-5-BANK-STATEMENTS.md.
 
+TRACE-082 recovers a reviewed refund Stripe reports failed or canceled (owner decisions 2026-09-22).
+Once the latest Stripe readback of the current send shows the failure, the refund's author or
+approver can resend it under a new Stripe key, or a finance operator can request its release, which
+a second operator approves. A released authorization is off the books: it stops holding the payout
+and blocking chargeback allocation, and its amount can be refunded again only through a new reviewed
+refund. Nothing is posted, and guards stop an earlier send's failed refund from being recorded as the
+current one and a released refund from ever being sent or settled. The slice also fixes
+`paymentFunctionError`, so Edge Function callers show the function's own code and message. A refund
+that fails after Stripe reported it succeeded is recorded as a finding. See
+PHASE-5-FAILED-REFUND-RECOVERY.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts

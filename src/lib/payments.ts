@@ -28,15 +28,17 @@ export async function paymentFunctionError(error: unknown): Promise<PaymentFunct
   const context = (error as FunctionErrorLike | null)?.context;
 
   try {
+    // A FunctionsHttpError's context is the fetch Response. Its body is a stream, not the payload,
+    // so read a clone as JSON before looking at body.
+    const readable = context?.clone?.() ?? context;
+    if (typeof readable?.json === "function") {
+      return normalize(await readable.json(), fallback);
+    }
     if (typeof context?.body === "string") {
       return normalize(JSON.parse(context.body), fallback);
     }
     if (context?.body && typeof context.body === "object") {
       return normalize(context.body, fallback);
-    }
-    const readable = context?.clone?.() ?? context;
-    if (typeof readable?.json === "function") {
-      return normalize(await readable.json(), fallback);
     }
   } catch {
     // Fall back to the client error below when the response has no JSON body.

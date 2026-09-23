@@ -29,14 +29,16 @@ Deno.serve(async request => {
       const target = await admin.rpc("money_refund_readback_target", { p_authorization: body.authorization_id, p_actor: actor });
       if (target.error?.code === "42501") return json({ error: "FINANCE_AUTHORITY_REQUIRED" }, 403);
       if (target.error || !target.data) return json({ error: "REFUND_REVIEW_REQUIRED" }, 409);
-      const current = target.data as { payment_id: string; attempt_status: string; provider_reference: string | null };
+      const current = target.data as { payment_id: string; attempt_status: string; provider_reference: string | null; failed_references?: string[] };
+      // TRACE-082: a refund that an earlier send created and Stripe failed is not the current send's refund.
+      const earlier = new Set(current.failed_references ?? []);
       if (current.attempt_status === "not_started") return json({ error: "REFUND_NOT_SENT", message: "This refund has not been sent to Stripe, so there is nothing to read back." }, 409);
       let refund: Stripe.Refund | undefined;
       if (current.provider_reference) {
         refund = await stripe.refunds.retrieve(current.provider_reference);
       } else {
         const listed = await stripe.refunds.list({ payment_intent: current.payment_id, limit: 100 });
-        refund = listed.data.find(item => item.metadata?.money_authorization_id === body.authorization_id);
+        refund = listed.data.find(item => item.metadata?.money_authorization_id === body.authorization_id && !earlier.has(item.id));
         if (!refund && listed.has_more) return json({ error: "REFUND_READBACK_INCOMPLETE", message: "Stripe has more refunds on this payment than one readback covers. Nothing was recorded; find the refund in Stripe." }, 409);
       }
       const intent = typeof refund?.payment_intent === "string" ? refund.payment_intent : refund?.payment_intent?.id;
@@ -52,6 +54,7 @@ Deno.serve(async request => {
     if (prepared.error || !prepared.data) return json({ error: "REFUND_REVIEW_REQUIRED" }, 409);
     const attempt = prepared.data;
     if (attempt.status === "succeeded") return json({ status: "succeeded", already_refunded: true });
+    if (attempt.status === "failed") return json({ status: "failed", message: "Stripe reported this refund failed. Read it back from Stripe, then resend or release it." });
     if (attempt.status !== "prepared") return json({ status: attempt.status, message: "Awaiting refund reconciliation; do not submit another refund." });
     const refund = await stripe.refunds.create({ payment_intent: attempt.payment_id, amount: Number(attempt.amount), metadata: { money_authorization_id: body.authorization_id } }, { idempotencyKey: attempt.idempotency_key });
     const recorded = await admin.rpc("money_record_refund_result", { p_authorization: body.authorization_id, p_reference: refund.id, p_status: refund.status ?? "pending", p_amount: refund.amount });

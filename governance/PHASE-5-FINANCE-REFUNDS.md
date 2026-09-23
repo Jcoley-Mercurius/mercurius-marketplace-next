@@ -162,9 +162,10 @@ operators; `paymentFunctionError` fix; hosted deployment.
 
 - A refund Stripe reports `failed` or `canceled` leaves its attempt `failed`; it cannot be sent
   again and its authorization still holds the payout. R5 covers only `reconcile`.
+  *TRACE-082 (PHASE-5-FAILED-REFUND-RECOVERY.md) adds a reviewed resend and release.*
 - `money_approve_review` remains directly callable by finance operators; such approvals no
   longer count for any gateway request (R2).
-- `paymentFunctionError` still loses Edge error codes (TRACE-076 finding).
+- `paymentFunctionError` still loses Edge error codes (TRACE-076 finding). *Fixed in TRACE-082.*
 
 ## Evidence
 

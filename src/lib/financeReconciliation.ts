@@ -52,7 +52,8 @@ export type ObligationReconciliation = {
     fully_captured: boolean;
     payments: { payment_id: string; mode: "full" | "deposit" | "balance"; amount: number }[];
   };
-  refunds: { service: number; tax: number; tip: number; settled: number; pending: number };
+  /** Released: refunds Stripe failed that were taken off the books (TRACE-082); never counted as refunded. */
+  refunds: { service: number; tax: number; tip: number; settled: number; pending: number; released: number };
   earnings: { platform_fee: number; platform_fee_ledger: number; tax: number; tax_ledger: number; provider_proceeds: number };
   payout: {
     funds_state: FundsState;

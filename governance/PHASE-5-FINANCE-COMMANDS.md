@@ -146,7 +146,7 @@ operators; hosted deployment.
   On a real Edge `Response` the body is a `ReadableStream`, so the structured `error` code and
   message are lost and every caller (checkout review, homeowner dashboard, invoices) shows its
   fallback text. The finance panel reads the response itself; the shared helper is unchanged
-  and needs its own fix.
+  and needs its own fix. *TRACE-082 fixes the helper and removes the panel's workaround.*
 - `money_approve_review` remains directly callable by finance operators; the gateway does not
   depend on it being closed.
 

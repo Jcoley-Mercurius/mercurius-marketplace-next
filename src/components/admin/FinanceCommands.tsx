@@ -18,10 +18,13 @@ import {
   blockerLabel,
   canReadBackRefund,
   canReissueRefund,
+  canRequestRefundRelease,
+  canResendRefund,
   canSendRefund,
   cancellationKindLabel,
   closeDetails,
   commandErrorMessage,
+  failedRefundBlockerLabel,
   formatDay,
   lateSettlementDetails,
   moneyDetails,
@@ -32,6 +35,7 @@ import {
   recoveryDetails,
   recoveryKindLabel,
   reissueBlockerLabel,
+  releaseDetails,
   retryDetails,
   reviewAction,
   withdrawalDetails,
@@ -46,7 +50,7 @@ import { formatCents, type ObligationReconciliation } from "@/lib/financeReconci
 import { paymentFunctionError } from "@/lib/payments";
 import { createClient } from "@/lib/supabase/client";
 
-// TRACE-076/077/078/079/080/081 finance operator commands. The signed-in session is the actor; the database refuses
+// TRACE-076/077/078/079/080/081/082 finance operator commands. The signed-in session is the actor; the database refuses
 // anyone without finance authority, binds second-person commands to their exact text, expires them
 // after 24 hours and picks the approver. Every command is confirmed by re-reading the server before
 // it is reported done.
@@ -79,6 +83,7 @@ const executeConsequence: Record<ReviewOperation, string> = {
   ach_late_settlement: "Records that the bank paid this withdrawn transfer and posts it as paid to the provider, with you as author and the approver as reviewer. If a replacement was also paid, the provider then owes the duplicate; if not, no replacement can be sent. It cannot be undone here.",
   payout_recovery: "Records this repayment or write-off against what the provider owes, with you as author and the approver as reviewer. It cannot be undone here.",
   bank_statement_close: "Closes this bank statement with you as author and the approver as reviewer, and fixes how each of its lines is matched. It then takes no more lines and cannot change.",
+  refund_release: "Takes this failed refund off the books with you as author and the approver as reviewer. It stops holding the payout and frees its amount; it can never be sent again. If the customer is still owed, request a new refund. It cannot be undone here.",
 };
 
 export function FinanceCommands({
@@ -166,13 +171,7 @@ export function FinanceCommands({
 
   const refund = async (body: Record<string, unknown>) => {
     const { data, error } = await createClient().functions.invoke("refund-invoice", { body });
-    if (error) {
-      // The HTTP error's context is the Response; paymentFunctionError reads its stream as the body.
-      const response = (error as { context?: unknown }).context;
-      const payload = response instanceof Response ? await response.clone().json().catch(() => null) : null;
-      const code = typeof payload?.error === "string" ? payload.error : (await paymentFunctionError(error)).code;
-      throw new Error(refundErrorMessage(code));
-    }
+    if (error) throw new Error(refundErrorMessage((await paymentFunctionError(error)).code));
     return data as { status?: string; found?: boolean; provider_status?: string | null };
   };
 
@@ -234,7 +233,9 @@ export function FinanceCommands({
     const recovery = recoveryDetails(request);
     const close = closeDetails(request);
     const money = moneyDetails(request);
+    const release = releaseDetails(request);
     if (close) return `Statement ${formatDay(close.period_start)} to ${formatDay(close.period_end)}`;
+    if (release) return `${invoiceLabel(request.obligation_id, request.invoice_number)} · ${release.payment_id}`;
     if (request.operation === "event_exclusion") {
       return `${request.subject}${request.obligation_id ? ` · ${invoiceLabel(request.obligation_id, request.invoice_number)}` : ""}`;
     }
@@ -257,6 +258,10 @@ export function FinanceCommands({
     const recovery = recoveryDetails(request);
     const close = closeDetails(request);
     const money = moneyDetails(request);
+    const release = releaseDetails(request);
+    if (release) {
+      return `${formatCents(release.amount)} (${components(release)}) · Stripe refund ${release.provider_reference ?? "unknown"}${release.provider_status ? ` ${release.provider_status}` : ""}`;
+    }
     if (close) {
       return `${close.lines} line${close.lines === 1 ? "" : "s"} · debits ${formatCents(close.debits)} · credits ${formatCents(close.credits)}${close.exceptions_now > 0 ? ` · ${close.exceptions_now} open exception${close.exceptions_now === 1 ? "" : "s"} now` : ""}`;
     }
@@ -283,7 +288,7 @@ export function FinanceCommands({
         <div>
           <h2 id="finance-commands" className="text-lg font-semibold">Finance commands</h2>
           <p className="text-sm text-muted-foreground">
-            Recorded as you, with your finance authority. Authorizing a refund, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch, retrying a failed transfer, withdrawing a transfer from its statement, recording a late payment of a withdrawn transfer and recording a provider repayment or write-off need a second operator too, and so does closing a bank statement. Placing and releasing a payout hold, recording a bank outcome, and importing, matching or dismissing bank statement lines need one operator.
+            Recorded as you, with your finance authority. Authorizing a refund, releasing a refund Stripe failed, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch, retrying a failed transfer, withdrawing a transfer from its statement, recording a late payment of a withdrawn transfer and recording a provider repayment or write-off need a second operator too, and so does closing a bank statement. Resending a failed refund, placing and releasing a payout hold, recording a bank outcome, and importing, matching or dismissing bank statement lines need one operator.
           </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => void refresh()}><RefreshCw />Refresh commands</Button>
@@ -293,7 +298,7 @@ export function FinanceCommands({
       <div className="space-y-3">
         <h3 className="font-medium">Second-person reviews ({ops.requests.filter((item) => item.state !== "executed").length} open)</h3>
         {ops.requests.length === 0 ? (
-          <PageState kind="empty" title="No review requests" description="Requests to prepare ACH batches, retry or withdraw transfers, record late payments and provider recoveries, close bank statements, authorize refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
+          <PageState kind="empty" title="No review requests" description="Requests to prepare ACH batches, retry or withdraw transfers, record late payments and provider recoveries, close bank statements, authorize or release refunds, allocate chargebacks, resolve readbacks or exclude events appear here for a second operator." />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -844,7 +849,7 @@ export function FinanceCommands({
       <div className="space-y-3">
         <h3 className="font-medium">Reviewed refunds not settled ({ops.refunds.length})</h3>
         {ops.refunds.length === 0 ? (
-          <PageState kind="empty" title="No unsettled refunds" description="Separately approved refunds appear here until Stripe's refund event settles them." />
+          <PageState kind="empty" title="No unsettled refunds" description="Separately approved refunds appear here until Stripe's refund event settles them, or until a refund Stripe failed is released." />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-card">
             <ResponsiveDataList
@@ -868,7 +873,7 @@ export function FinanceCommands({
                   label: "Status",
                   render: (item) => (
                     <span className="flex flex-col gap-0.5">
-                      <span>{refundAttemptLabel[item.attempt_status]}{item.generation > 1 ? ` · reissued (send ${item.generation})` : ""}</span>
+                      <span>{refundAttemptLabel[item.attempt_status]}{item.generation > 1 ? ` · sent again (send ${item.generation})` : ""}</span>
                       {item.last_readback && (
                         <span className="text-xs text-muted-foreground">
                           Last Stripe readback {formatDate(item.last_readback.created_at)}: {item.last_readback.found ? `Stripe status ${item.last_readback.provider_status}` : "not found at Stripe"}
@@ -886,12 +891,31 @@ export function FinanceCommands({
                       {canReadBackRefund(item) && <RefundReadback item={item} busy={busy} run={run} refund={refund} />}
                       {canReissueRefund(item) && <RefundReissue item={item} busy={busy} run={run} accepted={accepted} />}
                       {item.attempt_status === "reconcile" && item.can_send && item.reissue_blocker && <span className="text-xs text-muted-foreground">{reissueBlockerLabel[item.reissue_blocker]}</span>}
+                      {canResendRefund(item) && <RefundResend item={item} busy={busy} run={run} accepted={accepted} />}
+                      {canRequestRefundRelease(item) && (
+                        <RefundRelease item={item} busy={busy} entity={invoiceLabel(item.obligation_id, item.invoice_number)} submitRequest={submitRequest} commandKey={key} />
+                      )}
+                      {item.attempt_status === "failed" && item.resend_blocker && <span className="text-xs text-muted-foreground">{failedRefundBlockerLabel[item.resend_blocker]}</span>}
+                      {item.open_release_request_id && <span className="text-xs text-muted-foreground">Release requested; see reviews.</span>}
                       {!canSendRefund(item) && !canReadBackRefund(item) && <span className="text-muted-foreground">Only the refund&apos;s author or approver can send it.</span>}
                     </span>
                   ),
                 },
               ]}
             />
+          </div>
+        )}
+        {ops.refund_releases.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Failed refunds released in the last 30 days ({ops.refund_releases.length})</h4>
+            <ul className="space-y-1 text-sm">
+              {ops.refund_releases.map((item) => (
+                <li key={item.authorization_id} className="[overflow-wrap:anywhere]">
+                  <span className="font-medium tabular-nums">{invoiceLabel(item.obligation_id, item.invoice_number)} · {formatCents(item.amount)}</span>
+                  <span className="text-muted-foreground"> · Stripe refund {item.provider_reference} · {item.reason} · {formatDate(item.created_at)}{item.by_me ? " · you took part" : ""}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
@@ -976,5 +1000,68 @@ function RefundReissue({ item, busy, run, accepted }: { item: PendingRefund; bus
         );
       }}
     />
+  );
+}
+
+// TRACE-082: a refund Stripe reported failed, sent again under a new Stripe key by one operator.
+function RefundResend({ item, busy, run, accepted }: { item: PendingRefund; busy: boolean; run: Run; accepted: Accepted }) {
+  return (
+    <ConfirmAction
+      disabled={busy}
+      requireReason
+      reasonLabel="Resend reason"
+      reasonHelp="Why sending it again should succeed, for example the customer's card was updated."
+      triggerLabel="Resend refund"
+      title="Resend this refund?"
+      entity={`${item.payment_id} · ${formatCents(item.amount)}`}
+      consequence="Stripe's readback shows this refund failed or was canceled. This prepares the same approved amount again under a new Stripe key; send it next. It never changes the amount."
+      confirmLabel="Resend"
+      onConfirm={(reason) => {
+        const generation = item.generation;
+        return run(
+          async () => { await accepted(createClient().rpc("money_operator_resend_refund", { p_authorization: item.authorization_id, p_reason: reason })); },
+          (next) => next.refunds.some((candidate) => candidate.authorization_id === item.authorization_id && candidate.generation > generation && candidate.attempt_status === "prepared"),
+          { title: "Refund ready to resend", description: "Send it to Stripe to complete the refund." },
+        );
+      }}
+    />
+  );
+}
+
+// TRACE-082: a refund Stripe reported failed, taken off the books with a second operator.
+function RefundRelease({
+  item,
+  busy,
+  entity,
+  submitRequest,
+  commandKey,
+}: {
+  item: PendingRefund;
+  busy: boolean;
+  entity: string;
+  submitRequest: (operation: ReviewOperation, entity: string, call: () => PromiseLike<{ data: unknown; error: { message: string } | null }>) => Promise<void>;
+  commandKey: (operation: string) => string;
+}) {
+  const [evidence, setEvidence] = useState("");
+  return (
+    <span className="flex w-full flex-col gap-2">
+      <FormField label="Release evidence" required help="What Stripe shows for the failed refund, and how the customer is being made whole, if they are.">
+        {(control) => <Input {...control} value={evidence} maxLength={1000} disabled={busy} onChange={(event) => setEvidence(event.target.value)} />}
+      </FormField>
+      <ConfirmAction
+        disabled={busy || !evidence.trim()}
+        requireReason
+        reasonLabel="Release reason"
+        confirmationTone="commitment"
+        triggerLabel="Request release"
+        title="Release this failed refund?"
+        entity={`${entity} · ${item.payment_id} · ${formatCents(item.amount)}`}
+        consequence="Creates a review request. Once a different finance operator approves it within 24 hours and you run it, the refund is taken off the books: it stops holding the payout and its amount can be refunded again only through a new reviewed refund. It can never be sent again."
+        confirmLabel="Request release"
+        onConfirm={(reason) => submitRequest("refund_release", `${entity} · ${formatCents(item.amount)}`, () => createClient().rpc("money_operator_request_refund_release", {
+          p_authorization: item.authorization_id, p_reason: reason, p_evidence: evidence.trim(), p_key: commandKey(`refund-release:${item.authorization_id}`),
+        })).then(() => setEvidence(""))}
+      />
+    </span>
   );
 }

@@ -1,7 +1,7 @@
-# Agent handoff — 2026-09-21
+# Agent handoff — 2026-09-22
 
 Each section carries its own date; the repository checkpoint below was taken on
-2026-09-10 and the latest slice checkpoint is TRACE-080.
+2026-09-10 and the latest slice checkpoint is TRACE-082.
 
 ## Repository checkpoint
 
@@ -518,6 +518,51 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   authorized owner bank workflow acceptance with a real statement; failed-refund recovery;
   `paymentFunctionError`.
 - Next: CI and Codex review of the PR.
+
+## Current slice — TRACE-082 failed-refund recovery (2026-09-22, PR #38 open)
+
+- PR #37 (TRACE-081) merged 2026-09-22 (main `28c52e9`).
+- Branch `codex/phase5-failed-refund-recovery`, base main `28c52e9`, worktree
+  `../mercurius-failed-refund-recovery`. The `paymentFunctionError` fix (TRACE-076 finding) is
+  folded in at the owner's request.
+- Owner decisions 2026-09-22 (asked before implementation, all four as recommended):
+  - resend or release;
+  - a resend is one operator (the refund's author or approver), a release is two;
+  - either needs a Stripe readback showing the current send failed or canceled;
+  - a refund that fails after it succeeded is a finding.
+- Change: migration `20260922002000`:
+  - the immutable `money_refund_releases`, and `money_refund_reissues.failed_reference`, so a
+    resend shares the reissue generations;
+  - `money_operator_resend_refund`, and the reviewed `refund_release` (request, and the
+    service-only `money_release_refund` kernel);
+  - guard triggers: an earlier send's failed refund is never recorded as the current one, and a
+    released refund is never prepared or settled;
+  - released authorizations are excluded from every pending check and refund cap (fourteen
+    generated substitutions);
+  - readbacks: resend and release state, release details and recent releases in
+    `money_finance_operations`, and `refunds.released` in reconciliation.
+- Also changed:
+  - `refund-invoice`'s readback skips earlier failed refunds;
+  - `paymentFunctionError` reads the `Response` first, and the finance panel's workaround is gone;
+  - `/admin/finance` gains Resend refund and Request release.
+- Evidence: `governance/PHASE-5-FAILED-REFUND-RECOVERY.md` (F1–F8) and the TRACE-082 section of
+  `governance/PHASE-5-VALIDATION.md`:
+  - 2335 SQL assertions across 40 suites (049 new, 123); 37 of 39 mutants killed, the other two
+    equivalent;
+  - 18 concurrency scripts in CI order, clean reset and replay;
+  - 169 unit tests (10 new), build, and 220/221 non-visual browser cases (4 new; the `mds.spec.ts`
+    Escape/focus flake passed 3/3 on rerun), 0 audit findings.
+- Open:
+  - Codex review of F1–F8, especially F3's guard, F5's substitutions, and whether a released
+    cancellation refund should be offered again;
+  - a reviewed path for a refund that fails after it succeeded;
+  - provisioning finance operators;
+  - Stripe test-mode acceptance.
+- CI run 35810165963 on `740eb2b` passed all three jobs on its first attempt:
+  - backend and lifecycle: 2335 SQL assertions across 40 suites on the clean reset and again on
+    the clean replay, and all 18 concurrency scripts including the new failed refund script;
+  - application: 221 of 221 non-visual browser cases (no flake).
+- Next: Codex review of PR #38.
 
 ## Workflow update — 2026-09-10
 

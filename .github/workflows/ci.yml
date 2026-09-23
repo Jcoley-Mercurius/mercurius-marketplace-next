@@ -70,6 +70,8 @@ jobs:
         run: node scripts/phase5-payout-recovery-concurrency.mjs
       - name: Concurrent bank statement imports, closes and line resolutions
         run: node scripts/phase5-bank-statement-concurrency.mjs
+      - name: Concurrent resends and releases of failed refunds
+        run: node scripts/phase5-failed-refund-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay
