@@ -34,6 +34,11 @@ jobs:
         run: node scripts/prepare-phase5-local.mjs
       - name: Reconstruct database
         run: sh scripts/phase5-db.sh start
+      - name: Show redacted start failure
+        if: failure()
+        run: |
+          grep -iE "error|fail|denied|pull|timeout|unhealthy|manifest|exited" .phase5-local/start.log \
+            | sed -E 's/eyJ[A-Za-z0-9._-]+/[redacted]/g; s/sb_[a-z]+_[A-Za-z0-9_-]+/[redacted]/g' | tail -40 || true
       - name: Database role and money contracts
         run: sh scripts/phase5-db.sh test
       - name: Concurrent checkout, webhook and refund reservations
