@@ -510,7 +510,10 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - 17 concurrency scripts in CI order, clean reset and replay;
   - 159 unit tests (17 new), build, 216/216 non-visual browser cases (8 new; the `mds.spec.ts`
     Escape/focus flake passed 3/3 on rerun), 0 audit findings.
-- Open: CI; Codex review (S1–S8, especially correcting an amount mismatch or a
+- CI run 35801711815 on `c979900` passed all three jobs; its first attempt failed only the
+  unrelated `onboarding-checklist` "Response has been disposed" fixture flake, which passes 3/3
+  locally and passed on rerun. Recheck CI on the final head after this note.
+- Open: Codex review (S1–S8, especially correcting an amount mismatch or a
   conflicting outcome, and releasing a match or dismissal); the owner's real bank export format;
   authorized owner bank workflow acceptance with a real statement; failed-refund recovery;
   `paymentFunctionError`.

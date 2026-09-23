@@ -184,7 +184,14 @@ and a table variant, and a row heading repeats its state), and one assertion exp
 hint the page does not render. The locators and that assertion were corrected; no product change
 followed from them.
 
-Not performed: CI, Edge checks (no Edge change), any real bank file, statement, transfer or portal,
+CI: run 35801711815 on head `c979900` passed all three jobs (backend, lifecycle, application). Its
+first attempt failed one unrelated case, `onboarding-checklist.spec.ts` "replacing evidence names
+the current evidence", with the Playwright fixture race `Response has been disposed` that TRACE-076
+also recorded; it passed 3/3 locally and on the rerun. The earlier red runs on the PR are
+push-triggered runs cancelled by the workflow's concurrency group. This documentation commit
+follows that run, so CI must be rechecked on the final head before review closes.
+
+Not performed: Edge checks (no Edge change), any real bank file, statement, transfer or portal,
 owner bank workflow acceptance, hosted verification, human screen-reader review.
 
 ## Unperformed checks and remaining gates
