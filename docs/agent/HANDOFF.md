@@ -483,7 +483,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
 - Next: CI and Codex review of the PR, then bank statement reconciliation or failed-refund
   recovery.
 
-## Current slice — TRACE-081 bank statement reconciliation (2026-09-22, uncommitted)
+## Current slice — TRACE-081 bank statement reconciliation (2026-09-22, PR #37 open)
 
 - PR #36 (TRACE-080) merged 2026-09-21 (main `5e29da3`).
 - Branch `codex/phase5-bank-statements`, base main `5e29da3`, worktree `../mercurius-bank-statements`.
@@ -510,7 +510,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - 17 concurrency scripts in CI order, clean reset and replay;
   - 159 unit tests (17 new), build, 216/216 non-visual browser cases (8 new; the `mds.spec.ts`
     Escape/focus flake passed 3/3 on rerun), 0 audit findings.
-- Open: commit, PR and CI; Codex review (S1–S8, especially correcting an amount mismatch or a
+- Open: CI; Codex review (S1–S8, especially correcting an amount mismatch or a
   conflicting outcome, and releasing a match or dismissal); the owner's real bank export format;
   authorized owner bank workflow acceptance with a real statement; failed-refund recovery;
   `paymentFunctionError`.
