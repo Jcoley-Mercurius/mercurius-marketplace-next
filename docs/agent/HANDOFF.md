@@ -427,7 +427,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   cases, 0 audit findings.
 - Open: Codex review (one-operator settlement, reference before sending, G5 holds on statement
   payouts); CI; replacement statements and prepared-attempt withdrawal; already-paid recovery.
-- Next: CI and Codex review of PR #39.
+- Next: CI and Codex review of the PR.
 
 ## Current slice — TRACE-079 ACH withdrawal and replacement statements (2026-09-21, PR open)
 
@@ -517,7 +517,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   conflicting outcome, and releasing a match or dismissal); the owner's real bank export format;
   authorized owner bank workflow acceptance with a real statement; failed-refund recovery;
   `paymentFunctionError`.
-- Next: CI and Codex review of PR #39.
+- Next: CI and Codex review of the PR.
 
 ## Slice — TRACE-082 failed-refund recovery (2026-09-22, merged as PR #38)
 
