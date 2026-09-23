@@ -108,6 +108,7 @@ const operations = {
     retained: { service: 10000, tax: 700, tip: 1000 }, blocker: null, open_request_id: null, created_at: now }],
   ach,
   recoveries,
+  statements: { today: "2026-09-16", statements: [], unevidenced: [] },
 };
 
 test.beforeEach(async ({ page }) => {

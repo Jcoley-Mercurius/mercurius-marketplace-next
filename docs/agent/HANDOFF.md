@@ -483,6 +483,42 @@ as current branch/merge status; reconcile them with the latest slice evidence.
 - Next: CI and Codex review of the PR, then bank statement reconciliation or failed-refund
   recovery.
 
+## Current slice — TRACE-081 bank statement reconciliation (2026-09-22, PR #37 open)
+
+- PR #36 (TRACE-080) merged 2026-09-21 (main `5e29da3`).
+- Branch `codex/phase5-bank-statements`, base main `5e29da3`, worktree `../mercurius-bank-statements`.
+- Owner decisions 2026-09-22 (asked before implementation, all four as recommended): the bank's CSV
+  is parsed in the browser and never uploaded; only payout-related lines are imported; a line is
+  evidence only; a period is closed by a two-operator review, refused while any exception is open.
+- Change: migration `20260922001000`:
+  - immutable statement periods, imports, lines (posting date, debit or credit, amount, bank
+    reference only), matches, dismissals and closes; periods cannot overlap;
+  - a line pairs with a recorded settlement, return, late payment (TRACE-080) or repayment of the
+    same direction and reference, in date order; a differing amount is an exception, not a match;
+  - `money_operator_resolve_bank_line` runs the existing bank outcome and late payment commands
+    with the line as their evidence; manual matches and dismissals are one operator with a reason,
+    and a line naming a transfer can never be dismissed;
+  - the reviewed `bank_statement_close` binds the lines and totals, is refused while the period is
+    open or anything is unresolved, and stores the statement's pairings;
+  - readbacks: `statements` in `money_finance_operations`; `bank_line` and `bank_unevidenced`
+    exceptions in `money_finance_reconciliation`.
+  - `/admin/finance` gains a Bank statements section; `src/lib/bankStatementCsv.ts` reads the file.
+- Evidence: `governance/PHASE-5-BANK-STATEMENTS.md` (S1–S8) and the TRACE-081 section of
+  `governance/PHASE-5-VALIDATION.md`:
+  - 2212 SQL assertions across 39 suites (048 new, 206); 33 of 33 mutants killed (five survivors on
+    the first run each gained a case);
+  - 17 concurrency scripts in CI order, clean reset and replay;
+  - 159 unit tests (17 new), build, 216/216 non-visual browser cases (8 new; the `mds.spec.ts`
+    Escape/focus flake passed 3/3 on rerun), 0 audit findings.
+- CI run 35801711815 on `c979900` passed all three jobs; its first attempt failed only the
+  unrelated `onboarding-checklist` "Response has been disposed" fixture flake, which passes 3/3
+  locally and passed on rerun. Recheck CI on the final head after this note.
+- Open: Codex review (S1–S8, especially correcting an amount mismatch or a
+  conflicting outcome, and releasing a match or dismissal); the owner's real bank export format;
+  authorized owner bank workflow acceptance with a real statement; failed-refund recovery;
+  `paymentFunctionError`.
+- Next: CI and Codex review of the PR.
+
 ## Workflow update — 2026-09-10
 
 Owner assigned Codex architecture and code review, with Claude implementing the

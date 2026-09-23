@@ -62,6 +62,138 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-081 — Bank statement reconciliation — 2026-09-22
+
+Branch `codex/phase5-bank-statements`, base `main` `5e29da3` (PR #36 merged); isolated synthetic
+stack only. Design S1–S8, the owner's four decisions and the review questions are in
+PHASE-5-BANK-STATEMENTS.md.
+
+Baseline before change: 2006 pgTAP assertions across 38 suites passed on `5e29da3` after a clean
+reset. With the migration applied and no test changes, all 38 suites passed unchanged.
+
+Database: 2212 pgTAP assertions across 39 suites pass after a clean reset, and again as CI's clean
+replay after all committed concurrency fixtures. Suite 048 is new (206 assertions). It covers:
+
+- grants: the five operator commands callable by signed-in users only; the close kernel
+  service-only; every helper and all six tables closed to browser roles; no service-role update;
+  and that a statement line has no description, payee or account column;
+- import access and validation: a homeowner and an admin without finance authority refused; a
+  backwards, over-long or future period; a malformed file fingerprint; lines that are not an array,
+  more than 1000, carry any extra field (a bank description), an unknown direction, an impossible
+  date, a date outside the period, a zero, fractional or signed amount, a blank reference, or the
+  same line twice; and that no refused import created a statement;
+- a statement imported in two parts: the trimmed reference, the totals, the replayed key, a
+  conflicting key, a line already imported and an overlapping period;
+- pairing by reference: a settlement, a returned transfer's debit and credit, and lines that stay
+  unmatched; the readback naming what each matched and how;
+- each suggestion: `record_settled`, `request_late_settlement`, `record_returned`,
+  `match_repayment`, `amount_mismatch`, `already_evidenced`, `outcome_conflict` and `no_transfer`;
+- resolving through the existing commands: the settlement and return recorded under the operator
+  with the statement line and note as evidence, the replay, a conflicting replay, a wrong action, a
+  missing note, an unresolvable line, and a line that is already matched; the late payment creating
+  the reviewed TRACE-080 request, replayed, then matching once approved and run, with the line's
+  reference on the recorded late payment;
+- manual matches: direction, amount, an already evidenced movement, an already matched line, an
+  unknown movement, a missing reason and an unknown line; then a repayment and a transfer the bank
+  shows under another reference, both replayed;
+- dismissals: refused for a matched line, for a line whose reference names a transfer, with a
+  different reason, and after a dismissal; and that a dismissed line cannot be matched;
+- evidence only: importing, matching and dismissing changed no transfer status and posted no
+  journal; only the three recorded outcomes posted one each;
+- the current statement: its exceptions counted as its four unresolved lines plus the three
+  recorded movements in its period with no line, `period_open` on its close and its close request;
+- reconciliation's `bank_line` and `bank_unevidenced` exceptions, and the operator readback's
+  unevidenced list naming the statement whose period covers each;
+- the close: an admin without finance authority refused, an unknown statement, the generic request
+  refused, the stored command bound to the lines and totals, no separate evidence, a replay keeping
+  those totals, the approver's details, a line imported afterwards making it stale, a close refused
+  while a line is unresolved, no self-approval, no unapproved run, then the close with both
+  operators, its stored pairings, and the immutability of lines, matches and the close;
+- a closed statement taking no more lines, dismissals, matches or closes, its pairing surviving a
+  later line that would otherwise pair first, and the kernel replaying, conflicting on other
+  details and refusing an open period even when approved;
+- no full bank reference and no customer identity in either readback.
+
+Mutation check (local harness, not committed): each mutant redefined one function from the
+migration inside suite 048's transaction, which rolled it back. A mutant counts as killed when the
+suite reports `not ok` or an error; the unmutated suite reports 206 `ok`, no `not ok` and no error.
+All 33 mutants were killed. They covered the pairing rule (direction, stored lines and movements),
+the line states, the movement set, the unevidenced set, each suggestion branch, the statement
+exception count, every close blocker, the close kernel's stored pairings and replay, each manual
+match and dismissal guard, the resolution's suggestion check, the closed-statement guard, five
+import validations, the close request's bound totals, and the reference hint.
+
+Five mutants survived the first run: re-pairing a stored line, the suggestion's amount check, a
+second late payment of a withdrawn transfer, the kernel's replay comparison and the close request's
+bound totals. Suite 048 gained a case for each — including a later transfer recorded under the
+reference a manual match had used, which proves a matched line never pairs again — and all five are
+now killed.
+
+Concurrency: new `scripts/phase5-bank-statement-concurrency.mjs`, wired into CI after the TRACE-080
+script. Its ACH week starts at +245 days and its statement periods are in the past. Each call is a
+separate signed-in session:
+
+- two operators importing the same line under different keys: one line, one statement, the other
+  refused as already imported;
+- an import holding the lock while an approved close of the same statement runs: the close is
+  refused as stale and nothing is closed;
+- an import into an earlier statement of a line that pairs first, holding the lock while an
+  approved close of the later statement runs: the later line loses its pairing and the close is
+  refused with open exceptions;
+- the same race the other way: the close holds the lock, stores its pairing, and the later import
+  succeeds with its line unmatched and reading `already_evidenced`;
+- two operators resolving the same line into a settlement: one settled event, the other refused as
+  already matched.
+
+It also asserts that no line or movement is paired twice, that every closed statement's lines are
+matched or dismissed, and that the race payouts reconcile with no issue. All 17 scripts passed in
+CI order on a clean reset, and the clean replay after them passed.
+
+Application: `scan:secrets`, `lint` and `typecheck` pass. 159 unit tests pass (17 new cases): the
+CSV reader (quoted fields, escaped quotes, CRLF and a byte order mark; money and date formats; the
+three column shapes; per-row errors; the period check; the file digest), and the presentation
+(which resolutions a line offers, manual match candidates, which lines may be dismissed, close
+details typed to their operation, and the statement refusal wording). One unit case found a real
+wording defect: the "needs a date, direction, amount and reference" refusal was worded as an amount
+problem because it contains the word "amount"; the order was fixed. The build passes with CI's
+synthetic public variables. Regenerated database types are additions only. `audit:prod` has 0
+findings.
+
+Browser: 216 of 216 non-visual cases pass (`test:a11y`) on the final build; 8 are new. The one
+failure in the full run was the known `mds.spec.ts` Escape/focus flake, unrelated to this slice and
+passing 3/3 on rerun. The new cases cover:
+
+- the themed layout at 320px light and 1440px dark under axe and the no-horizontal-scroll check:
+  a statement's exception count and close blocker, a matched line, an amount mismatch showing the
+  recorded amount, a suggestion, a dismissal, a closed statement and the movements not on a
+  statement;
+- a CSV read in the browser: the guessed mapping, a row dated outside the period and an unreadable
+  row both disabled, the debit selection, and a request carrying only the period, one line's four
+  fields, a SHA-256 file digest and a key — with the bank description, the account number in it and
+  the file name absent from the request body, and no actor field;
+- one line entered by hand, refused while dated outside the period, and an empty period recorded;
+- an unmatched line recording its settlement with a note through the resolve command;
+- a dismissal refused by the server with operator wording, and a manual match to a recorded
+  movement;
+- a close request bound to its totals, the approver's view of them, and the statement then showing
+  the open request;
+- the reconciliation page listing an unmatched line and a movement missing from a statement.
+
+Three first-run browser failures were test-locator strictness (the responsive list renders a list
+and a table variant, and a row heading repeats its state), and one assertion expected a reference
+hint the page does not render. The locators and that assertion were corrected; no product change
+followed from them.
+
+CI: run 35801711815 on head `c979900` passed all three jobs (backend, lifecycle, application). Its
+first attempt failed one unrelated case, `onboarding-checklist.spec.ts` "replacing evidence names
+the current evidence", with the Playwright fixture race `Response has been disposed` that TRACE-076
+also recorded; it passed 3/3 locally and on the rerun. The earlier red runs on the PR are
+push-triggered runs cancelled by the workflow's concurrency group. This documentation commit
+follows that run, so CI must be rechecked on the final head before review closes.
+
+Not performed: Edge checks (no Edge change), any real bank file, statement, transfer or portal,
+owner bank workflow acceptance, hosted verification, human screen-reader review.
+
 ## Unperformed checks and remaining gates
 
 No actual Stripe SDK network call, Stripe CLI delivery, bank transfer, bank statement

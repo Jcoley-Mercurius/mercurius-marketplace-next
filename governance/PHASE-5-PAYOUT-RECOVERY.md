@@ -247,6 +247,8 @@ See the TRACE-080 section of PHASE-5-VALIDATION.md.
 - Codex design and code review: R1–R8, especially R3's returned-transfer question, R4's guard and
   R8's `reversed` question. CI.
 - Bank statement reconciliation, which is where most late payments will be found.
+  *TRACE-081 (PHASE-5-BANK-STATEMENTS.md) adds it, and resolves such a line into this slice's
+  reviewed late payment request.*
 - A reviewed path for a return recorded after a repayment.
 - Provider-facing wording and notification of an amount owed (MPS §6.5 "role-appropriate money
   states").

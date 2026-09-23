@@ -10,7 +10,11 @@ import {
   canRequestWithdrawal,
   canReissueRefund,
   canSendRefund,
+  canDismissLine,
+  closeDetails,
   commandErrorMessage,
+  lineResolution,
+  matchCandidates,
   formatDay,
   lateSettlementDetails,
   moneyDetails,
@@ -23,11 +27,13 @@ import {
   weekEnd,
   withdrawalDetails,
   type AchItem,
+  type BankMovement,
+  type StatementLine,
   type PendingRefund,
   type ReviewRequest,
 } from "../../src/lib/financeCommands";
 
-// TRACE-076/077/078/079/080: wording and gating only. The database decides authority, approvers and actionability.
+// TRACE-076/077/078/079/080/081: wording and gating only. The database decides authority, approvers and actionability.
 const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   request_id: "00000000-0000-4000-8000-000000000761",
   operation: "hold_resolution",
@@ -314,5 +320,68 @@ describe("already-paid recovery", () => {
     expect(commandErrorMessage("Recovery must be a repayment or a write-off")).toBe("Choose a repayment or a write-off.");
     expect(commandErrorMessage("Recovery amount in cents required")).toBe("Enter an amount greater than zero.");
     expect(commandErrorMessage("Payout recovery idempotency conflict")).toContain("already submitted with different details");
+  });
+});
+
+describe("bank statement reconciliation", () => {
+  const line = (overrides: Partial<StatementLine> = {}): StatementLine => ({
+    line_id: "l1", line_number: 1, posted_on: "2026-09-15", direction: "debit", amount: 9500, bank_reference_hint: "0001",
+    state: "unmatched", match: null, suggestion: { action: "no_transfer" }, dismissal: null, ...overrides,
+  });
+  const movement = (overrides: Partial<BankMovement> = {}): BankMovement => ({
+    movement: "settled:00000000-0000-4000-8000-000000000001", kind: "settled", direction: "debit", amount: 9500, bank_reference_hint: "9999",
+    obligation_id: "o1", invoice_number: "M5-1", payee_name: "Synthetic payee", attempt_number: 1, recorded_at: "2026-09-15T12:00:00Z", ...overrides,
+  });
+
+  it("offers only the resolutions that record through an existing command", () => {
+    expect(lineResolution(line({ suggestion: { action: "record_settled", attempt_id: "a" } }))).toBe("record_settled");
+    expect(lineResolution(line({ suggestion: { action: "record_returned", attempt_id: "a" } }))).toBe("record_returned");
+    expect(lineResolution(line({ suggestion: { action: "request_late_settlement", attempt_id: "a" } }))).toBe("request_late_settlement");
+    for (const action of ["amount_mismatch", "outcome_conflict", "already_evidenced", "no_transfer", "match_repayment"] as const) {
+      expect(lineResolution(line({ suggestion: { action } }))).toBeNull();
+    }
+    expect(lineResolution(line({ state: "matched", suggestion: { action: "record_settled" } }))).toBeNull();
+  });
+
+  it("matches by hand only a movement of the same direction and amount", () => {
+    const movements = [movement(), movement({ movement: "repayment:x", kind: "repayment", direction: "credit", amount: 500 }), movement({ movement: "settled:y", amount: 9400 })];
+    expect(matchCandidates(line(), movements).map((item) => item.movement)).toEqual(["settled:00000000-0000-4000-8000-000000000001"]);
+    expect(matchCandidates(line({ direction: "credit", amount: 500 }), movements).map((item) => item.kind)).toEqual(["repayment"]);
+    expect(matchCandidates(line({ state: "matched" }), movements)).toEqual([]);
+  });
+
+  it("never offers to dismiss a line whose reference names a transfer", () => {
+    expect(canDismissLine(line())).toBe(true);
+    expect(canDismissLine(line({ direction: "credit", suggestion: { action: "match_repayment" } }))).toBe(true);
+    for (const action of ["record_settled", "record_returned", "request_late_settlement", "amount_mismatch", "outcome_conflict", "already_evidenced"] as const) {
+      expect(canDismissLine(line({ suggestion: { action } }))).toBe(false);
+    }
+    expect(canDismissLine(line({ state: "dismissed" }))).toBe(false);
+  });
+
+  it("reads close details only from a close request", () => {
+    const close = request({ operation: "bank_statement_close", details: { period_start: "2026-09-01", period_end: "2026-09-30", lines: 3, debits: 19000, credits: 500, exceptions_now: 0 } });
+    expect(closeDetails(close)?.lines).toBe(3);
+    expect(moneyDetails(close)).toBeNull();
+    expect(recoveryDetails(close)).toBeNull();
+    expect(closeDetails(request({ operation: "payout_recovery" }))).toBeNull();
+  });
+
+  it("words statement refusals for operators without echoing database text", () => {
+    expect(commandErrorMessage("Finance review not actionable: period_open")).toContain("has not ended");
+    expect(commandErrorMessage("Finance review not actionable: statement_changed")).toContain("Request the close again");
+    expect(commandErrorMessage("Finance review not actionable: statement_exceptions")).toContain("Resolve them first");
+    expect(commandErrorMessage("Statement line not matchable: movement_matched")).toBe("Another statement line already shows that movement.");
+    expect(commandErrorMessage("Statement line not dismissable: line_names_transfer")).toContain("cannot be dismissed");
+    expect(commandErrorMessage("Statement line not resolvable: suggestion_changed")).toContain("Refresh and check it again");
+    expect(commandErrorMessage("Statement line 3 is already imported")).toBe("Line 3 is already on a bank statement. Leave it out and import the rest.");
+    expect(commandErrorMessage("Statement line 2 is posted outside the statement period")).toBe("Line 2 is dated outside the statement period.");
+    expect(commandErrorMessage("Statement line 4 needs an amount in whole cents greater than zero")).toBe("Line 4 needs an amount greater than zero.");
+    expect(commandErrorMessage("Statement line 5 needs a bank reference of up to 200 characters")).toContain("bank's reference");
+    expect(commandErrorMessage("Statement line 6 needs a posting date, direction, amount and reference only")).toBe("Line 6 needs a date, debit or credit, amount and reference.");
+    expect(commandErrorMessage("Another statement already covers part of this period")).toContain("does not overlap");
+    expect(commandErrorMessage("Bank statement is closed")).toContain("closed");
+    expect(commandErrorMessage("Statement import idempotency conflict")).toContain("already submitted with different details");
+    expect(commandErrorMessage("Statement line not matchable: something_new")).toContain("Refresh the page");
   });
 });
