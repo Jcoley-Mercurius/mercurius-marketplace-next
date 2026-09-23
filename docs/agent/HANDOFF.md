@@ -558,7 +558,11 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - a reviewed path for a refund that fails after it succeeded;
   - provisioning finance operators;
   - Stripe test-mode acceptance.
-- Next: CI on PR #38, then Codex review.
+- CI run 35810165963 on `740eb2b` passed all three jobs on its first attempt:
+  - backend and lifecycle: 2335 SQL assertions across 40 suites on the clean reset and again on
+    the clean replay, and all 18 concurrency scripts including the new failed refund script;
+  - application: 221 of 221 non-visual browser cases (no flake).
+- Next: Codex review of PR #38.
 
 ## Workflow update — 2026-09-10
 
