@@ -519,7 +519,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   `paymentFunctionError`.
 - Next: CI and Codex review of the PR.
 
-## Current slice — TRACE-082 failed-refund recovery (2026-09-22, PR not yet opened)
+## Current slice — TRACE-082 failed-refund recovery (2026-09-22, PR #38 open)
 
 - PR #37 (TRACE-081) merged 2026-09-22 (main `28c52e9`).
 - Branch `codex/phase5-failed-refund-recovery`, base main `28c52e9`, worktree
@@ -558,7 +558,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - a reviewed path for a refund that fails after it succeeded;
   - provisioning finance operators;
   - Stripe test-mode acceptance.
-- Next: commit, open the PR, CI, then Codex review.
+- Next: CI on PR #38, then Codex review.
 
 ## Workflow update — 2026-09-10
 
