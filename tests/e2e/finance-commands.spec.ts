@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-076/077/078/079/080/082 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
+// TRACE-076/077/078/079/080/082/083 synthetic browser evidence. Readbacks and commands are mocked; no real refund, hold,
 // Stripe object, bank transfer or operator identity is represented.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const now = "2026-09-16T15:00:00.000Z";
@@ -93,6 +93,20 @@ const withdrawnTransfer = {
   bank_reference_hint: null, withdrawn_at: now, open_request_id: null,
 };
 const recoveries = { owed_total: 1700, owed: [owedPayout], withdrawn: [withdrawnTransfer], late_settlements: [] };
+// TRACE-083: a settled refund Stripe failed afterwards, owed to the customer, and a repayment owed back after a return.
+const lateOwed = {
+  authorization_id: "00000000-0000-4000-8000-000000000920", obligation_id: "00000000-0000-4000-8000-000000000871", invoice_number: "M5-0000000871",
+  payment_id: "pi_synthetic_late", amount: 2000, state: "customer_owed", delivered_reference: null, attempt_status: "failed", provider_reference: "re_synthetic_late_1",
+  generation: 1, signal: { event_id: "evt_synthetic_refund_failed", status: "failed", received_at: now },
+  last_readback: { found: true, provider_reference: "re_synthetic_late_1", provider_status: "failed", by_me: false, created_at: now },
+  late_failure: { failed_reference: "re_synthetic_late_1", reason: "Card closed after the refund", evidence: "Stripe readback: failed", by_me: false, created_at: now },
+  can_send: true, failure_blocker: null, resend_blocker: null, release_blocker: null,
+  open_failure_request_id: null, open_resend_request_id: null, open_release_request_id: null, created_at: now,
+};
+const returnPayout = {
+  obligation_id: "00000000-0000-4000-8000-000000000872", invoice_number: "M5-0000000872", payee_name: payee.payee_name,
+  returnable: 1700, repaid: 1700, reversed: 0, paid: 0, proceeds: 7800, reversals: [], open_request_id: null,
+};
 const operations = {
   evaluated_at: now,
   requests: [theirRequest, myApproved, myWaiting],
@@ -104,12 +118,14 @@ const operations = {
     attempt_status: "not_started", provider_reference: null, can_send: true, generation: 1, reissue_blocker: null,
     resend_blocker: null, release_blocker: null, open_release_request_id: null, last_readback: null, created_at: now }],
   refund_releases: [],
+  late_refunds: [lateOwed],
   cancellations: [{ operation_id: "00000000-0000-4000-8000-000000000893", kind: "customer_cancel", payment_id: "pi_synthetic_cancel", obligation_id: obligation, invoice_number: invoice,
     refund_percent: 50, service: 5000, tax: 350, tip: 500, blocker: null, open_request_id: null, cancelled_at: now }],
   chargebacks: [{ dispute_id: "dp_synthetic", obligation_id: obligation, payment_id: "pi_synthetic", amount: 1000, invoice_number: invoice,
     retained: { service: 10000, tax: 700, tip: 1000 }, blocker: null, open_request_id: null, created_at: now }],
   ach,
   recoveries,
+  repayment_returns: { returnable_total: 1700, payouts: [returnPayout] },
   statements: { today: "2026-09-16", statements: [], unevidenced: [] },
 };
 
@@ -152,6 +168,11 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     const owed = width < 1280 ? page.getByRole("list", { name: "Amounts providers owe" }) : page.getByRole("table", { name: "Amounts providers owe" });
     await expect(owed.getByText("Customer refunded $20.00")).toBeVisible();
     await expect(page.getByText("Owed now: $17.00")).toBeVisible();
+    const lateList = width < 1280 ? page.getByRole("list", { name: "Refunds that failed after they settled" }) : page.getByRole("table", { name: "Refunds that failed after they settled" });
+    await expect(lateList.getByText("Failed after it settled; owed to the customer")).toBeVisible();
+    await expect(lateList.getByRole("button", { name: "Request resend" })).toBeVisible();
+    await expect(page.getByText("Owed to customers now: $20.00")).toBeVisible();
+    await expect(page.getByText("Owed back now: $17.00")).toBeVisible();
     await expect(page.getByText("Replaces the withdrawn statement for the week of Sep 7, 2026 ($50.00)")).toBeVisible();
     await expect(page.getByRole("heading", { name: /Week of Sep 14, 2026 · 4 payouts · \$380\.00 · \$95\.00 withdrawn/ })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: /M5-0000000863/ })).toBeDisabled();
@@ -727,4 +748,182 @@ test("a refund on a paid payout warns that the provider's share becomes owed", a
   await expect(page.getByText("Their share of this refund becomes an amount they owe", { exact: false })).toBeVisible();
   await page.getByLabel("Chargeback (required)").selectOption("dp_synthetic");
   await expect(page.getByText("Their share of this chargeback becomes an amount they owe", { exact: false })).toBeVisible();
+});
+
+const signalRefund = {
+  ...lateOwed, state: "failure_signal", delivered_reference: "re_synthetic_late_1", attempt_status: "succeeded", late_failure: null,
+};
+
+test("a settled refund Stripe failed is recorded with evidence once a readback shows it", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_late_refund", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000921", replay: false } }));
+  let requested = false;
+  await openPage(page, () => ({
+    ...operations,
+    late_refunds: [requested ? { ...signalRefund, open_failure_request_id: "00000000-0000-4000-8000-000000000921" } : signalRefund],
+    requests: requested
+      ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000921", operation: "refund_late_failure", subject: signalRefund.authorization_id,
+        obligation_id: signalRefund.obligation_id, invoice_number: signalRefund.invoice_number, requested_by_me: true, reason: "Stripe failed it after it settled",
+        evidence: "Stripe readback: failed", details: { authorization_id: signalRefund.authorization_id, payment_id: "pi_synthetic_late", service: 2000, tax: 0, tip: 0, amount: 2000,
+          provider_reference: "re_synthetic_late_1", attempt_status: "succeeded", provider_status: "failed", restores_provider: null } }]
+      : operations.requests,
+  }));
+  const late = page.getByRole("table", { name: "Refunds that failed after they settled" });
+  await expect(late.getByText("Stripe may have failed it after it settled")).toBeVisible();
+  await expect(late.getByText("Last Stripe readback", { exact: false })).toContainText("re_synthetic_late_1 failed");
+  const trigger = late.getByRole("button", { name: "Request failure record" });
+  await expect(trigger).toBeDisabled();
+  await late.getByLabel("Stripe failure evidence (required)").fill("Stripe readback: failed");
+  expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Record that this settled refund failed?" });
+  await expect(confirm.getByText("The refund stands", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Stripe failed it after it settled");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_late_refund");
+  requested = true;
+  await confirm.getByRole("button", { name: "Request failure record", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_action: "failure", p_authorization: signalRefund.authorization_id, p_reason: "Stripe failed it after it settled", p_evidence: "Stripe readback: failed" });
+  expect(payload.p_key).toMatch(/^finance:.+:late-refund:failure:/);
+  noActor(payload);
+  await expect(page.getByText("Review requested", { exact: true })).toBeVisible();
+  await expect(late.getByText("Failure record requested; see reviews.")).toBeVisible();
+});
+
+test("Stripe's event alone offers only a readback, and the readback is recorded", async ({ page }) => {
+  let read = false;
+  await page.route("**/functions/v1/refund-invoice", route => {
+    expect(route.request().postDataJSON()).toEqual({ action: "readback", authorization_id: signalRefund.authorization_id });
+    read = true;
+    return route.fulfill({ json: { status: "succeeded", settled: true, found: true, refund_id: "re_synthetic_late_1", provider_status: "failed" } });
+  });
+  const waiting = { ...signalRefund, last_readback: null, failure_blocker: "readback_required" };
+  await openPage(page, () => ({ ...operations, late_refunds: [read
+    ? { ...signalRefund, last_readback: { ...signalRefund.last_readback, created_at: "2026-09-16T15:05:00.000Z" } } : waiting] }));
+  const late = page.getByRole("table", { name: "Refunds that failed after they settled" });
+  await expect(late.getByText("Stripe event", { exact: false })).toContainText("failed");
+  await expect(late.getByText("Read the refund back from Stripe first.", { exact: false })).toBeVisible();
+  await expect(late.getByRole("button", { name: "Request failure record" })).toHaveCount(0);
+  await late.getByRole("button", { name: "Read back from Stripe" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Read this refund back from Stripe?" });
+  await expect(confirm.getByText("never records a failure by itself", { exact: false })).toBeVisible();
+  await confirm.getByRole("button", { name: "Read back", exact: true }).click();
+  await expect(page.getByText("Stripe refund read back", { exact: true })).toBeVisible();
+  await expect(late.getByRole("button", { name: "Request failure record" })).toBeVisible();
+});
+
+test("a refund owed to the customer is resent through a reviewed request with a reason only", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_late_refund", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000922", replay: false } }));
+  let requested = false;
+  await openPage(page, () => ({
+    ...operations,
+    late_refunds: [requested ? { ...lateOwed, open_resend_request_id: "00000000-0000-4000-8000-000000000922" } : lateOwed],
+    requests: requested
+      ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000922", operation: "refund_late_resend", subject: lateOwed.authorization_id,
+        requested_by_me: true, reason: "Customer updated their card", evidence: null, details: null }]
+      : operations.requests,
+  }));
+  const late = page.getByRole("table", { name: "Refunds that failed after they settled" });
+  await expect(late.getByText("Failure recorded", { exact: false })).toContainText("Card closed after the refund");
+  await late.getByRole("button", { name: "Request resend" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Resend this refund to the customer?" });
+  await expect(confirm.getByText("It never changes the amount.", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Customer updated their card");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_late_refund");
+  requested = true;
+  await confirm.getByRole("button", { name: "Request resend", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_action: "resend", p_authorization: lateOwed.authorization_id, p_reason: "Customer updated their card" });
+  expect(payload).not.toHaveProperty("p_evidence");
+  noActor(payload);
+  await expect(late.getByText("Resend requested; see reviews.")).toBeVisible();
+});
+
+test("a resent late refund is sent to Stripe by its author or approver", async ({ page }) => {
+  let sentToStripe = false;
+  await page.route("**/functions/v1/refund-invoice", route => {
+    expect(route.request().postDataJSON()).toEqual({ action: "send", authorization_id: lateOwed.authorization_id });
+    sentToStripe = true;
+    return route.fulfill({ json: { status: "awaiting_webhook", refund_id: "re_synthetic_late_2" } });
+  });
+  const prepared = { ...lateOwed, attempt_status: "prepared", provider_reference: null, generation: 2 };
+  await openPage(page, () => ({ ...operations, late_refunds: [sentToStripe ? { ...prepared, attempt_status: "pending", provider_reference: "re_synthetic_late_2" } : prepared] }));
+  const late = page.getByRole("table", { name: "Refunds that failed after they settled" });
+  await expect(late.getByText("send 2", { exact: false })).toBeVisible();
+  await late.getByRole("button", { name: "Send refund to Stripe" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Send this refund to Stripe again?" });
+  await confirm.getByRole("button", { name: "Send refund", exact: true }).click();
+  await expect(page.getByText("Refund sent to Stripe", { exact: true })).toBeVisible();
+  await expect(late.getByRole("button", { name: "Send refund to Stripe" })).toHaveCount(0);
+});
+
+test("a release that would underpay a paid payout is not offered, and says to resend instead", async ({ page }) => {
+  await openPage(page, () => ({ ...operations, late_refunds: [{ ...lateOwed, release_blocker: "payout_paid" }] }));
+  const late = page.getByRole("table", { name: "Refunds that failed after they settled" });
+  await expect(late.getByText("resend the refund instead", { exact: false })).toBeVisible();
+  await expect(late.getByRole("button", { name: "Request release" })).toHaveCount(0);
+  await expect(late.getByRole("button", { name: "Request resend" })).toBeVisible();
+});
+
+test("a late refund is released with evidence, and the approver sees the provider share it restores", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_late_refund", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000923", replay: false } }));
+  await openPage(page);
+  const late = page.getByRole("table", { name: "Refunds that failed after they settled" });
+  const trigger = late.getByRole("button", { name: "Request release" });
+  await expect(trigger).toBeDisabled();
+  await late.getByLabel("Customer outcome evidence (required)").fill("Customer paid by check; ticket 5100");
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Release this refund?" });
+  await expect(confirm.getByText("the platform fee and the provider's share are restored", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Refunded outside Stripe");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_late_refund");
+  await confirm.getByRole("button", { name: "Request release", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_action: "release", p_authorization: lateOwed.authorization_id, p_reason: "Refunded outside Stripe", p_evidence: "Customer paid by check; ticket 5100" });
+  noActor(payload);
+
+  const release = {
+    ...theirRequest, request_id: "00000000-0000-4000-8000-000000000924", operation: "refund_late_release", subject: lateOwed.authorization_id,
+    obligation_id: lateOwed.obligation_id, invoice_number: lateOwed.invoice_number, reason: "Refunded outside Stripe", evidence: "Customer paid by check",
+    details: { authorization_id: lateOwed.authorization_id, payment_id: "pi_synthetic_late", service: 2000, tax: 0, tip: 0, amount: 2000,
+      provider_reference: "re_synthetic_late_1", attempt_status: "failed", provider_status: "failed", restores_provider: 1700 },
+  };
+  await page.unroute("**/rpc/money_finance_operations");
+  await openPage(page, () => ({ ...operations, requests: [release] }));
+  const reviews = page.getByRole("table", { name: "Second-person reviews" });
+  await expect(reviews.getByText("Release refund that failed after it settled")).toBeVisible();
+  await expect(reviews.getByText("Stripe refund re_synthetic_late_1, last read back failed · restores $17.00 to the provider", { exact: false })).toBeVisible();
+});
+
+test("a returned repayment is requested against what is owed back, and never for more", async ({ page }) => {
+  await page.route("**/rpc/money_operator_request_repayment_reversal", route => route.fulfill({ json: { request_id: "00000000-0000-4000-8000-000000000925", replay: false } }));
+  let requested = false;
+  await openPage(page, () => ({ ...operations, requests: requested
+    ? [...operations.requests, { ...theirRequest, request_id: "00000000-0000-4000-8000-000000000925", operation: "repayment_reversal", subject: returnPayout.obligation_id,
+      obligation_id: returnPayout.obligation_id, invoice_number: returnPayout.invoice_number, requested_by_me: true, reason: "Transfer returned", evidence: "Bank debit line 9",
+      details: { amount: 1000, returnable: 1700, returnable_now: 1700, payee_name: payee.payee_name } }]
+    : operations.requests }));
+  const returns = page.getByRole("table", { name: "Repayments Mercurius owes back" });
+  await expect(returns.getByText("Bank paid and kept $0.00 of $78.00 proceeds")).toBeVisible();
+  await page.getByLabel("Payout to return (required)").selectOption(returnPayout.obligation_id);
+  const amount = page.getByLabel("Amount returned (USD) (required)");
+  await amount.fill("20.00");
+  await expect(page.getByText("That is more of the repayment than Mercurius owes back.")).toBeVisible();
+  const trigger = page.getByRole("button", { name: "Request return record" });
+  await expect(trigger).toBeDisabled();
+  await amount.fill("10.00");
+  await page.getByLabel("Return evidence (required)").fill("Bank debit line 9");
+  await trigger.click();
+  const confirm = page.getByRole("alertdialog", { name: "Record this returned repayment?" });
+  await expect(confirm.getByText("$10.00 of $17.00 owed back", { exact: false })).toBeVisible();
+  await confirm.getByRole("textbox").fill("Transfer returned");
+  const sent = page.waitForRequest("**/rpc/money_operator_request_repayment_reversal");
+  requested = true;
+  await confirm.getByRole("button", { name: "Request record", exact: true }).click();
+  const payload = (await sent).postDataJSON();
+  expect(payload).toMatchObject({ p_obligation: returnPayout.obligation_id, p_amount: 1000, p_reason: "Transfer returned", p_evidence: "Bank debit line 9" });
+  expect(payload.p_key).toMatch(/^finance:.+:repayment-return:/);
+  noActor(payload);
+  await expect(page.getByText("Review requested", { exact: true })).toBeVisible();
+  const reviews = page.getByRole("table", { name: "Second-person reviews" });
+  await expect(reviews.getByText("$10.00 of $17.00 owed back")).toBeVisible();
 });

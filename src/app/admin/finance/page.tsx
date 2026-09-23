@@ -202,6 +202,7 @@ export default function FinanceReconciliationPage() {
             {formatCents(row.refunds.service + row.refunds.tax + row.refunds.tip)}
             {row.refunds.pending > 0 ? ` (${row.refunds.pending} pending)` : ""}
             {row.refunds.released > 0 ? ` · ${row.refunds.released} failed and released` : ""}
+            {row.refunds.customer_owed > 0 ? ` · ${formatCents(row.refunds.customer_owed)} failed after it settled; owed to the customer` : ""}
           </dd>
         </dl>
       ),
@@ -274,6 +275,8 @@ export default function FinanceReconciliationPage() {
         <Total label="Processor costs" value={formatCents(data.totals.processor_costs)} />
         <Total label="Chargeback suspense" value={formatCents(data.totals.chargeback_suspense)} tone={data.totals.chargeback_suspense ? "warning" : undefined} />
         <Total label="Owed by providers" value={formatCents(data.totals.provider_owed)} tone={data.totals.provider_owed ? "warning" : undefined} />
+        {data.totals.customer_refunds_owed > 0 && <Total label="Refunds owed to customers" value={formatCents(data.totals.customer_refunds_owed)} tone="warning" />}
+        {data.totals.repayments_returnable > 0 && <Total label="Repayments owed back" value={formatCents(data.totals.repayments_returnable)} tone="warning" />}
         <Total label="Invoices with ledger issues" value={String(data.totals.with_issues)} tone={data.totals.with_issues ? "danger" : undefined} />
         <Total label="Open exceptions" value={String(data.exceptions.length)} tone={data.exceptions.length ? "warning" : undefined} />
         <div className="bg-card p-4">
@@ -452,6 +455,8 @@ function FundsDetail({ row }: { row: ObligationReconciliation }) {
       )}
       {payout.recovery.owed > 0 ? (
         <span className="text-xs font-medium text-status-warning tabular-nums">Provider owes {formatCents(payout.recovery.owed)}</span>
+      ) : payout.recovery.repayment_returnable > 0 ? (
+        <span className="text-xs font-medium text-status-warning tabular-nums">Repayment owed back {formatCents(payout.recovery.repayment_returnable)}</span>
       ) : (
         <span className="text-xs text-muted-foreground tabular-nums">Payable {formatCents(payout.payable_ledger)}</span>
       )}

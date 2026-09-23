@@ -14,10 +14,10 @@ const base = {
   payee,
   terms: { subtotal: 10000, tax: 700, tip: 1000, deposit: 3000, total: 11700 },
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [{ payment_id: "pi_synthetic", mode: "full", amount: 11700 }] },
-  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0, released: 0 },
+  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0, released: 0, late_failed: 0, reversed: 0, customer_owed: 0 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
   payout: { funds_state: "eligible", not_eligible: [], held: [], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null,
-    withdrawn_statements: 0, recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0 } },
+    withdrawn_statements: 0, recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0, repayment_reversed: 0, repayment_returnable: 0 } },
   chargebacks: { suspense: 0, suspense_ledger: 0, lost: 0 },
   processor_costs: 0,
   readback: { state: "matched", observed: 11700, expected: 11700, recorded_at: "2026-09-12T15:00:00.000Z" },
@@ -177,7 +177,7 @@ test("a provider who owes Mercurius after a refund on a paid payout needs attent
   const owing = {
     ...paid, obligation_id: "00000000-0000-4000-8000-000000000775", invoice_number: "M5-0000000775",
     refunds: { ...base.refunds, service: 2000, settled: 1 },
-    payout: { ...paid.payout, payable: -1700, payable_ledger: -1700, recovery: { owed: 1700, late_settled: 0, repaid: 0, written_off: 0 } },
+    payout: { ...paid.payout, payable: -1700, payable_ledger: -1700, recovery: { ...base.payout.recovery, owed: 1700 } },
   };
   await readback(page, {
     obligations: [owing, eligible],

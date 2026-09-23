@@ -250,6 +250,8 @@ See the TRACE-080 section of PHASE-5-VALIDATION.md.
   *TRACE-081 (PHASE-5-BANK-STATEMENTS.md) adds it, and resolves such a line into this slice's
   reviewed late payment request.*
 - A reviewed path for a return recorded after a repayment.
+  *TRACE-083 (PHASE-5-LATE-REVERSALS.md) adds it: a reviewed repayment reversal, recorded once
+  Mercurius has sent the repayment back, and received amounts that count it.*
 - Provider-facing wording and notification of an amount owed (MPS §6.5 "role-appropriate money
   states").
 - Failed-refund recovery (TRACE-077); `paymentFunctionError` (TRACE-076).

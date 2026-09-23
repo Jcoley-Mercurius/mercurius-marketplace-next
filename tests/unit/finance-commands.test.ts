@@ -13,11 +13,14 @@ import {
   canResendRefund,
   canSendRefund,
   canDismissLine,
+  canRequestLateStep,
+  canSendLateRefund,
   closeDetails,
   commandErrorMessage,
   lineResolution,
   matchCandidates,
   formatDay,
+  lateRefundDetails,
   lateSettlementDetails,
   moneyDetails,
   parseCents,
@@ -26,17 +29,20 @@ import {
   refundErrorMessage,
   releaseDetails,
   retryDetails,
+  reversalDetails,
+  reversalError,
   reviewAction,
   weekEnd,
   withdrawalDetails,
   type AchItem,
   type BankMovement,
+  type LateRefund,
   type StatementLine,
   type PendingRefund,
   type ReviewRequest,
 } from "../../src/lib/financeCommands";
 
-// TRACE-076/077/078/079/080/081/082: wording and gating only. The database decides authority, approvers and actionability.
+// TRACE-076/077/078/079/080/081/082/083: wording and gating only. The database decides authority, approvers and actionability.
 const request = (overrides: Partial<ReviewRequest> = {}): ReviewRequest => ({
   request_id: "00000000-0000-4000-8000-000000000761",
   operation: "hold_resolution",
@@ -155,7 +161,7 @@ describe("failed refund recovery", () => {
     expect(commandErrorMessage("Refund resend not allowed: readback_required")).toContain("failed or canceled");
     expect(commandErrorMessage("Refund resend not allowed: refund_released")).toBe("It was released.");
     expect(commandErrorMessage("Only the refund's author or approver can resend it")).toBe("Only the refund's author or approver can resend it.");
-    expect(commandErrorMessage("Finance review not actionable: refund_changed")).toContain("Stripe failed a different refund");
+    expect(commandErrorMessage("Finance review not actionable: refund_changed")).toContain("a different Stripe refund failed");
     expect(commandErrorMessage("This Stripe refund failed on an earlier send of this refund; read back the current send")).toContain("earlier send");
     expect(commandErrorMessage("A released refund cannot be sent again")).toContain("new refund");
     expect(reviewAction(request({ operation: "refund_release", requested_by_me: true, state: "stale", blocker: "refund_not_failed" })).note)
@@ -422,5 +428,88 @@ describe("bank statement reconciliation", () => {
     expect(commandErrorMessage("Bank statement is closed")).toContain("closed");
     expect(commandErrorMessage("Statement import idempotency conflict")).toContain("already submitted with different details");
     expect(commandErrorMessage("Statement line not matchable: something_new")).toContain("Refresh the page");
+  });
+});
+
+const late = (overrides: Partial<LateRefund> = {}): LateRefund => ({
+  authorization_id: "00000000-0000-4000-8000-000000000764",
+  obligation_id: "00000000-0000-4000-8000-000000000763",
+  invoice_number: "M5-0000000763",
+  payment_id: "pi_synthetic",
+  amount: 2000,
+  state: "failure_signal",
+  delivered_reference: "re_synthetic_1",
+  attempt_status: "succeeded",
+  provider_reference: "re_synthetic_1",
+  generation: 1,
+  signal: null,
+  last_readback: null,
+  late_failure: null,
+  can_send: true,
+  failure_blocker: null,
+  resend_blocker: null,
+  release_blocker: null,
+  open_failure_request_id: null,
+  open_resend_request_id: null,
+  open_release_request_id: null,
+  created_at: "2026-09-16T15:00:00.000Z",
+  ...overrides,
+});
+
+describe("refunds that fail after they settle", () => {
+  it("offers recording a failure only on a signal with the readback and no open request", () => {
+    expect(canRequestLateStep(late(), "failure")).toBe(true);
+    expect(canRequestLateStep(late({ failure_blocker: "readback_required" }), "failure")).toBe(false);
+    expect(canRequestLateStep(late({ open_failure_request_id: "r" }), "failure")).toBe(false);
+    expect(canRequestLateStep(late(), "resend")).toBe(false);
+    expect(canRequestLateStep(late(), "release")).toBe(false);
+  });
+  it("offers a resend or release only while the refund is owed to the customer", () => {
+    const owed = late({ state: "customer_owed", delivered_reference: null, attempt_status: "failed" });
+    expect(canRequestLateStep(owed, "resend")).toBe(true);
+    expect(canRequestLateStep(owed, "release")).toBe(true);
+    expect(canRequestLateStep(owed, "failure")).toBe(false);
+    expect(canRequestLateStep({ ...owed, resend_blocker: "chargeback_open" }, "resend")).toBe(false);
+    expect(canRequestLateStep({ ...owed, release_blocker: "payout_paid" }, "release")).toBe(false);
+    expect(canRequestLateStep({ ...owed, open_release_request_id: "r" }, "release")).toBe(false);
+    expect(canRequestLateStep(late({ state: "released" }), "release")).toBe(false);
+  });
+  it("sends a resent refund only from its author or approver, once prepared", () => {
+    const prepared = late({ state: "customer_owed", attempt_status: "prepared", generation: 2 });
+    expect(canSendLateRefund(prepared)).toBe(true);
+    expect(canSendLateRefund({ ...prepared, can_send: false })).toBe(false);
+    expect(canSendLateRefund({ ...prepared, attempt_status: "pending" })).toBe(false);
+    expect(canSendLateRefund(late({ attempt_status: "prepared" }))).toBe(false);
+  });
+  it("reads late refund and reversal details only for their own operations", () => {
+    const details = { authorization_id: "a", payment_id: "pi", service: 2000, tax: 0, tip: 0, amount: 2000, provider_reference: "re_1",
+      attempt_status: "failed" as const, provider_status: "failed", restores_provider: 1700 };
+    expect(lateRefundDetails(request({ operation: "refund_late_release", details }))?.restores_provider).toBe(1700);
+    expect(lateRefundDetails(request({ operation: "refund_late_failure", details }))?.provider_reference).toBe("re_1");
+    expect(lateRefundDetails(request({ operation: "refund_release", details }))).toBeNull();
+    const reversal = { amount: 700, returnable: 1700, returnable_now: 1000, payee_name: "Synthetic payee" };
+    expect(reversalDetails(request({ operation: "repayment_reversal", details: reversal }))?.returnable_now).toBe(1000);
+    expect(reversalDetails(request({ operation: "payout_recovery", details: reversal }))).toBeNull();
+  });
+  it("allows returning part of a repayment up to what is owed back", () => {
+    expect(reversalError(1700, 700)).toBeNull();
+    expect(reversalError(1700, 1700)).toBeNull();
+    expect(reversalError(1700, 1701)).toContain("more of the repayment");
+    expect(reversalError(1700, 0)).toContain("greater than zero");
+    expect(reversalError(1700, null)).toContain("greater than zero");
+  });
+  it("words late refund and reversal refusals for operators", () => {
+    expect(commandErrorMessage("Finance review not actionable: payout_paid")).toContain("resend the refund instead");
+    expect(commandErrorMessage("Finance review not actionable: refund_in_flight")).toContain("with Stripe");
+    expect(commandErrorMessage("Refund release not allowed: on_ach_statement")).toContain("already on an ACH statement");
+    expect(commandErrorMessage("Refund late failure not allowed: readback_required")).toContain("Read the refund back");
+    expect(commandErrorMessage("Repayment reversal not allowed: returnable_changed")).toContain("owes back changed");
+    expect(commandErrorMessage("Late refund step must be failure, resend or release")).toContain("record the failure, resend or release");
+    expect(commandErrorMessage("Reversal amount in cents required")).toBe("Enter an amount greater than zero.");
+  });
+  it("lets a line that suggests a returned repayment be dismissed like a repayment", () => {
+    const line = { line_id: "l", line_number: 1, posted_on: "2026-09-16", direction: "debit" as const, amount: 700, bank_reference_hint: "0700",
+      state: "unmatched" as const, match: null, suggestion: { action: "match_reversal" as const }, dismissal: null };
+    expect(canDismissLine(line)).toBe(true);
   });
 });

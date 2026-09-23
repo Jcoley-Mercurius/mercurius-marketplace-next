@@ -48,8 +48,9 @@ const closeRequest = {
   created_at: now, expires_at: "2026-09-17T15:00:00.000Z", executed_at: null,
 };
 const operations = (overrides: Record<string, unknown> = {}) => ({
-  evaluated_at: now, requests: [closeRequest], holds: [], readbacks: [], events: [], refunds: [], refund_releases: [], cancellations: [], chargebacks: [],
+  evaluated_at: now, requests: [closeRequest], holds: [], readbacks: [], events: [], refunds: [], refund_releases: [], late_refunds: [], cancellations: [], chargebacks: [],
   ach: { next_period_start: null, ready: [], batches: [] }, recoveries: { owed_total: 0, owed: [], withdrawn: [], late_settlements: [] },
+    repayment_returns: { returnable_total: 0, payouts: [] },
   statements, ...overrides,
 });
 const reconciliation = {

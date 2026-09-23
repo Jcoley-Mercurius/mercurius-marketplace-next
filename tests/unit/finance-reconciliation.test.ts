@@ -16,7 +16,7 @@ import {
   type ObligationReconciliation,
 } from "../../src/lib/financeReconciliation";
 
-// TRACE-075/080: the page only words server-derived states; these cases pin that wording.
+// TRACE-075/080/083: the page only words server-derived states; these cases pin that wording.
 const since = "2026-09-16T12:00:00.000Z";
 const row = (patch: Partial<ObligationReconciliation> = {}): ObligationReconciliation => ({
   obligation_id: "00000000-0000-4000-8000-000000000001",
@@ -26,10 +26,10 @@ const row = (patch: Partial<ObligationReconciliation> = {}): ObligationReconcili
   payee: { contractor_id: "00000000-0000-4000-8000-000000000003", name: "Synthetic payee", reassigned: false },
   terms: { subtotal: 10000, tax: 700, tip: 1000, deposit: 0, total: 11700 },
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [] },
-  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0, released: 0 },
+  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0, released: 0, late_failed: 0, reversed: 0, customer_owed: 0 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
   payout: { funds_state: "eligible", not_eligible: [], held: [], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null,
-    withdrawn_statements: 0, recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0 } },
+    withdrawn_statements: 0, recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0, repayment_reversed: 0, repayment_returnable: 0 } },
   chargebacks: { suspense: 0, suspense_ledger: 0, lost: 0 },
   processor_costs: 0,
   readback: { state: "none" },
@@ -90,9 +90,9 @@ describe("finance reconciliation presentation", () => {
 
   it("flags a paid payout whose provider owes Mercurius, and never suggests a debit or netting", () => {
     const paid = row({ payout: { ...row().payout, funds_state: "paid", paid: 9500, payable: -1700, payable_ledger: -1700,
-      recovery: { owed: 1700, late_settled: 0, repaid: 0, written_off: 0 } } });
+      recovery: { ...row().payout.recovery, owed: 1700 } } });
     expect(needsAttention(paid)).toBe(true);
-    expect(needsAttention(row({ payout: { ...paid.payout, payable: 0, payable_ledger: 0, recovery: { owed: 0, late_settled: 0, repaid: 1000, written_off: 700 } } }))).toBe(false);
+    expect(needsAttention(row({ payout: { ...paid.payout, payable: 0, payable_ledger: 0, recovery: { ...row().payout.recovery, repaid: 1000, written_off: 700 } } }))).toBe(false);
     const owes: FinanceException = { kind: "provider_owes", obligation_id: "o", invoice_number: "M5-1", payee_name: "Synthetic payee", amount: 1700, since };
     expect(exceptionPresentation(owes).title).toBe("Provider owes Mercurius");
     expect(exceptionPresentation(owes).action).toContain("second reviewer");
@@ -112,5 +112,21 @@ describe("finance reconciliation presentation", () => {
     expect(exceptionPresentation(missing).title).toBe("Not on a bank statement");
     expect(exceptionPresentation(missing).action).not.toMatch(/resend|retry/i);
     expect(bankMovementLabel.late).toBe("Late payment of a withdrawn transfer");
+  });
+  it("flags a refund owed to a customer and a repayment owed back, with the reviewed next step", () => {
+    expect(needsAttention(row({ refunds: { ...row().refunds, settled: 1, late_failed: 1, customer_owed: 2000 } }))).toBe(true);
+    expect(needsAttention(row({ payout: { ...row().payout, recovery: { ...row().payout.recovery, repaid: 1700, repayment_returnable: 1700 } } }))).toBe(true);
+    const owed: FinanceException = { kind: "customer_refund_owed", obligation_id: "o", authorization_id: "a", failed_reference: "re_1", amount: 2000, since };
+    expect(exceptionPresentation(owed).title).toBe("Refund owed to customer");
+    expect(exceptionPresentation(owed).action).toMatch(/Resend it, or release it/);
+    expect(exceptionAmount(owed)).toBe(2000);
+    const signal: FinanceException = { kind: "refund_failed_late", obligation_id: "o", authorization_id: "a", amount: 2000, source: "stripe_event", since };
+    expect(exceptionPresentation(signal).action).toContain("Only a readback showing it failed");
+    expect(exceptionPresentation({ ...signal, source: "readback" }).action).toContain("Record the failure with a second reviewer");
+    const back: FinanceException = { kind: "repayment_returnable", obligation_id: "o", invoice_number: "M5-1", payee_name: "Synthetic payee", amount: 1700, since };
+    expect(exceptionPresentation(back).action).toContain("Send it back by ACH, then record the return");
+    expect(issueLabel.customer_refund_payable).toBe("Refunds owed to customers differ from open late refund failures");
+    expect(accountLabel.customer_refund_payable).toBe("Refunds owed to customers");
+    expect(bankMovementLabel.reversal).toBe("Repayment returned to the provider");
   });
 });

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { PageState } from "@/components/ui/page-state";
 import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
 import { FinanceAchCommands } from "@/components/admin/FinanceAchCommands";
+import { FinanceLateRefundCommands } from "@/components/admin/FinanceLateRefundCommands";
 import { FinanceRecoveryCommands } from "@/components/admin/FinanceRecoveryCommands";
 import { FinanceStatementCommands } from "@/components/admin/FinanceStatementCommands";
 import {
@@ -26,6 +27,7 @@ import {
   commandErrorMessage,
   failedRefundBlockerLabel,
   formatDay,
+  lateRefundDetails,
   lateSettlementDetails,
   moneyDetails,
   operationLabel,
@@ -37,6 +39,7 @@ import {
   reissueBlockerLabel,
   releaseDetails,
   retryDetails,
+  reversalDetails,
   reviewAction,
   withdrawalDetails,
   reviewStateLabel,
@@ -50,7 +53,7 @@ import { formatCents, type ObligationReconciliation } from "@/lib/financeReconci
 import { paymentFunctionError } from "@/lib/payments";
 import { createClient } from "@/lib/supabase/client";
 
-// TRACE-076/077/078/079/080/081/082 finance operator commands. The signed-in session is the actor; the database refuses
+// TRACE-076/077/078/079/080/081/082/083 finance operator commands. The signed-in session is the actor; the database refuses
 // anyone without finance authority, binds second-person commands to their exact text, expires them
 // after 24 hours and picks the approver. Every command is confirmed by re-reading the server before
 // it is reported done.
@@ -83,6 +86,10 @@ const executeConsequence: Record<ReviewOperation, string> = {
   ach_late_settlement: "Records that the bank paid this withdrawn transfer and posts it as paid to the provider, with you as author and the approver as reviewer. If a replacement was also paid, the provider then owes the duplicate; if not, no replacement can be sent. It cannot be undone here.",
   payout_recovery: "Records this repayment or write-off against what the provider owes, with you as author and the approver as reviewer. It cannot be undone here.",
   bank_statement_close: "Closes this bank statement with you as author and the approver as reviewer, and fixes how each of its lines is matched. It then takes no more lines and cannot change.",
+  refund_late_failure: "Records that Stripe failed this refund after it settled, with you as author and the approver as reviewer. What Stripe returned is held as owed to the customer; the refund, its fee and the provider's share stand. It cannot be undone here.",
+  refund_late_resend: "Prepares the same approved refund again under a new Stripe key, with you as author and the approver as reviewer. The refund's author or approver then sends it; what was held for the customer is paid out when Stripe's event arrives.",
+  refund_late_release: "Reverses this refund with you as author and the approver as reviewer: the customer is no longer shown as refunded, and the platform fee and the provider's share are restored. It can never be sent again. It cannot be undone here.",
+  repayment_reversal: "Records that Mercurius sent this part of the provider's repayment back, with you as author and the approver as reviewer. Record it only once the bank shows the debit. It cannot be undone here.",
   refund_release: "Takes this failed refund off the books with you as author and the approver as reviewer. It stops holding the payout and frees its amount; it can never be sent again. If the customer is still owed, request a new refund. It cannot be undone here.",
 };
 
@@ -234,6 +241,10 @@ export function FinanceCommands({
     const close = closeDetails(request);
     const money = moneyDetails(request);
     const release = releaseDetails(request);
+    const lateRefund = lateRefundDetails(request);
+    const reversal = reversalDetails(request);
+    if (lateRefund) return `${invoiceLabel(request.obligation_id, request.invoice_number)} · ${lateRefund.payment_id}`;
+    if (reversal) return `${invoiceLabel(request.obligation_id, request.invoice_number)} · ${reversal.payee_name ?? "Provider"}`;
     if (close) return `Statement ${formatDay(close.period_start)} to ${formatDay(close.period_end)}`;
     if (release) return `${invoiceLabel(request.obligation_id, request.invoice_number)} · ${release.payment_id}`;
     if (request.operation === "event_exclusion") {
@@ -259,6 +270,14 @@ export function FinanceCommands({
     const close = closeDetails(request);
     const money = moneyDetails(request);
     const release = releaseDetails(request);
+    const lateRefund = lateRefundDetails(request);
+    const reversal = reversalDetails(request);
+    if (lateRefund) {
+      return `${formatCents(lateRefund.amount)} (${components(lateRefund)}) · Stripe refund ${lateRefund.provider_reference ?? "unknown"}${lateRefund.provider_status ? `, last read back ${lateRefund.provider_status}` : ""}${lateRefund.restores_provider !== null ? ` · restores ${formatCents(lateRefund.restores_provider)} to the provider` : ""}`;
+    }
+    if (reversal) {
+      return `${formatCents(reversal.amount)} of ${formatCents(reversal.returnable)} owed back${reversal.returnable_now !== reversal.returnable ? ` (now ${formatCents(reversal.returnable_now)})` : ""}`;
+    }
     if (release) {
       return `${formatCents(release.amount)} (${components(release)}) · Stripe refund ${release.provider_reference ?? "unknown"}${release.provider_status ? ` ${release.provider_status}` : ""}`;
     }
@@ -288,7 +307,7 @@ export function FinanceCommands({
         <div>
           <h2 id="finance-commands" className="text-lg font-semibold">Finance commands</h2>
           <p className="text-sm text-muted-foreground">
-            Recorded as you, with your finance authority. Authorizing a refund, releasing a refund Stripe failed, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch, retrying a failed transfer, withdrawing a transfer from its statement, recording a late payment of a withdrawn transfer and recording a provider repayment or write-off need a second operator too, and so does closing a bank statement. Resending a failed refund, placing and releasing a payout hold, recording a bank outcome, and importing, matching or dismissing bank statement lines need one operator.
+            Recorded as you, with your finance authority. Authorizing a refund, releasing a refund Stripe failed, recording, resending or releasing a refund Stripe failed after it settled, allocating a lost chargeback, resolving a readback and excluding a Stripe event need a different finance operator to approve the exact command in their own session within 24 hours; you then run it. Preparing a weekly ACH batch, retrying a failed transfer, withdrawing a transfer from its statement, recording a late payment of a withdrawn transfer, recording a provider repayment or write-off, and returning a repayment need a second operator too, and so does closing a bank statement. Resending a failed refund, placing and releasing a payout hold, recording a bank outcome, and importing, matching or dismissing bank statement lines need one operator.
           </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => void refresh()}><RefreshCw />Refresh commands</Button>
@@ -912,13 +931,19 @@ export function FinanceCommands({
               {ops.refund_releases.map((item) => (
                 <li key={item.authorization_id} className="[overflow-wrap:anywhere]">
                   <span className="font-medium tabular-nums">{invoiceLabel(item.obligation_id, item.invoice_number)} · {formatCents(item.amount)}</span>
-                  <span className="text-muted-foreground"> · Stripe refund {item.provider_reference} · {item.reason} · {formatDate(item.created_at)}{item.by_me ? " · you took part" : ""}</span>
+                  <span className="text-muted-foreground"> · Stripe refund {item.provider_reference}{item.reversed ? " · failed after it settled; reversed" : ""} · {item.reason} · {formatDate(item.created_at)}{item.by_me ? " · you took part" : ""}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
       </div>
+
+      {ops.late_refunds ? (
+        <FinanceLateRefundCommands ops={ops} busy={busy} run={run} refund={refund} submitRequest={submitRequest} commandKey={key} />
+      ) : (
+        <PageState kind="error" title="Late refund failures unavailable" description="The server did not return refunds that failed after they settled. Refresh before resending or releasing one." />
+      )}
     </section>
   );
 }
@@ -928,7 +953,7 @@ export type Run = (
   confirmed: (next: FinanceOperations) => boolean,
   success: { title: string; description: string },
 ) => Promise<void>;
-type Refund = (body: Record<string, unknown>) => Promise<{ status?: string; found?: boolean; provider_status?: string | null }>;
+export type Refund = (body: Record<string, unknown>) => Promise<{ status?: string; found?: boolean; provider_status?: string | null }>;
 export type Accepted = <T>(call: PromiseLike<{ data: T; error: { message: string } | null }>) => Promise<Record<string, unknown> | null>;
 
 function RefundSend({ item, busy, run, refund }: { item: PendingRefund; busy: boolean; run: Run; refund: Refund }) {

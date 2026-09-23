@@ -1,4 +1,4 @@
-// TRACE-076/077/078/079/080/081/082 presentation for the finance operator command gateway. The database decides who
+// TRACE-076/077/078/079/080/081/082/083 presentation for the finance operator command gateway. The database decides who
 // may act, what is actionable and which approver counts; this module only words its answers.
 // Amounts are integer cents.
 
@@ -15,7 +15,11 @@ export type ReviewOperation =
   | "ach_late_settlement"
   | "payout_recovery"
   | "bank_statement_close"
-  | "refund_release";
+  | "refund_release"
+  | "refund_late_failure"
+  | "refund_late_resend"
+  | "refund_late_release"
+  | "repayment_reversal";
 export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale" | "expired";
 export type ReviewBlocker =
   | "not_found"
@@ -49,6 +53,11 @@ export type ReviewBlocker =
   | "statement_exceptions"
   | FailedRefundBlocker
   | "refund_changed"
+  | LateRefundBlocker
+  | "reversal_invalid"
+  | "nothing_returnable"
+  | "returnable_changed"
+  | "exceeds_returnable"
   | AchBlocker;
 /** Why a payout cannot be batched, sent, retried or withdrawn, or a bank outcome recorded (TRACE-078/079). */
 export type AchBlocker =
@@ -96,6 +105,17 @@ export type FailedRefundBlocker =
   | "refund_released"
   | "refund_not_failed"
   | "readback_required";
+
+/** Why a step on a refund Stripe failed after it settled cannot be taken yet (TRACE-083). */
+export type LateRefundBlocker =
+  | "refund_not_settled"
+  | "late_failure_open"
+  | "no_late_failure"
+  | "refund_in_flight"
+  | "refund_found_at_stripe"
+  | "readback_too_early"
+  | "payout_paid"
+  | "advance_captured";
 
 export type Components = { service: number; tax: number; tip: number };
 export type RefundAttemptStatus = "not_started" | "prepared" | "pending" | "succeeded" | "failed" | "reconcile";
@@ -179,6 +199,24 @@ export type RefundReleaseDetails = Components & {
   provider_status: string | null;
   refund_created_at: string;
 };
+/** A late refund step names the Stripe refund it acts on and the send's key; a resend makes it stale (TRACE-083). */
+export type LateRefundDetails = Components & {
+  authorization_id: string;
+  payment_id: string;
+  amount: number;
+  provider_reference: string | null;
+  attempt_status: RefundAttemptStatus | null;
+  provider_status: string | null;
+  /** For a release: the provider share it restores. */
+  restores_provider: number | null;
+};
+/** A repayment reversal binds what was returnable when it was requested (TRACE-083). */
+export type RepaymentReversalDetails = {
+  amount: number;
+  returnable: number;
+  returnable_now: number;
+  payee_name: string | null;
+};
 export type PayoutRecoveryDetails = {
   kind: RecoveryKind;
   amount: number;
@@ -196,7 +234,18 @@ export type ReviewRequest = {
   invoice_number: string | null;
   reason: string;
   evidence: string | null;
-  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | AchLateSettlementDetails | PayoutRecoveryDetails | BankCloseDetails | RefundReleaseDetails | null;
+  details:
+    | MoneyDetails
+    | AchBatchDetails
+    | AchRetryDetails
+    | AchWithdrawalDetails
+    | AchLateSettlementDetails
+    | PayoutRecoveryDetails
+    | BankCloseDetails
+    | RefundReleaseDetails
+    | LateRefundDetails
+    | RepaymentReversalDetails
+    | null;
   requested_by_me: boolean;
   approved_by_me: boolean;
   recorded_by_me: boolean;
@@ -273,6 +322,36 @@ export type RefundRelease = {
   reason: string;
   evidence: string;
   by_me: boolean;
+  /** True when the refund had settled and the release reversed it (TRACE-083). */
+  reversed: boolean;
+  created_at: string;
+};
+
+export type LateRefundState = "failure_signal" | "customer_owed" | "redelivered" | "released";
+/** A settled refund Stripe failed, or may have failed, after it settled (TRACE-083). */
+export type LateRefund = {
+  authorization_id: string;
+  obligation_id: string;
+  invoice_number: string | null;
+  payment_id: string;
+  amount: number;
+  state: LateRefundState;
+  /** The Stripe refund that delivered it now; null while it is owed to the customer or released. */
+  delivered_reference: string | null;
+  attempt_status: RefundAttemptStatus;
+  provider_reference: string | null;
+  generation: number;
+  /** Stripe's refund.updated event saying it failed: a reason to read it back, not evidence. */
+  signal: { event_id: string; status: string; received_at: string } | null;
+  last_readback: { found: boolean; provider_reference: string | null; provider_status: string | null; by_me: boolean; created_at: string } | null;
+  late_failure: { failed_reference: string; reason: string; evidence: string; by_me: boolean; created_at: string } | null;
+  can_send: boolean;
+  failure_blocker: ReviewBlocker | null;
+  resend_blocker: ReviewBlocker | null;
+  release_blocker: ReviewBlocker | null;
+  open_failure_request_id: string | null;
+  open_resend_request_id: string | null;
+  open_release_request_id: string | null;
   created_at: string;
 };
 
@@ -403,8 +482,24 @@ export type LateSettlement = {
 };
 export type RecoveryOperations = { owed_total: number; owed: OwedPayout[]; withdrawn: WithdrawnTransfer[]; late_settlements: LateSettlement[] };
 
+/** A payout whose provider repaid an amount they no longer owe, or with a recent reversal (TRACE-083). */
+export type RepaymentReturn = {
+  obligation_id: string;
+  invoice_number: string | null;
+  payee_name: string | null;
+  returnable: number;
+  repaid: number;
+  reversed: number;
+  /** What the bank paid and kept on this payout, and the proceeds it is owed. */
+  paid: number;
+  proceeds: number;
+  reversals: { amount: number; returnable_before: number; reason: string; evidence: string; by_me: boolean; created_at: string }[];
+  open_request_id: string | null;
+};
+export type RepaymentReturnOperations = { returnable_total: number; payouts: RepaymentReturn[] };
+
 /** A recorded bank movement a statement line can evidence (TRACE-081). */
-export type BankMovementKind = "settled" | "returned" | "late" | "repayment";
+export type BankMovementKind = "settled" | "returned" | "late" | "repayment" | "reversal";
 export type BankMovement = {
   movement: string;
   kind: BankMovementKind;
@@ -423,6 +518,7 @@ export type BankSuggestionAction =
   | "record_returned"
   | "request_late_settlement"
   | "match_repayment"
+  | "match_reversal"
   | "amount_mismatch"
   | "outcome_conflict"
   | "already_evidenced"
@@ -483,10 +579,12 @@ export type FinanceOperations = {
   events: UnprocessedEvent[];
   refunds: PendingRefund[];
   refund_releases: RefundRelease[];
+  late_refunds: LateRefund[];
   cancellations: CancellationRefund[];
   chargebacks: LostChargeback[];
   ach: AchOperations;
   recoveries: RecoveryOperations;
+  repayment_returns: RepaymentReturnOperations;
   statements: StatementOperations;
 };
 
@@ -504,6 +602,10 @@ export const operationLabel: Record<ReviewOperation, string> = {
   payout_recovery: "Record provider recovery",
   bank_statement_close: "Close bank statement",
   refund_release: "Release failed refund",
+  refund_late_failure: "Record refund that failed after it settled",
+  refund_late_resend: "Resend refund that failed after it settled",
+  refund_late_release: "Release refund that failed after it settled",
+  repayment_reversal: "Return a provider repayment",
 };
 
 export const recoveryKindLabel: Record<RecoveryKind, string> = {
@@ -559,8 +661,20 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   refund_settled: "The refund has settled.",
   refund_released: "The refund was already released.",
   refund_not_failed: "Stripe has not reported this refund failed, or it was resent. Read it back from Stripe first.",
-  readback_required: "Read the refund back from Stripe first. A release needs a readback showing it failed or canceled.",
-  refund_changed: "The refund was resent after this was requested, and Stripe failed a different refund. Request the release again if it still applies.",
+  readback_required: "Read the refund back from Stripe first. This needs a readback showing the current refund failed or was canceled, or, for an uncertain send, that Stripe has no refund.",
+  refund_changed: "The refund was resent, or a different Stripe refund failed, after this was requested. Request it again if it still applies.",
+  refund_not_settled: "Stripe has not settled this refund. A refund that fails before it settles is resent or released under Reviewed refunds not settled.",
+  late_failure_open: "This refund's failure is already recorded. Resend or release it.",
+  no_late_failure: "No failure is open on this refund: it was delivered again or released.",
+  refund_in_flight: "A resend of this refund is with Stripe. Read it back, or wait for Stripe's refund event.",
+  refund_found_at_stripe: "Stripe has a refund for this send. Read it back instead.",
+  readback_too_early: "Read it back again: the readback must be at least 24 hours after the refund was prepared.",
+  payout_paid: "The provider's payout was already paid at the refunded amount. Restoring their share would leave them owed proceeds that cannot be paid again, so resend the refund instead.",
+  advance_captured: "The refund was of a deposit, and the invoice has since been paid in full. A release cannot restore the deposit; resend the refund.",
+  reversal_invalid: "Enter an amount greater than zero.",
+  nothing_returnable: "Mercurius owes this provider none of their repayment back.",
+  returnable_changed: "What Mercurius owes back changed after this was requested. Refresh the page and request it again if it still applies.",
+  exceeds_returnable: "That is more of the repayment than Mercurius owes back.",
   awaiting_confirmation: "The homeowner has not confirmed completion, or the confirmation does not match the job.",
   replacement_reconciliation: "The replacement provider's payout needs its reviewed reconciliation first.",
   dispute_hold: "A dispute or appeal on this job is open.",
@@ -661,6 +775,10 @@ export const closeDetails = (request: ReviewRequest): BankCloseDetails | null =>
   request.operation === "bank_statement_close" ? (request.details as BankCloseDetails | null) : null;
 export const releaseDetails = (request: ReviewRequest): RefundReleaseDetails | null =>
   request.operation === "refund_release" ? (request.details as RefundReleaseDetails | null) : null;
+export const lateRefundDetails = (request: ReviewRequest): LateRefundDetails | null =>
+  ["refund_late_failure", "refund_late_resend", "refund_late_release"].includes(request.operation) ? (request.details as LateRefundDetails | null) : null;
+export const reversalDetails = (request: ReviewRequest): RepaymentReversalDetails | null =>
+  request.operation === "repayment_reversal" ? (request.details as RepaymentReversalDetails | null) : null;
 
 export const bankLineStateLabel: Record<BankLineState, string> = {
   matched: "Matched",
@@ -674,6 +792,7 @@ export const bankMovementKindLabel: Record<BankMovementKind, string> = {
   returned: "Returned transfer",
   late: "Late payment of a withdrawn transfer",
   repayment: "Provider repayment",
+  reversal: "Repayment returned to the provider",
 };
 
 /** What an unmatched line tells the operator to do. */
@@ -682,6 +801,7 @@ export const bankSuggestionLabel: Record<BankSuggestionAction, string> = {
   record_returned: "The bank returned this transfer. Record the return.",
   request_late_settlement: "The bank paid this withdrawn transfer. Request a late payment record with a second operator.",
   match_repayment: "Match it to the provider repayment it shows.",
+  match_reversal: "Match it to the repayment Mercurius returned to the provider.",
   amount_mismatch: "The bank shows a different amount from the transfer. Do not record it; escalate to the finance owner.",
   outcome_conflict: "The bank shows something the transfer's recorded outcome contradicts. Check with the bank and escalate; nothing can be recorded from this line.",
   already_evidenced: "Another statement line already shows this transfer. Check the bank for a duplicate.",
@@ -708,13 +828,21 @@ export function matchCandidates(line: StatementLine, movements: BankMovement[]):
 
 /** Whether an unmatched line may be dismissed: never one whose reference names a transfer. */
 export function canDismissLine(line: StatementLine) {
-  return line.state === "unmatched" && (line.suggestion?.action === "no_transfer" || line.suggestion?.action === "match_repayment");
+  const action = line.suggestion?.action;
+  return line.state === "unmatched" && (action === "no_transfer" || action === "match_repayment" || action === "match_reversal");
 }
 
 /** Why a recovery of this amount cannot be requested, or null. The server re-checks against the ledger. */
 export function recoveryError(owed: number, amount: number | null): string | null {
   if (amount === null || amount <= 0) return "Enter an amount greater than zero.";
   if (amount > owed) return "That is more than the provider owes on this payout.";
+  return null;
+}
+
+/** Why a repayment reversal of this amount cannot be requested, or null. The server re-checks against the ledger. */
+export function reversalError(returnable: number, amount: number | null): string | null {
+  if (amount === null || amount <= 0) return "Enter an amount greater than zero.";
+  if (amount > returnable) return "That is more of the repayment than Mercurius owes back.";
   return null;
 }
 
@@ -783,6 +911,30 @@ export function canRequestRefundRelease(refund: PendingRefund) {
   return refund.attempt_status === "failed" && refund.release_blocker === null && refund.open_release_request_id === null;
 }
 
+export const lateRefundStateLabel: Record<LateRefundState, string> = {
+  failure_signal: "Stripe may have failed it after it settled",
+  customer_owed: "Failed after it settled; owed to the customer",
+  redelivered: "Delivered again after a late failure",
+  released: "Released after a late failure; the refund is reversed",
+};
+
+/** The late refund steps, each a second-person request (TRACE-083). */
+export type LateRefundStep = "failure" | "resend" | "release";
+
+/** Whether this late refund step can be requested from this session. */
+export function canRequestLateStep(item: LateRefund, step: LateRefundStep) {
+  if (step === "failure") return item.state === "failure_signal" && item.failure_blocker === null && item.open_failure_request_id === null;
+  if (item.state !== "customer_owed") return false;
+  return step === "resend"
+    ? item.resend_blocker === null && item.open_resend_request_id === null
+    : item.release_blocker === null && item.open_release_request_id === null;
+}
+
+/** Whether a resent late refund may be sent to Stripe from this session: prepared, and by its author or approver. */
+export function canSendLateRefund(item: LateRefund) {
+  return item.can_send && item.state === "customer_owed" && item.attempt_status === "prepared";
+}
+
 /** The only ways to split a lost chargeback: the three parts add up to it and stay within what is retained. */
 export function allocationError(amount: number, retained: Components, parts: Components): string | null {
   if (parts.service + parts.tax + parts.tip !== amount) return "Service, tax and tip must add up to the chargeback.";
@@ -830,6 +982,8 @@ const refusals: [RegExp, string][] = [
   [/Evidence of up to 1000 characters required/, "Enter evidence of up to 1000 characters."],
   [/Recovery must be a repayment or a write-off/, "Choose a repayment or a write-off."],
   [/Recovery amount in cents required/, "Enter an amount greater than zero."],
+  [/Reversal amount in cents required/, "Enter an amount greater than zero."],
+  [/Late refund step must be/, "Choose whether to record the failure, resend or release the refund."],
   [/Statement period of up to 32 days required/, "Enter a statement period of up to 32 days, ending on or after its start."],
   [/Statement period cannot start in the future/, "The statement period cannot start after today."],
   [/Another statement already covers part of this period/, "Another statement already covers part of this period. Use its exact dates, or choose a period that does not overlap."],
@@ -871,6 +1025,8 @@ export function commandErrorMessage(message: string): string {
   }
   const reissue = /Refund reissue not allowed: ([a-z_]+)/.exec(message)?.[1];
   if (reissue && reissue in reissueBlockerLabel) return reissueBlockerLabel[reissue as ReissueBlocker];
+  const late = /(?:Refund late failure|Refund release|Repayment reversal) not allowed: ([a-z_]+)/.exec(message)?.[1];
+  if (late && late in blockerLabel) return blockerLabel[late as ReviewBlocker];
   const resend = /Refund resend not allowed: ([a-z_]+)/.exec(message)?.[1];
   if (resend && resend in failedRefundBlockerLabel) return failedRefundBlockerLabel[resend as FailedRefundBlocker];
   for (const [pattern, text] of refusals) if (pattern.test(message)) return text;
