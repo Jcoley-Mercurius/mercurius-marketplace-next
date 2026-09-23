@@ -427,7 +427,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   cases, 0 audit findings.
 - Open: Codex review (one-operator settlement, reference before sending, G5 holds on statement
   payouts); CI; replacement statements and prepared-attempt withdrawal; already-paid recovery.
-- Next: CI and Codex review of the PR.
+- Next: CI and Codex review of PR #39.
 
 ## Current slice — TRACE-079 ACH withdrawal and replacement statements (2026-09-21, PR open)
 
@@ -517,7 +517,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   conflicting outcome, and releasing a match or dismissal); the owner's real bank export format;
   authorized owner bank workflow acceptance with a real statement; failed-refund recovery;
   `paymentFunctionError`.
-- Next: CI and Codex review of the PR.
+- Next: CI and Codex review of PR #39.
 
 ## Slice — TRACE-082 failed-refund recovery (2026-09-22, merged as PR #38)
 
@@ -564,7 +564,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - application: 221 of 221 non-visual browser cases (no flake).
 - Next: Codex review of PR #38.
 
-## Current slice — TRACE-083 late reversals (2026-09-23, PR open)
+## Current slice — TRACE-083 late reversals (2026-09-23, PR #39 open)
 
 - PR #38 (TRACE-082) merged 2026-09-23 (main `a39abf1`).
 - Branch `codex/phase5-late-reversals`, base main `a39abf1`, worktree `../mercurius-late-reversals`.
@@ -591,7 +591,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - a write-off made unnecessary by a later return;
   - provisioning finance operators;
   - Stripe test-mode and owner bank acceptance.
-- Next: CI and Codex review of the PR.
+- Next: CI and Codex review of PR #39.
 
 ## Workflow update — 2026-09-10
 
