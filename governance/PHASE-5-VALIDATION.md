@@ -204,12 +204,15 @@ regeneration from the final clean database. `audit:prod` has 0 findings.
 The light 320px and dark 1440px layout cases now include both new panels. The existing finance,
 bank statement and reconciliation fixtures gained the new readback fields.
 
+**CI.** Run 35915476088 on `99279d7` passed backend, lifecycle and application. Earlier runs failed
+before any test, on main as well: ghcr.io refused Supabase image pulls with `toomanyrequests`. The
+workflow now pulls from public.ecr.aws and retries the stack start.
+
 **Not performed:**
 
 - Stripe test-mode acceptance of a refund that fails after it succeeded;
 - owner bank workflow acceptance;
 - hosted deployment;
-- CI on the PR head (pending);
 - visual screenshots (`test:visual`).
 
 ## TRACE-082 — Failed-refund recovery — 2026-09-22

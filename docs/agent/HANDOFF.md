@@ -591,7 +591,15 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - a write-off made unnecessary by a later return;
   - provisioning finance operators;
   - Stripe test-mode and owner bank acceptance.
-- Next: CI and Codex review of PR #39.
+- CI: `backend` failed on main (since the PR #38 merge at 18:03 UTC) and on this branch before any
+  test ran. ghcr.io refused Supabase image pulls with `toomanyrequests`, even when authenticated.
+  `.github/workflows/ci.yml` now pulls the same images from public.ecr.aws, retries the stack start
+  up to three times, and prints redacted start errors on failure. Skipped jobs were `lifecycle`
+  and `application` waiting on `backend`.
+- CI run 35915476088 on `99279d7` passed all three jobs: 2531 SQL assertions across 41 suites on the
+  clean reset and the replay, all 19 concurrency scripts, lifecycle, and the application job. The
+  push run of the same commit was cancelled by the workflow's concurrency group, not failed.
+- Next: Codex review of PR #39.
 
 ## Workflow update — 2026-09-10
 
