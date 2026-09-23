@@ -14,7 +14,7 @@ const base = {
   payee,
   terms: { subtotal: 10000, tax: 700, tip: 1000, deposit: 3000, total: 11700 },
   charges: { captured: 11700, attempts_captured: 11700, ledger_captured: 11700, fully_captured: true, payments: [{ payment_id: "pi_synthetic", mode: "full", amount: 11700 }] },
-  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0 },
+  refunds: { service: 0, tax: 0, tip: 0, settled: 0, pending: 0, released: 0 },
   earnings: { platform_fee: 1500, platform_fee_ledger: 1500, tax: 700, tax_ledger: 700, provider_proceeds: 9500 },
   payout: { funds_state: "eligible", not_eligible: [], held: [], eligible_at: null, paid: 0, returned: 0, payable: 9500, payable_ledger: 9500, statement: null,
     withdrawn_statements: 0, recovery: { owed: 0, late_settled: 0, repaid: 0, written_off: 0 } },

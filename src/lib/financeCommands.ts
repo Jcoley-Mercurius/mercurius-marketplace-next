@@ -1,4 +1,4 @@
-// TRACE-076/077/078/079/080/081 presentation for the finance operator command gateway. The database decides who
+// TRACE-076/077/078/079/080/081/082 presentation for the finance operator command gateway. The database decides who
 // may act, what is actionable and which approver counts; this module only words its answers.
 // Amounts are integer cents.
 
@@ -14,7 +14,8 @@ export type ReviewOperation =
   | "ach_withdrawal"
   | "ach_late_settlement"
   | "payout_recovery"
-  | "bank_statement_close";
+  | "bank_statement_close"
+  | "refund_release";
 export type ReviewState = "awaiting_approval" | "approved" | "executed" | "stale" | "expired";
 export type ReviewBlocker =
   | "not_found"
@@ -46,6 +47,8 @@ export type ReviewBlocker =
   | "period_open"
   | "statement_changed"
   | "statement_exceptions"
+  | FailedRefundBlocker
+  | "refund_changed"
   | AchBlocker;
 /** Why a payout cannot be batched, sent, retried or withdrawn, or a bank outcome recorded (TRACE-078/079). */
 export type AchBlocker =
@@ -85,6 +88,14 @@ export type ReissueBlocker =
   | "refund_found_at_stripe"
   | "readback_required"
   | "readback_too_early";
+
+/** Why a refund Stripe reported failed cannot be resent or released yet (TRACE-082). */
+export type FailedRefundBlocker =
+  | "refund_not_sent"
+  | "refund_settled"
+  | "refund_released"
+  | "refund_not_failed"
+  | "readback_required";
 
 export type Components = { service: number; tax: number; tip: number };
 export type RefundAttemptStatus = "not_started" | "prepared" | "pending" | "succeeded" | "failed" | "reconcile";
@@ -159,6 +170,15 @@ export type BankCloseDetails = {
   credits: number;
   exceptions_now: number;
 };
+/** A release names the Stripe refund that failed; it goes stale if the refund is resent first (TRACE-082). */
+export type RefundReleaseDetails = Components & {
+  authorization_id: string;
+  payment_id: string;
+  amount: number;
+  provider_reference: string | null;
+  provider_status: string | null;
+  refund_created_at: string;
+};
 export type PayoutRecoveryDetails = {
   kind: RecoveryKind;
   amount: number;
@@ -176,7 +196,7 @@ export type ReviewRequest = {
   invoice_number: string | null;
   reason: string;
   evidence: string | null;
-  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | AchLateSettlementDetails | PayoutRecoveryDetails | BankCloseDetails | null;
+  details: MoneyDetails | AchBatchDetails | AchRetryDetails | AchWithdrawalDetails | AchLateSettlementDetails | PayoutRecoveryDetails | BankCloseDetails | RefundReleaseDetails | null;
   requested_by_me: boolean;
   approved_by_me: boolean;
   recorded_by_me: boolean;
@@ -234,7 +254,25 @@ export type PendingRefund = {
   can_send: boolean;
   generation: number;
   reissue_blocker: ReissueBlocker | null;
+  /** Set only for a refund Stripe reported failed: why it cannot be resent or released yet, or null. */
+  resend_blocker: FailedRefundBlocker | null;
+  release_blocker: ReviewBlocker | null;
+  open_release_request_id: string | null;
   last_readback: { found: boolean; provider_status: string | null; by_me: boolean; created_at: string } | null;
+  created_at: string;
+};
+
+/** A failed refund taken off the books in the last 30 days (TRACE-082). */
+export type RefundRelease = {
+  authorization_id: string;
+  obligation_id: string;
+  invoice_number: string | null;
+  payment_id: string;
+  amount: number;
+  provider_reference: string;
+  reason: string;
+  evidence: string;
+  by_me: boolean;
   created_at: string;
 };
 
@@ -444,6 +482,7 @@ export type FinanceOperations = {
   readbacks: OpenReadback[];
   events: UnprocessedEvent[];
   refunds: PendingRefund[];
+  refund_releases: RefundRelease[];
   cancellations: CancellationRefund[];
   chargebacks: LostChargeback[];
   ach: AchOperations;
@@ -464,6 +503,7 @@ export const operationLabel: Record<ReviewOperation, string> = {
   ach_late_settlement: "Record late payment of withdrawn transfer",
   payout_recovery: "Record provider recovery",
   bank_statement_close: "Close bank statement",
+  refund_release: "Release failed refund",
 };
 
 export const recoveryKindLabel: Record<RecoveryKind, string> = {
@@ -515,6 +555,12 @@ export const blockerLabel: Record<ReviewBlocker, string> = {
   period_open: "The statement period has not ended. Close it after its last day.",
   statement_changed: "Lines were added to the statement after this was requested. Request the close again.",
   statement_exceptions: "The statement has unresolved lines, or recorded bank movements in its period that no line shows. Resolve them first.",
+  refund_not_sent: "The refund has not been sent to Stripe.",
+  refund_settled: "The refund has settled.",
+  refund_released: "The refund was already released.",
+  refund_not_failed: "Stripe has not reported this refund failed, or it was resent. Read it back from Stripe first.",
+  readback_required: "Read the refund back from Stripe first. A release needs a readback showing it failed or canceled.",
+  refund_changed: "The refund was resent after this was requested, and Stripe failed a different refund. Request the release again if it still applies.",
   awaiting_confirmation: "The homeowner has not confirmed completion, or the confirmation does not match the job.",
   replacement_reconciliation: "The replacement provider's payout needs its reviewed reconciliation first.",
   dispute_hold: "A dispute or appeal on this job is open.",
@@ -613,6 +659,8 @@ export const recoveryDetails = (request: ReviewRequest): PayoutRecoveryDetails |
   request.operation === "payout_recovery" ? (request.details as PayoutRecoveryDetails | null) : null;
 export const closeDetails = (request: ReviewRequest): BankCloseDetails | null =>
   request.operation === "bank_statement_close" ? (request.details as BankCloseDetails | null) : null;
+export const releaseDetails = (request: ReviewRequest): RefundReleaseDetails | null =>
+  request.operation === "refund_release" ? (request.details as RefundReleaseDetails | null) : null;
 
 export const bankLineStateLabel: Record<BankLineState, string> = {
   matched: "Matched",
@@ -679,6 +727,14 @@ export const reissueBlockerLabel: Record<ReissueBlocker, string> = {
   readback_too_early: "Read it back again: the readback must be at least 24 hours after the refund was prepared.",
 };
 
+export const failedRefundBlockerLabel: Record<FailedRefundBlocker, string> = {
+  refund_not_sent: "It has not been sent to Stripe.",
+  refund_settled: "It has already settled.",
+  refund_released: "It was released.",
+  refund_not_failed: "Stripe has not reported this send failed.",
+  readback_required: "Read it back from Stripe first. Resending or releasing needs a readback showing this send failed or canceled.",
+};
+
 export const refundAttemptLabel: Record<RefundAttemptStatus, string> = {
   not_started: "Not sent to Stripe",
   prepared: "Prepared, not confirmed by Stripe",
@@ -717,6 +773,16 @@ export function canReissueRefund(refund: PendingRefund) {
   return refund.can_send && refund.attempt_status === "reconcile" && refund.reissue_blocker === null;
 }
 
+/** Whether a refund Stripe reported failed may be sent again under a new Stripe key from this session (TRACE-082). */
+export function canResendRefund(refund: PendingRefund) {
+  return refund.can_send && refund.attempt_status === "failed" && refund.resend_blocker === null;
+}
+
+/** Whether a release of a refund Stripe reported failed can be requested from this session (TRACE-082). */
+export function canRequestRefundRelease(refund: PendingRefund) {
+  return refund.attempt_status === "failed" && refund.release_blocker === null && refund.open_release_request_id === null;
+}
+
 /** The only ways to split a lost chargeback: the three parts add up to it and stay within what is retained. */
 export function allocationError(amount: number, retained: Components, parts: Components): string | null {
   if (parts.service + parts.tax + parts.tip !== amount) return "Service, tax and tip must add up to the chargeback.";
@@ -750,6 +816,9 @@ const refusals: [RegExp, string][] = [
   [/Payout hold already released/, "This hold was already released."],
   [/Payout hold not found|Cancellation not found|Chargeback not found|Refund authorization not found/, "It no longer exists. Refresh the page."],
   [/Only the refund's author or approver can reissue/, "Only the refund's author or approver can reissue it."],
+  [/Only the refund's author or approver can resend/, "Only the refund's author or approver can resend it."],
+  [/failed on an earlier send of this refund/, "Stripe's refund is the one an earlier send created, which failed. Read back the current send."],
+  [/A released refund cannot be sent again/, "This refund was released, so it cannot be sent again. Request a new refund if one is still owed."],
   [/Service, tax and tip amounts in cents required/, "Enter service, tax and tip amounts, greater than zero in total."],
   [/Stripe payment required/, "Choose the Stripe payment to refund."],
   [/Weekly period start required/, "Choose the date the week starts."],
@@ -802,6 +871,8 @@ export function commandErrorMessage(message: string): string {
   }
   const reissue = /Refund reissue not allowed: ([a-z_]+)/.exec(message)?.[1];
   if (reissue && reissue in reissueBlockerLabel) return reissueBlockerLabel[reissue as ReissueBlocker];
+  const resend = /Refund resend not allowed: ([a-z_]+)/.exec(message)?.[1];
+  if (resend && resend in failedRefundBlockerLabel) return failedRefundBlockerLabel[resend as FailedRefundBlocker];
   for (const [pattern, text] of refusals) if (pattern.test(message)) return text;
   return "The command was not completed. Refresh the page and check the current state before trying again.";
 }

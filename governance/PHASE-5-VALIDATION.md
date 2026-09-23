@@ -62,6 +62,143 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-082 — Failed-refund recovery — 2026-09-22
+
+Branch `codex/phase5-failed-refund-recovery`, base `main` `28c52e9` (PR #37 merged); isolated
+synthetic stack only. The design (F1–F8), the owner's four decisions and the review questions are
+in PHASE-5-FAILED-REFUND-RECOVERY.md.
+
+**Baseline.** With the migration applied and no test changes, all 39 existing suites (2212 pgTAP
+assertions) passed after a clean reset.
+
+**Database.** 2335 pgTAP assertions across 40 suites pass after a clean reset, and again as CI's
+clean replay after all committed concurrency fixtures. Suite 049 is new (123 assertions). It
+covers:
+
+- **Grants:** both commands callable by signed-in users only, the release kernel service-only, the
+  helpers and the release table closed to browser roles.
+- **Before any failure:** the refund holds the payout, reserves its share of the caps and counts as
+  pending. A resend and a release of an unsent refund are both refused.
+- **The failure evidence:**
+  - pending and resent refunds offer no resend;
+  - a failed send response alone allows neither step;
+  - a readback showing the refund pending is not proof, even after a later failed send response;
+  - a readback showing it failed allows both;
+  - a failed refund still holds its payout.
+- **Resend:**
+  - who may: an admin without finance authority, a third operator, a blank reason and an unknown
+    refund are refused, and the approver resends as generation 2;
+  - idempotency: the replay, and conflicts on another reason and another operator;
+  - the attempt: prepared under the `:g2` key with the same amount and no Stripe refund, and the
+    failed refund recorded on the generation;
+  - the readback target listing the failed refund to skip.
+- **The earlier refund:** neither a readback nor a send response can record the earlier failed
+  refund, and the refused readback changes nothing. The first send's readback does not prove the
+  second send failed.
+- **Release request:**
+  - request checks: reason, evidence and key required, an unknown refund refused, an admin without
+    finance authority refused;
+  - any finance operator may request it; the replay, and a conflict on another reason;
+  - the approver's details; the refund row's open request;
+  - no self-approval, no unapproved run, and the approver cannot run it;
+  - the run and its replay.
+- **After the release:**
+  - the refund leaves the unsettled list and the `refund_pending` exception;
+  - resend and a second release are refused;
+  - the recorded row (both operators, the failed refund, the readback that proved it) is immutable;
+  - the payout is no longer held by the readback mirror or the ACH kernel's check;
+  - the full service subtotal can be requested again;
+  - reconciliation reads 0 pending and 1 released, with no ledger issue, no refund journal and no
+    refunded amount;
+  - `money_prepare_refund` finds nothing to send, and no writer can prepare it again;
+  - a settled refund event for it does not process, holds the payout as an unprocessed event and
+    is listed for reconciliation;
+  - a new authorization for the full amount succeeds.
+- **A stale release:** a release approved for the first failure goes stale as `refund_not_failed`
+  while a resend is out, and as `refund_changed` once the second send fails. The request and the
+  kernel both refuse it. A replay keeps the first reference, and a new request names the second.
+- **Chargebacks:** a released refund no longer blocks chargeback allocation, and the allocation
+  runs.
+- **Cancellation policy:** a deposit-plus-balance cancellation's refund line on each payment before
+  and after a release on the deposit, through the kernel with an approval of the exact command,
+  plus its replay.
+- **The kernel's own checks:** a refund that has not failed, no failure readback, one operator as
+  both roles, an unapproved command, and a conflicting second release.
+
+**Mutation check** (local harness, not committed). Each mutant redefined one function from the
+migration inside suite 049's transaction, which rolled it back. A mutant counts as killed when the
+suite reports `not ok`, or when a statement outside an assertion raises and aborts the suite. A
+mutant that did not compile is not counted.
+
+39 mutants ran; 37 were killed. They covered:
+
+- every clause of the failure readback;
+- each resend and release blocker;
+- each kernel check, including the review;
+- the resend's author check, blocker, reference clearing, failed-reference record and replay;
+- both guard triggers;
+- all fourteen F5 substitutions;
+- the readback target's list;
+- the request blocker.
+
+The two survivors are equivalent and recorded in the findings: the readback's `found` check, and
+its timing check.
+
+On the first run, three mutants survived and one was malformed:
+
+- the readback's status check: a new case covers a pending readback before a failed send response;
+- the cancellation line's reservation on this payment: the cases now assert whole lines on two
+  payments;
+- the earlier-payments capacity: it was not yet in the harness; the deposit fixture kills it;
+- the kernel review mutant did not compile: it was rewritten, and is killed.
+
+**Concurrency.** New `scripts/phase5-failed-refund-concurrency.mjs`, wired into CI after the
+TRACE-081 script. Each call is a separate signed-in session:
+
+- **Six resends:** three each from the refund's author and approver, with different reasons,
+  produce one generation. Each other call replays it or is refused.
+- **Release holds the lock:** an approved release holding the lock while the approver resends
+  records the release and refuses the resend (`refund_released`).
+- **Resend holds the lock:** a resend holding the lock while an approved release runs prepares the
+  resend and refuses the release (`refund_not_failed`).
+
+It also asserts that nothing settled and that the race payouts reconcile with no issue. All 18
+scripts passed in CI order on a clean reset, and the clean replay after them passed.
+
+**Application.** `scan:secrets`, `lint` and `typecheck` pass. 169 unit tests pass, 10 of them new:
+
+- six `paymentFunctionError` cases. Before the fix, the two `Response` cases failed, which
+  reproduced the TRACE-076 finding;
+- four finance presentation cases: resend and release gating, release details typed to their
+  operation, and the resend and release refusal wording.
+
+The build passes with CI's synthetic public variables. The regenerated database types only add
+lines. `audit:prod` has 0 findings.
+
+**Browser.** 220 of 221 non-visual cases pass (`test:a11y`) on the final build; 4 are new. The one
+failure was the known `mds.spec.ts` Escape/focus flake, which is unrelated and passed 3/3 on rerun.
+The new cases cover:
+
+- a failed refund resent with a reason: the exact payload, no actor field, and the refund then
+  ready to send as send 2;
+- a failed refund without a failure readback: neither action is offered, the reason is shown, and
+  the readback is still offered;
+- a release requested by an operator who cannot send the refund: disabled until evidence is
+  entered, an axe pass with the evidence field, the confirmation's consequence, a payload with
+  reason, evidence and key and no actor field, and the row then showing the open request;
+- the approver's view of a release request (amount, components, failed Stripe refund and status),
+  and the list of recent releases.
+
+The existing finance, bank statement and reconciliation specs gained the new readback fields. The
+reissue case now reads "sent again (send 2)".
+
+**Not performed:**
+
+- Stripe test-mode acceptance of a failed refund, its readback, a resend and a release;
+- hosted deployment;
+- CI on the PR head (pending);
+- visual screenshots (`test:visual`).
+
 ## TRACE-081 — Bank statement reconciliation — 2026-09-22
 
 Branch `codex/phase5-bank-statements`, base `main` `5e29da3` (PR #36 merged); isolated synthetic
