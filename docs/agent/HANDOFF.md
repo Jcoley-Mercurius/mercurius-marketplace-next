@@ -1,7 +1,7 @@
-# Agent handoff — 2026-09-22
+# Agent handoff — 2026-09-23
 
 Each section carries its own date; the repository checkpoint below was taken on
-2026-09-10 and the latest slice checkpoint is TRACE-082.
+2026-09-10 and the latest slice checkpoint is TRACE-083.
 
 ## Repository checkpoint
 
@@ -519,7 +519,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   `paymentFunctionError`.
 - Next: CI and Codex review of the PR.
 
-## Current slice — TRACE-082 failed-refund recovery (2026-09-22, PR #38 open)
+## Slice — TRACE-082 failed-refund recovery (2026-09-22, merged as PR #38)
 
 - PR #37 (TRACE-081) merged 2026-09-22 (main `28c52e9`).
 - Branch `codex/phase5-failed-refund-recovery`, base main `28c52e9`, worktree
@@ -563,6 +563,35 @@ as current branch/merge status; reconcile them with the latest slice evidence.
     the clean replay, and all 18 concurrency scripts including the new failed refund script;
   - application: 221 of 221 non-visual browser cases (no flake).
 - Next: Codex review of PR #38.
+
+## Current slice — TRACE-083 late reversals (2026-09-23, PR open)
+
+- PR #38 (TRACE-082) merged 2026-09-23 (main `a39abf1`).
+- Branch `codex/phase5-late-reversals`, base main `a39abf1`, worktree `../mercurius-late-reversals`.
+- Owner decisions 2026-09-23 (asked before implementation):
+  - a refund that fails after it settled stands, and the customer is owed. The owner first said
+    "the provider owes it"; the conflict with CFG-005/008 (charging the provider twice) was raised,
+    and this reading was confirmed;
+  - every step takes two operators;
+  - a return after a repayment reverses the repayment, as a separate reviewed record.
+- Change: migration `20260923001000`:
+  - late failures hold what Stripe returned in `customer_refund_payable`;
+  - a resend's refund event resettles it through a handler routed from `money_process_event`;
+  - a release reverses the refund and restores the fee and provider share;
+  - repayment reversals, with the TRACE-080 R4 received amount counting them;
+  - a `reversal` bank movement;
+  - fifteen generated redefinitions.
+- `/admin/finance` gains "Refunds that failed after they settled" and "Repayments Mercurius owes
+  back".
+- Evidence: `governance/PHASE-5-LATE-REVERSALS.md` (L1–L8) and the TRACE-083 section of
+  `governance/PHASE-5-VALIDATION.md`.
+- Open:
+  - Codex review of L1–L8 and the review questions: a provider top-up where `payout_paid` refuses a
+    release; whether a chargeback should block a release;
+  - a write-off made unnecessary by a later return;
+  - provisioning finance operators;
+  - Stripe test-mode and owner bank acceptance.
+- Next: CI and Codex review of the PR.
 
 ## Workflow update — 2026-09-10
 

@@ -110,8 +110,9 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/vendor_renewal_document_queue") return send({ evaluated_at: new Date().toISOString(), entries: [] });
   if (url.pathname === "/rest/v1/rpc/vendor_own_renewal_documents") return send({ accepting: false, open_limit: 5, documents: [] });
   // TRACE-076/078/079/080/082 finance commands: nothing open by default; specs override per case.
-  if (url.pathname === "/rest/v1/rpc/money_finance_operations") return send({ evaluated_at: new Date().toISOString(), requests: [], holds: [], readbacks: [], events: [], refunds: [], refund_releases: [], cancellations: [], chargebacks: [],
+  if (url.pathname === "/rest/v1/rpc/money_finance_operations") return send({ evaluated_at: new Date().toISOString(), requests: [], holds: [], readbacks: [], events: [], refunds: [], refund_releases: [], late_refunds: [], cancellations: [], chargebacks: [],
     ach: { next_period_start: null, ready: [], batches: [] }, recoveries: { owed_total: 0, owed: [], withdrawn: [], late_settlements: [] },
+    repayment_returns: { returnable_total: 0, payouts: [] },
     statements: { today: new Date().toISOString().slice(0, 10), statements: [], unevidenced: [] } });
   // TRACE-074 document retention: empty by default; specs override per case.
   if (url.pathname === "/rest/v1/rpc/vendor_document_retention_queue") return send({

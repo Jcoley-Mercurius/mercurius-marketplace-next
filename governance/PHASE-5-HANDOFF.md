@@ -176,6 +176,24 @@ current one and a released refund from ever being sent or settled. The slice als
 that fails after Stripe reported it succeeded is recorded as a finding. See
 PHASE-5-FAILED-REFUND-RECOVERY.md.
 
+TRACE-083 closes both late-reversal findings (owner decisions 2026-09-23).
+
+A settled refund Stripe later fails stands: its fee, tax and provider share stay posted. Two finance
+operators record the failure from a Stripe readback, and what Stripe returned is then held in a new
+`customer_refund_payable` account as owed to the customer. It is cleared in one of two reviewed
+ways:
+
+- a resend, whose Stripe refund event pays the customer out of what was held;
+- a release, which reverses the refund and restores the platform fee and the provider's share.
+
+A release is refused when the bank has not paid the payout yet, or when the restored proceeds would
+exceed what a paid payout already paid.
+
+A bank return after a provider's repayment leaves that repayment returnable. Mercurius sends it
+back by ACH, and two operators record it as a repayment reversal. The replacement statement pays
+only the proceeds, and a statement line pairs with the reversal by hand. See
+PHASE-5-LATE-REVERSALS.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
@@ -233,6 +251,8 @@ behavior characterized before replacing the five active entrypoints.
   export has been read. Changed-bank/changed-amount replacement
   statements, failed-refund reservation replacement and already-paid recovery get
   reviewed operations integration; current paths block those ambiguous actions.
+  TRACE-083 adds a refund that fails after it settled and a return after a repayment, against
+  synthetic Stripe events and bank movements only.
 - [ ] Licensing/insurance sufficiency by category/jurisdiction, private evidence
   collection, Auth provisioning, delivery/acceptance receipts, renewal operations and
   CFG-011 retention/legal-hold/purge for application revisions are verified.

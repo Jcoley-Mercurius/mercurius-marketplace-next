@@ -12,9 +12,11 @@ import {
   parseCents,
   recoveryError,
   recoveryKindLabel,
+  reversalError,
   type FinanceOperations,
   type OwedPayout,
   type RecoveryKind,
+  type RepaymentReturn,
   type ReviewOperation,
   type WithdrawnTransfer,
 } from "@/lib/financeCommands";
@@ -25,6 +27,9 @@ import { createClient } from "@/lib/supabase/client";
 // withdrawn transfer the bank paid after all, leaves the provider owing Mercurius. Nothing here
 // moves money: operators record a repayment the provider sent, or a write-off Mercurius absorbs,
 // each with a second finance operator. Other payouts are never held back or netted.
+// TRACE-083: a bank return, or a released refund, can leave a repayment covering an amount the
+// provider no longer owes. Mercurius sends it back by manual ACH and records that with a second
+// operator; the replacement statement still pays only the proceeds.
 
 const selectClass =
   "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
@@ -59,6 +64,9 @@ export function FinanceRecoveryCommands({
   const [lateTransfer, setLateTransfer] = useState("");
   const [lateReference, setLateReference] = useState("");
   const [lateEvidence, setLateEvidence] = useState("");
+  const [returnPayout, setReturnPayout] = useState("");
+  const [returnAmount, setReturnAmount] = useState("");
+  const [returnEvidence, setReturnEvidence] = useState("");
 
   const label = (invoice: string | null, obligation: string) => invoice ?? `Obligation ${obligation.slice(0, 8)}`;
   const owedLabel = (row: OwedPayout) => `${label(row.invoice_number, row.obligation_id)} · ${row.payee_name ?? "Provider"} · owes ${formatCents(row.owed)}`;
@@ -71,6 +79,12 @@ export function FinanceRecoveryCommands({
   const amountError = chosen && amount.trim() ? recoveryError(chosen.owed, cents) : null;
   const lateable = recoveries.withdrawn.filter((row) => row.open_request_id === null);
   const late = lateable.find((row) => row.attempt_id === lateTransfer);
+  const returns = ops.repayment_returns;
+  const returnLabel = (row: RepaymentReturn) => `${label(row.invoice_number, row.obligation_id)} · ${row.payee_name ?? "Provider"} · owed back ${formatCents(row.returnable)}`;
+  const returnable = returns ? returns.payouts.filter((row) => row.returnable > 0 && row.open_request_id === null) : [];
+  const returning = returnable.find((row) => row.obligation_id === returnPayout);
+  const returnCents = returnAmount.trim() ? parseCents(returnAmount) : null;
+  const returnError = returning && returnAmount.trim() ? reversalError(returning.returnable, returnCents) : null;
 
   return (
     <section aria-labelledby="finance-recovery" className="space-y-4">
@@ -231,6 +245,101 @@ export function FinanceRecoveryCommands({
           />
         </div>
       </div>
+
+      {returns ? (
+        <div className="space-y-3">
+          <h4 id="finance-repayment-returns" className="font-medium">Repayments Mercurius owes back</h4>
+          <p className="text-sm text-muted-foreground">
+            When the bank returns a payout after the provider repaid part of it, or a refund they repaid is released, Mercurius holds a repayment the provider no longer owes. Send it back by ACH from Mercurius&apos;s bank, then record it here once the bank shows the debit. The replacement statement pays only the payout&apos;s proceeds.
+          </p>
+          <p className="text-sm font-medium tabular-nums">Owed back now: {formatCents(returns.returnable_total)}</p>
+          {returns.payouts.length === 0 ? (
+            <PageState kind="empty" title="No repayment is owed back" description="Payouts appear here when a provider's repayment covers more than they now owe." />
+          ) : (
+            <div className="overflow-hidden rounded-xl border bg-card">
+              <ResponsiveDataList
+                label="Repayments Mercurius owes back"
+                rows={returns.payouts}
+                rowKey={(row) => row.obligation_id}
+                rowLabel={returnLabel}
+                columns={[
+                  {
+                    key: "payout",
+                    label: "Payout",
+                    render: (row) => (
+                      <span className="flex flex-col gap-0.5 tabular-nums [overflow-wrap:anywhere]">
+                        <span className="font-medium">{label(row.invoice_number, row.obligation_id)}</span>
+                        <span className="text-xs text-muted-foreground">{row.payee_name ?? "Provider"}</span>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "why",
+                    label: "Why",
+                    render: (row) => (
+                      <span className="flex flex-col gap-0.5 text-xs tabular-nums">
+                        <span>Repaid {formatCents(row.repaid)}{row.reversed > 0 && ` · returned ${formatCents(row.reversed)}`}</span>
+                        <span>Bank paid and kept {formatCents(row.paid)} of {formatCents(row.proceeds)} proceeds</span>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "owed",
+                    label: "Owed back",
+                    render: (row) => (
+                      <span className="flex flex-col gap-0.5 tabular-nums">
+                        <span className="font-medium">{row.returnable > 0 ? formatCents(row.returnable) : "Nothing owed back"}</span>
+                        {row.open_request_id && <span className="text-xs text-muted-foreground">Return requested; see reviews</span>}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          )}
+          <div className="space-y-3 rounded-xl border bg-card p-4 lg:max-w-xl">
+            <h4 className="font-medium">Record a returned repayment</h4>
+            <p className="text-sm text-muted-foreground">A part amount is allowed. A second finance operator approves; if what is owed back changes first, it cannot run.</p>
+            <FormField label="Payout to return" required>
+              {(control) => (
+                <select {...control} className={selectClass} value={returnPayout} disabled={busy || returnable.length === 0} onChange={(event) => { setReturnPayout(event.target.value); setReturnAmount(""); }}>
+                  <option value="">{returnable.length ? "Select a payout" : "Nothing is owed back"}</option>
+                  {returnable.map((row) => <option key={row.obligation_id} value={row.obligation_id}>{returnLabel(row)}</option>)}
+                </select>
+              )}
+            </FormField>
+            <FormField label="Amount returned (USD)" required error={returnError ?? undefined} help={returning ? `Up to ${formatCents(returning.returnable)}.` : undefined}>
+              {(control) => <Input {...control} inputMode="decimal" placeholder="0.00" value={returnAmount} disabled={busy || !returning} onChange={(event) => setReturnAmount(event.target.value)} />}
+            </FormField>
+            <FormField label="Return evidence" required help="What the bank shows for the payment back to the provider, such as the debit line. Never account details.">
+              {(control) => <Input {...control} value={returnEvidence} maxLength={1000} disabled={busy || !returning} onChange={(event) => setReturnEvidence(event.target.value)} />}
+            </FormField>
+            <ConfirmAction
+              disabled={busy || !returning || returnCents === null || returnError !== null || !returnEvidence.trim()}
+              requireReason
+              reasonLabel="Reason"
+              reasonHelp="Why the provider no longer owes it, for example the bank returned their payout."
+              confirmationTone="commitment"
+              triggerLabel="Request return record"
+              title="Record this returned repayment?"
+              entity={returning && returnCents !== null ? `${label(returning.invoice_number, returning.obligation_id)} · ${returning.payee_name ?? "Provider"} · ${formatCents(returnCents)} of ${formatCents(returning.returnable)} owed back` : ""}
+              consequence="Creates a review request. Once a different finance operator approves it within 24 hours and you run it, the payment back to the provider is posted against what Mercurius owes them. It cannot be undone here."
+              confirmLabel="Request record"
+              onConfirm={(reason) => {
+                const row = returning!;
+                const value = returnCents!;
+                const proof = returnEvidence.trim();
+                return submitRequest("repayment_reversal", returnLabel(row), () => createClient().rpc("money_operator_request_repayment_reversal", {
+                  p_obligation: row.obligation_id, p_amount: value, p_reason: reason, p_evidence: proof,
+                  p_key: commandKey(`repayment-return:${row.obligation_id}:${value}`),
+                })).then(() => { setReturnPayout(""); setReturnAmount(""); setReturnEvidence(""); });
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <PageState kind="error" title="Repayments owed back unavailable" description="The server did not return repayments owed back. Refresh before recording one." />
+      )}
     </section>
   );
 }

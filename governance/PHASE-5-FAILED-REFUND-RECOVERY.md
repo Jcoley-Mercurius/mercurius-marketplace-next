@@ -212,6 +212,8 @@ See the TRACE-082 section of PHASE-5-VALIDATION.md.
 - **Codex design and code review:** F1–F8, especially F3's guard, F5's substitutions and the
   cancellation review question. CI.
 - **A reviewed path for a refund that fails after it succeeded.**
+  *TRACE-083 (PHASE-5-LATE-REVERSALS.md) adds it: the refund stands and what Stripe returned is
+  owed to the customer, until a reviewed resend settles or a reviewed release reverses it.*
 - **Provisioning two finance operators.**
 - **Authorized Stripe test-mode acceptance:** a failed refund (for example Stripe's test card that
   fails refunds), its readback, a resend and a release.

@@ -2796,6 +2796,67 @@ export type Database = {
           },
         ]
       }
+      money_refund_late_failures: {
+        Row: {
+          amount: number
+          approved_by: string
+          authorization_id: string
+          created_at: string
+          evidence: string
+          failed_reference: string
+          obligation_id: string
+          readback_id: string
+          reason: string
+          requested_by: string
+        }
+        Insert: {
+          amount: number
+          approved_by: string
+          authorization_id: string
+          created_at?: string
+          evidence: string
+          failed_reference: string
+          obligation_id: string
+          readback_id: string
+          reason: string
+          requested_by: string
+        }
+        Update: {
+          amount?: number
+          approved_by?: string
+          authorization_id?: string
+          created_at?: string
+          evidence?: string
+          failed_reference?: string
+          obligation_id?: string
+          readback_id?: string
+          reason?: string
+          requested_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_late_failures_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_attempts"
+            referencedColumns: ["authorization_id"]
+          },
+          {
+            foreignKeyName: "money_refund_late_failures_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_refund_late_failures_readback_id_fkey"
+            columns: ["readback_id"]
+            isOneToOne: true
+            referencedRelation: "money_refund_readbacks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_refund_readbacks: {
         Row: {
           actor: string
@@ -2840,6 +2901,7 @@ export type Database = {
       money_refund_reissues: {
         Row: {
           actor: string
+          approved_by: string | null
           authorization_id: string
           created_at: string
           failed_reference: string | null
@@ -2852,6 +2914,7 @@ export type Database = {
         }
         Insert: {
           actor: string
+          approved_by?: string | null
           authorization_id: string
           created_at?: string
           failed_reference?: string | null
@@ -2864,6 +2927,7 @@ export type Database = {
         }
         Update: {
           actor?: string
+          approved_by?: string | null
           authorization_id?: string
           created_at?: string
           failed_reference?: string | null
@@ -2952,6 +3016,52 @@ export type Database = {
           },
         ]
       }
+      money_refund_resettlements: {
+        Row: {
+          authorization_id: string
+          created_at: string
+          event_id: string
+          failed_reference: string
+          provider_ref: string
+        }
+        Insert: {
+          authorization_id: string
+          created_at?: string
+          event_id: string
+          failed_reference: string
+          provider_ref: string
+        }
+        Update: {
+          authorization_id?: string
+          created_at?: string
+          event_id?: string
+          failed_reference?: string
+          provider_ref?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_resettlements_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_attempts"
+            referencedColumns: ["authorization_id"]
+          },
+          {
+            foreignKeyName: "money_refund_resettlements_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "money_webhook_events"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "money_refund_resettlements_failed_reference_fkey"
+            columns: ["failed_reference"]
+            isOneToOne: true
+            referencedRelation: "money_refund_late_failures"
+            referencedColumns: ["failed_reference"]
+          },
+        ]
+      }
       money_refunds: {
         Row: {
           authorization_id: string
@@ -2985,6 +3095,63 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "money_webhook_events"
             referencedColumns: ["event_id"]
+          },
+        ]
+      }
+      money_repayment_reversals: {
+        Row: {
+          amount: number
+          approved_by: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          evidence: string
+          id: string
+          obligation_id: string
+          reason: string
+          requested_by: string
+          returnable_before: number
+        }
+        Insert: {
+          amount: number
+          approved_by: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          evidence: string
+          id?: string
+          obligation_id: string
+          reason: string
+          requested_by: string
+          returnable_before: number
+        }
+        Update: {
+          amount?: number
+          approved_by?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          evidence?: string
+          id?: string
+          obligation_id?: string
+          reason?: string
+          requested_by?: string
+          returnable_before?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_repayment_reversals_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_repayment_reversals_obligation_id_fkey"
+            columns: ["obligation_id"]
+            isOneToOne: false
+            referencedRelation: "money_obligations"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6112,6 +6279,16 @@ export type Database = {
         }
         Returns: Json
       }
+      money_operator_request_late_refund: {
+        Args: {
+          p_action: string
+          p_authorization: string
+          p_evidence: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       money_operator_request_payout_recovery: {
         Args: {
           p_amount: number
@@ -6141,6 +6318,16 @@ export type Database = {
           p_authorization: string
           p_evidence: string
           p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      money_operator_request_repayment_reversal: {
+        Args: {
+          p_amount: number
+          p_evidence: string
+          p_key: string
+          p_obligation: string
           p_reason: string
         }
         Returns: Json
@@ -6358,6 +6545,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      money_record_refund_late_failure: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_authorization: string
+          p_evidence: string
+          p_key: string
+          p_reason: string
+          p_reference: string
+        }
+        Returns: string
+      }
       money_record_refund_readback: {
         Args: {
           p_actor: string
@@ -6377,9 +6576,34 @@ export type Database = {
         }
         Returns: undefined
       }
+      money_record_repayment_reversal: {
+        Args: {
+          p_actor: string
+          p_amount: number
+          p_approver: string
+          p_evidence: string
+          p_key: string
+          p_obligation: string
+          p_reason: string
+          p_returnable: number
+        }
+        Returns: string
+      }
       money_refund_readback_target: {
         Args: { p_actor: string; p_authorization: string }
         Returns: Json
+      }
+      money_release_late_refund: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_authorization: string
+          p_evidence: string
+          p_key: string
+          p_reason: string
+          p_reference: string
+        }
+        Returns: string
       }
       money_release_refund: {
         Args: {
@@ -6400,6 +6624,17 @@ export type Database = {
       money_require_review: {
         Args: { p_actor: string; p_approver: string; p_command: Json }
         Returns: undefined
+      }
+      money_resend_late_refund: {
+        Args: {
+          p_actor: string
+          p_approver: string
+          p_authorization: string
+          p_key: string
+          p_reason: string
+          p_reference: string
+        }
+        Returns: number
       }
       money_resolve_chargeback_loss: {
         Args: {

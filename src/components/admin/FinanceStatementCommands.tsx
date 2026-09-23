@@ -360,7 +360,7 @@ export function FinanceStatementCommands({
       <div className="space-y-3 rounded-xl border bg-card p-4">
         <h4 className="font-medium">Match a line by hand</h4>
         <p className="text-sm text-muted-foreground">
-          For a provider repayment, which has no transfer reference, or a payment the bank shows under a different reference. Only a recorded movement of the same direction and amount that no other line shows can be matched.
+          For a provider repayment or a repayment returned to the provider, which have no transfer reference, or a payment the bank shows under a different reference. Only a recorded movement of the same direction and amount that no other line shows can be matched.
         </p>
         <FormField label="Unmatched statement line" required>
           {(control) => (
@@ -404,7 +404,7 @@ export function FinanceStatementCommands({
       <div className="space-y-3">
         <h4 className="font-medium">Recorded but not on a statement ({statements.unevidenced.length})</h4>
         <p className="text-sm text-muted-foreground">
-          Settlements, returns, late payments and repayments no imported line shows. One dated inside an imported statement&apos;s period stops that statement from closing until its line is imported or matched.
+          Settlements, returns, late payments, repayments and returned repayments no imported line shows. One dated inside an imported statement&apos;s period stops that statement from closing until its line is imported or matched.
         </p>
         {statements.unevidenced.length === 0 ? (
           <PageState kind="empty" title="Every recorded bank movement is on a statement" />

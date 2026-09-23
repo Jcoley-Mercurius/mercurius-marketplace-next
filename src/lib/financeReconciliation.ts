@@ -34,7 +34,8 @@ export type LedgerIssue =
   | "statement_stale"
   | "chargeback_suspense"
   | "stripe_clearing"
-  | "recovery_ledger";
+  | "recovery_ledger"
+  | "customer_refund_payable";
 
 export type BankStatus = "prepared" | "submitted" | "unknown" | "settled" | "failed" | "returned";
 
@@ -52,8 +53,22 @@ export type ObligationReconciliation = {
     fully_captured: boolean;
     payments: { payment_id: string; mode: "full" | "deposit" | "balance"; amount: number }[];
   };
-  /** Released: refunds Stripe failed that were taken off the books (TRACE-082); never counted as refunded. */
-  refunds: { service: number; tax: number; tip: number; settled: number; pending: number; released: number };
+  /**
+   * Released: refunds Stripe failed that were taken off the books (TRACE-082); never counted as refunded.
+   * Late failed, reversed and customer owed: settled refunds Stripe later failed, those released and
+   * reversed, and what is held for customers until a resend settles (TRACE-083).
+   */
+  refunds: {
+    service: number;
+    tax: number;
+    tip: number;
+    settled: number;
+    pending: number;
+    released: number;
+    late_failed: number;
+    reversed: number;
+    customer_owed: number;
+  };
   earnings: { platform_fee: number; platform_fee_ledger: number; tax: number; tax_ledger: number; provider_proceeds: number };
   payout: {
     funds_state: FundsState;
@@ -69,7 +84,15 @@ export type ObligationReconciliation = {
     /** Statements withdrawn from this payout (TRACE-079). */
     withdrawn_statements: number;
     /** What the provider owes after a refund, chargeback or late payment beyond the proceeds, and how it was recovered (TRACE-080). */
-    recovery: { owed: number; late_settled: number; repaid: number; written_off: number };
+    recovery: {
+      owed: number;
+      late_settled: number;
+      repaid: number;
+      written_off: number;
+      /** Repayments Mercurius sent back, and what it still owes back (TRACE-083). */
+      repayment_reversed: number;
+      repayment_returnable: number;
+    };
   };
   chargebacks: { suspense: number; suspense_ledger: number; lost: number };
   processor_costs: number;
@@ -108,6 +131,12 @@ export type FinanceException =
   | { kind: "payout_hold"; obligation_id: string; hold_id: string; since: string }
   | { kind: "bank_outcome"; obligation_id: string; item_id: string; attempt_number: number; amount: number; status: "unknown" | "failed" | "returned"; since: string }
   | { kind: "provider_owes"; obligation_id: string; invoice_number: string | null; payee_name: string | null; amount: number; since: string }
+  /** What Stripe returned after a settled refund failed, held for the customer (TRACE-083). */
+  | { kind: "customer_refund_owed"; obligation_id: string; authorization_id: string; failed_reference: string; amount: number; since: string }
+  /** A delivered refund a readback or Stripe event shows failed, not yet recorded (TRACE-083). */
+  | { kind: "refund_failed_late"; obligation_id: string; authorization_id: string; amount: number; source: "readback" | "stripe_event"; since: string }
+  /** A provider repayment Mercurius owes back (TRACE-083). */
+  | { kind: "repayment_returnable"; obligation_id: string; invoice_number: string | null; payee_name: string | null; amount: number; since: string }
   /** A bank statement line that matches no recorded movement, or matches one at another amount (TRACE-081). */
   | {
       kind: "bank_line";
@@ -126,7 +155,7 @@ export type FinanceException =
   | {
       kind: "bank_unevidenced";
       movement: string;
-      movement_kind: "settled" | "returned" | "late" | "repayment";
+      movement_kind: "settled" | "returned" | "late" | "repayment" | "reversal";
       obligation_id: string;
       direction: "debit" | "credit";
       amount: number;
@@ -142,7 +171,8 @@ export type LedgerAccount =
   | "processor_expense"
   | "chargeback_suspense"
   | "bank"
-  | "provider_recovery_loss";
+  | "provider_recovery_loss"
+  | "customer_refund_payable";
 
 export type FinanceReconciliation = {
   evaluated_at: string;
@@ -160,6 +190,8 @@ export type FinanceReconciliation = {
     processor_costs: number;
     chargeback_suspense: number;
     provider_owed: number;
+    customer_refunds_owed: number;
+    repayments_returnable: number;
     with_issues: number;
   };
   global_event_holds: number;
@@ -224,6 +256,7 @@ export const issueLabel: Record<LedgerIssue, string> = {
   chargeback_suspense: "Chargeback suspense differs from open disputes",
   stripe_clearing: "Stripe clearing differs from charges less refunds, chargebacks and costs",
   recovery_ledger: "Recovery loss differs from recorded write-offs",
+  customer_refund_payable: "Refunds owed to customers differ from open late refund failures",
 };
 
 export const accountLabel: Record<LedgerAccount, string> = {
@@ -236,6 +269,7 @@ export const accountLabel: Record<LedgerAccount, string> = {
   chargeback_suspense: "Chargeback suspense",
   bank: "Bank",
   provider_recovery_loss: "Provider recovery loss",
+  customer_refund_payable: "Refunds owed to customers",
 };
 
 export function labelOf<K extends string>(labels: Record<K, string>, key: string) {
@@ -246,11 +280,12 @@ export const formatCents = (minor: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(minor / 100);
 
 /** What a recorded bank movement was (TRACE-081). */
-export const bankMovementLabel: Record<"settled" | "returned" | "late" | "repayment", string> = {
+export const bankMovementLabel: Record<"settled" | "returned" | "late" | "repayment" | "reversal", string> = {
   settled: "ACH transfer settled",
   returned: "ACH transfer returned",
   late: "Late payment of a withdrawn transfer",
   repayment: "Provider repayment",
+  reversal: "Repayment returned to the provider",
 };
 
 /** Title and next action for one exception. Actions describe the existing reviewed kernels. */
@@ -299,6 +334,26 @@ export function exceptionPresentation(exception: FinanceException): { title: str
         title: "Provider owes Mercurius",
         action: "Ask the provider to repay, then record the repayment, or record a write-off, each with a second reviewer. Never debit the provider's bank or hold back other earnings.",
       };
+    case "customer_refund_owed":
+      return {
+        title: "Refund owed to customer",
+        action: "Stripe failed this refund after it settled and returned the money. Resend it, or release it if the customer no longer needs it, each with a second reviewer.",
+      };
+    case "refund_failed_late":
+      return exception.source === "readback"
+        ? {
+            title: "Settled refund failed at Stripe",
+            action: "A readback shows Stripe failed this refund after it settled. Record the failure with a second reviewer so the customer is shown as owed.",
+          }
+        : {
+            title: "Stripe reports a settled refund failed",
+            action: "Read the refund back from Stripe. Only a readback showing it failed lets you record the failure.",
+          };
+    case "repayment_returnable":
+      return {
+        title: "Repayment owed back to provider",
+        action: "The provider repaid an amount they no longer owe. Send it back by ACH, then record the return with a second reviewer.",
+      };
     case "bank_line":
       return exception.state === "amount_mismatch"
         ? {
@@ -344,5 +399,6 @@ export function readbackLabel(readback: ObligationReconciliation["readback"]) {
 
 export function needsAttention(row: ObligationReconciliation) {
   return row.issues.length > 0 || row.payout.funds_state === "held" || row.payout.funds_state === "payout_failed"
-    || row.readback.state === "mismatch" || row.reconciliation_open || row.payout.recovery.owed > 0;
+    || row.readback.state === "mismatch" || row.reconciliation_open || row.payout.recovery.owed > 0
+    || row.refunds.customer_owed > 0 || row.payout.recovery.repayment_returnable > 0;
 }

@@ -299,7 +299,8 @@ select throws_ok($$delete from public.money_refund_releases$$,'55000',null,'Rele
 select is(pg_temp.payout_blocker('fail'),null,'A released refund no longer holds the payout');
 select lives_ok($$select public.money_payable(pg_temp.id('fail'))$$,'The ACH kernel''s payable check passes');
 select is(pg_temp.refund_blocker('fail',10000),null,'The full service subtotal can be requested again');
-select is(pg_temp.recon('fail')->'refunds',jsonb_build_object('service',0,'tax',0,'tip',0,'settled',0,'pending',0,'released',1),'Reconciliation counts the refund released, not pending');
+select is(pg_temp.recon('fail')->'refunds',jsonb_build_object('service',0,'tax',0,'tip',0,'settled',0,'pending',0,'released',1,
+  'late_failed',0,'reversed',0,'customer_owed',0),'Reconciliation counts the refund released, not pending');
 select is(pg_temp.recon('fail')->'issues','[]'::jsonb,'Reconciliation finds no ledger issue');
 select is((select count(*)::integer from public.money_journals where obligation_id=pg_temp.id('fail') and kind='refund'),0,'No refund journal is posted');
 select is((select refunded_service+refunded_tax+refunded_tip from public.money_obligations where id=pg_temp.id('fail')),0::bigint,'No refund is counted on the invoice');

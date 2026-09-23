@@ -62,6 +62,156 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-083 — Late reversals — 2026-09-23
+
+Branch `codex/phase5-late-reversals`, base `main` `a39abf1` (PR #38 merged); isolated synthetic stack
+only. The design (L1–L8), the owner's decisions and the review questions are in
+PHASE-5-LATE-REVERSALS.md.
+
+**Baseline.** With the migration applied and no test changes, 2334 of the existing 2335 pgTAP
+assertions passed. The one failure was suite 049's exact comparison of the reconciliation `refunds`
+object, which now carries `late_failed`, `reversed` and `customer_owed`; that expectation now
+includes them at zero.
+
+**Database.** 2531 pgTAP assertions across 41 suites pass after a clean reset, and again as CI's
+clean replay after all committed concurrency fixtures. Suite 050 is new (196 assertions). It covers:
+
+- **Grants:** the two requests are callable by signed-in users only; the four kernels are
+  service-only; the helpers, the resettlement handler and the three tables are closed.
+- **Evidence:**
+  - a settled refund with no signal is not listed;
+  - Stripe's `refund.updated` observation lists it as a signal, not evidence;
+  - a readback showing it failed allows recording and leaves the attempt as sent until then;
+  - a failed readback taken before a stale settlement event still proves it;
+  - once a resend delivers it, the first refund's failed readback proves nothing.
+- **One-operator paths:** the TRACE-077 reissue, the TRACE-082 resend and the TRACE-082 release all
+  refuse a settled refund.
+- **Requests:** an unknown step, a blank reason, missing evidence for a failure or a release, an
+  unknown refund and an admin without finance authority are refused. No self-approval, and nothing
+  runs unapproved. The approver's details are shown. A run replays.
+- **Recording the failure:**
+  - the row, its readback and both operators;
+  - the exact journal;
+  - the attempt reads failed;
+  - the refund counters are unchanged and the payout amount stays reduced by the provider share;
+  - reconciliation has no issues and reads 2000 owed to the customer;
+  - the exception and total;
+  - a matching Stripe payment readback;
+  - `money_prepare_refund` reports failed;
+  - a second failure is refused while one is open.
+- **Resend:**
+  - generation 2 under a new key, naming the failed refund, both operators and the evidence;
+  - an earlier approved release goes stale (`refund_changed`);
+  - no second resend is allowed while one is out;
+  - the failed refund can never be recorded again.
+- **Resettlement:**
+  - the new refund's event resettles with the exact journal and the attempt reads succeeded;
+  - replays, a duplicate delivery and a late duplicate of the first settlement are no-ops;
+  - an event for a released refund does not process.
+- **Release:**
+  - the exact reversal journal (fee 300, provider 1700), and the counters back to zero;
+  - reconciliation reads released and reversed with no issue;
+  - the full proceeds are payable and the full service is refundable again;
+  - it can never be sent, resent or released again;
+  - recent releases mark it reversed.
+- **A resend that fails before it settles:**
+  - a second resend needs a readback of the new refund;
+  - each generation keeps its failed refund;
+  - an uncertain third send can be released only after a readback at least 24 hours after it was
+    prepared.
+- **Chargebacks:** an open chargeback blocks a resend.
+- **Payouts:**
+  - a refund after the payout leaves the provider's share owed through the failure, and a release
+    clears it;
+  - after a repayment, a release makes the repayment returnable and a reversal returns it;
+  - a refund before the payout cannot be released (`payout_paid`), only resent;
+  - an unpaid statement blocks a release (`on_ach_statement`).
+- **The kernels' own checks:** an unapproved command, no readback, one operator as both roles, the
+  replay and a conflicting record. The tables are immutable, and journals still refuse unknown
+  accounts.
+- **Repayment reversal:**
+  - nothing is returnable before the bank return, and 1700 after it;
+  - the operations row and the exception;
+  - a zero amount, missing evidence and more than returnable are refused;
+  - an approved second request goes stale after the first runs (`returnable_changed`);
+  - the exact journal and the recorded row;
+  - the whole repayment is returned and the received amount is back to zero;
+  - the kernel checks the amount too;
+  - the replacement statement pays exactly the 7800 proceeds, and the payout then reconciles with
+    nothing owed either way;
+  - each reversal is a debit bank movement with no reference, a debit line suggests
+    `match_reversal`, and the operator matches it.
+
+**Mutation check** (local harness, not committed). Each mutant redefined one function inside suite
+050's transaction, which rolled it back. 22 mutants ran and 19 were killed. They covered:
+
+- the delivered predicate and the delivering reference;
+- every blocker clause;
+- the send-state rules;
+- the resettlement's duplicate check;
+- the returnable formula;
+- the reversal's staleness and cap;
+- the received amount;
+- the reconciliation clearing and counter substitutions;
+- the two attempt readers;
+- the payment readback's expected amount;
+- the evidence reference.
+
+The three survivors are equivalent and recorded in the findings: the send-key checks in the failure
+and resend blockers, and the resettlement's open-failure check. On the first run, M9 (an early
+readback of an uncertain send) and the evidence reference survived; two cases were added. An
+evidence timing clause could not be distinguished inside one transaction. It was found unnecessary,
+because Stripe's failed status is final, and was removed.
+
+**Concurrency.** New `scripts/phase5-late-reversal-concurrency.mjs`, wired into CI after the
+TRACE-082 script:
+
+- **Release first:** an approved release holding the lock refuses an approved resend of the same
+  late failure.
+- **Resend first:** a resend holding the lock refuses an approved release (`refund_changed`).
+- **Duplicate events:** four simultaneous deliveries of the resend's refund event resettle once and
+  post one journal.
+- **Two reversals:** two approved reversals of the whole repayment record one; the other is stale.
+
+The race payouts reconcile. The returned payout reads only `statement_stale` until it is replaced.
+All 19 scripts passed in CI order on a clean reset, and the clean replay after them passed.
+
+**Application.** `scan:secrets`, `lint` and `typecheck` pass. 177 unit tests pass, 8 of them new:
+
+- late step gating;
+- the resent refund send;
+- details typed to their operation;
+- the reversal amount check;
+- refusal wording;
+- dismissing a reversal-suggesting line;
+- the new exceptions, issues and accounts.
+
+The TRACE-082 wording test now reads the broadened `refund_changed` text. The build passes with CI's
+synthetic public variables. The regenerated database types only add lines and match a
+regeneration from the final clean database. `audit:prod` has 0 findings.
+
+**Browser.** 228 of 228 non-visual cases pass (`test:a11y`); 7 are new:
+
+- recording a failure with evidence and a reason: an axe pass, the payload and key, and the open
+  request shown;
+- a signal alone offering only a readback, and the readback recorded;
+- a resend request with a reason and no evidence field;
+- a prepared resend sent to Stripe;
+- a release refused with `payout_paid`;
+- a release requested with evidence, and the approver seeing the restored provider share;
+- a returned repayment requested against what is owed back, never more.
+
+The light 320px and dark 1440px layout cases now include both new panels. The existing finance,
+bank statement and reconciliation fixtures gained the new readback fields.
+
+**Not performed:**
+
+- Stripe test-mode acceptance of a refund that fails after it succeeded;
+- owner bank workflow acceptance;
+- hosted deployment;
+- CI on the PR head (pending);
+- visual screenshots (`test:visual`).
+
 ## TRACE-082 — Failed-refund recovery — 2026-09-22
 
 Branch `codex/phase5-failed-refund-recovery`, base `main` `28c52e9` (PR #37 merged); isolated
