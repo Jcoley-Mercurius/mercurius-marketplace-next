@@ -194,6 +194,15 @@ back by ACH, and two operators record it as a repayment reversal. The replacemen
 only the proceeds, and a statement line pairs with the reversal by hand. See
 PHASE-5-LATE-REVERSALS.md.
 
+TRACE-084 applies CFG-011 retention to the documents of rejected or abandoned applications
+(owner decisions 2026-09-23). A reviewed closure records who rejected or abandoned an
+application, when and why, and replaces the direct status update; a provider rejected in
+onboarding review starts the same clock. After 90 days an operator may quarantine, restore or,
+after 14 days in quarantine, permanently delete each file through the TRACE-074 mechanics. A
+file that is compliance evidence is never purged. Holds can be placed on an application, and a
+provider hold covers its applications. Legacy rejections with no record are not due until
+recorded; never-submitted uploads stay outside retention. See PHASE-5-APPLICATION-RETENTION.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
@@ -255,7 +264,10 @@ behavior characterized before replacing the five active entrypoints.
   synthetic Stripe events and bank movements only.
 - [ ] Licensing/insurance sufficiency by category/jurisdiction, private evidence
   collection, Auth provisioning, delivery/acceptance receipts, renewal operations and
-  CFG-011 retention/legal-hold/purge for application revisions are verified.
+  CFG-011 retention/legal-hold/purge for application revisions are verified. TRACE-074
+  and TRACE-084 implement operator-run retention for declined renewal documents and for
+  rejected or abandoned application documents against synthetic files only;
+  never-submitted uploads remain outside retention.
 - [ ] Human screen-reader, true browser zoom, cross-platform and brand acceptance
   follow-ups from Phase 3 remain open; automated axe/screenshots do not satisfy them.
 - [ ] Explicit later authorization covers any production migration, configuration,

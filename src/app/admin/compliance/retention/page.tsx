@@ -20,8 +20,10 @@ import {
   type RetentionAction,
 } from "@/lib/renewalRetention";
 import { cn } from "@/lib/utils";
+import { ApplicationDocumentRetention } from "@/components/admin/ApplicationDocumentRetention";
 
-// TRACE-074 CFG-011 retention queue for declined renewal documents. Each step is run by an
+// TRACE-074 CFG-011 retention queue for declined renewal documents; TRACE-084 adds the
+// documents of rejected or abandoned applications below it. Each step is run by an
 // operator behind ConfirmAction and confirmed by rereading this queue. Nothing here
 // changes a submission, decision, evidence, status or listing.
 
@@ -140,7 +142,7 @@ export default function DocumentRetentionPage() {
     <PageHeader
       eyebrow="Provider compliance"
       title="Document retention"
-      description={`Declined renewal documents are kept for ${queue?.retention_days ?? 90} days after the decline. After that an operator may move the file to quarantine, where it can be restored for ${queue?.quarantine_days ?? 14} days before it may be deleted permanently. A retention hold stops quarantine and deletion for that provider.`}
+      description={`Declined renewal documents, and the documents of rejected or abandoned applications, are kept for ${queue?.retention_days ?? 90} days after the decline or closure. After that an operator may move the file to quarantine, where it can be restored for ${queue?.quarantine_days ?? 14} days before it may be deleted permanently. A retention hold stops quarantine and deletion.`}
       actions={refresh}
     />
   );
@@ -363,6 +365,14 @@ export default function DocumentRetentionPage() {
 
       {section("retention-due", "Due for quarantine", queue.due, dueColumns, `No declined document has passed its ${queue.retention_days}-day retention period.`)}
       {section("retention-quarantined", "In quarantine", queue.quarantined, quarantineColumns, "No document is in quarantine.")}
+
+      {/* TRACE-084: documents of rejected or abandoned applications. */}
+      <section aria-labelledby="application-retention" className="space-y-4 border-t pt-6">
+        <h2 id="application-retention" className="text-lg font-semibold">
+          Application documents
+        </h2>
+        <ApplicationDocumentRetention />
+      </section>
     </div>
   );
 }

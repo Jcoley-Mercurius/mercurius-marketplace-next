@@ -19,7 +19,6 @@ import {
   Search,
   ShieldCheck,
   User,
-  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +28,7 @@ import { ConfirmAction } from "@/components/ui/confirm-action";
 import { VendorAccountLinking } from "@/components/admin/VendorAccountLinking";
 import { VendorInvitation } from "@/components/admin/VendorInvitation";
 import { VendorOnboardingChecklist } from "@/components/admin/VendorOnboardingChecklist";
+import { ApplicationClosure } from "@/components/admin/ApplicationClosure";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { type ApplicationRetentionOverview } from "@/lib/applicationRetention";
+import { retentionStateLabel } from "@/lib/renewalRetention";
 import {
   vendorDocumentDisplayName,
   vendorDocumentKindFromPath,
@@ -135,6 +137,7 @@ const statusStyle: Record<string, string> = {
   pending: "border-amber-200 bg-amber-50 text-amber-700",
   approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
   rejected: "border-red-200 bg-red-50 text-red-700",
+  abandoned: "border-border bg-muted text-muted-foreground",
 };
 
 const pipelineLabel: Record<string, string> = {
@@ -160,8 +163,8 @@ export default function AdminApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [mode, setMode] = useState<PageMode>("loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const [processing, setProcessing] = useState<"reject" | null>(null);
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
+  const [retention, setRetention] = useState<ApplicationRetentionOverview | null>(null);
 
   const loadApplications = useCallback(
     async (showLoading = false) => {
@@ -221,43 +224,15 @@ export default function AdminApplicationsPage() {
     [],
   );
 
-  const rejectApplication = async (application: Application) => {
-    const confirmed = window.confirm(
-      "Reject " +
-        application.business_name +
-        "? This records the application as rejected.",
-    );
-    if (!confirmed) return;
-
-    setProcessing("reject");
-    const supabase = createClient();
-    try {
-      const { data, error } = await supabase
-        .from("vendor_applications")
-        .update({ status: "rejected" })
-        .eq("id", application.id)
-        .eq("status", "pending")
-        .select("id")
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) {
-        await loadApplications(false);
-        throw new Error(
-          "This application is no longer pending. The queue has been refreshed.",
-        );
-      }
-
-      patchApplication(application.id, { status: "rejected" });
-      toast.success("Application rejected");
-    } catch (error) {
-      toast.error("Application could not be rejected", {
-        description:
-          error instanceof Error ? error.message : "Please try again.",
-      });
-    } finally {
-      setProcessing(null);
-    }
-  };
+  // TRACE-084: the closure panel's reads carry the recorded status and each file's
+  // retention state; a closure patches the queue row without a full reload.
+  const receiveRetention = useCallback(
+    (overview: ApplicationRetentionOverview) => {
+      setRetention(overview);
+      patchApplication(overview.application_id, { status: overview.application_status });
+    },
+    [patchApplication],
+  );
 
   const openDocument = async (path: string) => {
     setOpeningDocument(path);
@@ -421,6 +396,7 @@ export default function AdminApplicationsPage() {
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
+          <option value="abandoned">Abandoned</option>
         </select>
       </div>
 
@@ -518,15 +494,13 @@ export default function AdminApplicationsPage() {
 
       <ApplicationDialog
         application={selected}
-        processing={processing}
         openingDocument={openingDocument}
-        onClose={() => {
-          if (!processing) setSelected(null);
-        }}
+        onClose={() => setSelected(null)}
         onReviewStarted={(application, contractorId) =>
           patchApplication(application.id, { contractor_id: contractorId })
         }
-        onReject={(application) => void rejectApplication(application)}
+        retention={retention?.application_id === selected?.id ? retention : null}
+        onRetention={receiveRetention}
         onOpenDocument={(path) => void openDocument(path)}
       />
     </div>
@@ -535,19 +509,19 @@ export default function AdminApplicationsPage() {
 
 function ApplicationDialog({
   application,
-  processing,
   openingDocument,
   onClose,
   onReviewStarted,
-  onReject,
+  retention,
+  onRetention,
   onOpenDocument,
 }: {
   application: Application | null;
-  processing: "reject" | null;
   openingDocument: string | null;
   onClose: () => void;
   onReviewStarted: (application: Application, contractorId: string) => void;
-  onReject: (application: Application) => void;
+  retention: ApplicationRetentionOverview | null;
+  onRetention: (overview: ApplicationRetentionOverview) => void;
   onOpenDocument: (path: string) => void;
 }) {
   if (!application) return null;
@@ -670,7 +644,25 @@ function ApplicationDialog({
         <DetailSection title="Credential documents">
           {application.document_urls && application.document_urls.length > 0 ? (
             <div className="space-y-2">
-              {application.document_urls.map((path) => (
+              {application.document_urls.map((path) => {
+                const file = retention?.files.find((candidate) => candidate.path === path);
+                if (file && file.retention_state !== "retained") {
+                  return (
+                    <div
+                      key={path}
+                      className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground"
+                    >
+                      <Paperclip className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {vendorDocumentDisplayName(path)}
+                      </span>
+                      <Badge variant="secondary" className="shrink-0">
+                        {retentionStateLabel[file.retention_state]}
+                      </Badge>
+                    </div>
+                  );
+                }
+                return (
                 <Button
                   key={path}
                   variant="outline"
@@ -696,7 +688,8 @@ function ApplicationDialog({
                     </Badge>
                   )}
                 </Button>
-              ))}
+                );
+              })}
               <p className="pt-1 text-xs text-muted-foreground">
                 Files open through an admin-only signed link that expires after
                 10 minutes.
@@ -728,31 +721,21 @@ function ApplicationDialog({
         )}
 
         <OnboardingReview
-          key={application.id}
+          key={`${application.id}:${application.status}`}
           application={application}
-          disabled={Boolean(processing)}
+          disabled={false}
           onStarted={(contractorId) => onReviewStarted(application, contractorId)}
         />
 
-        {application.status === "pending" && (
-          <div className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-5 text-muted-foreground">
-              Rejecting records this application as rejected.
-            </p>
-            <Button
-              variant="destructive"
-              disabled={Boolean(processing)}
-              onClick={() => onReject(application)}
-            >
-              {processing === "reject" ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <XCircle />
-              )}
-              {processing === "reject" ? "Rejecting..." : "Reject"}
-            </Button>
-          </div>
-        )}
+        <DetailSection title="Closure and retention">
+          <ApplicationClosure
+            key={`${application.id}:${application.contractor_id ?? ""}`}
+            applicationId={application.id}
+            businessName={application.business_name}
+            disabled={false}
+            onOverview={onRetention}
+          />
+        </DetailSection>
 
         {application.status === "approved" && (
           <div className="space-y-3 border-t border-border pt-4">
@@ -815,15 +798,8 @@ function ApplicationDialog({
           </div>
         )}
 
-        {application.status === "rejected" && (
-          <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <XCircle className="h-4 w-4" />
-            Application was rejected
-          </div>
-        )}
-
         <DialogFooter>
-          <Button variant="outline" disabled={Boolean(processing)} onClick={onClose}>
+          <Button variant="outline" onClick={onClose}>
             Close
           </Button>
         </DialogFooter>
