@@ -15,9 +15,6 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    permissions:
-      contents: read
-      packages: read
     env:
       MERCURIUS_BUILD_WORKERS: 1
     steps:
@@ -33,11 +30,12 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.9.6
+      - name: Pull Supabase images from public.ecr.aws
+        # supabase/setup-cli points pulls at ghcr.io, which has refused them with toomanyrequests
+        # since 2026-09-23. The same images are published on public.ecr.aws.
+        run: echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws" >> "$GITHUB_ENV"
       - name: Prepare isolated synthetic stack
         run: node scripts/prepare-phase5-local.mjs
-      - name: Authenticate image pulls from GitHub Container Registry
-        # Anonymous ghcr.io pulls share the runners' throttled budget (toomanyrequests since 2026-09-23).
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Reconstruct database
         run: |
           for attempt in 1 2 3; do
@@ -108,9 +106,6 @@ jobs:
     needs: backend
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -123,11 +118,12 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.9.6
+      - name: Pull Supabase images from public.ecr.aws
+        # supabase/setup-cli points pulls at ghcr.io, which has refused them with toomanyrequests
+        # since 2026-09-23. The same images are published on public.ecr.aws.
+        run: echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws" >> "$GITHUB_ENV"
       - name: Locked Edge checks and isolated handler tests
         run: sh scripts/check-edge.sh && sh scripts/test-edge.sh
-      - name: Authenticate image pulls from GitHub Container Registry
-        # Anonymous ghcr.io pulls share the runners' throttled budget (toomanyrequests since 2026-09-23).
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Isolated database reconstruction and lifecycle tests
         run: |
           mkdir -p supabase/.audit
