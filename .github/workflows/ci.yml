@@ -15,6 +15,9 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
     env:
       MERCURIUS_BUILD_WORKERS: 1
     steps:
@@ -32,8 +35,18 @@ jobs:
           deno-version: v2.9.6
       - name: Prepare isolated synthetic stack
         run: node scripts/prepare-phase5-local.mjs
+      - name: Authenticate image pulls from GitHub Container Registry
+        # Anonymous ghcr.io pulls share the runners' throttled budget (toomanyrequests since 2026-09-23).
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Reconstruct database
-        run: sh scripts/phase5-db.sh start
+        run: |
+          for attempt in 1 2 3; do
+            sh scripts/phase5-db.sh start && exit 0
+            echo "Isolated start attempt $attempt failed; retrying after a pause."
+            supabase stop --workdir .phase5-local --no-backup > /dev/null 2>&1 || true
+            sleep 60
+          done
+          exit 1
       - name: Show redacted start failure
         if: failure()
         run: |
@@ -95,6 +108,9 @@ jobs:
     needs: backend
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,10 +125,19 @@ jobs:
           deno-version: v2.9.6
       - name: Locked Edge checks and isolated handler tests
         run: sh scripts/check-edge.sh && sh scripts/test-edge.sh
+      - name: Authenticate image pulls from GitHub Container Registry
+        # Anonymous ghcr.io pulls share the runners' throttled budget (toomanyrequests since 2026-09-23).
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Isolated database reconstruction and lifecycle tests
         run: |
           mkdir -p supabase/.audit
-          npx supabase start -x studio,imgproxy,mailpit,storage-api,realtime,postgres-meta,logflare,vector,supavisor > supabase/.audit/ci-start.log 2>&1
+          for attempt in 1 2 3; do
+            npx supabase start -x studio,imgproxy,mailpit,storage-api,realtime,postgres-meta,logflare,vector,supavisor > supabase/.audit/ci-start.log 2>&1 && break
+            [ "$attempt" = 3 ] && { grep -iE "error|toomanyrequests" supabase/.audit/ci-start.log | tail -5; exit 1; }
+            echo "Stack start attempt $attempt failed; retrying after a pause."
+            npx supabase stop --no-backup > /dev/null 2>&1 || true
+            sleep 60
+          done
           sh scripts/test-phase4-db.sh
       - name: Authenticated local worker and pg_net transport, Cron inactive
         run: |
