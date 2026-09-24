@@ -1,7 +1,8 @@
 # Phase 5 — Removal of the legacy admin write paths to applications and their documents (TRACE-085)
 
 **Status:** IMPLEMENTED on branch `codex/phase5-application-privileges`, based on `main`
-`7cc7203` (PR #41, TRACE-084 checkpoint, merged). Awaiting Codex code review. Merging is not phase
+`7cc7203` (PR #41, TRACE-084 checkpoint, merged). Merged as PR #42 (`main` `da64e4d`);
+final-head and post-merge CI passed. Awaiting Codex code review. Merging is not phase
 acceptance or production activation. No hosted policy, grant, row or file has changed.
 
 **Authorization (2026-09-23):** the owner chose this slice and approved revoking the four
@@ -87,7 +88,8 @@ See [validation](PHASE-5-VALIDATION.md#trace-085--removal-of-the-legacy-admin-wr
 - **Deleting an application row** now has no client path at all. A spam or duplicate
   application is closed as abandoned; if the owner wants rows removed, that needs its own
   reviewed command and a retention definition for the row.
-- **The applicant `INSERT` policy** (`anon`, `authenticated`) is still open although the
+- **The applicant `INSERT` policy** (`anon`, `authenticated`), resolved by TRACE-086
+  (owner decision 2026-09-24; PHASE-5-APPLICATION-INSERT.md). It was open although the
   form submits through the service-key route. A direct insert creates a pending row with no
   documents and notifies admins. This was not part of the approved revocation.
 - **Hosted acceptance**: the migration applies to a hosted project only with owner

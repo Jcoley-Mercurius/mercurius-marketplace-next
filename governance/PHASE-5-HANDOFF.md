@@ -1,14 +1,15 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
-## Current checkpoint — PR #40 / TRACE-084
+## Current checkpoint — PR #42 / TRACE-085
 
-As of 2026-09-24 UTC, `main` is `76c833a`. PR #40 and both final-head CI
-runs passed; post-merge [main CI run 35937218157](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35937218157)
-passed backend, lifecycle and application. TRACE-084 adds operator-run retention
-for rejected or abandoned application documents, with evidence exclusions and
-application/provider holds. Its Codex code review and hosted acceptance remain
-open. Phase 5 is **IN PROGRESS**; use the gates below and
-[TRACE-084's report](PHASE-5-APPLICATION-RETENTION.md) for next work.
+As of 2026-09-24 UTC, `main` is `da64e4d`. PR #42 and its final-head CI passed;
+post-merge [main CI run 35991864405](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35991864405)
+passed backend, lifecycle and application. TRACE-085 removes the legacy admin write
+paths to applications and their stored documents. Its Codex code review (A1–A5), like
+TRACE-084's (C1–C8), and hosted acceptance remain open. TRACE-086 (branch
+`codex/phase5-application-insert`, awaiting review) removes the direct applicant insert
+path under the owner's 2026-09-24 decision. Phase 5 is **IN PROGRESS**; use the gates
+below for next work.
 
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
@@ -220,6 +221,13 @@ move, rename, overwrite or remove a file in `vendor-documents`, from a client; s
 through the reviewed commands and files only through the service-key retention routes. Reads,
 the applicant insert policy and other buckets are unchanged. The Document Retention totals now
 count application documents too. See PHASE-5-APPLICATION-ADMIN-WRITES.md.
+
+TRACE-086 removes the direct applicant insert path TRACE-085 left open (owner decision
+2026-09-24, option A). No anonymous or signed-in client can insert a `vendor_applications` row;
+the validated application route's service key is the only way to create one, and its insert
+still notifies admins and records the intake version. Rate limiting or a bot check on the route
+and the contact form's anonymous insert remain separate decisions. See
+PHASE-5-APPLICATION-INSERT.md.
 
 ## Original independent checkpoint
 

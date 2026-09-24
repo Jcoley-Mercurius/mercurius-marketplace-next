@@ -62,6 +62,50 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-086 — Removal of the direct applicant insert path — 2026-09-24
+
+Branch `codex/phase5-application-insert` on `main` `da64e4d` (PR #42 merged; post-merge
+[main CI run 35991864405](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35991864405)
+passed backend, lifecycle and application). Local synthetic stack only (this checkout's
+default project; the isolated container was in use by another checkout). Scope, the
+owner's decision and review questions B1–B4 are in PHASE-5-APPLICATION-INSERT.md.
+
+Baseline before change: 2702 pgTAP assertions across 43 suites (TRACE-085 evidence).
+
+**Database.** 2724 pgTAP assertions across 44 suites pass after a clean reset; 22 are new in
+suite 053. It covers:
+
+- structure: the applicant policy is gone and no `INSERT`/`ALL` policy remains on
+  `vendor_applications`; `anon` and `authenticated` hold no table or column `INSERT`; `anon`
+  still cannot read; `authenticated` `SELECT`, the admin read policy, `service_role` `INSERT`,
+  both triggers and the `contact_submissions` anonymous insert grant are unchanged;
+- an anonymous caller, a signed-in non-admin and a signed-in admin are each refused (42501)
+  a row the old policy accepted; no row and no admin notification results;
+- a `service_role` insert creates a pending application, notifies the admin once and
+  records the intake version.
+
+Suite 052 (TRACE-085) asserted the applicant policy was unchanged; it now asserts its
+removal. No other suite changed.
+
+**Mutation check** (local harness, not committed): 11 of 11 mutants fail suite 053 —
+restoring the table `INSERT` grant to `anon` or `authenticated`; a single-column `INSERT`
+grant to either; the policy without grants; the full revert; a permissive `ALL` policy under
+another name; revoking `service_role` `INSERT`; disabling either trigger; and revoking the
+contact form grant. The restored state passes.
+
+**Round trip** (local REST API, synthetic `example.invalid` row). Before the migration an
+anonymous insert returned 201 and stored a `document_urls` entry naming another
+application's folder. After it, the same anonymous insert returns 401 with 42501
+`permission denied for table vendor_applications`; the same row with the service key returns
+201. `next dev` was not run: see the report's decision 3.
+
+**Application.** No application code changed. `scan:secrets` and `git diff --check` pass.
+Database types regenerated from the reset are identical to the committed file.
+
+**Not performed:** CI on this branch; concurrency scripts locally; lint, typecheck, unit,
+build and browser runs (no source change); a `next dev` round trip through the route; hosted
+migration.
+
 ## TRACE-085 — Removal of the legacy admin write paths — 2026-09-23
 
 Branch `codex/phase5-application-privileges` on `main` `7cc7203` (PR #41 merged); local

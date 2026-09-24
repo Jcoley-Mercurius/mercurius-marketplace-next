@@ -1,26 +1,33 @@
 # Agent handoff — 2026-09-24 UTC
 
-Current checkpoint: `main` at `76c833a` after PR #40 (TRACE-084). The dated
+Current checkpoint: `main` at `da64e4d` after PR #42 (TRACE-085). The dated
 sections below preserve earlier slice evidence; their old branch and PR statuses
 are historical. Use the current checkpoint and the Phase 5 handoff for next work.
 
 ## Current repository and Phase 5 checkpoint
 
-- PR #40 merged on 2026-09-24 00:10 UTC. Local `main` and `origin/main` are
-  `76c833a` after a clean fast-forward; this checkpoint is documentation only.
-- TRACE-084 adds reviewed application rejection/abandonment, application and
-  provider retention holds, and operator-run quarantine/restore/deletion for
-  submitted application documents. See
-  [the slice report](../../governance/PHASE-5-APPLICATION-RETENTION.md) and
-  [validation](../../governance/PHASE-5-VALIDATION.md).
-- PR #40 final-head CI passed twice; post-merge main [CI run 35937218157](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35937218157)
-  passed backend, lifecycle and application jobs. Codex code review, manual
-  acceptance and production activation remain separate.
-- Phase 5 remains **IN PROGRESS**. Next bounded review: TRACE-084 C1–C8,
-  especially the legacy admin application `UPDATE`/`DELETE` path, evidence
-  protection, lock order and retention replay. Then choose a remaining gate from
+- PR #42 merged on 2026-09-24 11:14 UTC; `origin/main` is `da64e4d`. Final-head
+  CI and post-merge main [CI run 35991864405](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35991864405)
+  passed backend, lifecycle and application jobs.
+- TRACE-084 (PR #40) and TRACE-085 (PR #42) are merged; their Codex code reviews
+  (C1–C8, A1–A5), manual acceptance and production activation remain separate.
+- Phase 5 remains **IN PROGRESS**. Choose remaining work from the
   [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md); never-submitted uploads
   need an owner-defined retention clock before implementation.
+
+## TRACE-086 — direct applicant insert path — 2026-09-24 UTC
+
+- Branch `codex/phase5-application-insert` on `main` `da64e4d` (PR #42 merged).
+- Scope: owner decision 2026-09-24 (option A) to drop the applicant `INSERT` policy on
+  `vendor_applications` and revoke `INSERT` from `anon` and `authenticated`; the
+  service-key application route is the only writer. See
+  [the slice report](../../governance/PHASE-5-APPLICATION-INSERT.md).
+- Evidence: suite 053 (22 assertions, 11 of 11 mutants killed); 2724 assertions
+  across 44 suites on a clean reset; local REST round trip. Ran on this checkout's
+  default local stack (Studio excluded: host port 55423 unavailable).
+- Open: Codex review (B1–B4); concurrency scripts and CI; route abuse protection
+  and `contact_submissions` decisions; application-row deletion; hosted migration.
+- Next: CI on the branch, then Codex review.
 
 ## TRACE-085 — admin write paths to applications and documents — 2026-09-24 UTC
 
@@ -29,10 +36,9 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   policies and grants on `vendor_applications` and the admin `UPDATE`/`DELETE`
   policies on `vendor-documents`; Document Retention totals include application
   documents. See [the slice report](../../governance/PHASE-5-APPLICATION-ADMIN-WRITES.md).
-- Open: Codex review (A1–A5); the applicant insert policy and application-row
-  deletion need decisions; concurrency scripts run only in CI (the isolated
-  container was in use by another checkout); hosted migration.
-- Next: CI on the branch, then Codex review.
+- Open: Codex review (A1–A5); application-row deletion needs a decision (the
+  applicant insert policy is resolved by TRACE-086); hosted migration.
+- Merged as PR #42 (`da64e4d`); final-head and post-merge CI passed.
 
 ## Historical repository checkpoint — 2026-09-10
 

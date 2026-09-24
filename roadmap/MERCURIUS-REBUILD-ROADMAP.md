@@ -146,8 +146,8 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
-**Status:** IN PROGRESS. TRACE-050–084 are implemented as bounded slices through
-PR #40 on `main` `76c833a`. PR #40 final-head and post-merge main CI passed;
+**Status:** IN PROGRESS. TRACE-050–085 are implemented as bounded slices through
+PR #42 on `main` `da64e4d`. PR #42 final-head and post-merge main CI passed;
 the latest [Phase 5 validation](../governance/PHASE-5-VALIDATION.md) records the
 synthetic checks. Merging a slice does not close its review, manual acceptance,
 hosted integration or production-activation gates.
@@ -166,10 +166,11 @@ Open gates include Codex review of the merged slices; tax and promotion rules;
 recurring visit generation and charge timing; legacy money/data cutover; finance
 operator provisioning; authorized Stripe, bank and hosted invitation/retention
 acceptance; real licensing and insurance requirements; never-submitted upload
-retention; and manual accessibility/brand acceptance. TRACE-085 (branch
-`codex/phase5-application-privileges`, awaiting review) removes the admin application
-`UPDATE`/`DELETE` and document-storage write privileges under the owner's 2026-09-23
-decision; the applicant insert policy and application-row deletion remain decisions.
+retention; and manual accessibility/brand acceptance. TRACE-085 removed the admin
+application `UPDATE`/`DELETE` and document-storage write privileges (owner decision
+2026-09-23). TRACE-086 (branch `codex/phase5-application-insert`, awaiting review) removes
+the direct applicant insert path (owner decision 2026-09-24); application-row deletion
+remains a decision.
 Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
