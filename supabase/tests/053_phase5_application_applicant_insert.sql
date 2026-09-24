@@ -39,7 +39,7 @@ select ok(exists(select 1 from pg_trigger where tgrelid='public.vendor_applicati
  and tgname='trg_notify_admins_new_vendor_application' and tgenabled<>'D'),'The admin notification trigger is unchanged');
 select ok(exists(select 1 from pg_trigger where tgrelid='public.vendor_applications'::regclass
  and tgname='vendor_version_intake' and tgenabled<>'D'),'The intake version trigger is unchanged');
-select ok(has_table_privilege('anon','public.contact_submissions','INSERT'),'The public contact form keeps its insert grant');
+select ok(not has_table_privilege('anon','public.contact_submissions','INSERT'),'The contact form insert grant is removed by TRACE-087 (suite 054)');
 
 -- No client can insert a row the old policy accepted.
 select pg_temp.as_anon();

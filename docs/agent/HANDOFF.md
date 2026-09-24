@@ -19,6 +19,22 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   and a 7-day clock for never-submitted application uploads. Next: implement them as
   bounded slices. See the [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
 
+## TRACE-087 — route-only contact submissions — 2026-09-24 UTC
+
+- Branch `codex/phase5-contact-insert`, stacked on `codex/phase5-trace086-status`
+  (PR #44, DEC-2026-012) on `main` `1d8a27e`.
+- Scope: DEC-2026-012 items 2 and 4. The contact route inserts with the service key;
+  the anonymous `contact_submissions` insert policy and `anon`/`authenticated` `INSERT`
+  are removed; the duplicate `vendor-documents` read policy is dropped. See
+  [the slice report](../../governance/PHASE-5-CONTACT-INSERT.md).
+- Evidence: suite 054 (22 assertions, 12 of 12 mutants killed); 2746 assertions
+  across 45 suites on a clean reset; round trip through a production build; lint,
+  typecheck, unit, build.
+- Open: code review (D1–D4); CI; deploy the route before the hosted migration.
+- PR #44's lifecycle job failed twice with a 401 from the local worker gateway; the
+  same step passes locally. Under investigation before PR #44 merges.
+- Next: DEC-2026-012 item 1 (abuse protection), then item 5 (never-submitted uploads).
+
 ## TRACE-086 — direct applicant insert path — 2026-09-24 UTC
 
 - Branch `codex/phase5-application-insert` on `main` `da64e4d` (PR #42 merged).

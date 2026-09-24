@@ -170,7 +170,9 @@ retention; and manual accessibility/brand acceptance. TRACE-085 removed the admi
 application `UPDATE`/`DELETE` and document-storage write privileges (owner decision
 2026-09-23). TRACE-086 (PR #43, merged at `1d8a27e`) removed
 the direct applicant insert path (owner decision 2026-09-24); route abuse protection,
-the `contact_submissions` anonymous insert and application-row deletion remain decisions.
+the `contact_submissions` anonymous insert and application-row deletion were decided in
+DEC-2026-012 (2026-09-24); TRACE-087 (awaiting review) makes the contact route the only
+writer to `contact_submissions`.
 Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.

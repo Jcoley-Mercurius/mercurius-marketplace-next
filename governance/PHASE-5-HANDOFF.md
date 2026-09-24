@@ -11,7 +11,8 @@ acceptance remain open. Phase 5 is **IN PROGRESS**. DEC-2026-012 (owner, 2026-09
 decides the open intake items: honeypot and Postgres rate limits on both public forms, a
 route-only contact insert, no application-row deletion, dropping the duplicate
 `vendor-documents` read policy, and a 7-day clock for never-submitted application uploads.
-Those are the next slices; use the gates below for the rest.
+Those are the next slices; use the gates below for the rest. TRACE-087 (branch
+`codex/phase5-contact-insert`, awaiting review) implements items 2 and 4.
 
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
@@ -230,6 +231,11 @@ the validated application route's service key is the only way to create one, and
 still notifies admins and records the intake version. Rate limiting or a bot check on the route
 and the contact form's anonymous insert remain separate decisions. See
 PHASE-5-APPLICATION-INSERT.md.
+
+TRACE-087 applies DEC-2026-012 items 2 and 4. The contact route inserts with the service key and
+no anonymous or signed-in client can insert a `contact_submissions` row; the duplicate admin
+read policy on `vendor-documents` is dropped with admin access unchanged. The route must be
+deployed before the migration reaches a hosted project. See PHASE-5-CONTACT-INSERT.md.
 
 ## Original independent checkpoint
 
