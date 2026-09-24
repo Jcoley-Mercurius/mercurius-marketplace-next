@@ -4821,6 +4821,141 @@ export type Database = {
           },
         ]
       }
+      vendor_application_closures: {
+        Row: {
+          actor: string
+          application_id: string
+          before_status: string
+          business_key: string
+          created_at: string
+          id: string
+          outcome: string
+          reason: string
+          sequence: number
+        }
+        Insert: {
+          actor: string
+          application_id: string
+          before_status: string
+          business_key: string
+          created_at?: string
+          id?: string
+          outcome: string
+          reason: string
+          sequence?: never
+        }
+        Update: {
+          actor?: string
+          application_id?: string
+          before_status?: string
+          business_key?: string
+          created_at?: string
+          id?: string
+          outcome?: string
+          reason?: string
+          sequence?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_application_closures_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_application_retention_actions: {
+        Row: {
+          action: string
+          actor: string
+          application_id: string
+          business_key: string
+          created_at: string
+          id: string
+          reason: string
+          sequence: number
+          size_bytes: number | null
+          storage_path: string
+          under_hold: boolean
+        }
+        Insert: {
+          action: string
+          actor: string
+          application_id: string
+          business_key: string
+          created_at?: string
+          id?: string
+          reason: string
+          sequence?: never
+          size_bytes?: number | null
+          storage_path: string
+          under_hold: boolean
+        }
+        Update: {
+          action?: string
+          actor?: string
+          application_id?: string
+          business_key?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          sequence?: never
+          size_bytes?: number | null
+          storage_path?: string
+          under_hold?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_application_retention_actions_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_application_retention_hold_events: {
+        Row: {
+          action: string
+          actor: string
+          application_id: string
+          business_key: string
+          created_at: string
+          id: string
+          reason: string
+          sequence: number
+        }
+        Insert: {
+          action: string
+          actor: string
+          application_id: string
+          business_key: string
+          created_at?: string
+          id?: string
+          reason: string
+          sequence?: never
+        }
+        Update: {
+          action?: string
+          actor?: string
+          application_id?: string
+          business_key?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          sequence?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_application_retention_hold_events_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_application_versions: {
         Row: {
           application: Json
@@ -6803,6 +6938,31 @@ export type Database = {
         Args: { p_contractor: string }
         Returns: Json
       }
+      vendor_application_retention_overview: {
+        Args: { p_application: string }
+        Returns: Json
+      }
+      vendor_application_retention_prepare: {
+        Args: {
+          p_action: string
+          p_application: string
+          p_key: string
+          p_path: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      vendor_application_retention_queue: { Args: never; Returns: Json }
+      vendor_application_retention_record: {
+        Args: {
+          p_action: string
+          p_application: string
+          p_key: string
+          p_path: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       vendor_authorize_renewal_upload: {
         Args: { p_contractor?: string; p_kind: string }
         Returns: Json
@@ -6834,6 +6994,15 @@ export type Database = {
         Returns: boolean
       }
       vendor_claim_invitation: { Args: { p_attempt: string }; Returns: Json }
+      vendor_close_application: {
+        Args: {
+          p_application: string
+          p_key: string
+          p_outcome: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       vendor_close_dispatched_invitation: {
         Args: { p_attempt: string; p_reason: string; p_status: string }
         Returns: undefined
@@ -6913,6 +7082,10 @@ export type Database = {
       }
       vendor_own_evidence_renewal: { Args: never; Returns: Json }
       vendor_own_renewal_documents: { Args: never; Returns: Json }
+      vendor_place_application_retention_hold: {
+        Args: { p_application: string; p_key: string; p_reason: string }
+        Returns: Json
+      }
       vendor_place_retention_hold: {
         Args: { p_contractor: string; p_key: string; p_reason: string }
         Returns: Json
@@ -7005,6 +7178,10 @@ export type Database = {
           p_existing_account?: string
         }
         Returns: undefined
+      }
+      vendor_release_application_retention_hold: {
+        Args: { p_application: string; p_key: string; p_reason: string }
+        Returns: Json
       }
       vendor_release_linked_account: {
         Args: {

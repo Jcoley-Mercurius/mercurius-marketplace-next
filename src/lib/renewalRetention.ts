@@ -46,8 +46,21 @@ const RENEWAL_PATH = /^renewals\/[0-9a-f-]{36}\/(license|insurance)\/[0-9a-f-]{3
  * anything else is refused before storage is touched.
  */
 export function retentionStorageStep(action: RetentionAction, prepared: Record<string, unknown>): StorageStep {
+  return preparedStorageStep(action, prepared, (path) => RENEWAL_PATH.test(path));
+}
+
+/**
+ * Shared by the renewal (TRACE-074) and application (TRACE-084) retention routes: the
+ * prepared path must pass the caller's own path rule, and the buckets must be the ones
+ * the action allows.
+ */
+export function preparedStorageStep(
+  action: RetentionAction,
+  prepared: Record<string, unknown>,
+  allowedPath: (path: string) => boolean,
+): StorageStep {
   const path = prepared.storage_path;
-  if (typeof path !== "string" || !RENEWAL_PATH.test(path)) {
+  if (typeof path !== "string" || !allowedPath(path)) {
     throw new Error("Prepared retention step has an unexpected path.");
   }
   const expected =

@@ -1,7 +1,7 @@
 # Agent handoff — 2026-09-23
 
 Each section carries its own date; the repository checkpoint below was taken on
-2026-09-10 and the latest slice checkpoint is TRACE-083.
+2026-09-10 and the latest slice checkpoint is TRACE-084.
 
 ## Repository checkpoint
 
@@ -564,7 +564,7 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   - application: 221 of 221 non-visual browser cases (no flake).
 - Next: Codex review of PR #38.
 
-## Current slice — TRACE-083 late reversals (2026-09-23, PR #39 open)
+## Slice — TRACE-083 late reversals (2026-09-23, merged as PR #39)
 
 - PR #38 (TRACE-082) merged 2026-09-23 (main `a39abf1`).
 - Branch `codex/phase5-late-reversals`, base main `a39abf1`, worktree `../mercurius-late-reversals`.
@@ -600,6 +600,41 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   clean reset and the replay, all 19 concurrency scripts, lifecycle, and the application job. The
   push run of the same commit was cancelled by the workflow's concurrency group, not failed.
 - Next: Codex review of PR #39.
+
+## Current slice — TRACE-084 application document retention (2026-09-23, awaiting review)
+
+- PR #39 (TRACE-083) merged 2026-09-23 (main `44e4efa`).
+- Branch `codex/phase5-application-retention`, base main `44e4efa`, worktree
+  `../mercurius-application-retention`.
+- Owner decisions 2026-09-23 (asked before implementation, all four as recommended):
+  - the 90 days start at a recorded rejection (or an onboarding rejection); legacy rejections
+    are not backfilled;
+  - an operator marks an application abandoned with a reason; no inactivity timer;
+  - a file that is compliance evidence is never purged;
+  - holds can be placed on an application, and a provider hold covers its applications.
+- Change: migration `20260923002000`:
+  - immutable closures, application hold events and application retention actions;
+  - `vendor_close_application` replaces the direct status update;
+  - `vendor_application_retention_prepare`/`_record` on the TRACE-074 mechanics;
+  - application hold place and release;
+  - an evidence guard trigger;
+  - queue and overview readbacks.
+- Route `/api/vendor-applications/retention`. The Applications dialog gains Closure and
+  retention; Document Retention gains Application documents.
+- Evidence: `governance/PHASE-5-APPLICATION-RETENTION.md` (C1–C8) and the TRACE-084 section of
+  `governance/PHASE-5-VALIDATION.md`:
+  - 2678 SQL assertions across 42 suites (051 new, 147); 22 of 22 mutants killed;
+  - 20 concurrency scripts in CI order, clean reset and replay;
+  - a local route/Auth/Storage round trip (15 checks);
+  - 182 unit tests (5 new), build, and 239/239 non-visual browser cases (11 new), 0 audit
+    findings.
+- Open:
+  - Codex review of C1–C8;
+  - CI on the final head;
+  - never-submitted uploads;
+  - the admin `UPDATE`/`DELETE` policies on `vendor_applications`;
+  - hosted deployment.
+- Next: CI and Codex review of the PR.
 
 ## Workflow update — 2026-09-10
 

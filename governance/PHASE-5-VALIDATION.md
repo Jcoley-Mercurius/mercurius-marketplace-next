@@ -62,6 +62,125 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-084 — Retention of rejected and abandoned application documents — 2026-09-23
+
+Branch `codex/phase5-application-retention` on `main` `44e4efa` (PR #39 merged); isolated
+synthetic stack only. Scope, owner decisions and review questions C1–C8 are in
+PHASE-5-APPLICATION-RETENTION.md.
+
+Baseline before change: 2531 pgTAP assertions across 41 suites (TRACE-083 evidence).
+
+**Database.** 2678 pgTAP assertions across 42 suites pass after a clean reset and again after
+the post-concurrency replay; 147 are new in suite 051. It covers:
+
+- access: anonymous and `service_role` callers are refused, helpers and the three tables are
+  closed to clients, and a vendor is refused on every command and readback;
+- the queue before any step: due at exactly 90 days and not one second earlier; an
+  abandonment and an onboarding rejection start the clock (from the rejection event); kept
+  files bound to evidence; unrecorded legacy statuses; quarantined files, including a
+  reopened application's; a path outside the upload layout and another application's file
+  listed on a row are not files of that application; the later of two clocks is used;
+  reading writes nothing;
+- closures: allowed outcomes per status; reason, key and outcome required; unknown
+  application; refused with a provider or an onboarding rejection; no second closure; a
+  legacy status recorded only as the same outcome; recorded, replayed, key conflicts
+  (reason, application, operator); the clock starts at the record; onboarding start refused
+  afterwards; status set, the replaced status recorded, no application version created;
+- prepare refusals and prepared buckets, with preparing writing nothing;
+- record: not before the move; window re-checked; a file in both buckets; an unreadable
+  size; recorded with the size storage showed; replay and conflicts; no second quarantine;
+- restore: a different size refused; recorded; due again; a reopened application's file
+  restorable;
+- deletion: not while the file exists; period re-checked after an early removal; recorded;
+  terminal; one deletion per file;
+- application holds (reason, key and application required, place, replay, conflict, no
+  second hold, queue and overview, quarantine and deletion refused, a completed quarantine
+  recorded under hold, restore allowed, release) and a provider hold covering its
+  application's file;
+- a fingerprint proving no application terms, version, evidence, onboarding status or
+  revision, role or listing changed;
+- the evidence guard: a closed or onboarding-rejected application's file and a quarantined
+  file are refused, and an open application's file and a non-path reference are unaffected;
+- immutability and check constraints.
+
+Suite 001's Phase 5 RPC-only table lists gain the three new private tables, as earlier
+slices did.
+
+**Mutation check** (local harness, not committed): 22 of 22 guard mutants fail suite 051:
+
+- the evidence exemption, the file-belongs check and the closure-required rule for deletion;
+- the 90-day and 14-day boundaries (`>` to `>=`);
+- the status-equals-outcome rule and the later-clock order;
+- the application-folder path rule;
+- provider holds covering applications, and the prepare hold refusal;
+- the restore size, quarantine size and deletion storage checks, and record replay;
+- the closure command's provider refusal, status rule, no-second-closure rule and replay
+  reason check;
+- the no-second-hold rule;
+- both evidence guard conditions;
+- the queue's evidence exclusion.
+
+The later-clock order and the application-folder path rule survived the first run; each
+gained a fixture and assertions.
+
+**Concurrency.** New `scripts/phase5-application-retention-concurrency.mjs`, wired into CI
+after the renewal retention script:
+
+- eight same-key closures record once;
+- eight distinct-key closures across two operators close once;
+- closures racing onboarding starts yield exactly one of the two (the closure won in all
+  six local runs; the start-first order is covered by suite 051);
+- eight same-key quarantine records write once;
+- an application-hold race and a provider-hold race each yield one hold and one quarantine;
+- eight deletion prepares under hold are all refused.
+
+All 20 scripts pass in CI order on a clean reset, and the clean replay after them passes.
+
+**Round trip** (local only, not committed): `next dev` against the isolated stack with local
+Auth and Storage, synthetic `example.invalid` accounts and synthetic bytes; past closure and
+quarantine times are fixture rows. 15 checks pass:
+
+- 401, 403 and 400 (another application's folder) refusals;
+- the closure RPC, then a quarantine refused inside 90 days with the file unmoved;
+- quarantine moving identical bytes and recording their size, and replay without moving;
+- an operator client unable to open, download or remove the quarantined file;
+- deletion refused inside 14 days, and restore returning identical, openable bytes;
+- permanent deletion after 14 days leaving neither bucket holding the file, replay, and no
+  restore afterwards;
+- an application hold refusing quarantine with nothing moved, a completed move recorded
+  under hold on retry, and release;
+- a file bound to evidence refused and listed as kept;
+- no application version created.
+
+**Application.** `scan:secrets`, `lint` and `typecheck` pass. The first scan flagged the
+TRACE-074 word order (`vendor_prepare_` + `application_retention`) as a Resend key pattern; the pair was renamed
+`vendor_application_retention_prepare`/`_record` rather than changing the scanner. 182 unit
+tests pass, 5 of them new (the application path rule and storage step, and the renewal path
+rule after the shared refactor). The build passes with CI's synthetic public variables. The
+regenerated database types only add lines and match a regeneration from the final clean
+database. `audit:prod` has 0 findings.
+
+**Browser.** 239 of 239 non-visual cases pass (`test:a11y`); 11 are new:
+
+- the Application documents section at light 320px and dark 1440px with an axe pass and no
+  horizontal scroll;
+- a quarantine with a reason, the payload and key, confirmed by rereading;
+- a refused deletion keeping the dialog open;
+- an application hold released from the queue;
+- a failed load with retry;
+- a rejection with a reason from the Applications dialog, confirmed by rereading, with an axe
+  pass;
+- a legacy status offering Record rejection only;
+- an application with a provider pointing to onboarding review;
+- moved credential documents offering no Open, and the evidence count;
+- an application hold placed from the dialog.
+
+The shared fixture server gained empty defaults for the two new readbacks. The dialog's hold
+labels say "application hold", so they are distinct from the provider hold in the same dialog.
+
+**Not performed:** CI on this branch; hosted deployment or round trip; real applicants or
+documents; visual screenshots (`test:visual`); manual screen-reader review.
+
 ## TRACE-083 — Late reversals — 2026-09-23
 
 Branch `codex/phase5-late-reversals`, base `main` `a39abf1` (PR #38 merged); isolated synthetic stack
