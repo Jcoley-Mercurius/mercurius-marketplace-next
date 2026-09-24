@@ -20,12 +20,16 @@ import {
   type RetentionAction,
 } from "@/lib/renewalRetention";
 import { cn } from "@/lib/utils";
-import { ApplicationDocumentRetention } from "@/components/admin/ApplicationDocumentRetention";
+import {
+  ApplicationDocumentRetention,
+  type ApplicationRetentionTotals,
+} from "@/components/admin/ApplicationDocumentRetention";
 
 // TRACE-074 CFG-011 retention queue for declined renewal documents; TRACE-084 adds the
 // documents of rejected or abandoned applications below it. Each step is run by an
 // operator behind ConfirmAction and confirmed by rereading this queue. Nothing here
-// changes a submission, decision, evidence, status or listing.
+// changes a submission, decision, evidence, status or listing. TRACE-085: the totals
+// count both queues and are withheld until the application queue has loaded.
 
 type Entry = {
   id: string;
@@ -69,6 +73,8 @@ export default function DocumentRetentionPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [nonce] = useState(() => crypto.randomUUID());
+  const [applicationTotals, setApplicationTotals] = useState<ApplicationRetentionTotals>(null);
+  const [applicationRefresh, setApplicationRefresh] = useState(0);
 
   const read = useCallback(async () => {
     setLoading(true);
@@ -132,7 +138,14 @@ export default function DocumentRetentionPage() {
   };
 
   const refresh = (
-    <Button variant="outline" disabled={loading} onClick={() => void read()}>
+    <Button
+      variant="outline"
+      disabled={loading}
+      onClick={() => {
+        void read();
+        setApplicationRefresh((count) => count + 1);
+      }}
+    >
       <RefreshCw />
       Refresh
     </Button>
@@ -308,14 +321,21 @@ export default function DocumentRetentionPage() {
     </section>
   );
 
+  // Renewal and application documents together; unknown until both queues have loaded.
+  const combined = (renewal: number, application: number | undefined) =>
+    application === undefined ? null : renewal + application;
+  const due = combined(queue.due.length, applicationTotals?.due);
+  const quarantined = combined(queue.quarantined.length, applicationTotals?.quarantined);
+  const holds = combined(queue.holds.length, applicationTotals?.holds);
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
       {header}
 
       <section aria-label="Queue totals" className="grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-4">
-        <Total label="Due for quarantine" value={queue.due.length} tone={queue.due.length ? "warning" : undefined} />
-        <Total label="In quarantine" value={queue.quarantined.length} />
-        <Total label="Providers on hold" value={queue.holds.length} />
+        <Total label="Due for quarantine" value={due} tone={due ? "warning" : undefined} />
+        <Total label="In quarantine" value={quarantined} />
+        <Total label="Retention holds" value={holds} />
         <div className="bg-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Evaluated</p>
           <p className="mt-1 text-sm font-medium">{new Date(queue.evaluated_at).toLocaleString()}</p>
@@ -371,17 +391,21 @@ export default function DocumentRetentionPage() {
         <h2 id="application-retention" className="text-lg font-semibold">
           Application documents
         </h2>
-        <ApplicationDocumentRetention />
+        <ApplicationDocumentRetention refreshKey={applicationRefresh} onTotals={setApplicationTotals} />
       </section>
     </div>
   );
 }
 
-function Total({ label, value, tone }: { label: string; value: number; tone?: "warning" }) {
+function Total({ label, value, tone }: { label: string; value: number | null; tone?: "warning" }) {
   return (
     <div className="bg-card p-4">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 text-xl font-semibold", tone === "warning" && "text-status-warning")}>{value}</p>
+      {value === null ? (
+        <p className="mt-1 text-sm text-muted-foreground">Application queue not loaded</p>
+      ) : (
+        <p className={cn("mt-1 text-xl font-semibold", tone === "warning" && "text-status-warning")}>{value}</p>
+      )}
     </div>
   );
 }

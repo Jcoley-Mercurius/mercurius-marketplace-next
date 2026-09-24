@@ -120,10 +120,12 @@ set local role authenticated;
 select is((select count(*) from storage.objects where bucket_id='vendor-documents-quarantine'),0::bigint,'An operator client cannot list quarantined files');
 select throws_ok(format('insert into storage.objects(bucket_id,name) values(%L,%L)','vendor-documents-quarantine',pg_temp.path('1','license',90)),
  '42501',null,'An operator client cannot write into quarantine');
-select throws_ok(format('update storage.objects set bucket_id=%L where bucket_id=%L and name=%L','vendor-documents-quarantine','vendor-documents',pg_temp.path('1','license',1)),
- '42501',null,'An operator client cannot move a file into quarantine');
+-- TRACE-085 removed the admin update policy, so the move matches no row instead of failing
+-- its check; the file stays where it was either way.
+select lives_ok(format('update storage.objects set bucket_id=%L where bucket_id=%L and name=%L','vendor-documents-quarantine','vendor-documents',pg_temp.path('1','license',1)),
+ 'An operator client''s move into quarantine matches no row');
 reset role;
-select is((select bucket_id from storage.objects where name=pg_temp.path('1','license',1)),'vendor-documents','The admin update policy cannot move a file into quarantine');
+select is((select bucket_id from storage.objects where name=pg_temp.path('1','license',1)),'vendor-documents','An operator client cannot move a file into quarantine');
 
 -- Access.
 set local role anon;

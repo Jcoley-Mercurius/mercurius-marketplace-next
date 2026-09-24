@@ -274,3 +274,38 @@ test("a failed application queue load offers a retry", async ({ page }) => {
   await expect(page.getByText("No application document is in quarantine.")).toBeVisible();
   await expect(page.getByText("Every closed application has a recorded closure.")).toBeVisible();
 });
+
+// TRACE-085: the page totals count renewal and application documents together.
+test("queue totals add application documents and are withheld until that queue loads", async ({ page }) => {
+  const renewal = { contractor_id: "00000000-0000-4000-8000-000000000070", name: "Synthetic Renewal Provider", kind: "license",
+    file_name: "synthetic-renewal.pdf", decided_at: at(-120), retention_state: "retained", retention_since: null,
+    retention_ends_at: at(-30), quarantine_ends_at: null, object_location: "documents", held: false };
+  await page.route("**/rpc/vendor_document_retention_queue", route => route.fulfill({
+    json: { evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14,
+      due: [{ ...renewal, id: "00000000-0000-4000-8000-000000000071" }], quarantined: [],
+      holds: [{ contractor_id: renewal.contractor_id, name: renewal.name, reason: "Synthetic provider hold", placed_at: at(-1) }] },
+  }));
+  let calls = 0;
+  await page.route("**/rpc/vendor_application_retention_queue", route => {
+    calls += 1;
+    return calls === 1
+      ? route.fulfill({ status: 503, json: { message: "Synthetic unavailable" } })
+      : route.fulfill({ json: { evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14,
+          due: [due, heldDue], quarantined: [deletable, reopened], kept: [kept], unrecorded: [], holds: [hold] } });
+  });
+  await syntheticSession(page.context(), "admin");
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/admin/compliance/retention");
+  const totals = page.getByRole("region", { name: "Queue totals" });
+  await expect(page.getByRole("alert").filter({ hasText: "Application document retention unavailable" })).toBeVisible();
+  await expect(totals.getByText("Application queue not loaded")).toHaveCount(3);
+
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByRole("heading", { name: "Application documents due for quarantine (2)" })).toBeVisible();
+  expect(calls).toBe(2);
+  const total = (label: string) => totals.getByText(label, { exact: true }).locator("xpath=following-sibling::p[1]");
+  await expect(total("Due for quarantine")).toHaveText("3");
+  await expect(total("In quarantine")).toHaveText("2");
+  await expect(total("Retention holds")).toHaveText("2");
+  await expect(totals.getByText("Application queue not loaded")).toHaveCount(0);
+});

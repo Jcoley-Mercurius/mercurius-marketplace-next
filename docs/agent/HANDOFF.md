@@ -22,6 +22,18 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md); never-submitted uploads
   need an owner-defined retention clock before implementation.
 
+## TRACE-085 — admin write paths to applications and documents — 2026-09-24 UTC
+
+- Branch `codex/phase5-application-privileges` on `main` `7cc7203` (PR #41 merged).
+- Scope: owner decision 2026-09-23 to revoke the legacy admin `UPDATE`/`DELETE`
+  policies and grants on `vendor_applications` and the admin `UPDATE`/`DELETE`
+  policies on `vendor-documents`; Document Retention totals include application
+  documents. See [the slice report](../../governance/PHASE-5-APPLICATION-ADMIN-WRITES.md).
+- Open: Codex review (A1–A5); the applicant insert policy and application-row
+  deletion need decisions; concurrency scripts run only in CI (the isolated
+  container was in use by another checkout); hosted migration.
+- Next: CI on the branch, then Codex review.
+
 ## Historical repository checkpoint — 2026-09-10
 
 - GitHub checked on 2026-09-10: latest merged PR is [#15, provider compliance operations](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/15), merged 2026-09-08.

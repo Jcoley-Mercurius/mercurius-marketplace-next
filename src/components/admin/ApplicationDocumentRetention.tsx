@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,9 @@ import {
 
 type Hold = { application_id: string; business_name: string; reason: string; placed_at: string };
 type Unrecorded = { application_id: string; business_name: string; status: string; has_provider: boolean };
+
+// Counts the Document Retention page adds to its totals; null while unloaded or failed.
+export type ApplicationRetentionTotals = { due: number; quarantined: number; holds: number } | null;
 
 type Queue = {
   evaluated_at: string;
@@ -49,11 +52,21 @@ const kindLabel: Record<string, string> = { license: "License", insurance: "Insu
 
 const linkClass = "font-medium text-foreground underline underline-offset-4 hover:text-accent";
 
-export function ApplicationDocumentRetention() {
+export function ApplicationDocumentRetention({
+  refreshKey = 0,
+  onTotals,
+}: {
+  refreshKey?: number;
+  onTotals?: (totals: ApplicationRetentionTotals) => void;
+}) {
   const [queue, setQueue] = useState<Queue | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [nonce] = useState(() => crypto.randomUUID());
+  const totals = useRef(onTotals);
+  useEffect(() => {
+    totals.current = onTotals;
+  }, [onTotals]);
 
   const read = useCallback(async () => {
     setLoading(true);
@@ -63,9 +76,11 @@ export function ApplicationDocumentRetention() {
       if (rpcError) throw rpcError;
       const next = data as unknown as Queue;
       setQueue(next);
+      totals.current?.({ due: next.due.length, quarantined: next.quarantined.length, holds: next.holds.length });
       return next;
     } catch (reason) {
       setError(messageOf(reason, "The application document retention queue could not be loaded."));
+      totals.current?.(null);
       return null;
     } finally {
       setLoading(false);
@@ -75,7 +90,7 @@ export function ApplicationDocumentRetention() {
   useEffect(() => {
     const timer = window.setTimeout(() => void read(), 0);
     return () => window.clearTimeout(timer);
-  }, [read]);
+  }, [read, refreshKey]);
 
   const step = (file: ApplicationRetentionFile, action: RetentionAction) => async (reason: string) => {
     const titles = { quarantine: "Document quarantined", restore: "Document restored", delete: "Document permanently deleted" };

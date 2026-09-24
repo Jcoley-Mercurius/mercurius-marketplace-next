@@ -62,6 +62,61 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-085 — Removal of the legacy admin write paths — 2026-09-23
+
+Branch `codex/phase5-application-privileges` on `main` `7cc7203` (PR #41 merged); local
+synthetic stack only. Scope, the owner's decision and review questions A1–A5 are in
+PHASE-5-APPLICATION-ADMIN-WRITES.md.
+
+Baseline before change: 2678 pgTAP assertions across 42 suites (TRACE-084 evidence).
+
+**Database.** 2702 pgTAP assertions across 43 suites pass after a clean reset; 24 are new in
+suite 052. It covers:
+
+- structure: the four policies are gone, no `UPDATE`/`DELETE`/`ALL` policy remains on
+  `vendor_applications` and no client write policy names `vendor-documents`; `authenticated`
+  holds no table or column `UPDATE` and no `DELETE`; `anon` holds neither; `authenticated`
+  `SELECT`, `service_role` `UPDATE`, the admin read policy, the applicant insert policy, the
+  admin document read policy and five other buckets' write policies are unchanged;
+- a signed-in admin still reads the application and the stored document, and is refused
+  (42501) a status update, a document-list update and a delete;
+- the same admin's bucket move, metadata overwrite, rename and delete (with the Storage
+  delete guard lifted) leave the object's bucket, name and metadata unchanged, and the
+  application unchanged;
+- `vendor_close_application` still closes the application and records the closure.
+
+Suite 041 (TRACE-074) asserted that an operator client's move into quarantine failed the
+old update policy's check (42501). With no update policy it matches no row, so that
+assertion now expects no error and the following assertion, that the file stayed in
+`vendor-documents`, carries the requirement. No other suite changed.
+
+**Mutation check** (local harness, not committed): 10 of 10 mutants fail suite 052 —
+restoring `UPDATE`, `DELETE` or a column `UPDATE` grant; restoring each of the four
+policies; the two storage policies under other names; and revoking execute on
+`vendor_close_application`. The restored state passes.
+
+**Concurrency.** Not run locally: the scripts are pinned to the isolated
+`mercurius-phase5-isolated` container, which another checkout was using. No script writes
+`vendor_applications` or `vendor-documents` as a client (fixtures run as the superuser), so
+none depends on the removed privileges. CI runs all 20 and the clean replay.
+
+**Round trip** (local only, not committed): local Auth and Storage, a synthetic
+`example.invalid` admin and synthetic bytes. The admin opens a signed link; a move to
+quarantine and a rename return 404; an upsert and an update return 403 (row-level
+security); a remove returns success with an empty list; afterwards the bytes are unchanged
+and nothing is in quarantine. With the two old storage policies temporarily restored, the
+same admin's rename succeeded and moved the file off its recorded path (then removed again).
+
+**Application.** `scan:secrets`, `lint` and `typecheck` pass; 182 unit tests pass. The build
+passes with CI's synthetic public variables. Database types are unchanged (policies and
+grants are not in them). Browser: 240 of 240 non-visual cases pass (`test:a11y`), 1 new — totals read
+"Application queue not loaded" while that queue fails, and after Refresh reloads both queues
+they read 3 due, 2 in quarantine and 2 retention holds. The agent inspected the 320px light
+screenshot: totals legible, no clipping.
+
+**Not performed:** CI on this branch; concurrency scripts locally; hosted migration;
+visual screenshots (`test:visual`); manual screen-reader review.
+
 ## TRACE-084 — Retention of rejected and abandoned application documents — 2026-09-23
 
 Branch `codex/phase5-application-retention` on `main` `44e4efa` (PR #39 merged); isolated
