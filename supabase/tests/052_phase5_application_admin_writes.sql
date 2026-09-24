@@ -40,8 +40,8 @@ select ok(has_table_privilege('authenticated','public.vendor_applications','SELE
 select ok(has_table_privilege('service_role','public.vendor_applications','UPDATE'),'The service key used by the upload route keeps UPDATE');
 select ok(exists(select 1 from pg_policies where schemaname='public' and tablename='vendor_applications'
  and policyname='Admins can view all applications' and cmd='SELECT'),'The admin read policy is unchanged');
-select ok(exists(select 1 from pg_policies where schemaname='public' and tablename='vendor_applications'
- and policyname='Anyone can submit vendor application' and cmd='INSERT'),'The applicant insert policy is unchanged');
+select ok(not exists(select 1 from pg_policies where schemaname='public' and tablename='vendor_applications'
+ and policyname='Anyone can submit vendor application'),'The applicant insert policy is removed by TRACE-086 (suite 053)');
 
 select ok(not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects'
  and policyname in ('Admins can update vendor documents','Admins can delete vendor documents')),'The admin document update and delete policies are removed');
