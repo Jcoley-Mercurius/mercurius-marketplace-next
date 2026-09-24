@@ -166,9 +166,11 @@ Open gates include Codex review of the merged slices; tax and promotion rules;
 recurring visit generation and charge timing; legacy money/data cutover; finance
 operator provisioning; authorized Stripe, bank and hosted invitation/retention
 acceptance; real licensing and insurance requirements; never-submitted upload
-retention; and manual accessibility/brand acceptance. Existing admin application
-`UPDATE`/`DELETE` and document-storage deletion privileges require a reviewed
-decision. Phase 6 has not started under this roadmap.
+retention; and manual accessibility/brand acceptance. TRACE-085 (branch
+`codex/phase5-application-privileges`, awaiting review) removes the admin application
+`UPDATE`/`DELETE` and document-storage write privileges under the owner's 2026-09-23
+decision; the applicant insert policy and application-row deletion remain decisions.
+Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
 

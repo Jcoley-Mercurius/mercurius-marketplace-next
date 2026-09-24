@@ -214,6 +214,13 @@ file that is compliance evidence is never purged. Holds can be placed on an appl
 provider hold covers its applications. Legacy rejections with no record are not due until
 recorded; never-submitted uploads stay outside retention. See PHASE-5-APPLICATION-RETENTION.md.
 
+TRACE-085 removes the legacy admin write paths TRACE-074 and TRACE-084 left open (owner decision
+2026-09-23). A signed-in admin can no longer update or delete a `vendor_applications` row, or
+move, rename, overwrite or remove a file in `vendor-documents`, from a client; statuses change only
+through the reviewed commands and files only through the service-key retention routes. Reads,
+the applicant insert policy and other buckets are unchanged. The Document Retention totals now
+count application documents too. See PHASE-5-APPLICATION-ADMIN-WRITES.md.
+
 ## Original independent checkpoint
 
 Draft checkpoint, not phase acceptance. Branch `codex/phase5-money-integrity` starts
