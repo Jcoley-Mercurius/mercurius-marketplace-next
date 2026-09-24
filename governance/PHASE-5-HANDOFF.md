@@ -1,15 +1,16 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
-## Current checkpoint — PR #42 / TRACE-085
+## Current checkpoint — PR #43 / TRACE-086
 
-As of 2026-09-24 UTC, `main` is `da64e4d`. PR #42 and its final-head CI passed;
-post-merge [main CI run 35991864405](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35991864405)
-passed backend, lifecycle and application. TRACE-085 removes the legacy admin write
-paths to applications and their stored documents. Its Codex code review (A1–A5), like
-TRACE-084's (C1–C8), and hosted acceptance remain open. TRACE-086 (branch
-`codex/phase5-application-insert`, awaiting review) removes the direct applicant insert
-path under the owner's 2026-09-24 decision. Phase 5 is **IN PROGRESS**; use the gates
-below for next work.
+As of 2026-09-24 UTC, `main` is `1d8a27e`. PR #43 and its final-head CI passed;
+post-merge [main CI run 36005291080](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36005291080)
+passed backend, lifecycle and application. TRACE-086 removes the direct applicant insert
+path, so the validated service-key route is the only way to create an application.
+Code review of TRACE-084 (C1–C8), TRACE-085 (A1–A5) and TRACE-086 (B1–B4) and hosted
+acceptance remain open. Phase 5 is **IN PROGRESS**; route abuse protection, the
+`contact_submissions` anonymous insert, application-row deletion, the duplicate admin read
+policy on `vendor-documents` and never-submitted upload retention await owner decisions.
+Use the gates below for next work.
 
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 

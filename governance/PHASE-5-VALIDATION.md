@@ -102,9 +102,12 @@ application's folder. After it, the same anonymous insert returns 401 with 42501
 **Application.** No application code changed. `scan:secrets` and `git diff --check` pass.
 Database types regenerated from the reset are identical to the committed file.
 
-**Not performed:** CI on this branch; concurrency scripts locally; lint, typecheck, unit,
-build and browser runs (no source change); a `next dev` round trip through the route; hosted
-migration.
+**CI (after merge):** final-head [PR CI run 35996039599](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35996039599) on `c7fc54e` and post-merge
+[main CI run 36005291080](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36005291080) on `1d8a27e` passed backend (including every concurrency
+script and the clean replay), lifecycle and application.
+
+**Not performed:** concurrency scripts locally; a `next dev` round trip through the route;
+hosted migration.
 
 ## TRACE-085 — Removal of the legacy admin write paths — 2026-09-23
 
