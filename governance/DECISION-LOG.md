@@ -23,6 +23,40 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-012 — Public intake hardening and application record lifecycle
+
+**Status:** APPROVED owner decisions. **Date:** 2026-09-24 UTC.
+
+Answers the open items left by TRACE-084, TRACE-085 and TRACE-086:
+
+1. **Abuse protection.** The vendor application and contact routes each get a hidden
+   honeypot field, a minimum fill time of 3 seconds, and submission limits of 5 per hour
+   per client IP and 3 per day per email address, counted separately for each form. The
+   counters live in a private Postgres table that only the service-key routes can use. A
+   refused submission gets a generic "try again later" (HTTP 429). No third-party bot
+   check (such as Turnstile) is added.
+2. **Contact form writes.** The contact route inserts with the service key, as the
+   application route does. The anonymous `contact_submissions` insert policy is dropped
+   and `INSERT` is revoked from `anon` and `authenticated`.
+3. **Application rows are never deleted.** A spam or duplicate application is closed as
+   abandoned with a reason (TRACE-084); its documents follow CFG-011 retention and the
+   row stays as the record. No deletion or anonymization command is added.
+4. **Duplicate read policy.** The identical `Admins can review vendor application
+   documents` `SELECT` policy on `vendor-documents` is dropped; `Admins can read vendor
+   documents` stays. Admin access does not change.
+5. **Never-submitted uploads.** A file in `vendor-documents` under an application's upload
+   path becomes due 7 days after its signed upload grant expires, when neither the
+   application's `document_urls` nor any compliance evidence references it. It then
+   follows the existing operator-run quarantine, 14-day wait and permanent deletion,
+   with application and provider holds respected. Orphaned renewal uploads are not part
+   of this decision.
+
+Alternatives considered: Turnstile, a honeypot alone, or deferring (1); keeping the
+length-checked anonymous policy (2); a reviewed purge or anonymization after retention
+(3); keeping both policies (4); the 90-day clock from upload, or no retention (5).
+
+These decisions do not authorize a hosted migration, deployment or activation.
+
 ### DEC-2026-011 — Phase 5 independent contracts and bank-operated ACH
 
 **Status:** APPROVED owner direction; implementation choices below use the owner's delegated chargeback discretion.

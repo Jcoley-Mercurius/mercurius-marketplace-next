@@ -1,8 +1,9 @@
 # Phase 5 — Removal of the direct applicant insert path to applications (TRACE-086)
 
-**Status:** IMPLEMENTED on branch `codex/phase5-application-insert`, based on `main`
-`da64e4d` (PR #42, TRACE-085, merged). Awaiting Codex code review. Merging is not phase
-acceptance or production activation. No hosted policy, grant or row has changed.
+**Status:** MERGED as PR #43 on 2026-09-24 13:23 UTC (main `1d8a27e`).
+Implemented from branch `codex/phase5-application-insert`, based on `da64e4d`.
+Final-head and post-merge main CI passed. Code review and Phase 5 acceptance remain
+open. No hosted policy, grant or row has changed.
 
 **Authorization (2026-09-24):** the owner chose option A of four presented: drop the
 applicant `INSERT` policy on `vendor_applications` and revoke the `INSERT` grants from `anon`
@@ -68,7 +69,7 @@ See [validation](PHASE-5-VALIDATION.md#trace-086--removal-of-the-direct-applican
 
 ## Open items
 
-- **Codex code review** (B1–B4 below).
+- **Code review** (B1–B4 below). Final-head and post-merge CI passed.
 - **Hosted acceptance:** the migration applies to a hosted project only with owner
   authorization. Before it does, confirm no external form, integration or script inserts
   applications with the anonymous or a user key.

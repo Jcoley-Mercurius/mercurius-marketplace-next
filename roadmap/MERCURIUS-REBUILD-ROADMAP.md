@@ -168,9 +168,9 @@ operator provisioning; authorized Stripe, bank and hosted invitation/retention
 acceptance; real licensing and insurance requirements; never-submitted upload
 retention; and manual accessibility/brand acceptance. TRACE-085 removed the admin
 application `UPDATE`/`DELETE` and document-storage write privileges (owner decision
-2026-09-23). TRACE-086 (branch `codex/phase5-application-insert`, awaiting review) removes
-the direct applicant insert path (owner decision 2026-09-24); application-row deletion
-remains a decision.
+2026-09-23). TRACE-086 (PR #43, merged at `1d8a27e`) removed
+the direct applicant insert path (owner decision 2026-09-24); route abuse protection,
+the `contact_submissions` anonymous insert and application-row deletion remain decisions.
 Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
