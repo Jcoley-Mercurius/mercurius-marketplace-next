@@ -1,7 +1,7 @@
 # Mercurius Rebuild and Implementation Roadmap
 
-**Status:** IN PROGRESS — Phase 4 implementation review
-**Baseline:** `main` at `94d608a`
+**Status:** IN PROGRESS — Phase 5 implementation; Phase 4 review and acceptance gates remain tracked
+**Implementation checkpoint:** `main` at `76c833a` (PR #40, TRACE-084, merged 2026-09-24 UTC); the original planning baseline was `94d608a`
 **Authority:** owner-approved MPS, MDS, and MTS
 **Delivery model:** stabilize and rebuild in vertical slices; do not perform a blind rewrite
 
@@ -146,57 +146,29 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
-**Invitation follow-up:** TRACE-063 adds reserved local Auth dispatch, verified
-recipient acceptance and explicit uncertain-outcome reconciliation. Hosted delivery,
-existing-account linking and operator queue integration remain open. See
-governance/PHASE-5-VENDOR-INVITATIONS.md.
+**Status:** IN PROGRESS. TRACE-050–084 are implemented as bounded slices through
+PR #40 on `main` `76c833a`. PR #40 final-head and post-merge main CI passed;
+the latest [Phase 5 validation](../governance/PHASE-5-VALIDATION.md) records the
+synthetic checks. Merging a slice does not close its review, manual acceptance,
+hosted integration or production-activation gates.
 
-**Compliance operations follow-up:** TRACE-062 provides the admin compliance
-interface, version-bound private document review/binding, evidence reuse and
-protected provider decisions/finalization. See governance/PHASE-5-COMPLIANCE-OPERATIONS.md.
-Remaining invitation, renewal, retention, finance and integration gates stay open.
+The delivered contracts cover source-bound checkout and durable Stripe processing;
+immutable money journals, reviewed refunds and late reversals; weekly direct ACH
+eligibility, transfer outcomes, replacement statements, recovery and bank statement
+reconciliation; onboarding, invitation, compliance, renewal and operator-run
+retention of declined renewal and rejected or abandoned application documents.
+See [traceability](../governance/TRACEABILITY.md) and the
+[Phase 5 handoff](../governance/PHASE-5-HANDOFF.md) for each slice's evidence and
+limits. TRACE-084's application retention is documented in
+[its slice report](../governance/PHASE-5-APPLICATION-RETENTION.md).
 
-**Onboarding operations follow-up:** TRACE-065 starts onboarding review for a new
-applicant without creating an account, invitation or public listing; TRACE-066 wires
-the invitation operator interface onto the TRACE-063 dispatch commands with a
-read-only operator readback and an operator-entered expiry that carries no default.
-See governance/PHASE-5-ONBOARDING-INTAKE.md and
-governance/PHASE-5-INVITATION-OPERATIONS.md. Existing-account linking, hosted
-delivery, renewal and retention operations remain open.
-TRACE-064 restores the production dependency-audit CI gate (Next.js 16.3.4 and
-transitive patches); see governance/PHASE-5-DEPENDENCY-SECURITY.md.
-
-**Onboarding operations follow-up:** TRACE-065 starts onboarding review for a new
-applicant, TRACE-066 wires the provider invitation operator interface, and TRACE-067
-binds an account the applicant already holds, closing the last unreviewed path that
-granted the vendor role from an email-directory scan. See
-governance/PHASE-5-ONBOARDING-INTAKE.md, PHASE-5-INVITATION-OPERATIONS.md and
-PHASE-5-ACCOUNT-LINKING.md. Activation still grants no vendor role; that, plus
-renewal, retention, finance and integration gates, stays open.
-
-**Follow-ups after PR #6 merge:** TRACE-054 binds snapshots and checkout to accepted
-quote revisions and selected eligible fixed offerings. See
-governance/PHASE-5-QUOTE-CHECKOUT.md. TRACE-055 connects the merged lifecycle to
-direct ACH eligibility using authenticated confirmation receipts and live dispute/
-appeal gates; see governance/PHASE-5-COMPLETION-PAYOUT.md. PR #7 is merged. Phase 5
-remains open for functional, configuration, operations and integration acceptance;
-Phase 6 has not started.
-
-**Cancellation/refund follow-up:** TRACE-056 consumes the Phase 4 CFG-006 customer
-cancellation assessment as immutable money evidence and creates exact, dual-reviewed
-refund authorizations per captured payment. Provider cancellation remains blocked
-until CFG-007 acceptable-replacement exhaustion is recorded. See
-`governance/PHASE-5-CANCELLATION-REFUNDS.md`.
-
-**Provider-refund follow-up:** TRACE-057 records replacement decisions and links exhausted supply to reviewed full refunds. TRACE-058 completes replacement commercial reconciliation and TRACE-059 binds separate recurring occurrence payment identities. Automated recurring generation/charge timing remains a follow-up. TRACE-060 gates matching and offer acceptance with current private onboarding evidence while preserving an explicit legacy-provider migration boundary. See governance/PHASE-5-PROVIDER-REFUNDS.md and governance/PHASE-5-VENDOR-MATCHING-ELIGIBILITY.md. TRACE-061 implements the fail-closed existing-provider compliance cutover contract; activation requires reviewed real requirements and provider decisions.
-
-**Checkpoint 2026-09-04:** Independent bounded slices are implemented for review on
-`codex/phase5-money-integrity`, now combined with main `735df91` after PRs #4 and #5
-merged. Lifecycle code is included; functional adapters remain open. DEC-2026-011 records
-the owner's authorization for this independent work and owner-operated bank ACH.
-TRACE-050–053 and PHASE-5-HANDOFF/VALIDATION track evidence and outstanding Phase 4,
-configuration, provider, banking, onboarding and manual acceptance gates. Execution
-remains disabled; this is not Phase 5 acceptance or authorization to activate.
+Open gates include Codex review of the merged slices; tax and promotion rules;
+recurring visit generation and charge timing; legacy money/data cutover; finance
+operator provisioning; authorized Stripe, bank and hosted invitation/retention
+acceptance; real licensing and insurance requirements; never-submitted upload
+retention; and manual accessibility/brand acceptance. Existing admin application
+`UPDATE`/`DELETE` and document-storage deletion privileges require a reviewed
+decision. Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
 

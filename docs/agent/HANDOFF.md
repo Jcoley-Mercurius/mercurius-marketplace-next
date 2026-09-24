@@ -1,9 +1,28 @@
-# Agent handoff — 2026-09-23
+# Agent handoff — 2026-09-24 UTC
 
-Each section carries its own date; the repository checkpoint below was taken on
-2026-09-10 and the latest slice checkpoint is TRACE-084.
+Current checkpoint: `main` at `76c833a` after PR #40 (TRACE-084). The dated
+sections below preserve earlier slice evidence; their old branch and PR statuses
+are historical. Use the current checkpoint and the Phase 5 handoff for next work.
 
-## Repository checkpoint
+## Current repository and Phase 5 checkpoint
+
+- PR #40 merged on 2026-09-24 00:10 UTC. Local `main` and `origin/main` are
+  `76c833a` after a clean fast-forward; this checkpoint is documentation only.
+- TRACE-084 adds reviewed application rejection/abandonment, application and
+  provider retention holds, and operator-run quarantine/restore/deletion for
+  submitted application documents. See
+  [the slice report](../../governance/PHASE-5-APPLICATION-RETENTION.md) and
+  [validation](../../governance/PHASE-5-VALIDATION.md).
+- PR #40 final-head CI passed twice; post-merge main [CI run 35937218157](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35937218157)
+  passed backend, lifecycle and application jobs. Codex code review, manual
+  acceptance and production activation remain separate.
+- Phase 5 remains **IN PROGRESS**. Next bounded review: TRACE-084 C1–C8,
+  especially the legacy admin application `UPDATE`/`DELETE` path, evidence
+  protection, lock order and retention replay. Then choose a remaining gate from
+  [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md); never-submitted uploads
+  need an owner-defined retention clock before implementation.
+
+## Historical repository checkpoint — 2026-09-10
 
 - GitHub checked on 2026-09-10: latest merged PR is [#15, provider compliance operations](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/15), merged 2026-09-08.
 - Synced base: `d815e900b158a5a4283c0aa073f872cc57e1eeb9` (`origin/main`).
@@ -23,7 +42,7 @@ an isolated recovery branch based on `94d608a` if those changes are needed.
 Do not drop the stash until its contents have been reviewed. Existing ignored
 local environment files were preserved and have not been validated for runtime use.
 
-## Product checkpoint
+## Historical product checkpoint — 2026-09-10
 
 PR #15 implements TRACE-062: admin compliance operations, version-bound private
 document review/binding, evidence reuse, and protected provider decisions.
@@ -601,11 +620,13 @@ as current branch/merge status; reconcile them with the latest slice evidence.
   push run of the same commit was cancelled by the workflow's concurrency group, not failed.
 - Next: Codex review of PR #39.
 
-## Current slice — TRACE-084 application document retention (2026-09-23, awaiting review)
+## Slice — TRACE-084 application document retention (2026-09-23, merged as PR #40)
 
 - PR #39 (TRACE-083) merged 2026-09-23 (main `44e4efa`).
 - Branch `codex/phase5-application-retention`, base main `44e4efa`, worktree
   `../mercurius-application-retention`.
+- Merged as PR #40 at `76c833a` on 2026-09-24 00:10 UTC. Both final-head CI
+  runs and post-merge main run 35937218157 passed all three jobs.
 - Owner decisions 2026-09-23 (asked before implementation, all four as recommended):
   - the 90 days start at a recorded rejection (or an onboarding rejection); legacy rejections
     are not backfilled;
@@ -630,11 +651,10 @@ as current branch/merge status; reconcile them with the latest slice evidence.
     findings.
 - Open:
   - Codex review of C1–C8;
-  - CI on the final head;
   - never-submitted uploads;
   - the admin `UPDATE`/`DELETE` policies on `vendor_applications`;
   - hosted deployment.
-- Next: CI and Codex review of the PR.
+- Next: Codex code review of the merged TRACE-084 slice and the remaining Phase 5 gates.
 
 ## Workflow update — 2026-09-10
 

@@ -1,5 +1,15 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
+## Current checkpoint — PR #40 / TRACE-084
+
+As of 2026-09-24 UTC, `main` is `76c833a`. PR #40 and both final-head CI
+runs passed; post-merge [main CI run 35937218157](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35937218157)
+passed backend, lifecycle and application. TRACE-084 adds operator-run retention
+for rejected or abandoned application documents, with evidence exclusions and
+application/provider holds. Its Codex code review and hosted acceptance remain
+open. Phase 5 is **IN PROGRESS**; use the gates below and
+[TRACE-084's report](PHASE-5-APPLICATION-RETENTION.md) for next work.
+
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
 PRs #4–7 are merged. TRACE-054 binds checkout to accepted quote revisions and
@@ -100,8 +110,9 @@ TRACE-074 applies CFG-011 retention to declined renewal documents: 90 days after
 an operator may move the file to a private quarantine bucket, restore it, or after 14 days in
 quarantine delete it permanently, each step recorded only once storage confirms it. A
 provider-level retention hold stops quarantine and deletion. Never-submitted uploads and
-application documents remain outside retention (owner decisions 2026-09-15). See
-PHASE-5-RENEWAL-RETENTION.md.
+application documents were outside TRACE-074; TRACE-084 now covers rejected or
+abandoned application documents. Never-submitted uploads remain outside retention. See
+PHASE-5-RENEWAL-RETENTION.md and PHASE-5-APPLICATION-RETENTION.md.
 
 TRACE-075 adds the finance reconciliation readback: finance operators see each invoice's
 charges, refunds, earnings and payouts checked against the journals, the MPS §5.5 funds state
@@ -232,7 +243,7 @@ behavior characterized before replacing the five active entrypoints.
 - Additive migrations depend only on main's recovered schema; no Phase 4-only
   relation is assumed. Legacy source is archived for characterization, not execution.
 
-## Acceptance gates for this draft
+## Acceptance gates for the original draft checkpoint
 
 - [ ] Final-head CI passes sequential backend and application jobs.
 - [ ] Owner/code review accepts command authority, financial allocation, concurrency,
