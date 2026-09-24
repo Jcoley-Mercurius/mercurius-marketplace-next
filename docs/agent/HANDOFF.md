@@ -12,11 +12,12 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
 - TRACE-084 (PR #40), TRACE-085 (PR #42) and TRACE-086 (PR #43) are merged; their
   code review questions (C1–C8, A1–A5, B1–B4), manual acceptance and production
   activation remain separate.
-- Phase 5 remains **IN PROGRESS**. Owner decisions pending before the next slices:
-  route abuse protection, the `contact_submissions` anonymous insert, application-row
-  deletion, the duplicate admin read policy on `vendor-documents`, and a retention
-  clock for never-submitted uploads. See the
-  [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
+- Phase 5 remains **IN PROGRESS**. The owner decided the open intake items on
+  2026-09-24 ([DEC-2026-012](../../governance/DECISION-LOG.md)): honeypot and
+  Postgres rate limits on both public forms, a route-only contact insert, no
+  application-row deletion, dropping the duplicate `vendor-documents` read policy,
+  and a 7-day clock for never-submitted application uploads. Next: implement them as
+  bounded slices. See the [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
 
 ## TRACE-086 — direct applicant insert path — 2026-09-24 UTC
 
@@ -32,7 +33,7 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   default local stack (Studio excluded: host port 55423 unavailable).
 - Open: code review (B1–B4); route abuse protection and `contact_submissions`
   decisions; application-row deletion; hosted migration.
-- Next: owner decisions on the open items above.
+- Next: implement DEC-2026-012 (owner decisions 2026-09-24 on these open items).
 
 ## TRACE-085 — admin write paths to applications and documents — 2026-09-24 UTC
 

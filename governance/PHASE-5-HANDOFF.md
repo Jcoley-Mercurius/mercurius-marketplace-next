@@ -7,10 +7,11 @@ post-merge [main CI run 36005291080](https://github.com/Jcoley-Mercurius/mercuri
 passed backend, lifecycle and application. TRACE-086 removes the direct applicant insert
 path, so the validated service-key route is the only way to create an application.
 Code review of TRACE-084 (C1–C8), TRACE-085 (A1–A5) and TRACE-086 (B1–B4) and hosted
-acceptance remain open. Phase 5 is **IN PROGRESS**; route abuse protection, the
-`contact_submissions` anonymous insert, application-row deletion, the duplicate admin read
-policy on `vendor-documents` and never-submitted upload retention await owner decisions.
-Use the gates below for next work.
+acceptance remain open. Phase 5 is **IN PROGRESS**. DEC-2026-012 (owner, 2026-09-24)
+decides the open intake items: honeypot and Postgres rate limits on both public forms, a
+route-only contact insert, no application-row deletion, dropping the duplicate
+`vendor-documents` read policy, and a 7-day clock for never-submitted application uploads.
+Those are the next slices; use the gates below for the rest.
 
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
