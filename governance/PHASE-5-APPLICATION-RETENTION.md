@@ -1,9 +1,9 @@
 # Phase 5 — Retention of rejected and abandoned application documents (TRACE-084)
 
-**Status:** IMPLEMENTED on branch `codex/phase5-application-retention`, based on `main`
-`44e4efa` (PR #39, TRACE-083, merged). Awaiting Codex code review. Merging is not phase
-acceptance or production activation, and no file in any hosted project has been moved or
-deleted.
+**Status:** MERGED as PR #40 on 2026-09-24 00:10 UTC (main `76c833a`).
+Implemented from branch `codex/phase5-application-retention`, based on `44e4efa`.
+Final-head and post-merge main CI passed. Codex code review and Phase 5 acceptance
+remain open. No file in any hosted project has been moved or deleted.
 
 **Authorization (2026-09-23):** the owner directed implementation of TRACE-084 and answered
 the four decisions below before implementation.
@@ -161,7 +161,7 @@ Grants: tables and helpers have no client access, and the seven new public funct
 
 ## Open items
 
-- **Codex code review** (C1–C8 below) and CI on the final head.
+- **Codex code review** (C1–C8 below). Final-head and post-merge CI passed.
 - **Never-submitted uploads** remain outside retention; they need a clock definition.
 - **The admin `UPDATE` and `DELETE` policies on `vendor_applications`** (2026-03-16) still
   let an admin change a status directly. The TRACE-074 open item on operator `DELETE` in

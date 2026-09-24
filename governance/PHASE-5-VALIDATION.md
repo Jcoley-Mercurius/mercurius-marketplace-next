@@ -178,7 +178,14 @@ database. `audit:prod` has 0 findings.
 The shared fixture server gained empty defaults for the two new readbacks. The dialog's hold
 labels say "application hold", so they are distinct from the provider hold in the same dialog.
 
-**Not performed:** CI on this branch; hosted deployment or round trip; real applicants or
+**CI after the local checkpoint:** PR #40 final-head runs 35932084753 and
+35932060841 each passed backend, lifecycle and application. Post-merge main run
+[35937218157](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35937218157)
+passed the same three jobs on `76c833a`, including database contracts, all 20
+concurrency scripts, clean reset/replay, Edge checks, lint, types, unit, build,
+audit and browser accessibility. These are isolated synthetic checks.
+
+**Not performed:** hosted deployment or round trip; real applicants or
 documents; visual screenshots (`test:visual`); manual screen-reader review.
 
 ## TRACE-083 — Late reversals — 2026-09-23
