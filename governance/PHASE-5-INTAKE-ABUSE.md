@@ -99,9 +99,8 @@ alone does not change the current routes.
 ## Open items
 
 - **Code review** (E1–E6 below) and CI on the branch.
-- **Per-IP limit** (5 per hour per form) once the production domain's proxy path, and so the
-  trusted client-IP header, is known (DEC-2026-013 item 2). The table and function take an IP
-  key in a later additive migration.
+- **Per-IP limit:** implemented by TRACE-089 (DEC-2026-014), which replaces the recording
+  function with a three-argument version. See PHASE-5-INTAKE-IP-LIMIT.md.
 - **Turnstile** stays out unless intake spam is observed or the per-IP limit is still
   deferred at launch (DEC-2026-013 item 1).
 - **Hosted acceptance:** apply the migration, then deploy, with owner authorization.

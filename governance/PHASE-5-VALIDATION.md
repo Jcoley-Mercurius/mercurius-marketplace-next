@@ -62,6 +62,66 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-089 — Per-network intake limit — 2026-09-24
+
+Branch `codex/phase5-intake-ip-limit` on `main` `3e4236c` (after PR #46, TRACE-088).
+Local synthetic stack only (this checkout's default project). Scope, DEC-2026-014 and review
+questions F1–F5 are in PHASE-5-INTAKE-IP-LIMIT.md.
+
+Baseline before change: 2783 pgTAP assertions across 46 suites (TRACE-088 evidence).
+
+**Database.** 2813 pgTAP assertions across 47 suites pass after a clean reset; 30 are new in
+suite 056, and suite 055 calls the three-argument function with a null network (37
+assertions, unchanged). The first reset attempt stopped with a container error; the same
+command then succeeded with no change to the files. Suite 056 covers:
+
+- structure: the nullable network key column, no raw address column, the two-argument
+  function gone, the outcome returned as text, and no client role can execute it;
+- five accepted per network per form in an hour whatever the email, the sixth refused as
+  `ip_limit`; separate allowances per form and per network; a null network skipping the
+  limit;
+- the email limit still applying across networks, and reported first when both are reached;
+- a raw address, an uppercase key or an empty key rejected (22023);
+- refusals and rejections recording nothing;
+- the one-hour network window (61 minutes no longer counts, 59 minutes does) while the
+  email's day still counts older rows.
+
+One assertion failed on the first run because the test itself was wrong: its email had only
+one submission. It was changed to an email at its limit.
+
+**Concurrency** (`PHASE5_DB_CONTAINER` set to this checkout's database): the four TRACE-088
+cases pass, plus a new one: with four submissions already recorded from one network, ten
+parallel attempts with different emails accept exactly one and refuse nine as `ip_limit`,
+leaving exactly five recorded.
+
+**Mutation check** (local harness, not committed): raising the network limit to 6 fails 3
+assertions in 056. Widening the window to 2 hours fails 1. Removing the network advisory lock
+lets 2–5 parallel attempts through in 4 of 5 script runs; the race is timing-dependent, so
+one run passed. The unmutated function passes 056 and three consecutive script runs.
+
+**Round trip** (local only, not committed): `next build` then `VERCEL=1 next start` on port
+3100 against the local stack, with the Supabase URL and keys overridden by local values
+(checked to be `127.0.0.1`) and Resend unset. Contact route with `x-real-ip` set:
+
+- 203.0.113.7 with five different emails returned 201 each, and a sixth returned 429;
+- 203.0.113.8 returned 201;
+- 2001:db8:1:2::9 and four more addresses in the same /64 returned 201, and a sixth
+  address in that /64 returned 429;
+- no header returned 201.
+
+The server log named `ip_limit` for the two refusals, without email or address. The
+counters held network hashes only. The local synthetic rows were removed by a clean reset
+afterwards.
+
+**Application.** `npm run lint`, `npm run typecheck`, `npm run test:unit` (202 tests in 16
+files; 20 in `intake-protection.test.ts`), `next build`, `scan:secrets` and
+`git diff --check` pass. Database types regenerated from the reset change only the function's
+arguments and return type.
+
+**Not performed:** CI on this branch; the browser suite (no page changed); a vendor
+application round trip (the route change is the same call as the contact route's); hosted
+migration, domain attachment or production `x-real-ip` confirmation.
+
 ## TRACE-088 — Intake abuse protection — 2026-09-24
 
 Branch `codex/phase5-intake-abuse` on `main` `0d47134`. Local synthetic stack only (this

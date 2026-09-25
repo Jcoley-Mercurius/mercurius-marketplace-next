@@ -8,7 +8,7 @@ select no_plan();
 create function pg_temp.key(p_label text) returns text language sql as $$
  select encode(extensions.digest('intake-limit-synthetic-' || p_label, 'sha256'), 'hex') $$;
 create function pg_temp.record(p_form text, p_label text) returns boolean language sql as $$
- select public.intake_record_submission(p_form, pg_temp.key(p_label)) $$;
+ select public.intake_record_submission(p_form, pg_temp.key(p_label), null) = 'accepted' $$;
 create function pg_temp.as_user(p_user uuid) returns void language sql as $$
  select set_config('request.jwt.claims',json_build_object('role','authenticated','sub',p_user)::text,true) $$;
 create function pg_temp.as_service() returns void language sql as $$
@@ -35,15 +35,15 @@ select ok(not has_table_privilege('service_role','private.intake_submissions','S
  'The service key holds no direct privilege on the intake counters');
 select ok(not exists(select 1 from information_schema.columns where table_schema='private'
  and table_name='intake_submissions' and column_name ilike '%email' ),'The intake counters have no email column');
-select ok(not has_function_privilege('anon','public.intake_record_submission(text,text)','EXECUTE'),
+select ok(not has_function_privilege('anon','public.intake_record_submission(text,text,text)','EXECUTE'),
  'An anonymous caller cannot record an intake submission');
-select ok(not has_function_privilege('authenticated','public.intake_record_submission(text,text)','EXECUTE'),
+select ok(not has_function_privilege('authenticated','public.intake_record_submission(text,text,text)','EXECUTE'),
  'A signed-in caller cannot record an intake submission');
-select ok(has_function_privilege('service_role','public.intake_record_submission(text,text)','EXECUTE'),
+select ok(has_function_privilege('service_role','public.intake_record_submission(text,text,text)','EXECUTE'),
  'The service key records intake submissions');
-select ok((select prosecdef from pg_proc where oid='public.intake_record_submission(text,text)'::regprocedure),
+select ok((select prosecdef from pg_proc where oid='public.intake_record_submission(text,text,text)'::regprocedure),
  'The recording function runs as its owner');
-select is((select proconfig from pg_proc where oid='public.intake_record_submission(text,text)'::regprocedure),
+select is((select proconfig from pg_proc where oid='public.intake_record_submission(text,text,text)'::regprocedure),
  array['search_path=""'],'The recording function has a fixed empty search path');
 
 -- Client roles are refused.
@@ -68,12 +68,12 @@ select ok(not pg_temp.record('contact','a'),'A refused submission does not chang
 select ok(pg_temp.record('vendor_application','a'),'The same email is counted separately for the vendor application form');
 select ok(pg_temp.record('contact','b'),'Another email has its own contact allowance');
 select throws_ok($$select count(*) from private.intake_submissions$$,'42501',null,'The service key cannot read the counters directly');
-select throws_ok($$select public.intake_record_submission('newsletter',pg_temp.key('a'))$$,'22023',null,'An unknown form is rejected');
-select throws_ok($$select public.intake_record_submission(null,pg_temp.key('a'))$$,'22023',null,'A missing form is rejected');
-select throws_ok($$select public.intake_record_submission('contact','intake-limit-synthetic-a@example.invalid')$$,'22023',null,
+select throws_ok($$select public.intake_record_submission('newsletter',pg_temp.key('a'),null)$$,'22023',null,'An unknown form is rejected');
+select throws_ok($$select public.intake_record_submission(null,pg_temp.key('a'),null)$$,'22023',null,'A missing form is rejected');
+select throws_ok($$select public.intake_record_submission('contact','intake-limit-synthetic-a@example.invalid',null)$$,'22023',null,
  'A raw email is rejected as a key');
-select throws_ok($$select public.intake_record_submission('contact',upper(pg_temp.key('a')))$$,'22023',null,'An uppercase key is rejected');
-select throws_ok($$select public.intake_record_submission('contact',null)$$,'22023',null,'A missing key is rejected');
+select throws_ok($$select public.intake_record_submission('contact',upper(pg_temp.key('a')),null)$$,'22023',null,'An uppercase key is rejected');
+select throws_ok($$select public.intake_record_submission('contact',null,null)$$,'22023',null,'A missing key is rejected');
 reset role;
 
 select is((select count(*) from private.intake_submissions where email_hash=pg_temp.key('a') and form='contact'),3::bigint,

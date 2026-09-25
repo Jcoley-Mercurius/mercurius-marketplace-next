@@ -13,7 +13,8 @@ route-only contact insert, no application-row deletion, dropping the duplicate
 `vendor-documents` read policy, and a 7-day clock for never-submitted application uploads.
 Those are the next slices; use the gates below for the rest. TRACE-087 (PR #45, merged at
 `0d47134`; [main CI run 36077050904](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36077050904) passed) implements items 2 and 4. TRACE-088 (branch
-`codex/phase5-intake-abuse`, awaiting review) implements item 1 as settled by DEC-2026-013.
+`codex/phase5-intake-abuse`, PR #46, merged at `3e4236c`) implements item 1 as settled by DEC-2026-013;
+TRACE-089 (branch `codex/phase5-intake-ip-limit`, awaiting review) adds its per-IP limit (DEC-2026-014).
 
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
@@ -245,6 +246,11 @@ accepted submission from one email address to one form in a rolling day, each wi
 writes. There is no Turnstile, and the per-IP limit waits for the production domain's proxy
 path. The migration must reach a hosted project before the routes are deployed. See
 PHASE-5-INTAKE-ABUSE.md.
+
+TRACE-089 adds that limit: 5 accepted submissions per client network per form per hour,
+with the network taken from Vercel's `x-real-ip` (IPv6 by /64) because the domain's GoDaddy
+DNS points straight at Vercel (DEC-2026-014). An unknown IP skips only this limit. See
+PHASE-5-INTAKE-IP-LIMIT.md.
 
 ## Original independent checkpoint
 
