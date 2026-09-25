@@ -1,6 +1,15 @@
 # Phase 5 handoff — independent money and onboarding contracts
 
-## Current checkpoint — PR #43 / TRACE-086
+## Current checkpoint — closure readiness (2026-09-25)
+
+`main` is `cd0c041` after PR #48 (TRACE-090); DEC-2026-012 is fully implemented. DEC-2026-015
+sets the closure basis. TRACE-091 (renewal uploads never submitted) and TRACE-092 (closure
+readiness) are on stacked branches awaiting CI and review.
+[PHASE-5-CLOSURE-READINESS.md](PHASE-5-CLOSURE-READINESS.md) maps the roadmap gate to its
+evidence, lists the open review questions, and names the later phase that owns each gate below.
+The owner closes Phase 5 after Codex review.
+
+## Earlier checkpoint — PR #43 / TRACE-086
 
 As of 2026-09-24 UTC, `main` is `1d8a27e`. PR #43 and its final-head CI passed;
 post-merge [main CI run 36005291080](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36005291080)
