@@ -4,6 +4,7 @@ import {
   RENEWAL_DOCUMENT_BUCKET,
   RENEWAL_QUARANTINE_BUCKET,
   daysUntil,
+  isRenewalUploadPath,
   isRetentionAction,
   retentionRecordAction,
   retentionStorageStep,
@@ -66,5 +67,23 @@ describe("retention helpers", () => {
     expect(daysUntil("2026-09-15T12:00:00.000Z", now)).toBe(0);
     expect(daysUntil("2026-09-01T00:00:00.000Z", now)).toBe(0);
     expect(daysUntil(null, now)).toBeNull();
+  });
+});
+
+// TRACE-091. The never-submitted upload route accepts only a renewal upload path, the same
+// layout migration 20260925002000 matches.
+describe("renewal upload path", () => {
+  it("accepts the renewal upload layout", () => {
+    expect(isRenewalUploadPath(path)).toBe(true);
+    expect(isRenewalUploadPath(path.replace("/license/", "/insurance/"))).toBe(true);
+  });
+
+  it("refuses other folders, items, names and types", () => {
+    expect(isRenewalUploadPath(path.replace("renewals/", ""))).toBe(false);
+    expect(isRenewalUploadPath(path.replace("/license/", "/other/"))).toBe(false);
+    expect(isRenewalUploadPath(path.replace(".pdf", ".txt"))).toBe(false);
+    expect(isRenewalUploadPath(`${path}/../x.pdf`)).toBe(false);
+    expect(isRenewalUploadPath("renewals/00000000-0000-4000-8000-000000000074/license/notes.pdf")).toBe(false);
+    expect(isRenewalUploadPath(undefined)).toBe(false);
   });
 });

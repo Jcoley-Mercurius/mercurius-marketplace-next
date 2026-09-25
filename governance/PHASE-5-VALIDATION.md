@@ -62,6 +62,67 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-091 — Never-submitted renewal uploads — 2026-09-25
+
+Branch `codex/phase5-renewal-orphan-uploads` on `main` `cd0c041` (after PR #48, TRACE-090).
+Local synthetic stack only (this checkout's default project). Scope, the owner's decision and
+review questions H1–H6 are in PHASE-5-RENEWAL-UNATTACHED-UPLOADS.md.
+
+Baseline before change: 2862 pgTAP assertions across 48 suites (TRACE-090 evidence).
+
+**Database.** 2924 pgTAP assertions across 49 suites pass after a clean reset; 62 are new in suite 058. Suites 040 (TRACE-073),
+041 (TRACE-074) and 057 (TRACE-090) pass unchanged. Suite 058 covers:
+
+- no client, anonymous or service-key access to the ledger and helpers; record reachable only
+  through the operator check; ledger rows immutable;
+- which files are unsubmitted: renewal-layout files no submission lists, in either bucket or
+  known to the ledger; the upload time is the object's creation;
+- a vendor refused the queue and prepare; submission refused at exactly 7 days and for a due
+  upload, allowed at 6 days;
+- the queue: due past the clock with held providers marked; kept when bound to evidence;
+  quarantined listed separately; the provider, file name, clock and 2-hour grant stated;
+- refusals: one minute short of the clock; a submitted upload (fixture and in-run); evidence;
+  provider hold; a path outside the layout; a path storage never held; 13 days in quarantine;
+  restore of a retained upload; deletion before quarantine; a missing reason; refusals
+  recording nothing;
+- steps: the exact boundary; prepare naming the provider; record refused before storage moved
+  the file, then recorded, replayed, and reported as a replay by prepare; a key reused for
+  another upload refused; the recorded size; a second quarantine refused; a quarantined upload
+  neither submittable nor usable as evidence; restore; deletion after 15 days with the file
+  gone; a deleted upload staying deleted and known; a restored upload due again; a hold placed
+  after the move recorded as under hold;
+- no declined-document queue entry, decision, evidence or onboarding status changed.
+
+The first run failed on fixtures only: renewal submission needs an active provider, the
+immutability trigger raises `55000`, and two readbacks ran under the client role. The first full
+run failed suite 001's RPC-only boundary check until the new ledger joined its list of tables
+the service key cannot reach, as each earlier retention ledger did.
+
+**Concurrency** (`scripts/phase5-renewal-upload-retention-concurrency.mjs`, added to CI after
+the TRACE-084 script; run locally with `PHASE5_DB_CONTAINER` set to this checkout's database,
+then reset): eight same-key records write once; eight distinct-key records across two
+operators write once; four submissions of a due upload racing four prepares are all refused
+as expired while every prepare proceeds, and the upload is then quarantined once; four
+submissions of a 6-day-old upload racing four prepares record one submission and every
+prepare is refused; a four-hold/four-record race yields one hold and one quarantine.
+
+**Mutation check** (local harness, not committed; each mutant applied in the suite's own
+transaction): the unmutated migration passes all 62 assertions, and each of 7 mutants fails the suite. Submission cut-off removed: 8 failures and an aborted run. Submitted uploads no longer excluded from the listing: 4. The refusal's submitted check removed: 2. Evidence exemption removed: 1. Clock one minute early: 1. Record's quarantine storage check removed: 1. Deletion fallback removed: the run aborts at the deletion step.
+
+**Browser** (`next build` with the CI browser environment): `renewal-retention.spec.ts` (13
+tests, four new: the upload lists in light 320 px and dark 1440 px with axe, quarantine by path
+through the new route confirmed by rereading, and a refused restore) and
+`application-retention.spec.ts` (13) pass. The existing renewal tests now also assert that a
+queue without the upload lists renders them empty. The dark 1440 px screenshot was reviewed.
+A first run against a build made with the local `.env` failed at sign-in for every test;
+rebuilding with CI's browser environment fixed it.
+
+**Application.** `npm run lint`, `npm run typecheck`, `npm run test:unit` (204 tests in 16
+files), `next build`, `scan:secrets` and `git diff --check` pass. Database types regenerated
+from the reset add only the new ledger and two commands.
+
+**Not performed:** CI on this branch; the full browser suite locally; hosted migration.
+
 ## TRACE-090 — Never-attached application uploads — 2026-09-25
 
 Branch `codex/phase5-orphan-uploads`, built on `main` `3e4236c` and rebased onto `6d1a11a`

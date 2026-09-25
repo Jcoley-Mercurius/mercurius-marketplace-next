@@ -22,6 +22,19 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   and a 7-day clock for never-submitted application uploads. Next: implement them as
   bounded slices. See the [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
 
+## TRACE-091 — never-submitted renewal uploads — 2026-09-25 UTC
+
+- Branch `codex/phase5-renewal-orphan-uploads` on `main` `cd0c041` (after PR #48, TRACE-090).
+- Scope: DEC-2026-015 item 2. Renewal uploads no submission lists follow TRACE-090's 7-day
+  clock and TRACE-074's quarantine, 14-day wait, deletion and provider holds, on a new
+  path-keyed ledger; submissions are refused from 7 days so they never race a quarantine. See
+  [the slice report](../../governance/PHASE-5-RENEWAL-UNATTACHED-UPLOADS.md).
+- Evidence: suite 058 (62 assertions); 2924 assertions across 49 suites on a clean reset;
+  concurrency script (added to CI); mutation check (7 of 7); retention browser specs (13 + 13);
+  lint, typecheck, 204 unit tests, build.
+- Open: code review (H1–H6); CI; hosted migration.
+- Next: the Phase 5 closure-readiness slice (DEC-2026-015 items 1, 3 and 4), then Codex review.
+
 ## TRACE-090 — never-attached application uploads — 2026-09-25 UTC
 
 - Branch `codex/phase5-orphan-uploads` on `main` `6d1a11a` (after PR #47, TRACE-089).
@@ -34,7 +47,8 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   lint, typecheck, 202 unit tests, build.
 - Open: code review (G1–G6); CI; hosted checks of the upload URL lifetime and move
   behavior; hosted migration.
-- Next: DEC-2026-012 is fully implemented once this slice merges.
+- Merged as PR #48 at `cd0c041`; post-merge main CI run 36138739942 passed all three jobs.
+  DEC-2026-012 is fully implemented.
 
 ## TRACE-089 — per-network intake limit — 2026-09-24 UTC
 

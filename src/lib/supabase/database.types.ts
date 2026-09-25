@@ -5854,6 +5854,56 @@ export type Database = {
           },
         ]
       }
+      vendor_renewal_upload_retention_actions: {
+        Row: {
+          action: string
+          actor: string
+          business_key: string
+          contractor_id: string
+          created_at: string
+          id: string
+          reason: string
+          sequence: number
+          size_bytes: number | null
+          storage_path: string
+          under_hold: boolean
+        }
+        Insert: {
+          action: string
+          actor: string
+          business_key: string
+          contractor_id: string
+          created_at?: string
+          id?: string
+          reason: string
+          sequence?: never
+          size_bytes?: number | null
+          storage_path: string
+          under_hold: boolean
+        }
+        Update: {
+          action?: string
+          actor?: string
+          business_key?: string
+          contractor_id?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          sequence?: never
+          size_bytes?: number | null
+          storage_path?: string
+          under_hold?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_renewal_upload_retention_actions_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_requirement_evidence: {
         Row: {
           bound_at: string
@@ -7205,6 +7255,24 @@ export type Database = {
         Returns: Json
       }
       vendor_renewal_document_queue: { Args: never; Returns: Json }
+      vendor_renewal_upload_retention_prepare: {
+        Args: {
+          p_action: string
+          p_key: string
+          p_path: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      vendor_renewal_upload_retention_record: {
+        Args: {
+          p_action: string
+          p_key: string
+          p_path: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       vendor_require_operator: { Args: never; Returns: string }
       vendor_start_onboarding_review: {
         Args: {

@@ -23,6 +23,40 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-015 — Phase 5 closure basis, never-submitted renewal uploads, promotions and tax
+
+**Status:** APPROVED owner decisions (2026-09-25); implementation choices recorded for Codex review.
+**Date:** 2026-09-25 UTC.
+
+1. **Closure basis.** Phase 5 is assessed against its roadmap gate: concurrent checkout,
+   duplicate webhook, partial and full refund, dispute, chargeback, payout and invite tests
+   pass in non-production environments, followed by Codex review. As with Phase 3
+   (DEC-2026-005), the activation gates that need production, external accounts or people
+   are carried forward to named later phases rather than holding Phase 5 open: hosted
+   migration and rollout, authorized Stripe and bank tests, finance operator provisioning,
+   legacy cutover, real licensing and insurance requirements, and manual accessibility and
+   brand acceptance. Codex review is not phase acceptance; the owner closes the phase.
+2. **Never-submitted renewal uploads** (TRACE-091) follow TRACE-090's rule: due 7 days after
+   the 2-hour upload link expires, measured from the object's `created_at`, then TRACE-074's
+   operator-run quarantine, 14-day wait and deletion, with provider holds and the evidence
+   exemption. Implementation choice: because a renewal upload can be submitted with the
+   provider's session at any time (application uploads need a 110-minute finalize token),
+   a submission is refused once the object is 7 days old, 2 hours before quarantine opens,
+   so a submission never races a quarantine.
+3. **Promotions.** None at private beta. Checkout must refuse any promotion or discount until
+   the owner approves promotion terms (funding, limits, allocation).
+4. **Sales tax.** Carried to the private-beta gate: the owner confirms taxability by service
+   category with an accountant before private beta, and checkout must not charge a category
+   without an approved tax rule. Test fixtures remain non-policy (DEC-2026-011).
+
+Alternatives considered: holding Phase 5 open until every activation gate passes (1);
+deferring renewal uploads (2); defining promotion terms now (3); a zero-tax rule now, or
+Stripe Tax (4).
+
+MPS/MDS/MTS impact: none. Items 3 and 4 fix beta configuration within CFG-005 and DEC-2026-011.
+
+This decision does not authorize a hosted migration, deployment, charge, deletion or activation.
+
 ### DEC-2026-014 — Per-IP intake limit: client-IP source and implementation choices
 
 **Status:** APPROVED owner fact; implementation choices recorded for Codex review.

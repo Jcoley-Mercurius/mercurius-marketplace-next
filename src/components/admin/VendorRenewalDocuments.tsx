@@ -277,7 +277,7 @@ export function VendorRenewalDocuments({
                 triggerLabel="Release hold"
                 title="Release this retention hold?"
                 entity={businessName}
-                consequence="Quarantine and permanent deletion open again for this provider's declined documents once their periods end."
+                consequence="Quarantine and permanent deletion open again for this provider's declined renewal documents and never-submitted renewal uploads once their periods end."
                 confirmLabel="Release hold"
                 onConfirm={changeHold("release")}
               />
@@ -289,7 +289,7 @@ export function VendorRenewalDocuments({
                 triggerLabel="Place hold"
                 title="Place a retention hold?"
                 entity={businessName}
-                consequence="Stops quarantine and permanent deletion of this provider's declined renewal documents until an operator releases the hold. Nothing else about the provider changes."
+                consequence="Stops quarantine and permanent deletion of this provider's declined renewal documents and never-submitted renewal uploads until an operator releases the hold. Nothing else about the provider changes."
                 confirmLabel="Place hold"
                 confirmationTone="commitment"
                 onConfirm={changeHold("place")}
