@@ -5,7 +5,7 @@ import {
   appendRequestContext,
   normalizeRequestId,
 } from "@/lib/requestContext";
-import { getAnonymousSupabaseEnvironment } from "@/lib/env/server";
+import { getServiceSupabaseEnvironment } from "@/lib/env/server";
 
 export const runtime = "nodejs";
 
@@ -61,9 +61,11 @@ function parseSubmission(value: unknown): ContactSubmission {
   };
 }
 
-function anonymousClient() {
-  const env = getAnonymousSupabaseEnvironment();
-  return createClient(env.supabaseUrl, env.supabaseAnonKey, {
+// The service key is the only writer to contact_submissions (TRACE-087); clients hold no
+// INSERT on the table.
+function serviceClient() {
+  const env = getServiceSupabaseEnvironment();
+  return createClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
   try {
     const submission = parseSubmission(await request.json());
     const submittedAt = new Date().toISOString();
-    const { error } = await anonymousClient()
+    const { error } = await serviceClient()
       .from("contact_submissions")
       .insert(submission);
     if (error) throw error;

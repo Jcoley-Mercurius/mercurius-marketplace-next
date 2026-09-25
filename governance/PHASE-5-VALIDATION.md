@@ -62,6 +62,54 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-087 — Route-only contact submissions — 2026-09-24
+
+Branch `codex/phase5-contact-insert`, stacked on `codex/phase5-trace086-status` (PR #44) on
+`main` `1d8a27e`. Local synthetic stack only (this checkout's default project). Scope, the
+owner's decision and review questions D1–D4 are in PHASE-5-CONTACT-INSERT.md.
+
+Baseline before change: 2724 pgTAP assertions across 44 suites (TRACE-086 evidence).
+
+**Database.** 2746 pgTAP assertions across 45 suites pass after a clean reset; 22 are new in
+suite 054. It covers:
+
+- structure: the contact insert policy is gone and no `INSERT`/`ALL` policy remains on
+  `contact_submissions`; `anon` and `authenticated` hold no table or column `INSERT`; `anon`
+  still cannot read; `authenticated` `SELECT`, the admin read policy and `service_role`
+  `INSERT` are unchanged; the duplicate `vendor-documents` read policy is gone, `Admins can
+  read vendor documents` remains, and exactly one client read policy covers the bucket;
+- an anonymous caller, a signed-in non-admin and a signed-in admin are each refused (42501)
+  a row the old policy accepted, and no row results;
+- a `service_role` insert creates the submission; an admin reads it and a stored vendor
+  document, and a signed-in non-admin reads neither.
+
+Suite 053 (TRACE-086) asserted the contact insert grant was unchanged; it now asserts its
+removal. No other suite changed.
+
+**Mutation check** (local harness, not committed): 12 of 12 mutants fail suite 054 — the
+table `INSERT` grant to `anon` or `authenticated`; a single-column `INSERT` grant to either;
+the policy without grants; the full revert; a permissive `ALL` policy under another name;
+revoking `service_role` `INSERT`; dropping the admin read policy; restoring the duplicate
+storage read policy; dropping the remaining one; and revoking `authenticated` `SELECT`. The
+unmutated state passes all 22.
+
+**Round trip** (local only, not committed): `next build` then `next start` against the local
+stack, with every variable `.env.local` names overridden by local values and the Resend
+variables unset. Through `/api/contact-submissions`, a valid submission returned 201 and was
+stored with the email lower-cased, a null phone and the request ID appended; an invalid email
+and a blank message returned 400 with their messages. Through the REST API an anonymous
+insert returned 42501 `permission denied for table contact_submissions`, and a service-key
+insert returned 201. The owner notification ran once and logged the missing Resend
+configuration; no email was sent. The synthetic rows were deleted afterwards. `next dev`
+answered 404 for every API route in this environment (decision 5 in the report).
+
+**Application.** `npm run lint`, `npm run typecheck`, `npm run test:unit` (182 tests in 15
+files), `next build`, `scan:secrets` and `git diff --check` pass. Database types regenerated
+from the reset are identical to the committed file.
+
+**Not performed:** CI on this branch; concurrency scripts locally; browser runs (no page
+changed); hosted migration.
+
 ## TRACE-086 — Removal of the direct applicant insert path — 2026-09-24
 
 Branch `codex/phase5-application-insert` on `main` `da64e4d` (PR #42 merged; post-merge
