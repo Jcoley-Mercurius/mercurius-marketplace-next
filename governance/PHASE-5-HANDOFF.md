@@ -11,8 +11,9 @@ acceptance remain open. Phase 5 is **IN PROGRESS**. DEC-2026-012 (owner, 2026-09
 decides the open intake items: honeypot and Postgres rate limits on both public forms, a
 route-only contact insert, no application-row deletion, dropping the duplicate
 `vendor-documents` read policy, and a 7-day clock for never-submitted application uploads.
-Those are the next slices; use the gates below for the rest. TRACE-087 (branch
-`codex/phase5-contact-insert`, awaiting review) implements items 2 and 4.
+Those are the next slices; use the gates below for the rest. TRACE-087 (PR #45, merged at
+`0d47134`; [main CI run 36077050904](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36077050904) passed) implements items 2 and 4. TRACE-088 (branch
+`codex/phase5-intake-abuse`, awaiting review) implements item 1 as settled by DEC-2026-013.
 
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
@@ -236,6 +237,14 @@ TRACE-087 applies DEC-2026-012 items 2 and 4. The contact route inserts with the
 no anonymous or signed-in client can insert a `contact_submissions` row; the duplicate admin
 read policy on `vendor-documents` is dropped with admin access unchanged. The route must be
 deployed before the migration reaches a hosted project. See PHASE-5-CONTACT-INSERT.md.
+
+TRACE-088 applies DEC-2026-012 item 1 as settled by DEC-2026-013. The vendor application and
+contact routes refuse a filled honeypot field, a form sent in under 3 seconds, and a fourth
+accepted submission from one email address to one form in a rolling day, each with the same
+429. Counters are email hashes in a private table that only the service key's function
+writes. There is no Turnstile, and the per-IP limit waits for the production domain's proxy
+path. The migration must reach a hosted project before the routes are deployed. See
+PHASE-5-INTAKE-ABUSE.md.
 
 ## Original independent checkpoint
 

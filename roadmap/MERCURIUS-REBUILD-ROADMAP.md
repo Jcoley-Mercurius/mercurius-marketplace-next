@@ -171,8 +171,9 @@ application `UPDATE`/`DELETE` and document-storage write privileges (owner decis
 2026-09-23). TRACE-086 (PR #43, merged at `1d8a27e`) removed
 the direct applicant insert path (owner decision 2026-09-24); route abuse protection,
 the `contact_submissions` anonymous insert and application-row deletion were decided in
-DEC-2026-012 (2026-09-24); TRACE-087 (awaiting review) makes the contact route the only
-writer to `contact_submissions`.
+DEC-2026-012 (2026-09-24); TRACE-087 (PR #45, merged at `0d47134`) makes the contact route
+the only writer to `contact_submissions`; TRACE-088 (awaiting review) adds the honeypot,
+fill time and per-email limit to both intake routes (DEC-2026-013).
 Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
@@ -228,7 +229,7 @@ Work:
 
 Work:
 
-- Add public abuse protection, rate limits, Turnstile, upload constraints, cleanup, and malware/quarantine policy.
+- Add public abuse protection, rate limits, Turnstile, upload constraints, cleanup, and malware/quarantine policy. (Turnstile is replaced at launch by a honeypot, fill time and per-email limit; DEC-2026-013, TRACE-088.)
 - Add security headers and CSP rollout.
 - Complete CI gates for unit, integration, RLS, E2E, axe, visual regression, dependency, secret, migration, and drift checks.
 - Isolate preview data and provider configuration.

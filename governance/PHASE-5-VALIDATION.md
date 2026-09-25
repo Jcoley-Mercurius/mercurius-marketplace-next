@@ -62,6 +62,70 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-088 — Intake abuse protection — 2026-09-24
+
+Branch `codex/phase5-intake-abuse` on `main` `0d47134`. Local synthetic stack only (this
+checkout's default project). Scope, the owner's decisions and review questions E1–E6 are in
+PHASE-5-INTAKE-ABUSE.md.
+
+Baseline before change: 2746 pgTAP assertions across 45 suites (TRACE-087 evidence).
+
+**Database.** 2783 pgTAP assertions across 46 suites pass after a clean reset; 37 are new in
+suite 055. It covers:
+
+- structure: the counters table is in the private schema with row level security and no
+  policy; `anon`, `authenticated` and `service_role` hold no privilege on it, and the client
+  roles cannot use the schema; the table has no email column; the recording function runs
+  as its owner with an empty search path and only `service_role` can execute it;
+- an anonymous caller and a signed-in admin are refused the function and the table (42501);
+- the service key: three accepted per email hash per form, then refused, with refusals not
+  recorded; separate allowances per form and per email; an unknown or missing form, a raw
+  email, an uppercase or missing key rejected (22023); the service key cannot read the
+  table directly;
+- the rolling window: rows older than a day do not count and are pruned, rows within the
+  day count and are kept.
+
+**Concurrency** (`scripts/phase5-intake-limit-concurrency.mjs`, added to CI after the
+application retention race; run locally with `PHASE5_DB_CONTAINER` set to this checkout's
+database because the isolated container was in use): ten parallel sessions racing for one
+remaining slot accept exactly one; two fresh emails with twelve interleaved attempts each
+accept exactly three each; one email racing on both forms accepts exactly three per form;
+exactly the accepted submissions are recorded.
+
+**Mutation check** (local harness, not committed): 7 of 8 mutants fail suite 055 or the
+concurrency script — removing the advisory lock (script), raising the limit to 4, removing
+the prune, counting across forms, granting `EXECUTE` to `anon`, granting the service key
+direct table access, and dropping the key-format check. The eighth, removing the one-day
+filter from the count, is equivalent: the prune just before the count already removes older
+rows. The unmutated state passes both.
+
+**Round trip** (local only, not committed): `next build` then `next start` against the local
+stack, with every variable `.env.local` names overridden by local values and the Resend
+variables unset. Contact route: no signals, a filled honeypot and a 1.2-second fill each
+returned 429 "Please try again later."; a missing email returned 400; three valid
+submissions returned 201 and the fourth 429. Application route: no signals returned 429;
+three valid applications returned 201 and the fourth 429. The counters held 3 rows per form
+and no email text; the owner notification ran for each accepted submission and logged the
+missing Resend configuration, so no email was sent. The server log named each refusal
+reason without the email.
+
+**Browser** (local only, not committed): on `/contact` in Chromium the hidden field has
+`tabindex=-1`, sits inside an `aria-hidden` wrapper and renders 1 px wide. A form sent after
+0.5 s was refused (429) and one sent after 3.8 s was accepted (201), in two runs. In an
+earlier run without timing logs, both a quick and a slow submit were accepted; it was not
+reproduced, and the likely cause is the first launch's automated fill taking over 3 seconds.
+`tests/e2e/request.spec.ts` (10 tests, including axe in light and dark) passes on a build
+with the CI browser environment.
+
+**Application.** `npm run lint`, `npm run typecheck`, `npm run test:unit` (192 tests in 16
+files), `next build`, `scan:secrets` and `git diff --check` pass. Database types regenerated
+from the reset add only the recording function. The local synthetic rows were removed by a
+clean reset afterwards.
+
+**Not performed:** CI on this branch; the full browser suite locally; a browser run of
+`/vendors/apply` and `/request` submissions (the route round trip covers both routes);
+hosted migration.
+
 ## TRACE-087 — Route-only contact submissions — 2026-09-24
 
 Branch `codex/phase5-contact-insert`, stacked on `codex/phase5-trace086-status` (PR #44) on

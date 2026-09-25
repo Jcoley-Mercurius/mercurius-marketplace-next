@@ -121,7 +121,7 @@ Migration toward this structure must be incremental. Characterization tests come
 
 | Role | Primary capabilities | Enforcement |
 |---|---|---|
-| Anonymous | Marketing/catalog read, coverage lookup, contact/vendor application | Public policies plus API validation, rate limit, and Turnstile |
+| Anonymous | Marketing/catalog read, coverage lookup, contact/vendor application | Public policies plus API validation, rate limit, and Turnstile (at launch: honeypot, fill time and per-email limit instead of Turnstile; see DEC-2026-013) |
 | Homeowner | Own profile, requests, messages, photos, invoices, reviews | Authenticated RLS using `auth.uid()` and ownership joins |
 | Vendor | Own contractor profile/packages, eligible offers, assigned jobs/messages/photos | Vendor role plus contractor ownership in RLS/RPCs |
 | Admin | Operational queues, vendor approval, pricing, disputes, refunds | Admin role checked in proxy, RLS, RPC, and Edge Functions |
@@ -262,7 +262,7 @@ Rules:
 - Fixed `search_path` for security-definer functions
 - Server-only service-role and provider secrets
 - Schema validation for all public/API/Edge Function input
-- Rate limit plus Turnstile for public writes and upload grants
+- Rate limit plus Turnstile for public writes and upload grants (at launch, the intake forms use a honeypot, fill time and per-email limit instead of Turnstile; see DEC-2026-013)
 - File size/type checks, randomized paths, private buckets, retention, and malware-handling decision
 - CSP, HSTS, frame protection, referrer policy, permissions policy, and MIME protection
 - Dependency and secret scanning in CI

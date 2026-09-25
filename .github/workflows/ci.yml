@@ -76,6 +76,8 @@ jobs:
         run: node scripts/phase5-renewal-retention-concurrency.mjs
       - name: Concurrent application closures, retention steps and holds
         run: node scripts/phase5-application-retention-concurrency.mjs
+      - name: Concurrent intake submissions against the per-email limit
+        run: node scripts/phase5-intake-limit-concurrency.mjs
       - name: Concurrent finance operator commands
         run: node scripts/phase5-finance-command-concurrency.mjs
       - name: Concurrent finance refund and chargeback commands

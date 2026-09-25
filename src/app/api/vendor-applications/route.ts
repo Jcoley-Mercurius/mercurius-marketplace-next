@@ -12,6 +12,11 @@ import {
 import { signVendorDocumentUploadGrant } from "@/lib/vendorApplicationUploadToken";
 import { sendOwnerNotification } from "@/lib/ownerNotifications";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
+import {
+  INTAKE_REFUSAL_MESSAGE,
+  intakeGuardRefusal,
+  recordIntakeSubmission,
+} from "@/lib/intakeProtection";
 
 export const runtime = "nodejs";
 
@@ -234,10 +239,19 @@ function parseDocuments(value: unknown): VendorDocumentDescriptor[] {
 export async function POST(request: Request) {
   try {
     const body = recordValue(await request.json());
+    const refusal = intakeGuardRefusal(body.intake);
+    if (refusal) {
+      console.warn("Vendor application refused", { reason: refusal });
+      return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
+    }
     const application = parseApplication(body.application);
     const documents = parseDocuments(body.documents);
     const applicationId = randomUUID();
     const supabase = serviceClient();
+    if (!(await recordIntakeSubmission(supabase, "vendor_application", application.email))) {
+      console.warn("Vendor application refused", { reason: "email_limit" });
+      return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
+    }
 
     const { error: applicationError } = await supabase
       .from("vendor_applications")
