@@ -1,5 +1,11 @@
 # Phase 4 handoff
 
+**Current status (2026-09-25):** PR #5 merged on 2026-09-04 at `735df91` under the owner's
+merge authorization. Phase 4 is **not owner-accepted**. Under DEC-2026-016 Codex reviews it
+together with the Phase 5 closure review (PHASE-5-CLOSURE-READINESS.md, "Phase 4 review"), and
+the owner then accepts both phases in one decision. Draft-PR and no-merge wording below is
+historical.
+
 Draft PR: https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/5
 Branch: `coderabbit/tighten-worker-workflow-matching-safety/031ff3bf`; target: `main`.
 

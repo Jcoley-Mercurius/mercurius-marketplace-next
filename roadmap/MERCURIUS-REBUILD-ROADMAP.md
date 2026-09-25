@@ -123,7 +123,7 @@ Work:
 
 ### Phase 4 — Canonical product lifecycle
 
-**Status:** IN PROGRESS — implementation submitted for verification and owner acceptance under DEC-2026-005–010; see governance/PHASE-4-RECONCILIATION.md and PHASE-4-VALIDATION.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
+**Status:** IN PROGRESS — implemented under DEC-2026-005–010 and merged as PR #5 (`735df91`, 2026-09-04); owner acceptance is open. Under DEC-2026-016 Codex reviews Phase 4 with the Phase 5 closure review and the owner accepts both together; see governance/PHASE-4-RECONCILIATION.md, PHASE-4-VALIDATION.md and PHASE-5-CLOSURE-READINESS.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
 
 **Phase 2 handoff (TRACE-010):** replace inherited automatic completion
 confirmation with admin review; define its deadline separately from the four-hour

@@ -23,6 +23,27 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-016 — Phase 4 acceptance through the combined Phase 5 closure review
+
+**Status:** APPROVED owner direction. **Date:** 2026-09-25 UTC.
+
+Phase 4 (PR #5, merged 2026-09-04 at `735df91`) was never owner-accepted. Its two acceptance
+gates were final-head CI and owner/code review. The owner chose to have Codex review Phase 4 in
+the same pass as the Phase 5 closure review, because Phase 5's payout holds, matching
+eligibility and recurring identities build on Phase 4, and then to accept both phases in one
+decision once findings are fixed or recorded.
+
+- **CI gate:** every check the Phase 4 gate names is now a standing CI step and passes on
+  `main` (run 36138739942). Counts differ from the Phase 4 report because later work added tests.
+- **Review gate:** Codex reviews Phase 4 as it stands on `main`, including later Phase 5 changes
+  to its matching and recurring-visit contracts (PHASE-5-CLOSURE-READINESS.md, "Phase 4 review").
+
+Alternatives considered: accepting Phase 4 now on CI and the CodeRabbit review alone; closing
+Phase 5 with Phase 4 acceptance recorded as an exception.
+
+This direction does not accept either phase and authorizes no scheduler, email, production
+change or activation.
+
 ### DEC-2026-015 — Phase 5 closure basis, never-submitted renewal uploads, promotions and tax
 
 **Status:** APPROVED owner decisions (2026-09-25); implementation choices recorded for Codex review.

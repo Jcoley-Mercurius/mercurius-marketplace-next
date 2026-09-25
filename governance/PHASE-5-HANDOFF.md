@@ -7,7 +7,8 @@ sets the closure basis. TRACE-091 (renewal uploads never submitted) and TRACE-09
 readiness) are on stacked branches awaiting CI and review.
 [PHASE-5-CLOSURE-READINESS.md](PHASE-5-CLOSURE-READINESS.md) maps the roadmap gate to its
 evidence, lists the open review questions, and names the later phase that owns each gate below.
-The owner closes Phase 5 after Codex review.
+Codex reviews Phase 4 in the same pass (DEC-2026-016), and the owner then accepts Phase 4 and
+closes Phase 5 in one decision.
 
 ## Earlier checkpoint — PR #43 / TRACE-086
 

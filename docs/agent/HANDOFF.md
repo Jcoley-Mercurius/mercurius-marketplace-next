@@ -18,15 +18,16 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   [closure readiness](../../governance/PHASE-5-CLOSURE-READINESS.md) for gate evidence,
   open review questions and carried-forward gates.
 - Phase 5 remains **IN PROGRESS** until the owner closes it after Codex review. Phase 4
-  owner acceptance is still open and is a Phase 5 dependency.
+  (merged as PR #5) is not owner-accepted; DEC-2026-016 puts it in the same Codex review
+  (questions P4-1–P4-7) and the owner accepts both phases together.
 
 ## TRACE-092 — Phase 5 closure readiness — 2026-09-25 UTC
 
 - Branch `codex/phase5-closure-readiness`, stacked on TRACE-091 (`c32e2e9`).
 - Scope: DEC-2026-015 items 1, 3 and 4. Documentation plus suite 059; no product code.
 - Evidence: suite 059 (10 assertions); 2934 assertions across 50 suites; lint.
-- Open: Codex review of all Phase 5 question sets; owner acceptance of Phase 4 and closure of
-  Phase 5.
+- Open: Codex review of the Phase 4 (P4-1–P4-7) and Phase 5 question sets; one owner
+  decision accepting Phase 4 and closing Phase 5 (DEC-2026-016).
 - Next: open PRs for TRACE-091 and TRACE-092, then hand the closure readiness report to Codex.
 
 ## TRACE-091 — never-submitted renewal uploads — 2026-09-25 UTC

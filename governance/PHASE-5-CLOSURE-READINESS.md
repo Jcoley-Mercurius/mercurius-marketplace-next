@@ -1,8 +1,8 @@
 # Phase 5 — Closure readiness
 
 **Status:** PREPARED for Codex review, 2026-09-25, on branch `codex/phase5-closure-readiness`
-(stacked on TRACE-091). This is not phase acceptance: after review, the owner closes Phase 5
-(DEC-2026-015 item 1). Nothing here authorizes a hosted migration, deployment, charge, refund,
+(stacked on TRACE-091). This is not phase acceptance: after review, the owner accepts Phase 4 and
+closes Phase 5 together (DEC-2026-015 item 1, DEC-2026-016). Nothing here authorizes a hosted migration, deployment, charge, refund,
 payout, email, scheduler or deletion.
 
 ## Closure basis (DEC-2026-015 item 1)
@@ -63,6 +63,36 @@ questions still open:
 Other merged slices (TRACE-062–083) record their review items in their reports and in
 TRACEABILITY.md; all Phase 5 rows remain IN PROGRESS until review.
 
+## Phase 4 review (DEC-2026-016)
+
+Phase 4 (TRACE-010, 012–016; PR #5, merged at `735df91`) was never owner-accepted. Codex
+reviews it in this pass, as it stands on `main`, and the owner then accepts Phases 4 and 5
+together. Sources: PHASE-4-RECONCILIATION.md (contracts and the stored-state recovery map),
+PHASE-4-VALIDATION.md (evidence and gates), PHASE-4-HANDOFF.md and DEC-2026-005–010.
+
+**CI gate:** met by standing CI. Suites 001–012 (188 assertions), Edge checks and handler
+tests, the authenticated worker and pg_net transport with Cron inactive, and the browser suite
+pass on `main` run 36138739942.
+
+**Review questions** (the Phase 4 review gate):
+
+- P4-1: authority checks — explicit caller and ownership checks, required admin reasons, and no
+  generic transition that bypasses the quote, completion or dispute workflows.
+- P4-2: locking — per-request locks for matching and offer expiry; the atomic worker's run IDs
+  and business-effect markers; the quote revision concurrency guard.
+- P4-3: history preservation — retained cancellations, quote revisions, dispute resolutions and
+  appeals, review originals and edits.
+- P4-4: legacy recovery — the stored-state map leaves no record in an unmapped state (the
+  roadmap Phase 4 gate), and legacy states need an operator with a reason rather than
+  fabricated consent or deadlines.
+- P4-5: independent state — quote, dispute-appeal and review-moderation states stay separate
+  from service status.
+- P4-6: Phase 5 changes to Phase 4 contracts — TRACE-060 recreates the matching candidate
+  function (`private.find_eligible_packages_core`) with current vendor eligibility and rechecks
+  it at acceptance; TRACE-059 binds each recurring visit to its own commercial identity.
+- P4-7: Phase 3 preservation, and that the worker stays default-disabled with no schedule
+  installed by migrations.
+
 ## Gates carried forward
 
 Each gate keeps its existing wording in PHASE-5-HANDOFF.md "Gates before integrated
@@ -70,7 +100,7 @@ activation"; this table names where it is now owned.
 
 | Gate | Owner of the next step | Carried to |
 |---|---|---|
-| Phase 4 owner acceptance (Phase 5 activation depends on its lifecycle adapters) | Owner | Before Phase 5 closes (dependency) |
+| Phase 4 owner acceptance (Phase 5 depends on its lifecycle) | Codex review above, then owner | Accepted with Phase 5 (DEC-2026-016) |
 | Hide the vendor promotion editor and public promotion display while promotions are refused | Implementation | Phase 6 (vendor packages; "remove premature" features) |
 | Recurring visit generation and charge timing (operating configuration) | Owner decision, then implementation | Phase 6 (quotes and scheduling) |
 | Scheduler, email and notification activation; finance operator runbooks | Owner authorization | Phase 7 |
@@ -86,6 +116,6 @@ activation"; this table names where it is now owned.
 ## What closes Phase 5
 
 1. TRACE-091 and this slice pass CI and merge.
-2. Codex reviews the open questions above and the gate evidence; findings are fixed or recorded.
-3. The owner accepts Phase 4 (or records why Phase 5 closes first), then records Phase 5's
-   closure and authorizes Phase 6.
+2. Codex reviews the Phase 4 and Phase 5 questions above and the gate evidence; findings are
+   fixed or recorded.
+3. The owner records one decision accepting Phase 4 and closing Phase 5, and authorizes Phase 6.
