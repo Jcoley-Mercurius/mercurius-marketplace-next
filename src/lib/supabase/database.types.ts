@@ -6192,6 +6192,10 @@ export type Database = {
         Args: { _approve: boolean; _job_id: string; _quote_id?: string }
         Returns: undefined
       }
+      intake_record_submission: {
+        Args: { p_email_hash: string; p_form: string }
+        Returns: boolean
+      }
       job_transition_actor_allowed: {
         Args: {
           _actor: string

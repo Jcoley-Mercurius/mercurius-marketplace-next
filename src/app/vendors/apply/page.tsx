@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/layout/Header";
+import { IntakeTrapField, useIntakeGuard } from "@/components/marketing/IntakeGuard";
 import { Footer } from "@/components/layout/Footer";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -118,6 +119,7 @@ export default function VendorApplyPage() {
   const [documents, setDocuments] = useState<SelectedDocument[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const { trapRef, intakePayload } = useIntakeGuard();
   const [submissionStage, setSubmissionStage] =
     useState<SubmissionStage>("idle");
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
@@ -248,6 +250,7 @@ export default function VendorApplyPage() {
             size: document.file.size,
             type: document.file.type,
           })),
+          intake: intakePayload(),
         }),
       });
       const creation =
@@ -375,6 +378,7 @@ export default function VendorApplyPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <main id="main-content" tabIndex={-1}>
+        <IntakeTrapField inputRef={trapRef} />
         <section className="bg-hero py-12 text-center md:py-16">
           <div className="container-narrow">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Provider Application</p>

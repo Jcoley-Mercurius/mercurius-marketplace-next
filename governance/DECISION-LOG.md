@@ -23,6 +23,43 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-013 — Intake abuse protection: Turnstile, the per-IP limit and implementation choices
+
+**Status:** APPROVED owner decisions. **Date:** 2026-09-24 UTC.
+
+Settles how DEC-2026-012 item 1 is implemented (TRACE-088):
+
+1. **No Turnstile at launch.** DEC-2026-012 rejected Turnstile but recorded no MTS impact.
+   The owner left the call to the implementer, who kept the owner's decision. **MTS
+   impact:** the Turnstile requirement in MTS §4 (Anonymous role) and §11 (public writes and
+   upload grants), and in the roadmap's Phase 5 abuse-protection item, is replaced at launch
+   by the honeypot, the minimum fill time and the per-email limit. The `TURNSTILE_*`
+   variables in MTS §12 are not used. Revisit Turnstile if intake spam is observed, or before
+   launch if the per-IP limit (item 2) is still deferred then.
+2. **The per-IP limit is deferred.** The production domain will reach the Vercel-hosted app
+   through a path that does not go through Vercel's own domain handling, so which request
+   header carries the real client IP is not yet known. Counting a proxy's address would make
+   every visitor share one limit. The per-IP limit of 5 per hour is added once that path is
+   known. Until then a sender who changes email address is limited only by the honeypot and
+   fill time; this risk is accepted.
+3. **Old counter rows** are deleted by the recording function each time it runs; no
+   scheduled job.
+4. **Only accepted submissions count** toward the per-email limit. Refused and invalid
+   attempts are not recorded.
+5. **Stored keys** are SHA-256 hashes of the normalized email address, not the address.
+6. **Fill time** is measured by the browser and trusted, like the honeypot, as a basic
+   filter. The browser sends how long the form was open, not a timestamp, so clock
+   differences between browser and server do not matter.
+7. **Every refusal** (honeypot, fill time, limit) returns the same HTTP 429 "Please try
+   again later."
+
+Alternatives considered: adding Turnstile now (1); the first `x-forwarded-for` entry, or one
+shared bucket when the IP is unknown (2); `pg_cron` or an operator-run cleanup (3); counting
+every attempt (4); a keyed hash with a new secret (5); a server-signed form token (6); a
+fake success for honeypot and fill-time refusals (7).
+
+These decisions do not authorize a hosted migration, deployment or activation.
+
 ### DEC-2026-012 — Public intake hardening and application record lifecycle
 
 **Status:** APPROVED owner decisions. **Date:** 2026-09-24 UTC.

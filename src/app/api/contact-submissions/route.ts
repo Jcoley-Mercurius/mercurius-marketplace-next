@@ -6,6 +6,11 @@ import {
   normalizeRequestId,
 } from "@/lib/requestContext";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
+import {
+  INTAKE_REFUSAL_MESSAGE,
+  intakeGuardRefusal,
+  recordIntakeSubmission,
+} from "@/lib/intakeProtection";
 
 export const runtime = "nodejs";
 
@@ -72,9 +77,22 @@ function serviceClient() {
 
 export async function POST(request: Request) {
   try {
-    const submission = parseSubmission(await request.json());
+    const body: unknown = await request.json();
+    const refusal = intakeGuardRefusal(
+      typeof body === "object" && body !== null ? (body as Record<string, unknown>).intake : null,
+    );
+    if (refusal) {
+      console.warn("Contact submission refused", { reason: refusal });
+      return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
+    }
+    const submission = parseSubmission(body);
+    const supabase = serviceClient();
+    if (!(await recordIntakeSubmission(supabase, "contact", submission.email))) {
+      console.warn("Contact submission refused", { reason: "email_limit" });
+      return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
+    }
     const submittedAt = new Date().toISOString();
-    const { error } = await serviceClient()
+    const { error } = await supabase
       .from("contact_submissions")
       .insert(submission);
     if (error) throw error;

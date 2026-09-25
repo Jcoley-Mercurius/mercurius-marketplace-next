@@ -1,11 +1,14 @@
 # Agent handoff — 2026-09-24 UTC
 
-Current checkpoint: `main` at `1d8a27e` after PR #43 (TRACE-086). The dated
+Current checkpoint: `main` at `0d47134` after PR #45 (TRACE-087). The dated
 sections below preserve earlier slice evidence; their old branch and PR statuses
 are historical. Use the current checkpoint and the Phase 5 handoff for next work.
 
 ## Current repository and Phase 5 checkpoint
 
+- PR #45 (TRACE-087) merged on 2026-09-25 00:20 UTC; `origin/main` is `0d47134` and
+  post-merge [main CI run 36077050904](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36077050904) passed. Its review questions (D1–D4) and the
+  hosted migration (route first) remain open.
 - PR #43 merged on 2026-09-24 13:23 UTC; `origin/main` is `1d8a27e`. Final-head
   [PR CI run 35996039599](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35996039599) and post-merge [main CI run 36005291080](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36005291080)
   passed backend, lifecycle and application jobs; this checkpoint is documentation only.
@@ -18,6 +21,20 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   application-row deletion, dropping the duplicate `vendor-documents` read policy,
   and a 7-day clock for never-submitted application uploads. Next: implement them as
   bounded slices. See the [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
+
+## TRACE-088 — intake abuse protection — 2026-09-24 UTC
+
+- Branch `codex/phase5-intake-abuse` on `main` `0d47134`.
+- Scope: DEC-2026-012 item 1 as settled by DEC-2026-013 (no Turnstile, per-IP limit
+  deferred). Both public routes refuse a filled honeypot, a fill time under 3 seconds,
+  and a fourth accepted submission per email per form per day with the same 429. See
+  [the slice report](../../governance/PHASE-5-INTAKE-ABUSE.md).
+- Evidence: suite 055 (37 assertions); 2783 assertions across 46 suites on a clean
+  reset; concurrency script; mutation check; round trip through a production build and
+  a browser; lint, typecheck, 192 unit tests, build; `/request` browser suite.
+- Open: code review (E1–E6); CI; the per-IP limit; hosted migration (migration before
+  the route, the reverse of TRACE-087).
+- Next: DEC-2026-012 item 5 (never-submitted uploads).
 
 ## TRACE-087 — route-only contact submissions — 2026-09-24 UTC
 

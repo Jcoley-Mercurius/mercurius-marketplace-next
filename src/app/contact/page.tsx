@@ -7,6 +7,7 @@ import { ArrowRight, CheckCircle2, Clock, FileText, Loader2, Mail, MapPin, Messa
 import { toast } from "sonner";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { IntakeTrapField, useIntakeGuard } from "@/components/marketing/IntakeGuard";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ function ContactPageContent() {
   const requestId = normalizeRequestId(searchParams.get("request"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const { trapRef, intakePayload } = useIntakeGuard();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +48,7 @@ function ContactPageContent() {
           subject: String(formData.get("subject") ?? "").trim(),
           message: String(formData.get("message") ?? "").trim(),
           request_id: requestId,
+          intake: intakePayload(),
         }),
       });
       const result = (await response.json()) as { error?: string };
@@ -146,6 +149,7 @@ function ContactPageContent() {
                       </div>
                     )}
                     <form onSubmit={handleSubmit} className="space-y-6">
+                      <IntakeTrapField inputRef={trapRef} />
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <Label htmlFor="firstName" className="text-sm font-medium">First Name</Label>
