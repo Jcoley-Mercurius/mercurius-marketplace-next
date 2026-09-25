@@ -318,7 +318,8 @@ behavior characterized before replacing the five active entrypoints.
   CFG-011 retention/legal-hold/purge for application revisions are verified. TRACE-074
   and TRACE-084 implement operator-run retention for declined renewal documents and for
   rejected or abandoned application documents against synthetic files only;
-  never-submitted uploads remain outside retention.
+  TRACE-090 adds never-attached application uploads (7 days after the upload link).
+  Orphaned renewal uploads remain outside retention.
 - [ ] Human screen-reader, true browser zoom, cross-platform and brand acceptance
   follow-ups from Phase 3 remain open; automated axe/screenshots do not satisfy them.
 - [ ] Explicit later authorization covers any production migration, configuration,
