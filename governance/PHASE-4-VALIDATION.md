@@ -1,5 +1,11 @@
 # Phase 4 validation and acceptance
 
+**Current status (2026-09-25):** PR #5 merged on 2026-09-04 at `735df91` under the owner's
+merge authorization. Phase 4 is **not owner-accepted**. Under DEC-2026-016 Codex reviews it
+together with the Phase 5 closure review (PHASE-5-CLOSURE-READINESS.md, "Phase 4 review"), and
+the owner then accepts both phases in one decision. Draft-PR and no-merge wording below is
+historical.
+
 Status: implementation submitted for owner review; final-head CI and acceptance remain gates.
 Recorded: 2026-09-03 (local) / 2026-09-04 UTC.
 Branch: `coderabbit/tighten-worker-workflow-matching-safety/031ff3bf`, draft PR #5 against `main`.
@@ -49,6 +55,12 @@ email, payment, refunds or payouts were used. CLI credentials remain in memory a
 are not printed. The only enabled worker environment is an ignored synthetic local fixture.
 
 ## Explicit acceptance gates
+
+Status on 2026-09-25 (DEC-2026-016): the CI gate's checks are all standing CI steps (Edge
+checks and handler tests, lifecycle suites, authenticated worker and pg_net transport with Cron
+inactive, lint, credential scan, types, unit tests, dependency audit, one-worker build and the
+browser suite) and pass on `main` run 36138739942. Suites 001–012 now hold 188 assertions (185
+at submission). The review gate moves to the combined Codex review; acceptance is still open.
 
 - [ ] Final-head CI passes clean reconstruction, 185 SQL assertions, 11 Edge checks, 32 runtime tests, authenticated concurrency/retry/pg_net and inactive installation, lint, credential scan, types, 63 unit tests, dependency audit, one-worker build and 56 browser cases.
 - [ ] Owner/code review accepts authority checks, locking, history preservation, legacy recovery, independent quote/dispute/review state, and Phase 3 preservation. Phase 4 owner acceptance has not yet been given.

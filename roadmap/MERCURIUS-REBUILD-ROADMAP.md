@@ -123,7 +123,7 @@ Work:
 
 ### Phase 4 — Canonical product lifecycle
 
-**Status:** IN PROGRESS — implementation submitted for verification and owner acceptance under DEC-2026-005–010; see governance/PHASE-4-RECONCILIATION.md and PHASE-4-VALIDATION.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
+**Status:** IN PROGRESS — implemented under DEC-2026-005–010 and merged as PR #5 (`735df91`, 2026-09-04); owner acceptance is open. Under DEC-2026-016 Codex reviews Phase 4 with the Phase 5 closure review and the owner accepts both together; see governance/PHASE-4-RECONCILIATION.md, PHASE-4-VALIDATION.md and PHASE-5-CLOSURE-READINESS.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
 
 **Phase 2 handoff (TRACE-010):** replace inherited automatic completion
 confirmation with admin review; define its deadline separately from the four-hour
@@ -146,8 +146,8 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
-**Status:** IN PROGRESS. TRACE-050–085 are implemented as bounded slices through
-PR #42 on `main` `da64e4d`. PR #42 final-head and post-merge main CI passed;
+**Status:** IN PROGRESS. TRACE-050–090 are implemented as bounded slices through
+PR #48 on `main` `cd0c041`; post-merge main CI run 36138739942 passed;
 the latest [Phase 5 validation](../governance/PHASE-5-VALIDATION.md) records the
 synthetic checks. Merging a slice does not close its review, manual acceptance,
 hosted integration or production-activation gates.
@@ -165,8 +165,8 @@ limits. TRACE-084's application retention is documented in
 Open gates include Codex review of the merged slices; tax and promotion rules;
 recurring visit generation and charge timing; legacy money/data cutover; finance
 operator provisioning; authorized Stripe, bank and hosted invitation/retention
-acceptance; real licensing and insurance requirements; never-submitted upload
-retention; and manual accessibility/brand acceptance. TRACE-085 removed the admin
+acceptance; real licensing and insurance requirements; and manual accessibility/brand
+acceptance. TRACE-085 removed the admin
 application `UPDATE`/`DELETE` and document-storage write privileges (owner decision
 2026-09-23). TRACE-086 (PR #43, merged at `1d8a27e`) removed
 the direct applicant insert path (owner decision 2026-09-24); route abuse protection,
@@ -174,8 +174,11 @@ the `contact_submissions` anonymous insert and application-row deletion were dec
 DEC-2026-012 (2026-09-24); TRACE-087 (PR #45, merged at `0d47134`) makes the contact route
 the only writer to `contact_submissions`; TRACE-088 (PR #46, merged at `3e4236c`) adds the honeypot,
 fill time and per-email limit to both intake routes (DEC-2026-013); TRACE-089 (PR #47, merged at
-`6d1a11a`) adds the per-IP limit (DEC-2026-014); TRACE-090 (awaiting review) applies retention
-to never-attached application uploads (DEC-2026-012 item 5).
+`6d1a11a`) adds the per-IP limit (DEC-2026-014); TRACE-090 (PR #48, merged at `cd0c041`) applies
+retention to never-attached application uploads (DEC-2026-012 item 5); TRACE-091 (awaiting review)
+applies it to renewal uploads never submitted (DEC-2026-015 item 2). DEC-2026-015 sets the closure
+basis: the gate below plus Codex review, with activation gates carried to named later phases; see
+[closure readiness](../governance/PHASE-5-CLOSURE-READINESS.md). The owner closes the phase.
 Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
