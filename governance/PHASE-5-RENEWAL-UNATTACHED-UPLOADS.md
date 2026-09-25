@@ -100,7 +100,8 @@ See [validation](PHASE-5-VALIDATION.md#trace-091--never-submitted-renewal-upload
 
 ## Review questions
 
-- H1: the submission cut-off at 7 days (decision 2) — a provider-visible refusal.
+- H1: the submission cut-off at 7 days (decision 2) — a provider-visible refusal. The owner
+  accepted it on 2026-09-25 (DEC-2026-015 item 2); review its implementation, not the policy.
 - H2: a separate ledger keyed by path (decision 1).
 - H3: reusing TRACE-090's constants (decision 3).
 - H4: the evidence guard for renewal-layout paths.

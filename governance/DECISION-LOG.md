@@ -42,7 +42,8 @@ Supersedes:
    exemption. Implementation choice: because a renewal upload can be submitted with the
    provider's session at any time (application uploads need a 110-minute finalize token),
    a submission is refused once the object is 7 days old, 2 hours before quarantine opens,
-   so a submission never races a quarantine.
+   so a submission never races a quarantine. The owner accepted this provider-visible refusal
+   on 2026-09-25.
 3. **Promotions.** None at private beta. Checkout must refuse any promotion or discount until
    the owner approves promotion terms (funding, limits, allocation).
 4. **Sales tax.** Carried to the private-beta gate: the owner confirms taxability by service
