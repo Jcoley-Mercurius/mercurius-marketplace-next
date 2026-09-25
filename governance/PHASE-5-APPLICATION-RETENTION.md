@@ -162,7 +162,8 @@ Grants: tables and helpers have no client access, and the seven new public funct
 ## Open items
 
 - **Codex code review** (C1–C8 below). Final-head and post-merge CI passed.
-- **Never-submitted uploads** remain outside retention; they need a clock definition.
+- **Never-submitted uploads:** DEC-2026-012 item 5 defines the clock; TRACE-090 implements it
+  (PHASE-5-UNATTACHED-UPLOADS.md). Orphaned renewal uploads remain outside retention.
 - **The admin `UPDATE` and `DELETE` policies on `vendor_applications`** (2026-03-16) still
   let an admin change a status directly. The TRACE-074 open item on operator `DELETE` in
   `vendor-documents` also still stands. Both need a decision.

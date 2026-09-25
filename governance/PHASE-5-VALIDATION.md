@@ -62,6 +62,70 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-090 — Never-attached application uploads — 2026-09-25
+
+Branch `codex/phase5-orphan-uploads`, built on `main` `3e4236c` and rebased onto `6d1a11a`
+(after PR #47, TRACE-089). Local synthetic stack only (this
+checkout's default project). Scope, the owner's decision and review questions G1–G6 are in
+PHASE-5-UNATTACHED-UPLOADS.md.
+
+Baseline before change: 2783 pgTAP assertions across 46 suites (TRACE-088 evidence).
+
+**Database.** 2832 pgTAP assertions across 47 suites pass after a clean reset; 49 are new in
+suite 057. Suites 051 (TRACE-084, 147 assertions) and 041 (TRACE-074, 111) pass unchanged.
+Two reset attempts stopped with a Storage container health error; the same command then
+succeeded with no file change. Suite 057 covers:
+
+- no client, anonymous or service-key access to the helpers; the 2-hour grant and 7-day
+  constants;
+- which files are unattached: unlisted files in the upload layout only; a file listed by an
+  earlier version stays attached; the upload time is the object's creation;
+- a vendor refused the queue and prepare;
+- the queue: due past the clock whatever the application status, held files included and
+  marked; kept when bound to evidence; attached lists unaffected; the overview's
+  `unattached_files`;
+- refusals: one minute short of the clock; attached files keeping the closure clock (an open
+  application, a 10-day-old rejection, a version-listed file); evidence; application and
+  provider holds; a path outside the layout; another application's file; 13 days in
+  quarantine; refusals recording nothing;
+- steps: a closed application's unattached file quarantined after 7 days, not 90; the exact
+  boundary; record refused before storage moved the file, then recorded and replayed;
+  appearing in quarantine as unattached; a second quarantine refused; the evidence guard
+  refusing a quarantined unattached file; restore; deletion after 15 days in quarantine
+  with the file already gone; a deleted file staying deleted and known; a restored file due
+  again;
+- no application status, closure or evidence changed.
+
+The first run found a defect: recording a deletion re-read the upload time after storage had
+removed the file, so every unattached deletion was refused. Deletion now relies on the clock
+checked at quarantine (decision 5). Two assertions also had wrong expected order (the list
+sorts by application first); the labels now include the application.
+
+**Storage probe** (local Storage API with the local service key, synthetic object, removed
+afterwards): uploading then moving an object from `vendor-documents` to
+`vendor-documents-quarantine` kept its `id` and `created_at`; only `updated_at` changed.
+
+**Mutation check** (local harness, not committed): each mutant fails suite 057, and the
+unmutated migration passes. 7 days → 6: 7 failures. Grant 2 hours → 0: 6. The attached
+exclusion removed: 6. The deletion fallback removed: 10. The evidence exemption limited to
+attached files: 1. The clock one minute early: 1.
+
+**Browser** (`next build` with the CI browser environment): `application-retention.spec.ts`
+(13 tests, one new: quarantine of a never-attached upload, deletion offered without a
+closure, evidence listing) and `renewal-retention.spec.ts` (9) pass, including axe in light
+320 px and dark 1440 px. The dark 1440 px screenshot was reviewed. Mocks now include the new
+queue fields.
+
+**Application.** `npm run lint`, `npm run typecheck`, `npm run test:unit` (192 tests in 16
+files), `next build`, `scan:secrets` and `git diff --check` pass. Database types regenerated
+from the reset are unchanged, because only private functions and JSON results changed.
+
+**After rebasing onto `6d1a11a`** (TRACE-089 merged): 2862 pgTAP assertions across 48 suites
+pass after a clean reset (TRACE-089's 2813 plus 057's 49); `npm run typecheck`, `npm run lint`
+and `npm run test:unit` (202 tests) pass.
+
+**Not performed:** CI on this branch; the full browser suite locally; the hosted checks in the
+slice report; hosted migration.
 ## TRACE-089 — Per-network intake limit — 2026-09-24
 
 Branch `codex/phase5-intake-ip-limit` on `main` `3e4236c` (after PR #46, TRACE-088).

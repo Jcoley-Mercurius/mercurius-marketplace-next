@@ -22,9 +22,23 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   and a 7-day clock for never-submitted application uploads. Next: implement them as
   bounded slices. See the [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
 
+## TRACE-090 — never-attached application uploads — 2026-09-25 UTC
+
+- Branch `codex/phase5-orphan-uploads` on `main` `6d1a11a` (after PR #47, TRACE-089).
+- Scope: DEC-2026-012 item 5. Uploads no application version or row lists are due 7 days
+  after their 2-hour upload link (from the object's `created_at`), then follow TRACE-084's
+  quarantine, 14-day wait and deletion with holds and the evidence exemption. See
+  [the slice report](../../governance/PHASE-5-UNATTACHED-UPLOADS.md).
+- Evidence: suite 057 (49 assertions); 2862 assertions across 48 suites on a clean reset
+  after the rebase; Storage move probe; mutation check (6 of 6); retention browser specs;
+  lint, typecheck, 202 unit tests, build.
+- Open: code review (G1–G6); CI; hosted checks of the upload URL lifetime and move
+  behavior; hosted migration.
+- Next: DEC-2026-012 is fully implemented once this slice merges.
+
 ## TRACE-089 — per-network intake limit — 2026-09-24 UTC
 
-- Branch `codex/phase5-intake-ip-limit` on `main` `3e4236c` (after PR #46, TRACE-088).
+- PR #47, merged at `6d1a11a`; branch `codex/phase5-intake-ip-limit` from `main` `3e4236c`.
 - Scope: DEC-2026-012 item 1's per-IP limit, settled by DEC-2026-014 (GoDaddy DNS points
   straight at Vercel; `x-real-ip` on Vercel only; IPv6 by /64). See
   [the slice report](../../governance/PHASE-5-INTAKE-IP-LIMIT.md).

@@ -18,7 +18,8 @@ import {
 } from "@/lib/applicationRetention";
 
 // TRACE-084 CFG-011 retention queue for the documents of rejected or abandoned vendor
-// applications, on the Document Retention page below the TRACE-074 renewal queue. Each
+// applications, and (TRACE-090) of uploads never attached to an application, on the
+// Document Retention page below the TRACE-074 renewal queue. Each
 // step runs behind ConfirmAction and is confirmed by rereading. Nothing here changes an
 // application's terms, version, evidence, onboarding status or listing.
 
@@ -32,9 +33,13 @@ type Queue = {
   evaluated_at: string;
   retention_days: number;
   quarantine_days: number;
+  unattached_days: number;
+  upload_grant_hours: number;
   due: ApplicationRetentionFile[];
+  unattached_due: ApplicationRetentionFile[];
   quarantined: ApplicationRetentionFile[];
   kept: ApplicationRetentionFile[];
+  unattached_kept: ApplicationRetentionFile[];
   unrecorded: Unrecorded[];
   holds: Hold[];
 };
@@ -76,7 +81,7 @@ export function ApplicationDocumentRetention({
       if (rpcError) throw rpcError;
       const next = data as unknown as Queue;
       setQueue(next);
-      totals.current?.({ due: next.due.length, quarantined: next.quarantined.length, holds: next.holds.length });
+      totals.current?.({ due: next.due.length + next.unattached_due.length, quarantined: next.quarantined.length, holds: next.holds.length });
       return next;
     } catch (reason) {
       setError(messageOf(reason, "The application document retention queue could not be loaded."));
@@ -104,7 +109,7 @@ export function ApplicationDocumentRetention({
       });
       const next = await read();
       const inQuarantine = next?.quarantined.some((candidate) => candidate.path === file.path);
-      const due = next?.due.some((candidate) => candidate.path === file.path);
+      const due = [...(next?.due ?? []), ...(next?.unattached_due ?? [])].some((candidate) => candidate.path === file.path);
       const confirmed = next !== null && (action === "quarantine" ? inQuarantine : action === "restore" ? !inQuarantine : !inQuarantine && !due);
       if (!confirmed) throw new Error("The server did not confirm this step. Review the queue before retrying.");
       toast.success(titles[action], {
@@ -164,8 +169,12 @@ export function ApplicationDocumentRetention({
   const closed = (file: ApplicationRetentionFile) => (
     <span className="flex flex-col gap-0.5">
       <span>
-        {file.closure_outcome ? closureOutcomeLabel[file.closure_outcome] : "Reopened"}
-        {file.closed_at ? ` ${formatRenewalDate(file.closed_at)}` : ""}
+        {!file.attached
+          ? `Never attached${file.uploaded_at ? ` · uploaded ${formatRenewalDate(file.uploaded_at)}` : ""}`
+          : file.closure_outcome
+            ? closureOutcomeLabel[file.closure_outcome]
+            : "Reopened"}
+        {file.attached && file.closed_at ? ` ${formatRenewalDate(file.closed_at)}` : ""}
       </span>
       {file.retention_ends_at && (
         <span className="text-xs text-muted-foreground">
@@ -175,11 +184,7 @@ export function ApplicationDocumentRetention({
     </span>
   );
 
-  const dueColumns: DataColumn<ApplicationRetentionFile>[] = [
-    { key: "application", label: "Application", render: application },
-    { key: "document", label: "Document", render: documentLabel },
-    { key: "closed", label: "Closed", render: closed },
-    {
+  const quarantineAction: DataColumn<ApplicationRetentionFile> = {
       key: "action",
       label: "Next action",
       render: (file) => (
@@ -204,7 +209,20 @@ export function ApplicationDocumentRetention({
           )}
         </span>
       ),
-    },
+  };
+
+  const dueColumns: DataColumn<ApplicationRetentionFile>[] = [
+    { key: "application", label: "Application", render: application },
+    { key: "document", label: "Document", render: documentLabel },
+    { key: "closed", label: "Closed", render: closed },
+    quarantineAction,
+  ];
+
+  const unattachedColumns: DataColumn<ApplicationRetentionFile>[] = [
+    { key: "application", label: "Application", render: application },
+    { key: "document", label: "Document", render: documentLabel },
+    { key: "uploaded", label: "Uploaded", render: closed },
+    quarantineAction,
   ];
 
   const quarantineColumns: DataColumn<ApplicationRetentionFile>[] = [
@@ -219,7 +237,7 @@ export function ApplicationDocumentRetention({
           <span className="flex flex-col gap-0.5">
             <span>{file.retention_since ? formatRenewalDate(file.retention_since) : ""}</span>
             <span className="text-xs text-muted-foreground">
-              {!file.closure_outcome
+              {file.attached && !file.closure_outcome
                 ? "Application reopened; deletion is closed"
                 : days
                   ? `Deletion opens in ${days} day${days === 1 ? "" : "s"}`
@@ -247,13 +265,15 @@ export function ApplicationDocumentRetention({
                   triggerLabel="Restore"
                   title="Restore this document?"
                   entity={`${file.business_name} · ${documentLabel(file)}`}
-                  consequence="Moves the file back to document storage. The application stays closed, and if its retention period has ended the file returns to the due list."
+                  consequence={file.attached
+                    ? "Moves the file back to document storage. The application stays closed, and if its retention period has ended the file returns to the due list."
+                    : "Moves the file back to document storage. It stays unattached, so it returns to the list of uploads never attached."}
                   confirmLabel="Restore"
                   confirmationTone="commitment"
                   onConfirm={step(file, "restore")}
                 />
               )}
-              {days === 0 && file.closure_outcome && (!file.held || completedElsewhere) && (
+              {days === 0 && (!file.attached || file.closure_outcome) && (!file.held || completedElsewhere) && (
                 <ConfirmAction
                   disabled={loading}
                   requireReason
@@ -261,7 +281,9 @@ export function ApplicationDocumentRetention({
                   triggerLabel="Delete permanently"
                   title="Delete this document permanently?"
                   entity={`${file.business_name} · ${documentLabel(file)}`}
-                  consequence="Removes the file from quarantine. This cannot be undone. The application and its closure remain; the file cannot be opened or restored."
+                  consequence={file.attached
+                    ? "Removes the file from quarantine. This cannot be undone. The application and its closure remain; the file cannot be opened or restored."
+                    : "Removes the file from quarantine. This cannot be undone. The application does not change; the file cannot be opened or restored."}
                   confirmLabel="Delete permanently"
                   onConfirm={step(file, "delete")}
                 />
@@ -279,7 +301,7 @@ export function ApplicationDocumentRetention({
   const keptColumns: DataColumn<ApplicationRetentionFile>[] = [
     { key: "application", label: "Application", render: application },
     { key: "document", label: "Document", render: documentLabel },
-    { key: "closed", label: "Closed", render: closed },
+    { key: "closed", label: "Closed or uploaded", render: closed },
   ];
 
   const section = (
@@ -360,10 +382,13 @@ export function ApplicationDocumentRetention({
 
       {section("application-retention-due", "Application documents due for quarantine", queue.due, dueColumns,
         `No closed application's documents have passed the ${queue.retention_days}-day retention period.`)}
+      {section("application-retention-unattached", "Uploads never attached to an application", queue.unattached_due, unattachedColumns,
+        "No upload is waiting past its clock.",
+        `The file was uploaded but never added to the submitted application. It is due ${queue.unattached_days} days after its ${queue.upload_grant_hours}-hour upload link expired, whatever the application's status. Holds still apply.`)}
       {section("application-retention-quarantined", "Application documents in quarantine", queue.quarantined, quarantineColumns,
         "No application document is in quarantine.")}
-      {section("application-retention-kept", "Kept as compliance evidence", queue.kept, keptColumns,
-        "No closed application's document is compliance evidence.",
+      {section("application-retention-kept", "Kept as compliance evidence", [...queue.kept, ...queue.unattached_kept], keptColumns,
+        "No closed application's document or never-attached upload is compliance evidence.",
         "These documents are referenced by provider compliance evidence, so they are never quarantined or deleted.")}
 
       <section aria-labelledby="application-retention-unrecorded" className="space-y-3">

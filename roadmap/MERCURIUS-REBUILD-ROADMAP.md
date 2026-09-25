@@ -173,8 +173,9 @@ the direct applicant insert path (owner decision 2026-09-24); route abuse protec
 the `contact_submissions` anonymous insert and application-row deletion were decided in
 DEC-2026-012 (2026-09-24); TRACE-087 (PR #45, merged at `0d47134`) makes the contact route
 the only writer to `contact_submissions`; TRACE-088 (PR #46, merged at `3e4236c`) adds the honeypot,
-fill time and per-email limit to both intake routes (DEC-2026-013); TRACE-089 (awaiting review)
-adds the per-IP limit (DEC-2026-014).
+fill time and per-email limit to both intake routes (DEC-2026-013); TRACE-089 (PR #47, merged at
+`6d1a11a`) adds the per-IP limit (DEC-2026-014); TRACE-090 (awaiting review) applies retention
+to never-attached application uploads (DEC-2026-012 item 5).
 Phase 6 has not started under this roadmap.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
