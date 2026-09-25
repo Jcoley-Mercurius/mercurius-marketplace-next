@@ -15,8 +15,10 @@ Those are the next slices; use the gates below for the rest. TRACE-087 (PR #45, 
 `0d47134`; [main CI run 36077050904](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36077050904) passed) implements items 2 and 4. TRACE-088 (branch
 `codex/phase5-intake-abuse`, PR #46, merged at `3e4236c`) implements item 1 as settled by DEC-2026-013;
 TRACE-089 (PR #47, merged at `6d1a11a`) adds its per-IP limit (DEC-2026-014).
-TRACE-090 (branch `codex/phase5-orphan-uploads`, awaiting review) implements item 5: uploads
+TRACE-090 (PR #48, merged at `cd0c041`) implements item 5: uploads
 never attached are due 7 days after their 2-hour upload link; see PHASE-5-UNATTACHED-UPLOADS.md.
+TRACE-091 (branch `codex/phase5-renewal-orphan-uploads`, awaiting review) applies the same rule to
+renewal uploads never submitted (DEC-2026-015 item 2); see PHASE-5-RENEWAL-UNATTACHED-UPLOADS.md.
 
 ## Current follow-ups: commercial sources, direct ACH and cancellation refunds
 
@@ -319,7 +321,7 @@ behavior characterized before replacing the five active entrypoints.
   and TRACE-084 implement operator-run retention for declined renewal documents and for
   rejected or abandoned application documents against synthetic files only;
   TRACE-090 adds never-attached application uploads (7 days after the upload link).
-  Orphaned renewal uploads remain outside retention.
+  TRACE-091 adds renewal uploads never submitted, on the same clock.
 - [ ] Human screen-reader, true browser zoom, cross-platform and brand acceptance
   follow-ups from Phase 3 remain open; automated axe/screenshots do not satisfy them.
 - [ ] Explicit later authorization covers any production migration, configuration,

@@ -15,6 +15,7 @@ import { renewalDocumentKindLabel, type RenewalDocumentKind } from "@/lib/renewa
 import {
   daysUntil,
   objectLocationLabel,
+  requestRenewalUploadRetentionStep,
   requestRetentionStep,
   type ObjectLocation,
   type RetentionAction,
@@ -29,7 +30,8 @@ import {
 // documents of rejected or abandoned applications below it. Each step is run by an
 // operator behind ConfirmAction and confirmed by rereading this queue. Nothing here
 // changes a submission, decision, evidence, status or listing. TRACE-085: the totals
-// count both queues and are withheld until the application queue has loaded.
+// count both queues and are withheld until the application queue has loaded. TRACE-091
+// adds renewal uploads never submitted, which have no document row and are keyed by path.
 
 type Entry = {
   id: string;
@@ -46,14 +48,37 @@ type Entry = {
   held: boolean;
 };
 
+// TRACE-091: a renewal upload never submitted. Due 7 days after its upload link expired.
+type UploadEntry = {
+  contractor_id: string;
+  name: string;
+  path: string;
+  kind: RenewalDocumentKind;
+  file_name: string;
+  uploaded_at: string | null;
+  retention_ends_at: string | null;
+  retention_state: "retained" | "quarantined";
+  retention_since: string | null;
+  quarantine_ends_at: string | null;
+  object_location: ObjectLocation;
+  bound_to_evidence: boolean;
+  held: boolean;
+};
+
 type Hold = { contractor_id: string; name: string; reason: string; placed_at: string };
 
 type Queue = {
   evaluated_at: string;
   retention_days: number;
   quarantine_days: number;
+  // Absent before TRACE-091 is applied.
+  unattached_days?: number;
+  upload_grant_hours?: number;
   due: Entry[];
   quarantined: Entry[];
+  unattached_due: UploadEntry[];
+  unattached_quarantined: UploadEntry[];
+  unattached_kept: UploadEntry[];
   holds: Hold[];
 };
 
@@ -82,7 +107,8 @@ export default function DocumentRetentionPage() {
     try {
       const { data, error: rpcError } = await createClient().rpc("vendor_document_retention_queue");
       if (rpcError) throw rpcError;
-      const next = data as unknown as Queue;
+      // A database without TRACE-091 returns no upload lists; show them empty, not broken.
+      const next = { unattached_due: [], unattached_quarantined: [], unattached_kept: [], ...(data as unknown as Partial<Queue>) } as Queue;
       setQueue(next);
       return next;
     } catch (reason) {
@@ -105,6 +131,31 @@ export default function DocumentRetentionPage() {
       const next = await read();
       const inQuarantine = next?.quarantined.some((candidate) => candidate.id === entry.id);
       const due = next?.due.some((candidate) => candidate.id === entry.id);
+      const confirmed = next !== null && (action === "quarantine" ? inQuarantine : action === "restore" ? !inQuarantine : !inQuarantine && !due);
+      if (!confirmed) throw new Error("The server did not confirm this step. Review the queue before retrying.");
+      toast.success(titles[action], {
+        description: result.underHold
+          ? `${entry.name} · ${entry.file_name}. Recorded while the provider is on a retention hold.`
+          : `${entry.name} · ${renewalDocumentKindLabel[entry.kind]} · ${entry.file_name}`,
+      });
+    } catch (reason) {
+      toast.error("Retention step not completed", { description: messageOf(reason, "Please try again.") });
+      throw reason;
+    }
+  };
+
+  const uploadStep = (entry: UploadEntry, action: RetentionAction) => async (reason: string) => {
+    const titles = { quarantine: "Upload quarantined", restore: "Upload restored", delete: "Upload permanently deleted" };
+    try {
+      const result = await requestRenewalUploadRetentionStep({
+        path: entry.path,
+        action,
+        reason,
+        key: `renewal-upload-retention:${nonce}:${action}:${entry.path}:${entry.retention_since ?? "uploaded"}`,
+      });
+      const next = await read();
+      const inQuarantine = next?.unattached_quarantined.some((candidate) => candidate.path === entry.path);
+      const due = next?.unattached_due.some((candidate) => candidate.path === entry.path);
       const confirmed = next !== null && (action === "quarantine" ? inQuarantine : action === "restore" ? !inQuarantine : !inQuarantine && !due);
       if (!confirmed) throw new Error("The server did not confirm this step. Review the queue before retrying.");
       toast.success(titles[action], {
@@ -155,7 +206,7 @@ export default function DocumentRetentionPage() {
     <PageHeader
       eyebrow="Provider compliance"
       title="Document retention"
-      description={`Declined renewal documents, and the documents of rejected or abandoned applications, are kept for ${queue?.retention_days ?? 90} days after the decline or closure. After that an operator may move the file to quarantine, where it can be restored for ${queue?.quarantine_days ?? 14} days before it may be deleted permanently. Uploads never attached to an application become due 7 days after their upload link expires. A retention hold stops quarantine and deletion.`}
+      description={`Declined renewal documents, and the documents of rejected or abandoned applications, are kept for ${queue?.retention_days ?? 90} days after the decline or closure. After that an operator may move the file to quarantine, where it can be restored for ${queue?.quarantine_days ?? 14} days before it may be deleted permanently. Uploads never attached to an application, and renewal uploads never submitted, become due ${queue?.unattached_days ?? 7} days after their upload link expires. A retention hold stops quarantine and deletion.`}
       actions={refresh}
     />
   );
@@ -321,11 +372,159 @@ export default function DocumentRetentionPage() {
     </section>
   );
 
+  const uploadLabel = (entry: UploadEntry) => `${renewalDocumentKindLabel[entry.kind]} · ${entry.file_name}`;
+  const uploadLocation = (entry: UploadEntry, expected: ObjectLocation) =>
+    entry.object_location === expected ? null : (
+      <span className="block text-xs text-status-danger">{objectLocationLabel[entry.object_location]}</span>
+    );
+  const uploaded = (entry: UploadEntry) => (
+    <span className="flex flex-col gap-0.5">
+      <span>{entry.uploaded_at ? formatRenewalDate(entry.uploaded_at) : "Upload time unknown"}</span>
+      {entry.retention_ends_at && (
+        <span className="text-xs text-muted-foreground">
+          {new Date(entry.retention_ends_at).getTime() <= new Date(queue.evaluated_at).getTime() ? "Retention ended" : "Retention ends"} {formatRenewalDate(entry.retention_ends_at)}
+        </span>
+      )}
+    </span>
+  );
+
+  const uploadDueColumns: DataColumn<UploadEntry>[] = [
+    { key: "provider", label: "Provider", render: provider },
+    { key: "document", label: "Upload", render: uploadLabel },
+    { key: "uploaded", label: "Uploaded", render: uploaded },
+    {
+      key: "action",
+      label: "Next action",
+      render: (entry) => (
+        <span className="flex flex-col items-start gap-1">
+          {uploadLocation(entry, "documents")}
+          {entry.held ? (
+            <span className="text-sm">On retention hold. Release the hold before quarantining.</span>
+          ) : entry.object_location === "missing" || entry.object_location === "both" ? (
+            <span className="text-sm">Investigate the stored file before any retention step.</span>
+          ) : (
+            <ConfirmAction
+              disabled={loading}
+              requireReason
+              reasonHelp="Recorded with the step. For example: upload never submitted; retention period ended; no hold or investigation."
+              triggerLabel="Quarantine"
+              title="Move this upload to quarantine?"
+              entity={`${entry.name} · ${uploadLabel(entry)}`}
+              consequence={`Moves the file out of document storage into quarantine, where operators cannot open it. It can be restored for ${queue.quarantine_days} days and may then be deleted permanently. The provider's documents, evidence and status do not change.`}
+              confirmLabel="Quarantine"
+              onConfirm={uploadStep(entry, "quarantine")}
+            />
+          )}
+        </span>
+      ),
+    },
+  ];
+
+  const uploadQuarantineColumns: DataColumn<UploadEntry>[] = [
+    { key: "provider", label: "Provider", render: provider },
+    { key: "document", label: "Upload", render: uploadLabel },
+    {
+      key: "quarantined",
+      label: "Quarantined",
+      render: (entry) => {
+        const days = daysUntil(entry.quarantine_ends_at, queue.evaluated_at);
+        return (
+          <span className="flex flex-col gap-0.5">
+            <span>{entry.retention_since ? formatRenewalDate(entry.retention_since) : ""}</span>
+            <span className="text-xs text-muted-foreground">
+              {days ? `Deletion opens in ${days} day${days === 1 ? "" : "s"}` : "Deletion is open"}
+            </span>
+          </span>
+        );
+      },
+    },
+    {
+      key: "action",
+      label: "Actions",
+      render: (entry) => {
+        const days = daysUntil(entry.quarantine_ends_at, queue.evaluated_at);
+        const completedElsewhere = entry.object_location === "missing";
+        return (
+          <span className="flex flex-col items-start gap-2">
+            {uploadLocation(entry, "quarantine")}
+            <span className="flex flex-wrap gap-2">
+              {(entry.object_location === "quarantine" || entry.object_location === "documents") && (
+                <ConfirmAction
+                  disabled={loading}
+                  requireReason
+                  reasonHelp="Recorded with the step. Explain why the file must be kept."
+                  triggerLabel="Restore"
+                  title="Restore this upload?"
+                  entity={`${entry.name} · ${uploadLabel(entry)}`}
+                  consequence="Moves the file back to document storage. It still cannot be submitted, so it returns to the list of renewal uploads never submitted."
+                  confirmLabel="Restore"
+                  confirmationTone="commitment"
+                  onConfirm={uploadStep(entry, "restore")}
+                />
+              )}
+              {days === 0 && (!entry.held || completedElsewhere) && (
+                <ConfirmAction
+                  disabled={loading}
+                  requireReason
+                  reasonHelp="Recorded with the deletion. For example: quarantine period ended; no hold or investigation."
+                  triggerLabel="Delete permanently"
+                  title="Delete this upload permanently?"
+                  entity={`${entry.name} · ${uploadLabel(entry)}`}
+                  consequence="Removes the file from quarantine. This cannot be undone. The provider's documents do not change; the file cannot be opened or restored."
+                  confirmLabel="Delete permanently"
+                  onConfirm={uploadStep(entry, "delete")}
+                />
+              )}
+            </span>
+            {entry.held && !completedElsewhere && (
+              <span className="text-sm">On retention hold. Deletion stays closed until the hold is released.</span>
+            )}
+          </span>
+        );
+      },
+    },
+  ];
+
+  const uploadKeptColumns: DataColumn<UploadEntry>[] = [
+    { key: "provider", label: "Provider", render: provider },
+    { key: "document", label: "Upload", render: uploadLabel },
+    { key: "uploaded", label: "Uploaded", render: uploaded },
+  ];
+
+  const uploadSection = (
+    id: string,
+    title: string,
+    rows: UploadEntry[],
+    columns: DataColumn<UploadEntry>[],
+    empty: string,
+    note?: string,
+  ) => (
+    <section aria-labelledby={id} className="space-y-3">
+      <h2 id={id} className="text-lg font-semibold">
+        {title} ({rows.length})
+      </h2>
+      {note && <p className="text-sm text-muted-foreground">{note}</p>}
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{empty}</p>
+      ) : (
+        <div className="overflow-hidden rounded-xl border bg-card">
+          <ResponsiveDataList
+            label={title}
+            rows={rows}
+            columns={columns}
+            rowKey={(entry) => entry.path}
+            rowLabel={(entry) => `${entry.name} · ${renewalDocumentKindLabel[entry.kind]}`}
+          />
+        </div>
+      )}
+    </section>
+  );
+
   // Renewal and application documents together; unknown until both queues have loaded.
   const combined = (renewal: number, application: number | undefined) =>
     application === undefined ? null : renewal + application;
-  const due = combined(queue.due.length, applicationTotals?.due);
-  const quarantined = combined(queue.quarantined.length, applicationTotals?.quarantined);
+  const due = combined(queue.due.length + queue.unattached_due.length, applicationTotals?.due);
+  const quarantined = combined(queue.quarantined.length + queue.unattached_quarantined.length, applicationTotals?.quarantined);
   const holds = combined(queue.holds.length, applicationTotals?.holds);
 
   return (
@@ -373,7 +572,7 @@ export default function DocumentRetentionPage() {
                   triggerLabel="Release hold"
                   title="Release this retention hold?"
                   entity={hold.name}
-                  consequence="Quarantine and permanent deletion open again for this provider's declined documents once their periods end."
+                  consequence="Quarantine and permanent deletion open again for this provider's declined renewal documents and never-submitted renewal uploads once their periods end."
                   confirmLabel="Release hold"
                   onConfirm={release(hold)}
                 />
@@ -385,6 +584,16 @@ export default function DocumentRetentionPage() {
 
       {section("retention-due", "Due for quarantine", queue.due, dueColumns, `No declined document has passed its ${queue.retention_days}-day retention period.`)}
       {section("retention-quarantined", "In quarantine", queue.quarantined, quarantineColumns, "No document is in quarantine.")}
+
+      {/* TRACE-091: renewal uploads never submitted. */}
+      {uploadSection("renewal-upload-due", "Renewal uploads never submitted", queue.unattached_due, uploadDueColumns,
+        "No renewal upload is waiting past its clock.",
+        `The provider uploaded the file but never submitted it for review. It is due ${queue.unattached_days ?? 7} days after its ${queue.upload_grant_hours ?? 2}-hour upload link expired, and can no longer be submitted. Holds still apply.`)}
+      {uploadSection("renewal-upload-quarantined", "Renewal uploads in quarantine", queue.unattached_quarantined, uploadQuarantineColumns,
+        "No renewal upload is in quarantine.")}
+      {queue.unattached_kept.length > 0 &&
+        uploadSection("renewal-upload-kept", "Renewal uploads kept as compliance evidence", queue.unattached_kept, uploadKeptColumns, "",
+          "These uploads are referenced by provider compliance evidence, so they are never quarantined or deleted.")}
 
       {/* TRACE-084: documents of rejected or abandoned applications. */}
       <section aria-labelledby="application-retention" className="space-y-4 border-t pt-6">

@@ -49,6 +49,11 @@ export function retentionStorageStep(action: RetentionAction, prepared: Record<s
   return preparedStorageStep(action, prepared, (path) => RENEWAL_PATH.test(path));
 }
 
+/** A renewal upload path (TRACE-091 routes a never-submitted upload by its path). */
+export function isRenewalUploadPath(path: unknown): path is string {
+  return typeof path === "string" && RENEWAL_PATH.test(path);
+}
+
 /**
  * Shared by the renewal (TRACE-074) and application (TRACE-084) retention routes: the
  * prepared path must pass the caller's own path rule, and the buckets must be the ones
@@ -80,6 +85,20 @@ export function preparedStorageStep(
 /** Browser call to the retention route. Success is confirmed by the caller rereading. */
 export async function requestRetentionStep(input: { documentId: string; action: RetentionAction; reason: string; key: string }) {
   const response = await fetch("/api/renewal-documents/retention", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const body = (await response.json().catch(() => null)) as { error?: unknown; recorded?: unknown; underHold?: unknown } | null;
+  if (!response.ok) {
+    throw new Error(typeof body?.error === "string" ? body.error : "The retention step could not be completed.");
+  }
+  return { recorded: body?.recorded === true, underHold: body?.underHold === true };
+}
+
+/** Browser call to the TRACE-091 route for a never-submitted renewal upload. */
+export async function requestRenewalUploadRetentionStep(input: { path: string; action: RetentionAction; reason: string; key: string }) {
+  const response = await fetch("/api/renewal-documents/uploads/retention", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

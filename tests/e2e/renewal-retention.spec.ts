@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-074 synthetic browser evidence. The retention queue, route and hold commands are
+// TRACE-074 and TRACE-091 synthetic browser evidence. The retention queue, route and hold commands are
 // mocked readbacks and requests; nothing here claims a real document, provider or
 // deletion. The real route, Storage and database round trip is recorded in validation.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
@@ -23,6 +23,17 @@ const due = entry(1, {});
 const heldDue = entry(2, { contractor_id: providerB, name: "Synthetic Held Provider", kind: "insurance", file_name: "synthetic-insurance-2.pdf", held: true });
 const deletable = entry(3, { retention_state: "quarantined", retention_since: at(-20), quarantine_ends_at: at(-6), object_location: "quarantine" });
 const waiting = entry(4, { retention_state: "quarantined", retention_since: at(-9), quarantine_ends_at: at(5), object_location: "quarantine" });
+// TRACE-091: renewal uploads never submitted, keyed by path.
+const upload = (n: number, overrides: Record<string, unknown>) => ({
+  contractor_id: providerA, name: "Synthetic Retention Services", kind: "insurance", file_name: `synthetic-upload-${n}.pdf`,
+  path: `renewals/${providerA}/insurance/${id(n)}-synthetic-upload-${n}.pdf`, uploaded_at: at(-9), retention_ends_at: at(-2 + 1 / 12),
+  retention_state: "retained", retention_since: null, quarantine_ends_at: null, object_location: "documents", bound_to_evidence: false, held: false,
+  ...overrides,
+});
+const uploadDue = upload(8, {});
+const uploadHeld = upload(9, { contractor_id: providerB, name: "Synthetic Held Provider", held: true });
+const uploadQuarantined = upload(10, { retention_state: "quarantined", retention_since: at(-15), quarantine_ends_at: at(-1), object_location: "quarantine" });
+const uploadLists = { unattached_days: 7, upload_grant_hours: 2, unattached_due: [uploadDue, uploadHeld], unattached_quarantined: [uploadQuarantined], unattached_kept: [] };
 const hold = { contractor_id: providerB, name: "Synthetic Held Provider", reason: "Synthetic investigation", placed_at: at(-2) };
 
 test.beforeEach(async ({ page }) => {
@@ -64,6 +75,8 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     await expect(quarantined.getByRole("button", { name: "Delete permanently" })).toHaveCount(1);
     await expect(quarantined.getByText("Deletion opens in 5 days")).toBeVisible();
     await expect(quarantined.getByText("Deletion is open")).toBeVisible();
+    // A queue from a database without TRACE-091 has no upload lists; they show as empty.
+    await expect(page.getByText("No renewal upload is waiting past its clock.")).toBeVisible();
     expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (width >= 1024) {
@@ -222,4 +235,64 @@ test("an operator places a retention hold from the checklist, confirmed by rerea
   expect(requests[0].p_key).toMatch(/^retention-hold-place:[0-9a-f-]+:0$/);
   await expect(dialog.getByText("Retention hold in force")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Release hold" })).toBeVisible();
+});
+
+for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
+  test(`renewal uploads never submitted ${theme} ${width}px`, async ({ page }) => {
+    await queue(page, () => uploadLists);
+    await openRetention(page, theme, width);
+    await expect(page.getByRole("heading", { name: "Renewal uploads never submitted (2)" })).toBeVisible();
+    await expect(page.getByText("It is due 7 days after its 2-hour upload link expired, and can no longer be submitted.", { exact: false })).toBeVisible();
+    const dueList = list(page, "Renewal uploads never submitted");
+    await expect(dueList.getByRole("button", { name: "Quarantine" })).toHaveCount(1);
+    await expect(dueList.getByText("On retention hold. Release the hold before quarantining.")).toBeVisible();
+    await expect(dueList.getByText("Retention ended", { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Renewal uploads in quarantine (1)" })).toBeVisible();
+    const quarantined = list(page, "Renewal uploads in quarantine");
+    await expect(quarantined.getByRole("button", { name: "Restore" })).toHaveCount(1);
+    await expect(quarantined.getByRole("button", { name: "Delete permanently" })).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: /^Renewal uploads kept as compliance evidence/ })).toHaveCount(0);
+    expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: `test-results/renewal-upload-retention-${theme}-${width}.png`, fullPage: true });
+  });
+}
+
+test("an unsubmitted upload is quarantined by path through its own route, confirmed by rereading", async ({ page }) => {
+  let moved = false;
+  const sent: Record<string, unknown>[] = [];
+  await queue(page, () => (moved
+    ? { ...uploadLists, unattached_due: [uploadHeld], unattached_quarantined: [{ ...uploadDue, retention_state: "quarantined", retention_since: at(0), quarantine_ends_at: at(14), object_location: "quarantine" }, uploadQuarantined] }
+    : uploadLists));
+  await page.route("**/api/renewal-documents/uploads/retention", route => {
+    sent.push(route.request().postDataJSON());
+    moved = true;
+    return route.fulfill({ json: { path: uploadDue.path, action: "quarantine", recorded: true, underHold: false } });
+  });
+  await openRetention(page);
+  await list(page, "Renewal uploads never submitted").getByRole("button", { name: "Quarantine" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Move this upload to quarantine?" });
+  await expect(confirm.getByText("The provider's documents, evidence and status do not change.", { exact: false })).toBeVisible();
+  await confirm.getByLabel("Reason (required)", { exact: true }).fill("Synthetic: upload never submitted.");
+  await confirm.getByRole("button", { name: "Quarantine", exact: true }).click();
+  await expect(page.getByText("Upload quarantined")).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ path: uploadDue.path, action: "quarantine", reason: "Synthetic: upload never submitted." });
+  expect(sent[0]).not.toHaveProperty("documentId");
+  expect(sent[0].key).toMatch(/^renewal-upload-retention:[0-9a-f-]+:quarantine:renewals\/.+:uploaded$/);
+  await expect(page.getByRole("heading", { name: "Renewal uploads in quarantine (2)" })).toBeVisible();
+});
+
+test("restoring an upload explains it still cannot be submitted, and a refusal keeps the dialog open", async ({ page }) => {
+  await queue(page, () => uploadLists);
+  await page.route("**/api/renewal-documents/uploads/retention", route =>
+    route.fulfill({ status: 400, json: { error: "Renewal upload is not in quarantine" } }));
+  await openRetention(page);
+  await list(page, "Renewal uploads in quarantine").getByRole("button", { name: "Restore" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Restore this upload?" });
+  await expect(confirm.getByText("It still cannot be submitted", { exact: false })).toBeVisible();
+  await confirm.getByLabel("Reason (required)", { exact: true }).fill("Synthetic: keep for review.");
+  await confirm.getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(confirm.getByRole("alert")).toBeFocused();
+  await expect(page.getByText("Renewal upload is not in quarantine")).toBeVisible();
 });
