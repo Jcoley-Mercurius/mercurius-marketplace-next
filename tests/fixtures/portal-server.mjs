@@ -120,11 +120,13 @@ const server = createServer(async (request, response) => {
   });
   // TRACE-084 application document retention: empty by default; specs override per case.
   if (url.pathname === "/rest/v1/rpc/vendor_application_retention_queue") return send({
-    evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14, due: [], quarantined: [], kept: [], unrecorded: [], holds: [],
+    evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14, unattached_days: 7, upload_grant_hours: 2,
+    due: [], unattached_due: [], quarantined: [], kept: [], unattached_kept: [], unrecorded: [], holds: [],
   });
   if (url.pathname === "/rest/v1/rpc/vendor_application_retention_overview") return send({
     application_id: body.p_application, application_status: "pending", has_provider: false, closure: null, closable: true,
-    close_outcomes: ["rejected", "abandoned"], retention_days: 90, quarantine_days: 14, hold: null, provider_held: false, files: [],
+    close_outcomes: ["rejected", "abandoned"], retention_days: 90, quarantine_days: 14, unattached_days: 7, hold: null, provider_held: false,
+    files: [], unattached_files: [],
   });
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });

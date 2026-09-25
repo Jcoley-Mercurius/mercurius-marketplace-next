@@ -3,9 +3,9 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
 
-// TRACE-084 synthetic browser evidence. The application retention queue, overview, route
+// TRACE-084 and TRACE-090 synthetic browser evidence. The application retention queue, overview, route
 // and commands are mocked readbacks and requests; nothing here claims a real application,
-// document or deletion. The database contract is suite 051.
+// document or deletion. The database contracts are suites 051 and 057.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const day = 86_400_000;
 const at = (days: number) => new Date(Date.now() + days * day).toISOString();
@@ -16,7 +16,7 @@ const filePath = (application: string, kind: string, n: number) =>
 const file = (n: number, overrides: Record<string, unknown>) => ({
   application_id: otherApplication, business_name: "Synthetic Closed Applicant", application_status: "rejected",
   path: filePath(otherApplication, "license", n), kind: "license", file_name: `synthetic-license-${n}.pdf`,
-  closure_outcome: "rejected", closed_at: at(-120), closure_source: "closure", retention_ends_at: at(-30),
+  attached: true, uploaded_at: at(-200), closure_outcome: "rejected", closed_at: at(-120), closure_source: "closure", retention_ends_at: at(-30),
   retention_state: "retained", retention_since: null, quarantine_ends_at: null, object_location: "documents",
   bound_to_evidence: false, held: false,
   ...overrides,
@@ -28,6 +28,15 @@ const deletable = file(3, { retention_state: "quarantined", retention_since: at(
 const reopened = file(4, { retention_state: "quarantined", retention_since: at(-20), quarantine_ends_at: at(-6), object_location: "quarantine",
   closure_outcome: null, closed_at: null, closure_source: null, retention_ends_at: null, application_status: "pending" });
 const kept = file(5, { bound_to_evidence: true, business_name: "Synthetic Rejected Provider", closure_source: "onboarding" });
+// TRACE-090: uploads never attached, on an open application with no closure.
+const unattached = (n: number, overrides: Record<string, unknown>) => file(n, {
+  application_id: applicationId, business_name: "Synthetic Open Applicant", application_status: "pending",
+  path: filePath(applicationId, "other", n), kind: "other", file_name: `synthetic-other-${n}.pdf`, attached: false, uploaded_at: at(-9),
+  closure_outcome: null, closed_at: null, closure_source: null, retention_ends_at: at(-2 + 1 / 12),
+  ...overrides,
+});
+const unattachedDue = unattached(6, {});
+const unattachedQuarantined = unattached(7, { retention_state: "quarantined", retention_since: at(-15), quarantine_ends_at: at(-1), object_location: "quarantine" });
 const hold = { application_id: otherApplication, business_name: "Synthetic Held Applicant", reason: "Synthetic investigation", placed_at: at(-2) };
 const unrecorded = { application_id: "00000000-0000-4000-8000-000000000091", business_name: "Synthetic Legacy Applicant", status: "rejected", has_provider: false };
 
@@ -41,8 +50,9 @@ test.beforeEach(async ({ page }) => {
 function queue(page: Page, body: () => Record<string, unknown>) {
   return page.route("**/rpc/vendor_application_retention_queue", route => route.fulfill({
     json: {
-      evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14,
-      due: [due, heldDue], quarantined: [deletable, reopened], kept: [kept], unrecorded: [unrecorded], holds: [hold], ...body(),
+      evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14, unattached_days: 7, upload_grant_hours: 2,
+      due: [due, heldDue], unattached_due: [], quarantined: [deletable, reopened], kept: [kept], unattached_kept: [],
+      unrecorded: [unrecorded], holds: [hold], ...body(),
     },
   }));
 }
@@ -60,9 +70,13 @@ const list = (page: Page, name: string) =>
 
 for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
   test(`application document retention ${theme} ${width}px`, async ({ page }) => {
-    await queue(page, () => ({}));
+    await queue(page, () => ({ unattached_due: [unattachedDue] }));
     await openRetention(page, theme, width);
     await expect(page.getByRole("heading", { name: "Application documents due for quarantine (2)" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Uploads never attached to an application (1)" })).toBeVisible();
+    const unattachedList = list(page, "Uploads never attached to an application");
+    await expect(unattachedList.getByText("Never attached · uploaded", { exact: false })).toBeVisible();
+    await expect(unattachedList.getByRole("button", { name: "Quarantine" })).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Application documents in quarantine (2)" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Kept as compliance evidence (1)" })).toBeVisible();
     await expect(page.getByRole("list", { name: "Application retention holds" }).getByText("Synthetic investigation")).toBeVisible();
@@ -264,7 +278,8 @@ test("a failed application queue load offers a retry", async ({ page }) => {
     calls += 1;
     return calls === 1
       ? route.fulfill({ status: 503, json: { message: "Synthetic unavailable" } })
-      : route.fulfill({ json: { evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14, due: [], quarantined: [], kept: [], unrecorded: [], holds: [] } });
+      : route.fulfill({ json: { evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14, unattached_days: 7,
+          upload_grant_hours: 2, due: [], unattached_due: [], quarantined: [], kept: [], unattached_kept: [], unrecorded: [], holds: [] } });
   });
   await syntheticSession(page.context(), "admin");
   await page.setViewportSize({ width: 320, height: 900 });
@@ -290,8 +305,9 @@ test("queue totals add application documents and are withheld until that queue l
     calls += 1;
     return calls === 1
       ? route.fulfill({ status: 503, json: { message: "Synthetic unavailable" } })
-      : route.fulfill({ json: { evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14,
-          due: [due, heldDue], quarantined: [deletable, reopened], kept: [kept], unrecorded: [], holds: [hold] } });
+      : route.fulfill({ json: { evaluated_at: new Date().toISOString(), retention_days: 90, quarantine_days: 14, unattached_days: 7,
+          upload_grant_hours: 2, due: [due, heldDue], unattached_due: [unattachedDue], quarantined: [deletable, reopened], kept: [kept],
+          unattached_kept: [], unrecorded: [], holds: [hold] } });
   });
   await syntheticSession(page.context(), "admin");
   await page.setViewportSize({ width: 320, height: 900 });
@@ -304,8 +320,37 @@ test("queue totals add application documents and are withheld until that queue l
   await expect(page.getByRole("heading", { name: "Application documents due for quarantine (2)" })).toBeVisible();
   expect(calls).toBe(2);
   const total = (label: string) => totals.getByText(label, { exact: true }).locator("xpath=following-sibling::p[1]");
-  await expect(total("Due for quarantine")).toHaveText("3");
+  await expect(total("Due for quarantine")).toHaveText("4");
   await expect(total("In quarantine")).toHaveText("2");
   await expect(total("Retention holds")).toHaveText("2");
   await expect(totals.getByText("Application queue not loaded")).toHaveCount(0);
+});
+
+// TRACE-090: a never-attached upload has no closure, yet quarantine and deletion stay open.
+test("a never-attached upload is quarantined and, once its quarantine ends, may be deleted", async ({ page }) => {
+  let moved = false;
+  const sent: Record<string, unknown>[] = [];
+  await queue(page, () => (moved
+    ? { unattached_due: [], quarantined: [unattachedQuarantined, { ...unattachedDue, retention_state: "quarantined", retention_since: at(0), quarantine_ends_at: at(14), object_location: "quarantine" }] }
+    : { unattached_due: [unattachedDue], quarantined: [unattachedQuarantined], unattached_kept: [unattached(8, { bound_to_evidence: true })] }));
+  await page.route("**/api/vendor-applications/retention", route => {
+    sent.push(route.request().postDataJSON());
+    moved = true;
+    return route.fulfill({ json: { applicationId, path: unattachedDue.path, action: "quarantine", recorded: true, underHold: false } });
+  });
+  await openRetention(page);
+  const quarantined = list(page, "Application documents in quarantine");
+  await expect(quarantined.getByText("Application reopened; deletion is closed")).toHaveCount(0);
+  await expect(quarantined.getByRole("button", { name: "Delete permanently" })).toHaveCount(1);
+  await expect(list(page, "Kept as compliance evidence").getByText("Never attached · uploaded", { exact: false })).toBeVisible();
+
+  await list(page, "Uploads never attached to an application").getByRole("button", { name: "Quarantine" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Move this document to quarantine?" });
+  await confirm.getByLabel("Reason (required)", { exact: true }).fill("Synthetic: never attached; 7 days passed.");
+  await confirm.getByRole("button", { name: "Quarantine", exact: true }).click();
+  await expect(page.getByText("Document quarantined")).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ applicationId, path: unattachedDue.path, action: "quarantine" });
+  await expect(page.getByRole("heading", { name: "Uploads never attached to an application (0)" })).toBeVisible();
+  await expect(page.getByText("No upload is waiting past its clock.")).toBeVisible();
 });

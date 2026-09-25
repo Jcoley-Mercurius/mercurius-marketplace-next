@@ -1,5 +1,5 @@
 // TRACE-084 CFG-011 retention of the documents of rejected or abandoned vendor
-// applications: closure wording, the path rule the retention route enforces and the
+// applications, and TRACE-090 retention of uploads never attached to an application: closure wording, the path rule the retention route enforces and the
 // browser calls. The database decides eligibility and records a step only after reading
 // storage; this module never decides either.
 
@@ -25,6 +25,9 @@ export type ApplicationRetentionFile = {
   path: string;
   kind: string;
   file_name: string;
+  /** False for an upload no application version or row lists (TRACE-090). */
+  attached: boolean;
+  uploaded_at: string | null;
   closure_outcome: ClosureOutcome | null;
   closed_at: string | null;
   closure_source: "closure" | "onboarding" | null;
@@ -46,9 +49,11 @@ export type ApplicationRetentionOverview = {
   close_outcomes: ClosureOutcome[];
   retention_days: number;
   quarantine_days: number;
+  unattached_days: number;
   hold: { reason: string; placed_at: string } | null;
   provider_held: boolean;
   files: ApplicationRetentionFile[];
+  unattached_files: ApplicationRetentionFile[];
 };
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";

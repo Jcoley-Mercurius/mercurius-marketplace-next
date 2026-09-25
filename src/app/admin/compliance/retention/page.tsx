@@ -155,7 +155,7 @@ export default function DocumentRetentionPage() {
     <PageHeader
       eyebrow="Provider compliance"
       title="Document retention"
-      description={`Declined renewal documents, and the documents of rejected or abandoned applications, are kept for ${queue?.retention_days ?? 90} days after the decline or closure. After that an operator may move the file to quarantine, where it can be restored for ${queue?.quarantine_days ?? 14} days before it may be deleted permanently. A retention hold stops quarantine and deletion.`}
+      description={`Declined renewal documents, and the documents of rejected or abandoned applications, are kept for ${queue?.retention_days ?? 90} days after the decline or closure. After that an operator may move the file to quarantine, where it can be restored for ${queue?.quarantine_days ?? 14} days before it may be deleted permanently. Uploads never attached to an application become due 7 days after their upload link expires. A retention hold stops quarantine and deletion.`}
       actions={refresh}
     />
   );
