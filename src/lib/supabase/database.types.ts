@@ -6193,8 +6193,8 @@ export type Database = {
         Returns: undefined
       }
       intake_record_submission: {
-        Args: { p_email_hash: string; p_form: string }
-        Returns: boolean
+        Args: { p_email_hash: string; p_form: string; p_ip_hash: string }
+        Returns: string
       }
       job_transition_actor_allowed: {
         Args: {

@@ -8,6 +8,7 @@ import {
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
 import {
   INTAKE_REFUSAL_MESSAGE,
+  intakeClientIp,
   intakeGuardRefusal,
   recordIntakeSubmission,
 } from "@/lib/intakeProtection";
@@ -87,8 +88,14 @@ export async function POST(request: Request) {
     }
     const submission = parseSubmission(body);
     const supabase = serviceClient();
-    if (!(await recordIntakeSubmission(supabase, "contact", submission.email))) {
-      console.warn("Contact submission refused", { reason: "email_limit" });
+    const limit = await recordIntakeSubmission(
+      supabase,
+      "contact",
+      submission.email,
+      intakeClientIp(request.headers),
+    );
+    if (limit !== "accepted") {
+      console.warn("Contact submission refused", { reason: limit });
       return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
     }
     const submittedAt = new Date().toISOString();

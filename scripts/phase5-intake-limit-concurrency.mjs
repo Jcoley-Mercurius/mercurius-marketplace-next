@@ -1,4 +1,4 @@
-// Synthetic-only concurrency proof for TRACE-088; reset the isolated database afterward.
+// Synthetic-only concurrency proof for TRACE-088 and TRACE-089; reset the isolated database afterward.
 // PHASE5_DB_CONTAINER may name another local database container for a manual run.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -36,7 +36,7 @@ function sql(source) {
 const key = (label) => createHash("sha256").update(`intake-race-synthetic-${label}`).digest("hex");
 const record = (form, label) =>
   sql(`begin; do $$ begin perform set_config('request.jwt.claims','{"role":"service_role"}',true); end $$;
- set local role service_role; select public.intake_record_submission('${form}','${key(label)}'); commit;`);
+ set local role service_role; select public.intake_record_submission('${form}','${key(label)}',null) = 'accepted'; commit;`);
 const accepted = (results) => results.filter((value) => value === "t").length;
 const labels = ["last-slot", "fresh", "fresh-other", "per-form"];
 const inList = labels.map((label) => `'${key(label)}'`).join(",");
@@ -73,4 +73,20 @@ assert.equal(
   "3,3,3,3,3",
   "Exactly the accepted submissions are recorded",
 );
-console.log("Intake limit concurrency: last slot, fresh emails and per-form allowances hold.");
+// 4 (TRACE-089): four submissions already recorded from one network; ten parallel attempts
+// with different emails race for its last hourly slot.
+const network = key("network-last-slot");
+const recordFrom = (label) =>
+  sql(`begin; do $$ begin perform set_config('request.jwt.claims','{"role":"service_role"}',true); end $$;
+ set local role service_role; select public.intake_record_submission('contact','${key(label)}','${network}'); commit;`);
+await sql(`insert into private.intake_submissions(form,email_hash,ip_hash)
+ select 'contact',md5(g::text)||md5(g::text),'${network}' from generate_series(1,4) g;`);
+const networkSlot = await Promise.all(Array.from({ length: 10 }, (_, n) => recordFrom(`network-${n}`)));
+assert.equal(networkSlot.filter((value) => value === "accepted").length, 1, "Exactly one takes the network's last slot");
+assert.equal(networkSlot.filter((value) => value === "ip_limit").length, 9, "The rest are refused by the network limit");
+assert.equal(
+  await sql(`select count(*) from private.intake_submissions where ip_hash='${network}'`),
+  "5",
+  "The network holds exactly five recorded submissions",
+);
+console.log("Intake limit concurrency: last slot, fresh emails, per-form and per-network allowances hold.");

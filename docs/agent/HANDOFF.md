@@ -22,6 +22,21 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   and a 7-day clock for never-submitted application uploads. Next: implement them as
   bounded slices. See the [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
 
+## TRACE-089 — per-network intake limit — 2026-09-24 UTC
+
+- Branch `codex/phase5-intake-ip-limit` on `main` `3e4236c` (after PR #46, TRACE-088).
+- Scope: DEC-2026-012 item 1's per-IP limit, settled by DEC-2026-014 (GoDaddy DNS points
+  straight at Vercel; `x-real-ip` on Vercel only; IPv6 by /64). See
+  [the slice report](../../governance/PHASE-5-INTAKE-IP-LIMIT.md).
+- Evidence: suite 056 (30 assertions); 2813 assertions across 47 suites on a clean reset;
+  concurrency network race; mutation check; round trip with `VERCEL=1`; lint, typecheck,
+  202 unit tests, build.
+- Open: code review (F1–F5); CI; hosted rollout per
+  [HOSTED-MIGRATION-ROLLOUT.md](../../governance/HOSTED-MIGRATION-ROLLOUT.md) (proposed; 78
+  migrations pending on the hosted project; the domain currently serves a separate static
+  page, not this app).
+- Next: DEC-2026-012 item 5 (never-submitted uploads).
+
 ## TRACE-088 — intake abuse protection — 2026-09-24 UTC
 
 - Branch `codex/phase5-intake-abuse` on `main` `0d47134`.

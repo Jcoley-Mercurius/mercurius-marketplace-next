@@ -23,6 +23,37 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-014 — Per-IP intake limit: client-IP source and implementation choices
+
+**Status:** APPROVED owner fact; implementation choices recorded for Codex review.
+**Date:** 2026-09-24 UTC.
+
+Settles DEC-2026-013 item 2 (TRACE-089):
+
+1. **Path (owner, 2026-09-24).** `mercuriusmarketplace.com` is registered with GoDaddy and
+   its DNS points straight at Vercel; there is no proxy or CDN in between. A read-only
+   check the same day confirmed GoDaddy nameservers, an apex record at a Vercel address and
+   a `www` CNAME to Vercel DNS.
+2. **Client IP** is Vercel's `x-real-ip` header, trusted only when the route runs on Vercel
+   (`VERCEL=1`). Vercel's edge replaces any value the client sent. Elsewhere the header is
+   ignored.
+3. **Network, not address, for IPv6:** an IPv6 client is counted by its /64 prefix. An
+   IPv4-mapped address counts as the IPv4 address.
+4. **Unknown IP:** the network limit is skipped and the per-email limit still applies.
+5. **Stored key:** SHA-256 of the network, unkeyed, like the email key.
+6. **The limit** is DEC-2026-012's 5 accepted submissions per hour per form, checked after
+   the per-email limit, with the same 429.
+
+Alternatives considered: `x-forwarded-for` (2); `@vercel/functions` `ipAddress()` for the
+same header (2); counting single IPv6 addresses (3); one shared bucket when the IP is
+unknown (4); a keyed hash (5).
+
+MTS impact: the MTS §4 anonymous row's launch note now includes the per-IP limit. With the
+per-IP limit in place, DEC-2026-013 item 1's "per-IP limit still deferred at launch"
+condition for revisiting Turnstile no longer applies.
+
+This decision does not authorize a hosted migration, deployment, domain change or activation.
+
 ### DEC-2026-013 — Intake abuse protection: Turnstile, the per-IP limit and implementation choices
 
 **Status:** APPROVED owner decisions. **Date:** 2026-09-24 UTC.

@@ -14,6 +14,7 @@ import { sendOwnerNotification } from "@/lib/ownerNotifications";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
 import {
   INTAKE_REFUSAL_MESSAGE,
+  intakeClientIp,
   intakeGuardRefusal,
   recordIntakeSubmission,
 } from "@/lib/intakeProtection";
@@ -248,8 +249,14 @@ export async function POST(request: Request) {
     const documents = parseDocuments(body.documents);
     const applicationId = randomUUID();
     const supabase = serviceClient();
-    if (!(await recordIntakeSubmission(supabase, "vendor_application", application.email))) {
-      console.warn("Vendor application refused", { reason: "email_limit" });
+    const limit = await recordIntakeSubmission(
+      supabase,
+      "vendor_application",
+      application.email,
+      intakeClientIp(request.headers),
+    );
+    if (limit !== "accepted") {
+      console.warn("Vendor application refused", { reason: limit });
       return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
     }
 
