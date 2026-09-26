@@ -23,6 +23,31 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-019 — Accept Phase 4 and release the Phase 6 hold
+
+**Status:** APPROVED owner decision. **Date:** 2026-09-26 UTC.
+
+After Claude's completion-integrity repair (TRACE-097, PR #55, answering review findings
+P4-R1/P4-R2 from PHASE-4-CODE-REVIEW.md), the owner reported that Codex's re-review found it
+ready, and:
+
+1. **Accepts Phase 4** (canonical product lifecycle) on its roadmap gate: the transition matrix
+   and cross-role acceptance tests pass and no record can be stranded in an unmapped state.
+   This covers the P4-1–P4-7 dispositions in PHASE-4-CODE-REVIEW.md and the TRACE-097 repair,
+   including its design choices D1–D4 as implemented (PHASE-4-COMPLETION-INTEGRITY.md).
+2. **Releases the DEC-2026-018 review-before-start hold.** Phase 6 implementation may begin with
+   slice 6.1 (TRACE-095) under PHASE-6-SCOPE.md and the roadmap order and gate.
+
+Record limits: Codex's re-review was relayed by the owner and is not yet written into the
+repository. The accepted repair is on PR #55, stacked on PR #54; neither is merged, and CI has
+not run on #55. Adding `scripts/phase4-completion-integrity.mjs` to CI remains an open owner
+decision. Carried-forward gates keep their phases: email/SMS and reminder timing (Phase 7),
+hosted migration and Storage checks (Phase 8), scheduler activation, and the Phase 3 manual
+screen-reader, zoom and brand follow-ups.
+
+This decision authorizes no hosted migration, deployment, production change, charge, refund,
+payout, email, scheduler activation or deletion.
+
 ### DEC-2026-018 — Review Phase 4 before beginning Phase 6
 
 **Status:** APPROVED owner direction. **Date:** 2026-09-26 UTC.

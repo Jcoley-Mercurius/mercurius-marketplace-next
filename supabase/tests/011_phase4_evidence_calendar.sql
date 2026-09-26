@@ -16,11 +16,15 @@ set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"81000000-0000-4000-8000-000000000003"}',true);
 select lives_ok($$select public.set_completion_evidence_rule((select id from public.services_catalog order by id limit 1),2,'Approved category needs before and after')$$,'admin versions category proof requirement');
 reset role;
+-- TRACE-097: completion evidence must be a stored job-photos object uploaded by the provider.
+insert into storage.objects(bucket_id,name,owner) select 'job-photos',
+ '81000000-0000-4000-8000-000000000002/83000000-0000-4000-8000-000000000001/synthetic-' || n || '.png','81000000-0000-4000-8000-000000000002'
+ from unnest(array['one','two']) n;
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"81000000-0000-4000-8000-000000000002"}',true);
 select throws_ok($$select public.transition_job_status('83000000-0000-4000-8000-000000000001','pending_review')$$,'42501','Use the canonical quote or completion workflow','new completion cannot enter legacy holding state');
-select throws_ok($$select public.vendor_complete_job('83000000-0000-4000-8000-000000000001',array['synthetic-one'])$$,'P0001',null,'category minimum cannot be bypassed by vendor');
-select lives_ok($$select public.vendor_complete_job('83000000-0000-4000-8000-000000000001',array['synthetic-one','synthetic-two'])$$,'required category proof allows completion');
+select throws_ok($$select public.vendor_complete_job('83000000-0000-4000-8000-000000000001',array['81000000-0000-4000-8000-000000000002/83000000-0000-4000-8000-000000000001/synthetic-one.png'])$$,'P0001',null,'category minimum cannot be bypassed by vendor');
+select lives_ok($$select public.vendor_complete_job('83000000-0000-4000-8000-000000000001',array['81000000-0000-4000-8000-000000000002/83000000-0000-4000-8000-000000000001/synthetic-one.png','81000000-0000-4000-8000-000000000002/83000000-0000-4000-8000-000000000001/synthetic-two.png'])$$,'required category proof allows completion');
 reset role;
 select is((select metadata->>'completion_rule_version' from public.job_events where job_id='83000000-0000-4000-8000-000000000001' and event_type='job_completed_by_vendor'),'1','completion audit records evidence-rule version');
 select * from finish();

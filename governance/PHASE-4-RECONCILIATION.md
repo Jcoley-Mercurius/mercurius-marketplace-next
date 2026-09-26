@@ -1,10 +1,12 @@
 # Phase 4 lifecycle reconciliation
 
-**Current status (2026-09-26):** Phase 4 remains **not owner-accepted**. DEC-2026-017
+**Current status (2026-09-26):** Phase 4 is **owner-accepted** (DEC-2026-019) after the Codex review (TRACE-096) and the completion-integrity repair (TRACE-097, [report](PHASE-4-COMPLETION-INTEGRITY.md)). Earlier status text below is historical.
+
+**Previous status (2026-09-26):** Phase 4 remains **not owner-accepted**. DEC-2026-017
 separated its acceptance from Phase 5 closure. The owner requested review before
 Phase 6 implementation (DEC-2026-018). The [Codex review](PHASE-4-CODE-REVIEW.md),
 TRACE-096, requires fixes for completion evidence and lock ordering (P4-R1/P4-R2).
-Next: Claude's bounded Phase 4 repair, Codex re-review, then owner acceptance/disposition.
+Repair implemented as TRACE-097 ([report](PHASE-4-COMPLETION-INTEGRITY.md)); next: Codex re-review, then owner acceptance/disposition.
 Earlier review/combined-acceptance/PR instructions below are historical.
 
 Status: implementation ready for final verification and owner review; acceptance is not claimed.

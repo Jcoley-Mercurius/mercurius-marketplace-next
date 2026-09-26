@@ -13,6 +13,14 @@ The owner has stated that no additional product-authority approval chain is requ
 
 The approved authority chain is now **MPS → MDS → MTS → implementation evidence**. No additional system-level approval is outstanding.
 
+## Phase 4 acceptance and Phase 6 start — 2026-09-26
+
+The owner accepted Phase 4 and released the Phase 6 review-before-start hold (DEC-2026-019),
+after the TRACE-097 repair of the Codex review findings and a Codex re-review the owner reported
+as clear. This accepts the implementation checkpoint only; PR #54/#55 merge and CI, hosted
+checks, Phase 7 communications and scheduler activation remain open, and no external activation
+is authorized.
+
 ## Phase 5 closure — 2026-09-26
 
 The owner closed Phase 5 and authorized Phase 6 implementation (DEC-2026-017) after the Codex

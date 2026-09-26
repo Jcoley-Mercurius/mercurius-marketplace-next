@@ -30,6 +30,7 @@ const job = (suffix, service, status) => ({
   quote_amount: 120, notes: "Synthetic internal note", needs_admin_review: false,
   match_attempt_count: 1, declined_contractor_ids: [], matching_status: "offered",
   preferred_contractor_id: null, package_question_answers: {},
+  service_catalog_id: suffix === "11" ? "synthetic-pool-service" : null,
 });
 const jobs = [job("10", "Synthetic Lawn Service", "matched"), job("11", "Synthetic Pool Service", "in_progress")];
 
@@ -143,6 +144,7 @@ const server = createServer(async (request, response) => {
     if (table === "user_roles") return send([{ role: user.testRole }]);
     if (table === "invoices") return send([{ id: "00000000-0000-4000-8000-000000000020", invoice_number: "MDS-INV-001", amount: 125, status: "pending", created_at: now.toISOString(), paid_at: null }]);
     if (table === "reviews") return send([]);
+    if (table === "completion_evidence_rules") return send(url.searchParams.get("service_id") === "eq.synthetic-pool-service" ? [{ minimum_photos: 2 }] : []);
     if (table === "vendor_applications") return send([{
       id: "00000000-0000-4000-8000-000000000050", first_name: "Synthetic", last_name: "Applicant",
       business_name: "Synthetic Applicant Services", email: "applicant@example.invalid", phone: "synthetic",

@@ -1,8 +1,8 @@
 # Phase 6 scope and Claude starting brief
 
 Date: 2026-09-26. Planning base: `7ed92a9`; Phase 5 implementation checkpoint: `417e642` (PR #52).
-Status: planned under DEC-2026-017; **implementation on hold** following the owner’s review-before-start direction (DEC-2026-018).
-Phase 4 review found P4-R1/P4-R2; see [review and Claude repair brief](PHASE-4-CODE-REVIEW.md).
+Status: planned under DEC-2026-017; **hold released** and Phase 4 accepted (DEC-2026-019). Start with slice 6.1 (TRACE-095).
+Phase 4 review findings P4-R1/P4-R2 were repaired by TRACE-097 ([report](PHASE-4-COMPLETION-INTEGRITY.md)).
 Codex scopes and reviews; Claude implements one bounded slice at a time.
 
 ## Count and order

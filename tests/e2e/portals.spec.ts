@@ -77,9 +77,28 @@ test("vendor confirmation, mobile navigation and completion upload failure", asy
   await page.getByRole("tab", { name: /Active Jobs/ }).click();
   await page.getByRole("button", { name: "Mark done", exact: true }).click();
   const complete = page.getByRole("dialog", { name: "Complete Synthetic Pool Service" });
+  await expect(complete).toHaveAccessibleDescription(/This service requires at least 2 photos of the finished work\./);
+  await expect(complete.getByText("0 of 2 required photos attached.")).toBeVisible();
+  await expect(complete.getByRole("button", { name: "Mark complete" })).toBeDisabled();
   await complete.locator('input[type="file"]').setInputFiles({ name: "synthetic.png", mimeType: "image/png", buffer: Buffer.from("synthetic image fixture") });
   await expect(complete.getByRole("alert")).toContainText("Photo upload failed");
   await expect(complete.getByRole("alert")).toBeFocused();
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+});
+
+test("vendor completion cannot proceed without the service's photo requirement", async ({ page }) => {
+  await portal(page, "vendor");
+  const rules = (url: URL) => url.pathname.endsWith("/rest/v1/completion_evidence_rules");
+  await page.route(rules, route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "PGRST100", message: "Synthetic request failure." }) }));
+  await page.getByRole("tab", { name: /Active Jobs/ }).click();
+  await page.getByRole("button", { name: "Mark done", exact: true }).click();
+  const complete = page.getByRole("dialog", { name: "Complete Synthetic Pool Service" });
+  await expect(complete.getByRole("alert")).toContainText("could not load this service's photo requirement");
+  await expect(complete.getByRole("button", { name: "Mark complete" })).toBeDisabled();
+  await page.unroute(rules);
+  await complete.getByRole("button", { name: "Try again" }).click();
+  await expect(complete.getByText("0 of 2 required photos attached.")).toBeVisible();
+  await expect(complete.getByRole("alert")).toHaveCount(0);
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
 });
 
