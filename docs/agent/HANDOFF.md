@@ -1,6 +1,17 @@
 # Agent handoff — 2026-09-26 UTC
 
-## Current checkpoint — Phase 4 review requires fixes; Phase 6 implementation held
+## Current checkpoint — TRACE-097 Phase 4 completion repair awaiting Codex re-review
+
+- Branch `codex/phase4-completion-integrity`, stacked on the review branch (PR #54, `efb4244`).
+- Scope: P4-R1/P4-R2 only ([report](../../governance/PHASE-4-COMPLETION-INTEGRITY.md)). Migration
+  `20260926003000`, completion dialog wording, suite 062, script `phase4-completion-integrity.mjs`.
+- Evidence: 3066 SQL assertions / 53 suites on a clean reset; 62 Storage/REST/concurrency checks;
+  review reproductions no longer reproduce; 11/11 SQL mutants; lint, typecheck, 204 unit tests, build;
+  244/246 non-visual browser cases (2 unchanged-spec timeouts passed on rerun).
+- Open: Codex re-review (D1–D4); adding the script to CI (edit declined pending owner decision);
+  PR CI; owner Phase 4 acceptance and Phase 6 hold release. TRACE-095 not started. No external activation.
+
+## Previous checkpoint — Phase 4 review requires fixes; Phase 6 implementation held
 
 - Base: merged main `1baf270` (PR #53, DEC-2026-017). Phase 5 is closed; Phase 4 is not accepted.
 - Owner requested Phase 4 review before Phase 6 work (DEC-2026-018). [Review](../../governance/PHASE-4-CODE-REVIEW.md),

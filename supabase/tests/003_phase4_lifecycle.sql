@@ -91,11 +91,14 @@ select throws_ok($$insert into public.job_events(job_id,event_type) values ('430
 reset role;
 update public.service_requests set status='in_progress',photo_proof_urls='{}'
  where id='43000000-0000-4000-8000-000000000004';
+-- TRACE-097: completion evidence must be a stored job-photos object uploaded by the provider.
+insert into storage.objects(bucket_id,name,owner) values ('job-photos',
+ '41000000-0000-4000-8000-000000000003/43000000-0000-4000-8000-000000000004/synthetic-proof.png','41000000-0000-4000-8000-000000000003');
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"41000000-0000-4000-8000-000000000003"}',true);
 select throws_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000004','vendor_completed',null,'{"photo_count":99}')$$,'P0001',null,'caller photo_count cannot substitute for stored evidence');
 select throws_ok($$update public.service_requests set homeowner_confirmed_at=now() where id='43000000-0000-4000-8000-000000000004'$$,'42501',null,'vendor cannot forge confirmation timestamp directly');
-select lives_ok($$select public.vendor_complete_job('43000000-0000-4000-8000-000000000004',array['synthetic-proof'])$$,'assigned vendor can submit stored completion evidence');
+select lives_ok($$select public.vendor_complete_job('43000000-0000-4000-8000-000000000004',array['41000000-0000-4000-8000-000000000003/43000000-0000-4000-8000-000000000004/synthetic-proof.png'])$$,'assigned vendor can submit stored completion evidence');
 select is((select confirmation_deadline_at-confirmation_sent_at from public.service_requests where id='43000000-0000-4000-8000-000000000004'),interval '72 hours','completion notice and approved deadline stored atomically');
 select throws_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000004','vendor_completed')$$,'22023','Duplicate job transition','duplicate vendor completion rejected');
 reset role;

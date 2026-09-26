@@ -27,6 +27,7 @@ type Job = {
   service_type: string;
   description: string | null;
   status: string;
+  service_catalog_id?: string | null;
   scheduled_start_at?: string | null;
   matching_status?: string;
   pricing_mode: string | null;
@@ -107,7 +108,7 @@ export default function VendorJobsPage() {
       }
       const result = await supabase
         .from("service_requests")
-        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at")
+        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at, service_catalog_id")
         .eq("contractor_id", contractorResult.data.id)
         .order("created_at", { ascending: false });
       if (result.error) throw result.error;
@@ -345,6 +346,27 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // The server enforces the category's current minimum; this only explains it. Services
+  // without a versioned rule use the approved one-photo baseline.
+  const [ruleAttempt, setRuleAttempt] = useState(0);
+  const [rule, setRule] = useState<{ key: string; required: number | null } | null>(null);
+  const serviceId = job ? job.service_catalog_id ?? null : null;
+  const ruleKey = serviceId ? `${serviceId}:${ruleAttempt}` : null;
+  useEffect(() => {
+    if (!serviceId || !ruleKey) return;
+    let active = true;
+    void createClient().from("completion_evidence_rules").select("minimum_photos").eq("service_id", serviceId)
+      .order("version", { ascending: false }).limit(1).maybeSingle()
+      .then((result) => {
+        if (active) setRule({ key: ruleKey, required: result.error ? null : result.data?.minimum_photos ?? 1 });
+      });
+    return () => { active = false; };
+  }, [serviceId, ruleKey]);
+  const loaded = rule?.key === ruleKey ? rule : null;
+  const required = !job ? null : !serviceId ? 1 : loaded?.required ?? null;
+  const ruleError = Boolean(loaded && loaded.required === null);
+  const photoWord = (count: number) => (count === 1 ? "photo" : "photos");
+  const enough = required !== null && photos.length >= required;
   const reset = () => { if (!uploading && !saving) { setPhotoError(""); setPhotos([]); close(); } };
   async function add(files: FileList | null) {
     if (!files?.length || !user || !job) return;
@@ -371,7 +393,7 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
     setPhotos((current) => current.filter((photo) => photo.path !== path));
   }
   async function submit() {
-    if (!job || !photos.length) return;
+    if (!job || !enough) return;
     setSaving(true);
     const result = await createClient().rpc("vendor_complete_job", { _job_id: job.id, _photo_urls: photos.map((photo) => photo.path) });
     setSaving(false);
@@ -381,14 +403,16 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
     done(job.id);
   }
   return <Dialog open={Boolean(job)} onOpenChange={(open) => !open && reset()}><DialogContent showCloseButton={!saving && !uploading} className="sm:max-w-lg">
-    <DialogHeader><DialogTitle>Complete {job?.service_type ?? "job"}</DialogTitle><DialogDescription>Attach at least one photo of the finished work. The homeowner sees this proof when confirming completion.</DialogDescription></DialogHeader>
-    <div className="space-y-4 py-2" aria-busy={uploading || saving}>
+    <DialogHeader><DialogTitle>Complete {job?.service_type ?? "job"}</DialogTitle><DialogDescription>{required === null ? "Attach photos of the finished work." : `This service requires at least ${required} ${photoWord(required)} of the finished work.`} The homeowner sees this proof when confirming completion.</DialogDescription></DialogHeader>
+    <div className="space-y-4 py-2" aria-busy={uploading || saving || (required === null && !ruleError)}>
+      {ruleError && <div role="alert" className="space-y-2 rounded-lg border border-destructive/40 p-3 text-sm text-destructive"><p>We could not load this service&apos;s photo requirement, so the job cannot be marked complete yet.</p><Button type="button" variant="outline" size="sm" onClick={() => setRuleAttempt((attempt) => attempt + 1)}><RefreshCw />Try again</Button></div>}
       {photoError && <p ref={photoErrorRef} tabIndex={-1} role="alert" className="text-sm text-destructive">{photoError}</p>}
+      {required !== null && <p aria-live="polite" className="text-sm text-muted-foreground">{photos.length} of {required} required {photoWord(required)} attached.</p>}
       {photos.length > 0 && <div className="grid grid-cols-3 gap-2">{photos.map((photo, index) => <div key={photo.path} className="relative"><img src={photo.preview} alt="Completion proof" className="h-24 w-full rounded-lg border object-cover" /><button type="button" aria-label={`Remove completion photo ${index + 1}`} disabled={uploading || saving} onClick={() => void remove(photo.path)} className="absolute -right-2 -top-2 flex h-11 w-11 items-center justify-center rounded-full border bg-background shadow"><X className="h-3.5 w-3.5" /></button></div>)}</div>}
       <input aria-label="Completion photos" ref={input} type="file" accept="image/*" multiple className="hidden" onChange={(event) => void add(event.target.files)} />
       <Button variant="outline" className="w-full" disabled={uploading || saving} onClick={() => input.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Camera />}{uploading ? "Uploading…" : "Add completion photos"}</Button>
     </div>
-    <DialogFooter><Button variant="outline" disabled={saving || uploading} onClick={reset}>Cancel</Button><Button className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active" disabled={!photos.length || saving || uploading} onClick={() => void submit()}>{saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Mark complete</Button></DialogFooter>
+    <DialogFooter><Button variant="outline" disabled={saving || uploading} onClick={reset}>Cancel</Button><Button className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active" disabled={!enough || saving || uploading} onClick={() => void submit()}>{saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Mark complete</Button></DialogFooter>
   </DialogContent></Dialog>;
 }
 
