@@ -23,6 +23,24 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-018 — Review Phase 4 before beginning Phase 6
+
+**Status:** APPROVED owner direction. **Date:** 2026-09-26 UTC.
+
+The owner requested Codex's P4-1–P4-7 review before any Phase 6 implementation,
+then authorized committing/pushing the review and planning documents and opening a PR.
+This adds a review-before-start hold to DEC-2026-017's Phase 6 authorization;
+it does not accept Phase 4 or change product policy.
+
+Codex completed the review on main `1baf270`: PHASE-4-CODE-REVIEW.md (TRACE-096)
+records P4-R1, completion evidence bypass, and P4-R2, completion lock inversion.
+Disposition: changes required. Phase 4 remains unaccepted and Phase 6 remains held
+pending disposition. Recommendation: Claude repairs the bounded completion command,
+Codex re-reviews, then the owner decides acceptance and releases the hold.
+That recommendation is not recorded as an owner acceptance or risk waiver.
+
+No hosted change, deployment, scheduler, email or money activation is authorized.
+
 ### DEC-2026-017 — Close Phase 5 and authorize Phase 6; Phase 4 stays open
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-26 UTC.
