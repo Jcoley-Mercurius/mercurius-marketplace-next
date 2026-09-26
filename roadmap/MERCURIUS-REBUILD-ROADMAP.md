@@ -1,7 +1,7 @@
 # Mercurius Rebuild and Implementation Roadmap
 
-**Status:** IN PROGRESS — Phase 5 implementation; Phase 4 review and acceptance gates remain tracked
-**Implementation checkpoint:** `main` at `76c833a` (PR #40, TRACE-084, merged 2026-09-24 UTC); the original planning baseline was `94d608a`
+**Status:** IN PROGRESS — Phase 5 closed and Phase 6 authorized (DEC-2026-017, 2026-09-26); Phase 4 owner acceptance remains open
+**Implementation checkpoint:** `main` at `417e642` (PR #52, TRACE-092–094, merged 2026-09-26 UTC); the original planning baseline was `94d608a`
 **Authority:** owner-approved MPS, MDS, and MTS
 **Delivery model:** stabilize and rebuild in vertical slices; do not perform a blind rewrite
 
@@ -123,7 +123,7 @@ Work:
 
 ### Phase 4 — Canonical product lifecycle
 
-**Status:** IN PROGRESS — implemented under DEC-2026-005–010 and merged as PR #5 (`735df91`, 2026-09-04); owner acceptance is open. Under DEC-2026-016 Codex reviews Phase 4 with the Phase 5 closure review and the owner accepts both together; see governance/PHASE-4-RECONCILIATION.md, PHASE-4-VALIDATION.md and PHASE-5-CLOSURE-READINESS.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
+**Status:** IN PROGRESS — implemented under DEC-2026-005–010 and merged as PR #5 (`735df91`, 2026-09-04); owner acceptance is open. DEC-2026-017 closed Phase 5 without accepting Phase 4; Phase 4 acceptance and review questions P4-1–P4-7 remain open for a separate owner decision; see governance/PHASE-4-RECONCILIATION.md, PHASE-4-VALIDATION.md and PHASE-5-CLOSURE-READINESS.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
 
 **Phase 2 handoff (TRACE-010):** replace inherited automatic completion
 confirmation with admin review; define its deadline separately from the four-hour
@@ -146,8 +146,9 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
-**Status:** IN PROGRESS. TRACE-050–091 are implemented as bounded slices through
-PR #49 on `main` `6c41143`; main CI run 36165305771 passed;
+**Status:** CLOSED by the owner, 2026-09-26 (DEC-2026-017). TRACE-050–094 are implemented as
+bounded slices through PR #52 on `main` `417e642`; post-merge main CI run 36256537232 passed backend, lifecycle and application. Activation
+gates are carried to later phases as listed in the closure readiness report;
 the latest [Phase 5 validation](../governance/PHASE-5-VALIDATION.md) records the
 synthetic checks. Merging a slice does not close its review, manual acceptance,
 hosted integration or production-activation gates.
@@ -180,8 +181,7 @@ TRACE-091 (PR #49, merged at `6c41143`) applies it to renewal uploads never subm
 The Codex closure review (TRACE-092) found a retention hold/deletion race and a finalization lost update;
 TRACE-093 and TRACE-094 fix them and await re-review ([fixes report](../governance/PHASE-5-REVIEW-FIXES.md)). DEC-2026-015 sets the closure
 basis: the gate below plus Codex review, with activation gates carried to named later phases; see
-[closure readiness](../governance/PHASE-5-CLOSURE-READINESS.md). The owner closes the phase.
-Phase 6 has not started under this roadmap.
+[closure readiness](../governance/PHASE-5-CLOSURE-READINESS.md). The owner closed the phase and authorized Phase 6 in DEC-2026-017.
 
 **Outcome:** customer charges, refunds, provider earnings, payouts, and vendor activation are reproducible and reconciled.
 
@@ -198,6 +198,10 @@ Work:
 **Gate:** concurrent checkout, duplicate webhook, partial/full refund, dispute, chargeback, payout, and invite tests pass in non-production environments.
 
 ### Phase 6 — Customer, vendor, and admin workflow rebuild
+
+**Status:** AUTHORIZED, not started (DEC-2026-017, 2026-09-26). Steps 2–5 build on Phase 4
+contracts that are not yet owner-accepted. Carried in from Phase 5: hide promotion UI and set
+recurring generation and charge timing.
 
 **Outcome:** each role can complete its core job using the approved lifecycle and design patterns.
 

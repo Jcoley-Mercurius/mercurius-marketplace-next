@@ -131,3 +131,9 @@ evidence are in [the fixes report](PHASE-5-REVIEW-FIXES.md).
   paths at `HEAD` and keeps all 6 after the fix.
 - **Closure package.** This branch contains TRACE-092, DEC-2026-016, suite 059 and this review.
   Its pull request targets `main` directly, so merging it brings the package into `main`.
+
+## Owner decision — 2026-09-26
+
+PR #52 merged the fixes and this review into `main` at `417e642`. The owner closed Phase 5 and
+authorized Phase 6 (DEC-2026-017). Phase 4 is not accepted; its review questions stay open for a
+separate owner decision.

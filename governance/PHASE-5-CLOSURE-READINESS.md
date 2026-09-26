@@ -1,10 +1,11 @@
 # Phase 5 — Closure readiness
 
-**Status:** PREPARED for Codex review, 2026-09-25. TRACE-091 merged to `main` as PR #49
-(`6c41143`); PR #50 merged this report into the TRACE-091 branch after that, not into `main`, so it
-reaches `main` with the review fixes (TRACE-093, TRACE-094) through one pull request to `main`. This is not phase acceptance: after review, the owner accepts Phase 4 and
-closes Phase 5 together (DEC-2026-015 item 1, DEC-2026-016). Nothing here authorizes a hosted migration, deployment, charge, refund,
-payout, email, scheduler or deletion.
+**Status:** CLOSED by the owner, 2026-09-26 (DEC-2026-017), after the [Codex review](PHASE-5-CODE-REVIEW.md)
+and its fixes (TRACE-093, TRACE-094; PR #52 at `417e642`). Phase 6 is authorized. Phase 4 is **not**
+accepted: DEC-2026-017 separated it from this closure, and its review questions below remain open.
+The gates carried forward below keep their phases; nothing here authorizes external activation.
+
+_Prepared for review 2026-09-25; the report below is kept as reviewed._
 
 ## Closure basis (DEC-2026-015 item 1)
 

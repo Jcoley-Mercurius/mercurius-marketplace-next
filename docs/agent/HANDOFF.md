@@ -1,6 +1,17 @@
 # Agent handoff — 2026-09-26 UTC
 
-## Current checkpoint — TRACE-093 and TRACE-094 (closure review fixes)
+## Current checkpoint — Phase 5 closed, Phase 6 authorized (DEC-2026-017)
+
+- `main` is `417e642` (PR #52: TRACE-092–094, closure package and review record); post-merge CI
+  run 36256537232 passed backend, lifecycle and application.
+- The owner closed Phase 5 and authorized Phase 6. **Phase 4 is not accepted**: owner acceptance and
+  P4-1–P4-7 remain open for a separate decision. Phase 6 steps 2–5 build on those contracts.
+- Carried into Phase 6: hide promotion UI; recurring visit generation and charge timing. Later
+  gates keep their phases (PHASE-5-CLOSURE-READINESS.md).
+- Next: Codex defines the first bounded Phase 6 slice (roadmap order: coverage and request intake).
+  No external activation is authorized.
+
+## Previous checkpoint — TRACE-093 and TRACE-094 (closure review fixes)
 
 - `main` is `6c41143` (PR #49). Branch `codex/phase5-review-fixes` is based on `b55fb1b`, which
   is `main` plus TRACE-092, DEC-2026-016, suite 059 and the Codex review. It targets `main` directly,
