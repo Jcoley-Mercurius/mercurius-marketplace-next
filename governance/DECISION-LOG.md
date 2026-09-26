@@ -23,6 +23,34 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-017 — Close Phase 5 and authorize Phase 6; Phase 4 stays open
+
+**Status:** APPROVED owner decision. **Date:** 2026-09-26 UTC.
+**Supersedes:** DEC-2026-016's single decision for both phases. Its review scope is kept.
+
+After the Codex closure review (PHASE-5-CODE-REVIEW.md) and its fixes (TRACE-093, TRACE-094;
+PR #52, merged at `417e642`), the owner:
+
+1. **Closes Phase 5** on the DEC-2026-015 basis: the roadmap gate's synthetic tests, the Codex
+   review with P1, P2 and the closure-package finding fixed, and the activation gates carried to
+   the later phases named in PHASE-5-CLOSURE-READINESS.md. Post-merge `main` CI:
+   run 36256537232 passed backend, lifecycle and application.
+2. **Authorizes Phase 6** implementation (customer, vendor and admin workflow rebuild) in bounded
+   slices under the roadmap's order and gate.
+3. **Does not accept Phase 4.** Phase 4 stays IN PROGRESS: owner acceptance and the Phase 4
+   review questions (P4-1–P4-7) remain open. It will be accepted in a separate decision,
+   no longer bundled with Phase 5.
+
+Context: Phase 6 steps 2–5 (matching, offers, quotes, scheduling, completion, cancellation,
+dispute) build on Phase 4's lifecycle contracts. That work proceeds on contracts not yet
+owner-accepted. A Phase 4 finding may require changes to Phase 6 work already built on them.
+
+Alternatives considered: holding Phase 6 until Phase 4 is accepted; accepting Phase 4 with
+Phase 5 as DEC-2026-016 planned.
+
+This decision authorizes no hosted migration, deployment, production change, charge, refund,
+payout, email, scheduler activation or deletion. The carried-forward gates keep their phases.
+
 ### DEC-2026-016 — Phase 4 acceptance through the combined Phase 5 closure review
 
 **Status:** APPROVED owner direction. **Date:** 2026-09-25 UTC.

@@ -13,6 +13,13 @@ The owner has stated that no additional product-authority approval chain is requ
 
 The approved authority chain is now **MPS → MDS → MTS → implementation evidence**. No additional system-level approval is outstanding.
 
+## Phase 5 closure — 2026-09-26
+
+The owner closed Phase 5 and authorized Phase 6 implementation (DEC-2026-017) after the Codex
+closure review and its fixes (PR #52). Phase 4 is **not** accepted and stays open. This closes the
+synthetic implementation checkpoint only; the activation gates carried to Phases 6–10 in
+PHASE-5-CLOSURE-READINESS.md remain open, and no external activation is authorized.
+
 ## Phase 3 acceptance — 2026-09-03
 
 The owner accepted Phase 3 as closed and authorized Phase 4 implementation and
