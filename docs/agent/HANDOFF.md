@@ -1,5 +1,17 @@
 # Agent handoff — 2026-09-25 UTC
 
+## Codex closure review — 2026-09-26
+
+Fetched `origin/main` is `6c41143` (PR #49); main CI 36165305771 passed all three jobs.
+PR #50 merged into the renewal-upload branch after PR #49's main merge, so TRACE-092,
+DEC-2026-016 and suite 059 remain outside main. The earlier checkpoint below is historical.
+[Codex review](../../governance/PHASE-5-CODE-REVIEW.md), tied to TRACE-092, requires changes:
+P1 retention hold/Storage deletion race; P2 concurrent document-finalization lost update
+(synthetic actual-route reproduction confirmed); and closure package inclusion in main.
+Next: Claude implements a bounded retention coordination fix with concurrency evidence,
+then atomic document finalization; Codex reviews the fixes before combined Phase 4/5
+acceptance and owner Phase 6 authorization. No external activation was performed.
+
 Current checkpoint: `main` at `cd0c041` after PR #48 (TRACE-090). The dated
 sections below preserve earlier slice evidence; their old branch and PR statuses
 are historical. Use the current checkpoint and the Phase 5 handoff for next work.
