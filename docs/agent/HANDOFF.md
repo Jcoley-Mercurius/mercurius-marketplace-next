@@ -1,4 +1,20 @@
-# Agent handoff — 2026-09-25 UTC
+# Agent handoff — 2026-09-26 UTC
+
+## Current checkpoint — TRACE-093 and TRACE-094 (closure review fixes)
+
+- `main` is `6c41143` (PR #49). Branch `codex/phase5-review-fixes` is based on `b55fb1b`, which
+  is `main` plus TRACE-092, DEC-2026-016, suite 059 and the Codex review. It targets `main` directly,
+  so merging it also brings the closure package into `main`.
+- TRACE-093 (P1): deletions go through the operator session and a quarantine delete policy
+  that takes the hold locks inside Storage's transaction. TRACE-094 (P2): finalization appends
+  under the application row lock. See the [fixes report](../../governance/PHASE-5-REVIEW-FIXES.md).
+- Evidence: suites 060 and 061; two new CI scripts; local route replay and round trip; mutation
+  checks (7 of 7).
+- Open: CI on the PR head and on post-merge `main`; Codex re-review; then one owner decision
+  accepting Phase 4, closing Phase 5 and authorizing Phase 6. No external activation was performed.
+
+The sections below are historical checkpoints.
+
 
 ## Codex closure review — 2026-09-26
 
@@ -12,7 +28,7 @@ Next: Claude implements a bounded retention coordination fix with concurrency ev
 then atomic document finalization; Codex reviews the fixes before combined Phase 4/5
 acceptance and owner Phase 6 authorization. No external activation was performed.
 
-Current checkpoint: `main` at `cd0c041` after PR #48 (TRACE-090). The dated
+Historical checkpoint (2026-09-25): `main` at `cd0c041` after PR #48 (TRACE-090). The dated
 sections below preserve earlier slice evidence; their old branch and PR statuses
 are historical. Use the current checkpoint and the Phase 5 handoff for next work.
 
