@@ -146,8 +146,8 @@ Work:
 
 ### Phase 5 — Money and vendor onboarding integrity
 
-**Status:** IN PROGRESS. TRACE-050–090 are implemented as bounded slices through
-PR #48 on `main` `cd0c041`; post-merge main CI run 36138739942 passed;
+**Status:** IN PROGRESS. TRACE-050–091 are implemented as bounded slices through
+PR #49 on `main` `6c41143`; main CI run 36165305771 passed;
 the latest [Phase 5 validation](../governance/PHASE-5-VALIDATION.md) records the
 synthetic checks. Merging a slice does not close its review, manual acceptance,
 hosted integration or production-activation gates.
@@ -175,8 +175,10 @@ DEC-2026-012 (2026-09-24); TRACE-087 (PR #45, merged at `0d47134`) makes the con
 the only writer to `contact_submissions`; TRACE-088 (PR #46, merged at `3e4236c`) adds the honeypot,
 fill time and per-email limit to both intake routes (DEC-2026-013); TRACE-089 (PR #47, merged at
 `6d1a11a`) adds the per-IP limit (DEC-2026-014); TRACE-090 (PR #48, merged at `cd0c041`) applies
-retention to never-attached application uploads (DEC-2026-012 item 5); TRACE-091 (awaiting review)
-applies it to renewal uploads never submitted (DEC-2026-015 item 2). DEC-2026-015 sets the closure
+retention to never-attached application uploads (DEC-2026-012 item 5);
+TRACE-091 (PR #49, merged at `6c41143`) applies it to renewal uploads never submitted (DEC-2026-015 item 2).
+The Codex closure review (TRACE-092) found a retention hold/deletion race and a finalization lost update;
+TRACE-093 and TRACE-094 fix them and await re-review ([fixes report](../governance/PHASE-5-REVIEW-FIXES.md)). DEC-2026-015 sets the closure
 basis: the gate below plus Codex review, with activation gates carried to named later phases; see
 [closure readiness](../governance/PHASE-5-CLOSURE-READINESS.md). The owner closes the phase.
 Phase 6 has not started under this roadmap.

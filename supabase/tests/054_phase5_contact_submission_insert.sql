@@ -44,7 +44,7 @@ select ok(not exists(select 1 from pg_policies where schemaname='storage' and ta
 select ok(exists(select 1 from pg_policies where schemaname='storage' and tablename='objects'
  and policyname='Admins can read vendor documents' and cmd='SELECT'),'The admin vendor document read policy is unchanged');
 select is((select count(*) from pg_policies where schemaname='storage' and tablename='objects'
- and cmd in ('SELECT','ALL') and coalesce(qual,'') like '%vendor-documents%'),1::bigint,
+ and cmd in ('SELECT','ALL') and coalesce(qual,'') like '%''vendor-documents''%'),1::bigint,
  'Exactly one policy lets a client read the vendor documents bucket');
 
 -- No client can insert a row the old policy accepted.

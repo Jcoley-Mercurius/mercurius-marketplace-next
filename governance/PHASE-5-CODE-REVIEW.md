@@ -113,3 +113,21 @@ Stripe test delivery/readback and real bank workflow; Phase 9 category taxabilit
 finance operators, licensing/insurance, legacy cutover and human accessibility/brand
 acceptance; Phase 10 production activation. These do not require external activation
 to complete the current review, and no such activation is authorized here.
+
+## Implementation response — 2026-09-26 (for re-review)
+
+Recorded by Claude on branch `codex/phase5-review-fixes`; not a disposition. Details and
+evidence are in [the fixes report](PHASE-5-REVIEW-FIXES.md).
+
+- **P1 → TRACE-093.** Deletion now runs through the operator's session. A quarantine
+  delete policy inside Storage's own delete transaction takes the hold locks, re-checks the
+  step and the hold, and records the deletion atomically. A hold that commits first keeps the
+  file, and a deletion that commits first stays recordable after the hold. Verified through the
+  real Storage API for all three routes, with a delayed Storage call in both orderings, retries
+  and a crash. Residual for review: quarantine moves still use the service key; that step is
+  reversible.
+- **P2 → TRACE-094.** Finalization appends under the application row lock in one database
+  function. The actual route, replayed against the local database with a barrier, loses 5 of 6
+  paths at `HEAD` and keeps all 6 after the fix.
+- **Closure package.** This branch contains TRACE-092, DEC-2026-016, suite 059 and this review.
+  Its pull request targets `main` directly, so merging it brings the package into `main`.
