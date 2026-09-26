@@ -1,6 +1,6 @@
 # Mercurius Rebuild and Implementation Roadmap
 
-**Status:** IN PROGRESS — Phase 5 closed; Phase 6 authorized but implementation held for Phase 4 review findings (DEC-2026-018, 2026-09-26)
+**Status:** IN PROGRESS — Phase 4 accepted and Phase 5 closed; Phase 6 implementation released (DEC-2026-019, 2026-09-26)
 **Implementation checkpoint:** `main` at `417e642` (PR #52, TRACE-092–094, merged 2026-09-26 UTC); the original planning baseline was `94d608a`
 **Authority:** owner-approved MPS, MDS, and MTS
 **Delivery model:** stabilize and rebuild in vertical slices; do not perform a blind rewrite
@@ -123,7 +123,7 @@ Work:
 
 ### Phase 4 — Canonical product lifecycle
 
-**Status:** IN PROGRESS — implemented under DEC-2026-005–010 and merged as PR #5 (`735df91`, 2026-09-04); owner acceptance is open. DEC-2026-017 closed Phase 5 without accepting Phase 4; P4-1–P4-7 were reviewed under TRACE-096; PHASE-4-CODE-REVIEW.md requires completion-evidence and lock-order fixes (P4-R1/P4-R2), then re-review and a separate owner acceptance decision; see governance/PHASE-4-RECONCILIATION.md, PHASE-4-VALIDATION.md and PHASE-5-CLOSURE-READINESS.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
+**Status:** ACCEPTED — owner accepted 2026-09-26 (DEC-2026-019) after the Codex review (TRACE-096) and the completion-integrity repair (TRACE-097, PR #55). Implemented under DEC-2026-005–010 and merged as PR #5 (`735df91`); see governance/PHASE-4-CODE-REVIEW.md and PHASE-4-COMPLETION-INTEGRITY.md. Money integrity remains Phase 5; email/reminder timing stays inactive under DEC-010.
 
 **Phase 2 handoff (TRACE-010):** replace inherited automatic completion
 confirmation with admin review; define its deadline separately from the four-hour
@@ -199,10 +199,10 @@ Work:
 
 ### Phase 6 — Customer, vendor, and admin workflow rebuild
 
-**Status:** AUTHORIZED, implementation held (DEC-2026-017/018, 2026-09-26). The Phase 4 review
-requires P4-R1/P4-R2 fixes and disposition before starting; see governance/PHASE-4-CODE-REVIEW.md.
-The proposed 13-slice breakdown and 6.1 starting brief are in governance/PHASE-6-SCOPE.md. Steps 2–5 build on Phase 4
-contracts that are not yet owner-accepted. Carried in from Phase 5: hide promotion UI and set
+**Status:** AUTHORIZED, hold released (DEC-2026-017/019, 2026-09-26). Phase 4 is accepted; start with
+slice 6.1 (TRACE-095).
+The proposed 13-slice breakdown and 6.1 starting brief are in governance/PHASE-6-SCOPE.md. Steps 2–5 build on the
+accepted Phase 4 contracts. Carried in from Phase 5: hide promotion UI and set
 recurring generation and charge timing.
 
 **Outcome:** each role can complete its core job using the approved lifecycle and design patterns.

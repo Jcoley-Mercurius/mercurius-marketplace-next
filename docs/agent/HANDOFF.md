@@ -1,6 +1,15 @@
 # Agent handoff — 2026-09-26 UTC
 
-## Current checkpoint — TRACE-097 Phase 4 completion repair awaiting Codex re-review
+## Current checkpoint — Phase 4 accepted; Phase 6 released (DEC-2026-019)
+
+- Owner accepted Phase 4 and released the Phase 6 hold after the TRACE-097 repair (PR #55) and a
+  Codex re-review the owner reported as clear (not yet written in the repo).
+- Open: merge PR #54 then #55 (retarget #55 to `main`) and their CI; whether to add
+  `scripts/phase4-completion-integrity.mjs` to CI.
+- Next: Phase 6 slice 6.1 (TRACE-095) per [PHASE-6-SCOPE.md](../../governance/PHASE-6-SCOPE.md).
+  No external activation authorized.
+
+## Previous checkpoint — TRACE-097 Phase 4 completion repair
 
 - Branch `codex/phase4-completion-integrity`, stacked on the review branch (PR #54, `efb4244`).
 - Scope: P4-R1/P4-R2 only ([report](../../governance/PHASE-4-COMPLETION-INTEGRITY.md)). Migration
