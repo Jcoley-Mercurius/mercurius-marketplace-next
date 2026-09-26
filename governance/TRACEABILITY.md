@@ -75,6 +75,18 @@ See PHASE-5-HANDOFF.md for acceptance gates and dependencies. No Phase 5 phase-c
 
 Status values: `PLANNED`, `IN PROGRESS`, `BLOCKED`, `COMPLETE`, `DEPRECATED`.
 
+## Phase 6
+
+| ID | Requirement | Authority | Phase | Implementation | Acceptance evidence | Open gates | Status |
+|---|---|---|---|---|---|---|---|
+| TRACE-095 | Authoritative, duplicate-safe request submission and honest eligible/unavailable outcomes | MPS §6.1/6.2; CFG-001–003/009; MDS forms/status/accessibility; MTS §§4/7/13; DEC-2026-017 | 6 | Planned slice 6.1 in PHASE-6-SCOPE.md | Required SQL/RLS, local API/RPC, concurrent retry and browser evidence specified; not yet performed | Owner review-before-start hold (DEC-2026-018); Phase 4 findings P4-R1/R2, re-review and owner disposition; then implementation/review/CI/manual gates | BLOCKED |
+
+## Phase 4 acceptance review
+
+| ID | Requirement | Authority | Phase | Implementation | Acceptance evidence | Open gates | Status |
+|---|---|---|---|---|---|---|---|
+| TRACE-096 | Focused P4-1–P4-7 review before Phase 6 implementation | DEC-2026-016/017/018; roadmap Phase 4 gate | 4 | PHASE-4-CODE-REVIEW.md; reproducible synthetic evidence under review-evidence/ | 251 SQL assertions across 15 suites; 14 lifecycle unit tests; confirmed NULL-proof bypass and real-RPC deadlock; existing main CI inspected | P4-R1/P4-R2 repair, Codex re-review and owner acceptance. Review completed with changes required; phase remains open | COMPLETE |
+
 ## Developer workspace
 
 | ID | Requirement | Implementation | Acceptance evidence | Status |

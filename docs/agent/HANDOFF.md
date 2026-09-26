@@ -1,15 +1,18 @@
 # Agent handoff — 2026-09-26 UTC
 
-## Current checkpoint — Phase 5 closed, Phase 6 authorized (DEC-2026-017)
+## Current checkpoint — Phase 4 review requires fixes; Phase 6 implementation held
 
-- `main` is `417e642` (PR #52: TRACE-092–094, closure package and review record); post-merge CI
-  run 36256537232 passed backend, lifecycle and application.
-- The owner closed Phase 5 and authorized Phase 6. **Phase 4 is not accepted**: owner acceptance and
-  P4-1–P4-7 remain open for a separate decision. Phase 6 steps 2–5 build on those contracts.
-- Carried into Phase 6: hide promotion UI; recurring visit generation and charge timing. Later
-  gates keep their phases (PHASE-5-CLOSURE-READINESS.md).
-- Next: Codex defines the first bounded Phase 6 slice (roadmap order: coverage and request intake).
-  No external activation is authorized.
+- Base: merged main `1baf270` (PR #53, DEC-2026-017). Phase 5 is closed; Phase 4 is not accepted.
+- Owner requested Phase 4 review before Phase 6 work (DEC-2026-018). [Review](../../governance/PHASE-4-CODE-REVIEW.md),
+  TRACE-096: P4-R1 (NULL photo slots bypass evidence) and P4-R2 (completion/admin deadlock).
+- New evidence: 251 SQL assertions / 15 rollback-only suites; 14 lifecycle unit tests;
+  both defects reproduced on the isolated synthetic database, with fixture cleanup.
+  Main CI 36263730879 passed all jobs after rerunning the failed invitation browser fixture.
+- Phase 6 [scope](../../governance/PHASE-6-SCOPE.md): 13 planned slices across seven areas.
+  TRACE-095 / 6.1 remains blocked; no Phase 6 implementation started.
+- Next: Claude repairs Phase 4 completion evidence and lock order under a new trace entry;
+  Codex re-reviews, then owner decides Phase 4 acceptance and release of the Phase 6 hold.
+  No external activation authorized. Review branch: `codex/phase4-review-phase6-scope`.
 
 ## Previous checkpoint — TRACE-093 and TRACE-094 (closure review fixes)
 
