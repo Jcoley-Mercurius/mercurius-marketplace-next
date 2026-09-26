@@ -87,30 +87,27 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: application, error: readError } = await supabase
-      .from("vendor_applications")
-      .select("id, document_urls")
-      .eq("id", applicationId)
-      .maybeSingle();
-    if (readError) throw readError;
-    if (!application) {
-      return NextResponse.json(
-        { error: "The vendor application could not be found." },
-        { status: 404 },
-      );
+    // TRACE-094: the database appends under the application's row lock, so concurrent
+    // finalizations of different paths from one grant cannot overwrite each other.
+    const { data, error: attachError } = await supabase.rpc("vendor_application_attach_documents", {
+      p_application: applicationId,
+      p_paths: paths,
+    });
+    if (attachError) {
+      if (attachError.code === "P0001" && attachError.message === "Application not found") {
+        return NextResponse.json(
+          { error: "The vendor application could not be found." },
+          { status: 404 },
+        );
+      }
+      throw attachError;
     }
-
-    const existingPaths = Array.isArray(application.document_urls)
-      ? application.document_urls.filter(
-          (path: unknown): path is string => typeof path === "string",
-        )
+    const documentPaths: string[] = isRecord(data) && Array.isArray(data.document_paths)
+      ? data.document_paths.filter((path: unknown): path is string => typeof path === "string")
       : [];
-    const documentPaths = [...new Set([...existingPaths, ...paths])];
-    const { error: updateError } = await supabase
-      .from("vendor_applications")
-      .update({ document_urls: documentPaths })
-      .eq("id", applicationId);
-    if (updateError) throw updateError;
+    if (paths.some((path) => !documentPaths.includes(path))) {
+      throw new Error("Attached documents were not confirmed.");
+    }
 
     return NextResponse.json({
       applicationId,
