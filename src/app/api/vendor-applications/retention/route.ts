@@ -2,15 +2,16 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isRetentionAction, retentionRecordAction } from "@/lib/renewalRetention";
 import { applicationRetentionStorageStep, isApplicationDocumentPath } from "@/lib/applicationRetention";
-import { databaseRefusal, recordValue, serviceClient } from "@/lib/renewalDocumentsServer";
+import { databaseRefusal, recordValue, runRetentionStorageStep } from "@/lib/renewalDocumentsServer";
 
 export const runtime = "nodejs";
 
 // TRACE-084: one CFG-011 retention step for a file of a rejected or abandoned vendor
 // application — quarantine, restore or permanent deletion. The same shape as the TRACE-074
 // renewal route: the caller's session asks the database whether the step may start; the
-// service client moves or removes the file (only it can reach quarantine); the caller's
-// session records the step, which the database accepts only after reading storage.
+// service client moves the file (only it can reach quarantine) and the caller's session
+// deletes it (TRACE-093, so a later hold stops the deletion); the caller's session records
+// the step, which the database accepts only after reading storage.
 export async function POST(request: Request) {
   try {
     const body = recordValue(await request.json().catch(() => null));
@@ -44,11 +45,7 @@ export async function POST(request: Request) {
 
     if (prepared.replay !== true) {
       const step = applicationRetentionStorageStep(action, applicationId, prepared);
-      const storage = serviceClient().storage;
-      const { error: storageError } =
-        step.kind === "move"
-          ? await storage.from(step.from).move(step.path, step.path, { destinationBucket: step.to })
-          : await storage.from(step.bucket).remove([step.path]);
+      const { error: storageError } = await runRetentionStorageStep(step, supabase);
       if (storageError) {
         // Expected when a retry finds the file already moved; recording checks storage.
         console.warn("Application retention storage step reported an error", { applicationId, action, message: storageError.message });

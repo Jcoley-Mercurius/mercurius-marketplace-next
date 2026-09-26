@@ -5,14 +5,15 @@ import {
   retentionRecordAction,
   retentionStorageStep,
 } from "@/lib/renewalRetention";
-import { databaseRefusal, recordValue, serviceClient } from "@/lib/renewalDocumentsServer";
+import { databaseRefusal, recordValue, runRetentionStorageStep } from "@/lib/renewalDocumentsServer";
 
 export const runtime = "nodejs";
 
 // TRACE-074: one CFG-011 retention step for a declined renewal document — quarantine,
 // restore or permanent deletion. The caller's session asks the database whether the step
-// may start; the service client then moves or removes the file (only it can reach the
-// quarantine bucket); the caller's session records the step, which the database accepts
+// may start; the service client moves the file (only it can reach the quarantine bucket)
+// and, since TRACE-093, the caller's session deletes it, so a hold committed after prepare
+// stops the deletion; the caller's session records the step, which the database accepts
 // only after reading storage to confirm it. A storage error is not trusted either way:
 // recording decides, so a retry after an interrupted request completes it.
 export async function POST(request: Request) {
@@ -47,11 +48,7 @@ export async function POST(request: Request) {
 
     if (prepared.replay !== true) {
       const step = retentionStorageStep(action, prepared);
-      const storage = serviceClient().storage;
-      const { error: storageError } =
-        step.kind === "move"
-          ? await storage.from(step.from).move(step.path, step.path, { destinationBucket: step.to })
-          : await storage.from(step.bucket).remove([step.path]);
+      const { error: storageError } = await runRetentionStorageStep(step, supabase);
       if (storageError) {
         // Expected when a retry finds the file already moved; recording checks storage.
         console.warn("Renewal retention storage step reported an error", { documentId, action, message: storageError.message });

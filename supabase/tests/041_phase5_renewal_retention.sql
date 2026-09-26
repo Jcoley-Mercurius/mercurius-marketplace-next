@@ -113,8 +113,12 @@ insert into snap values('state',pg_temp.state());
 
 -- Quarantine bucket.
 select ok(exists(select 1 from storage.buckets where id='vendor-documents-quarantine' and not public),'The quarantine bucket exists and is private');
-select ok(not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects'
- and (coalesce(qual,'')||coalesce(with_check,'')) like '%vendor-documents-quarantine%'),'No storage policy grants any client the quarantine bucket');
+-- TRACE-093 adds the only two: an operator sees and deletes an object it requested to delete,
+-- with the hold checked under lock. No client may insert, update or move into quarantine.
+select is((select string_agg(cmd||':'||policyname,' | ' order by cmd) from pg_policies where schemaname='storage' and tablename='objects'
+ and (coalesce(qual,'')||coalesce(with_check,'')) like '%vendor-documents-quarantine%'),
+ 'DELETE:Retention operators can delete when no hold is in force | SELECT:Retention operators can see requested quarantine deletions',
+ 'Only the TRACE-093 deletion policies name the quarantine bucket');
 select pg_temp.as_user('1');
 set local role authenticated;
 select is((select count(*) from storage.objects where bucket_id='vendor-documents-quarantine'),0::bigint,'An operator client cannot list quarantined files');

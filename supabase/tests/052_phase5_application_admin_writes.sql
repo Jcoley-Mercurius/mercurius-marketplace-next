@@ -46,7 +46,7 @@ select ok(not exists(select 1 from pg_policies where schemaname='public' and tab
 select ok(not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects'
  and policyname in ('Admins can update vendor documents','Admins can delete vendor documents')),'The admin document update and delete policies are removed');
 select ok(not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects'
- and cmd in ('INSERT','UPDATE','DELETE','ALL') and (coalesce(qual,'')||coalesce(with_check,'')) like '%vendor-documents%'),
+ and cmd in ('INSERT','UPDATE','DELETE','ALL') and (coalesce(qual,'')||coalesce(with_check,'')) like '%''vendor-documents''%'),
  'No policy permits a client to write the vendor documents bucket');
 select ok(exists(select 1 from pg_policies where schemaname='storage' and tablename='objects'
  and policyname='Admins can read vendor documents' and cmd='SELECT'),'Admins can still read vendor documents');

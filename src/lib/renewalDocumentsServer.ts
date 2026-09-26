@@ -3,6 +3,8 @@ import "server-only";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
+import type { StorageStep } from "@/lib/renewalRetention";
+import type { createClient } from "@/lib/supabase/server";
 
 // Shared by the TRACE-073 renewal document routes. The signed-in caller's own session
 // runs every database command, so the database stays the authorization boundary; the
@@ -14,6 +16,17 @@ export function serviceClient() {
   return createServiceClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+// TRACE-093: the one storage call of a prepared retention step. Moves use the service key,
+// the only caller that reaches quarantine. A permanent deletion uses the operator's own
+// session, so Storage's delete passes the quarantine policy: it takes the lock hold
+// placement takes, refuses while a hold is in force and records the deletion in Storage's
+// transaction. Refused, it removes nothing and reports no error; recording decides.
+export function runRetentionStorageStep(step: StorageStep, session: Awaited<ReturnType<typeof createClient>>) {
+  return step.kind === "move"
+    ? serviceClient().storage.from(step.from).move(step.path, step.path, { destinationBucket: step.to })
+    : session.storage.from(step.bucket).remove([step.path]);
 }
 
 export function recordValue(value: unknown): Record<string, unknown> | null {
