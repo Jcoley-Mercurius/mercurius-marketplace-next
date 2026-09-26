@@ -1,5 +1,11 @@
 # Phase 4 lifecycle reconciliation
 
+**Current status (2026-09-25):** PR #5 merged on 2026-09-04 at `735df91` under the owner's
+merge authorization. Phase 4 is **not owner-accepted**. Under DEC-2026-016 Codex reviews it
+together with the Phase 5 closure review (PHASE-5-CLOSURE-READINESS.md, "Phase 4 review"), and
+the owner then accepts both phases in one decision. Draft-PR and no-merge wording below is
+historical.
+
 Status: implementation ready for final verification and owner review; acceptance is not claimed.
 Authority: MPS → MDS → MTS; CFG-006–010; DEC-2026-005–010.
 No merge, deployment, production change or scheduler activation is authorized.

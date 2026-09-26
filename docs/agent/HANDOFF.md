@@ -1,26 +1,46 @@
-# Agent handoff — 2026-09-24 UTC
+# Agent handoff — 2026-09-25 UTC
 
-Current checkpoint: `main` at `0d47134` after PR #45 (TRACE-087). The dated
+## Codex closure review — 2026-09-26
+
+Fetched `origin/main` is `6c41143` (PR #49); main CI 36165305771 passed all three jobs.
+PR #50 merged into the renewal-upload branch after PR #49's main merge, so TRACE-092,
+DEC-2026-016 and suite 059 remain outside main. The earlier checkpoint below is historical.
+[Codex review](../../governance/PHASE-5-CODE-REVIEW.md), tied to TRACE-092, requires changes:
+P1 retention hold/Storage deletion race; P2 concurrent document-finalization lost update
+(synthetic actual-route reproduction confirmed); and closure package inclusion in main.
+Next: Claude implements a bounded retention coordination fix with concurrency evidence,
+then atomic document finalization; Codex reviews the fixes before combined Phase 4/5
+acceptance and owner Phase 6 authorization. No external activation was performed.
+
+Current checkpoint: `main` at `cd0c041` after PR #48 (TRACE-090). The dated
 sections below preserve earlier slice evidence; their old branch and PR statuses
 are historical. Use the current checkpoint and the Phase 5 handoff for next work.
 
 ## Current repository and Phase 5 checkpoint
 
-- PR #45 (TRACE-087) merged on 2026-09-25 00:20 UTC; `origin/main` is `0d47134` and
-  post-merge [main CI run 36077050904](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36077050904) passed. Its review questions (D1–D4) and the
-  hosted migration (route first) remain open.
-- PR #43 merged on 2026-09-24 13:23 UTC; `origin/main` is `1d8a27e`. Final-head
-  [PR CI run 35996039599](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/35996039599) and post-merge [main CI run 36005291080](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36005291080)
-  passed backend, lifecycle and application jobs; this checkpoint is documentation only.
-- TRACE-084 (PR #40), TRACE-085 (PR #42) and TRACE-086 (PR #43) are merged; their
-  code review questions (C1–C8, A1–A5, B1–B4), manual acceptance and production
-  activation remain separate.
-- Phase 5 remains **IN PROGRESS**. The owner decided the open intake items on
-  2026-09-24 ([DEC-2026-012](../../governance/DECISION-LOG.md)): honeypot and
-  Postgres rate limits on both public forms, a route-only contact insert, no
-  application-row deletion, dropping the duplicate `vendor-documents` read policy,
-  and a 7-day clock for never-submitted application uploads. Next: implement them as
-  bounded slices. See the [Phase 5 handoff](../../governance/PHASE-5-HANDOFF.md).
+- PR #48 (TRACE-090) merged on 2026-09-25; post-merge
+  [main CI run 36138739942](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/36138739942)
+  passed backend, lifecycle and application. DEC-2026-012 is fully implemented
+  (TRACE-084–090).
+- DEC-2026-015 (owner, 2026-09-25): Phase 5 closes on its roadmap gate plus Codex review,
+  with activation gates carried to named later phases; never-submitted renewal uploads get
+  the TRACE-090 rule; no promotions at beta; taxability confirmed before private beta.
+- Two stacked branches await CI and review: `codex/phase5-renewal-orphan-uploads`
+  (TRACE-091) and `codex/phase5-closure-readiness` (TRACE-092, on top of it). See
+  [closure readiness](../../governance/PHASE-5-CLOSURE-READINESS.md) for gate evidence,
+  open review questions and carried-forward gates.
+- Phase 5 remains **IN PROGRESS** until the owner closes it after Codex review. Phase 4
+  (merged as PR #5) is not owner-accepted; DEC-2026-016 puts it in the same Codex review
+  (questions P4-1–P4-7) and the owner accepts both phases together.
+
+## TRACE-092 — Phase 5 closure readiness — 2026-09-25 UTC
+
+- Branch `codex/phase5-closure-readiness`, stacked on TRACE-091 (`c32e2e9`).
+- Scope: DEC-2026-015 items 1, 3 and 4. Documentation plus suite 059; no product code.
+- Evidence: suite 059 (10 assertions); 2934 assertions across 50 suites; lint.
+- Open: Codex review of the Phase 4 (P4-1–P4-7) and Phase 5 question sets; one owner
+  decision accepting Phase 4 and closing Phase 5 (DEC-2026-016).
+- Next: open PRs for TRACE-091 and TRACE-092, then hand the closure readiness report to Codex.
 
 ## TRACE-091 — never-submitted renewal uploads — 2026-09-25 UTC
 
@@ -33,7 +53,7 @@ are historical. Use the current checkpoint and the Phase 5 handoff for next work
   concurrency script (added to CI); mutation check (7 of 7); retention browser specs (13 + 13);
   lint, typecheck, 204 unit tests, build.
 - Open: code review (H1–H6); CI; hosted migration.
-- Next: the Phase 5 closure-readiness slice (DEC-2026-015 items 1, 3 and 4), then Codex review.
+- Next: TRACE-092 (closure readiness), then Codex review.
 
 ## TRACE-090 — never-attached application uploads — 2026-09-25 UTC
 

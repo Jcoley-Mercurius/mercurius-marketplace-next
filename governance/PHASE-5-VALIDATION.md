@@ -62,6 +62,29 @@ already in CI. Run lint, typecheck, test:unit, build and test:a11y in that order
 Playwright refuses occupied test ports instead of reusing another task's server.
 The backend CI job runs before the application job, preserving sequential heavy work.
 
+## TRACE-092 — Phase 5 closure readiness — 2026-09-25
+
+Branch `codex/phase5-closure-readiness`, stacked on TRACE-091 (`c32e2e9`). Documentation plus
+one suite; no product code. See PHASE-5-CLOSURE-READINESS.md.
+
+**Database.** 2934 pgTAP assertions across 50 suites pass (TRACE-091's 2924 plus 059's 10), on
+the TRACE-091 clean reset; every run since rolled back its fixtures. Suite 059 covers: the
+offering prices at its full tier price without a promotion; an active enabled promotion blocks
+the commercial source; disabled, ended and future promotions do not; a request that recorded a
+promotion stays blocked after it ends; the snapshot constraints requiring promotion terms for a
+discount and non-empty, non-null tax evidence; no finance authority on a clean database. The
+first run failed on a fixture: `service_requests.promotion_id` is a foreign key, so the request
+now points at a real ended promotion.
+
+**Gate mapping.** Each roadmap gate item was traced to named assertions in suites 020–050 and
+to the concurrency scripts CI runs; the report cites them. Latest `main` CI (run 36138739942)
+passed all three jobs.
+
+**Application.** `npm run lint` and `git diff --check` pass. No application code changed, so
+typecheck, unit tests and build carry over from TRACE-091.
+
+**Not performed:** CI on this branch; a mutation check of suite 059.
+
 ## TRACE-091 — Never-submitted renewal uploads — 2026-09-25
 
 Branch `codex/phase5-renewal-orphan-uploads` on `main` `cd0c041` (after PR #48, TRACE-090).
