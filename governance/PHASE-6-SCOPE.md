@@ -39,9 +39,9 @@ Read AGENTS.md, docs/agent/README.md, the current HANDOFF.md checkpoint and all 
 governing authorities before implementation. Read CLAUDE.md and relevant installed
 Next.js documentation before framework changes. Product policy is not invented here.
 
-Phase 4 is not accepted. P4-1–P4-7 remain Phase 4 review questions. Under DEC-2026-017,
-Phase 6 can proceed on those contracts; matching through disputes must identify
-its dependencies and accommodate review fixes. Historical combined-acceptance
+Phase 4 is accepted (DEC-2026-019), including the P4-1–P4-7 dispositions and the TRACE-097
+repair. Matching through disputes builds on those accepted lifecycle contracts and must
+identify its dependencies on them. Historical combined-acceptance
 wording in PHASE-5-CLOSURE-READINESS.md is superseded by DEC-2026-017.
 
 Authority discrepancy recorded: MTS §1 still lists PRODUCT.md → DESIGN.md → matching.md.

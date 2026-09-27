@@ -23,6 +23,28 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
+
+**Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.
+
+Closing TRACE-095's open allowlist item, the owner decided that every Lee County, Florida ZIP
+code is covered (CFG-001) and that the list comes from public ZIP-to-county data, not an export
+of existing backend rows.
+
+1. **The allowlist is the 47 ZIPs the USPS assigns to Lee County:** 33 standard, 1 unique
+   (33965) and 13 PO box. Each was cross-checked against the Census 2020 ZCTA-to-county
+   relationship file (county 12071).
+2. **Split ZIPs assigned to Lee County are covered whole** (33917, 33921, 33936, 34134), because
+   enforcement is ZIP-level.
+3. **Neighboring-county ZIPs with Lee County slivers are not covered:** 33955 (Charlotte, 1.5% of
+   land in Lee), 34110 (5.2%) and 34119 (1.8%, both Collier).
+
+Committed as migration `20260927010000_cfg001_lee_county_coverage.sql` (additive; activates the
+47 ZIPs and changes no other rows). Evidence: SQL 064. Sources: Census
+`tab20_zcta520_county20_natl.txt`; USPS county listing via zip-codes.com (`county/fl-lee.asp`).
+Reconciling hosted `coverage_areas` rows against this list is part of the reviewed hosted migration
+(Phase 8). This authorizes no hosted migration or production change.
+
 ### DEC-2026-020 — Request submission: all-or-nothing plans and uncataloged services
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-26 UTC.
