@@ -1,6 +1,22 @@
 # Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — 6.2 intake implemented (TRACE-098)
+## Current checkpoint — Codex 6.2 review; 6.3 brief prepared
+
+- Reviewed `codex/phase6-intake` head `634837a`, implementation base `c2b9b81`.
+  [Review](../../governance/PHASE-6-INTAKE-REVIEW.md), TRACE-098: changes required.
+  P6-R2: confirmation ignores current lifecycle on saved reload (4 reproduced failures).
+  P6-R3: coverage/form validation precedes unknown-attempt replay (code-path finding).
+- P6-R1 local code re-review is clear. New evidence: SQL 063–066 **178/178**;
+  focused units **70/70**; typecheck PASS; real RPC/concurrency/Storage script **32/32**,
+  fixtures cleaned. No new browser/build/manual/CI result; owner-closed human gate preserved.
+- Next: Claude repairs P6-R2/P6-R3 under TRACE-098, returns regression evidence for
+  Codex re-review, then implements [6.3 / TRACE-099](../../governance/PHASE-6-MATCHING-BRIEF.md)
+  from the reviewed merged base (or explicitly authorized stack).
+- Open: merge/final-head and post-merge CI, local checkout integration, script CI wiring,
+  promotion backend refusal/data cutover and intake orphan-retention decision; hosted
+  rollout/reconciliation and delivery stay in their named later phases. No external activation.
+
+## Previous checkpoint — 6.2 intake implemented (TRACE-098)
 
 - Branch `codex/phase6-intake`, **stacked on the P6-R1 repair `c2b9b81`** (PR #59, not yet
   re-reviewed or merged) at the owner's request. Migration `20260928000000`: read-only anonymous
