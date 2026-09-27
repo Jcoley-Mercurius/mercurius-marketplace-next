@@ -1,6 +1,16 @@
 # Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — Codex 6.1 decisions reviewed; 6.2 brief prepared
+## Current checkpoint — P6-R1 role repair implemented (TRACE-095)
+
+- Branch `codex/phase6-role-repair` from `ab17e99` (PR #58 head). Migration `20260927020000`:
+  public `submit_service_requests` now requires the homeowner role before validation, replay
+  or writes; the unchanged 6.1 body is `private.submit_service_requests_core`.
+- Evidence: SQL 065 29/29 (11 failed pre-fix), 063 65/65, 064 16/16, script 23/23; clean reset
+  3176 / 56 PASS; types unchanged. [Report](../../governance/PHASE-6-REQUEST-SUBMISSION.md#p6-r1-repair-homeowner-role-enforcement-2026-09-27-branch-codex-phase6-role-repair-from-ab17e99).
+- Open: Codex re-review; PR/CI; merge of #58 and this repair to main. Next: after re-review,
+  Claude starts 6.2 (TRACE-098) on `codex/phase6-intake` from merged main. No external activation.
+
+## Previous checkpoint — Codex 6.1 decisions reviewed; 6.2 brief prepared
 
 - Branch `codex/phase6-cleanup`; reviewed base `0e4793b` (main merge `b85c887`).
   [Focused review](../../governance/PHASE-6-DECISION-REVIEW.md): D3 requires P6-R1,
