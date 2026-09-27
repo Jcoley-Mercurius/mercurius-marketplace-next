@@ -18,7 +18,7 @@ import {
   serviceAvailability,
   type PreviewOutcome,
 } from "../../src/lib/requestPreview";
-import { describeConfirmation, type RequestReadback } from "../../src/lib/requestConfirmation";
+import { describeConfirmation, intakeCheckoutAllowed, intakeMatchingAllowed, type RequestReadback } from "../../src/lib/requestConfirmation";
 import {
   MAX_REQUEST_PHOTOS,
   RequestPhotoError,
@@ -190,7 +190,7 @@ describe("preview responses", () => {
 });
 
 const request = (value: Partial<SubmittedRequest>): SubmittedRequest => ({ selection_index: 0, request_id: "r1", service_id: "lawn-mowing", pricing_mode: "fixed", quote_only: false, total_amount: 100, package_id: "p", package_tier_id: "t", ...value });
-const row = (value: Partial<RequestReadback>): RequestReadback => ({ id: "r1", status: "pending", matching_status: "awaiting_match", pricing_mode: "fixed", total_amount: 100, contractor_id: null, payment_status: "pending", ...value });
+const row = (value: Partial<RequestReadback>): RequestReadback => ({ id: "r1", status: "pending", matching_status: "awaiting_match", pricing_mode: "fixed", total_amount: 100, contractor_id: null, payment_status: "pending", quote_status: null, quote_amount: null, ...value });
 const confirm = (requests: SubmittedRequest[], readback: RequestReadback[] | null, extra: Partial<Parameters<typeof describeConfirmation>[0]> = {}) => describeConfirmation({
   requests, serviceNames: { "lawn-mowing": "Lawn care", "house-cleaning": "House cleaning" }, preferredProviderNames: {}, readback, matching: {}, checkout: { kind: "pending" }, formatMoney: money, ...extra,
 });
@@ -234,6 +234,66 @@ describe("honest confirmation", () => {
     expect(failed).toContain("Check this request in your dashboard before paying");
     expect(failed).not.toMatch(/no payment was collected/i);
     expect(confirm([request({}), request({ request_id: "r2", service_id: "house-cleaning", selection_index: 1 })], [row({}), row({ id: "r2" })], { checkout: { kind: "not_offered", reason: "multiple" } })[0].payment).toContain("payment wasn’t requested");
+  });
+});
+
+// P6-R2 (Codex review of TRACE-098): the saved intake reports the current lifecycle, not the
+// initial acceptance, and never repeats submission-time payment claims after later activity.
+describe("saved confirmation follows the current lifecycle", () => {
+  const assigned = { matching_status: "matched", contractor_id: "c", payment_status: "captured" } as const;
+  for (const [stored, expected] of [
+    ["cancelled", "cancelled"], ["scheduled", "scheduled"], ["in_progress", "in_progress"],
+    ["homeowner_confirmed", "completed"], ["vendor_completed", "completion_pending"],
+    ["closed", "closed"], ["disputed", "disputed"], ["resolved", "resolved"],
+  ] as const) {
+    it(`shows ${stored} as ${expected}, not the initial acceptance`, () => {
+      const [service] = confirm([request({})], [row({ ...assigned, status: stored })]);
+      expect(service.status).toBe(expected);
+      expect(service.summary).not.toBe("A provider accepted this request.");
+      expect(service.canRetryMatching).toBe(false);
+    });
+  }
+
+  it("does not fall back to submitted or quote copy for later states without a match", () => {
+    const quoteRequest = request({ pricing_mode: "custom_quote", total_amount: null });
+    expect(confirm([quoteRequest], [row({ status: "scheduled", matching_status: "awaiting_match" })])[0]).toMatchObject({ status: "scheduled" });
+    expect(confirm([request({})], [row({ status: "cancelled" })])[0]).toMatchObject({ status: "cancelled", provider: "No provider will visit for this request." });
+  });
+
+  it("reports quote activity from the current readback", () => {
+    const quoteRequest = request({ pricing_mode: "custom_quote", quote_only: true, total_amount: null, package_id: null, package_tier_id: null });
+    const open = confirm([quoteRequest], [row({ pricing_mode: "custom_quote", status: "matched", matching_status: "matched", contractor_id: "c", quote_status: "submitted", quote_amount: 240 })])[0];
+    expect(open).toMatchObject({ status: "quote_required" });
+    expect(open.payment).toBe("Quote: $240.00. See your dashboard for the current price and payment status.");
+    const accepted = confirm([quoteRequest], [row({ pricing_mode: "custom_quote", status: "matched", matching_status: "matched", contractor_id: "c", quote_status: "accepted", quote_amount: 240 })])[0];
+    expect(accepted).toMatchObject({ status: "provider_confirmed", summary: expect.stringContaining("You accepted a quote") });
+    expect(accepted.payment).toBe("Accepted quote: $240.00. See your dashboard for the current price and payment status.");
+    for (const service of [open, accepted]) expect(service.payment).not.toMatch(/nothing has been charged|no amount is set/i);
+    expect(confirm([quoteRequest], [row({ pricing_mode: "custom_quote", quote_status: "declined" })])[0].summary).toContain("hasn’t been cancelled");
+  });
+
+  it("names paid and refunded payment and treats other states as unknown after intake", () => {
+    expect(confirm([request({})], [row({ payment_status: "released", status: "completed" })])[0].payment).toBe("Payment confirmed.");
+    expect(confirm([request({})], [row({ payment_status: "refunded", status: "cancelled" })])[0].payment).toBe("Payment refunded. See your dashboard for details.");
+    const later = confirm([request({})], [row({ status: "scheduled" })])[0].payment;
+    expect(later).toBe("Submitted at $100.00 fixed price. See your dashboard for the current price and payment status.");
+    const quoteLater = confirm([request({ pricing_mode: "deposit_quote", total_amount: null })], [row({ status: "in_progress" })])[0].payment;
+    expect(quoteLater).not.toMatch(/nothing has been charged/i);
+    expect(confirm([request({ pricing_mode: "custom_quote", total_amount: null })], null)[0].payment).not.toMatch(/nothing has been charged/i);
+  });
+
+  it("offers checkout and matching retry only while the request is still at intake", () => {
+    expect(intakeCheckoutAllowed(row({}))).toBe(true);
+    expect(intakeCheckoutAllowed(row({ status: "matched", matching_status: "matched", contractor_id: "c" }))).toBe(true);
+    for (const value of [{ status: "scheduled" }, { status: "cancelled" }, { payment_status: "captured" }, { payment_status: "refunded" }, { quote_status: "accepted" }] as const) {
+      expect(intakeCheckoutAllowed(row(value))).toBe(false);
+    }
+    expect(intakeCheckoutAllowed(null)).toBe(false);
+    expect(intakeMatchingAllowed(row({}))).toBe(true);
+    expect(intakeMatchingAllowed(row({ status: "cancelled" }))).toBe(false);
+    expect(intakeMatchingAllowed(row({ matching_status: "offered" }))).toBe(false);
+    const quoteRequest = request({ pricing_mode: "custom_quote", total_amount: null });
+    expect(confirm([quoteRequest], [row({ status: "cancelled" })], { matching: { r1: "failed" } })[0].canRetryMatching).toBe(false);
   });
 });
 

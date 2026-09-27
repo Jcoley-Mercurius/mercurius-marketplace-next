@@ -37,6 +37,8 @@ type Scenario = {
   width?: number;
   theme?: string;
   coverage?: "covered" | "uncovered" | "waitlist" | "error";
+  /** Coverage that changes during a test; defaults to `coverage`. */
+  coverageNow?: () => Scenario["coverage"];
   outcomes?: (selection: Selection, stage: string) => Outcome;
   submit?: (call: { key: string; payload: { selections: Selection[] } }, count: number) => { json?: unknown; status?: number; abort?: boolean };
   readback?: (ids: string[]) => Outcome[];
@@ -73,7 +75,8 @@ function submittedFor(selections: Selection[], reused = false) {
 
 async function intake(page: Page, scenario: Scenario = {}) {
   const record = new Recorder();
-  const { signedIn = true, role = "homeowner", width = 390, theme = "light", coverage = "covered" } = scenario;
+  const { signedIn = true, role = "homeowner", width = 390, theme = "light" } = scenario;
+  const currentCoverage = () => scenario.coverageNow?.() ?? scenario.coverage ?? "covered";
   if (signedIn) await syntheticSession(page.context(), role);
   await page.setViewportSize({ width, height: 900 });
   const saved = new Map<string, Outcome>();
@@ -82,6 +85,7 @@ async function intake(page: Page, scenario: Scenario = {}) {
     const url = new URL(request.url());
     if (url.origin === app) {
       if (url.pathname === "/api/request-coverage") {
+        const coverage = currentCoverage();
         return coverage === "error"
           ? route.fulfill({ status: 503, json: { error: "Synthetic coverage outage." } })
           : route.fulfill({ json: { status: coverage, area: coverage === "covered" ? { id: "a", zip_code: "33904", city: "Cape Coral", state: "FL", is_active: true, has_waitlist: false } : null, checkedZip: "33904" } });
@@ -99,6 +103,7 @@ async function intake(page: Page, scenario: Scenario = {}) {
       const payload = request.postDataJSON().p_payload as { stage: string; selections: Selection[] };
       record.previews.push({ stage: payload.stage, selections: payload.selections });
       if (scenario.previewFails?.()) return route.fulfill({ status: 500, json: { message: "Synthetic outage" } });
+      const coverage = currentCoverage();
       if (coverage !== "covered") return route.fulfill({ json: { stage: payload.stage, coverage, outcomes: [] } });
       const outcomes = payload.selections.map((selection, index) => ({ selection_index: index, ...(scenario.outcomes?.(selection, payload.stage) ?? fixed(selection.service_id)) }));
       return route.fulfill({ json: { stage: payload.stage, coverage: "covered", outcomes } });
@@ -437,6 +442,46 @@ test.describe("authentication and retry (I3, I4)", () => {
     expect((await storedDraft(page)).submissionKey).not.toBe(record.submits[0].key);
   });
 
+  // P6-R3: the unknown attempt is resolved with its persisted key and payload before any
+  // fresh coverage, preview or form validation, and never turns into coverage interest.
+  test("a lost response is resolved even when coverage can no longer be checked", async ({ page }) => {
+    let coverage: Scenario["coverage"] = "covered";
+    const record = await intake(page, { coverageNow: () => coverage, submit: (_call, count) => count === 1 ? { abort: true } : {} });
+    await submitButton(page).click();
+    await expect(summary(page)).toContainText("We couldn’t confirm whether your request was saved.");
+    coverage = "error";
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Check and finish submitting" })).toBeEnabled();
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits).toHaveLength(2);
+    expect(record.submits[1].key).toBe(record.submits[0].key);
+    expect(record.submits[1].payload).toEqual(record.submits[0].payload);
+    expect(record.interest).toHaveLength(0);
+    await expect(page.locator("main")).not.toContainText(/nothing was sent/i);
+  });
+
+  test("a lost response is resolved with the original payload after the ZIP becomes uncovered and fields are edited", async ({ page }) => {
+    let coverage: Scenario["coverage"] = "covered";
+    const record = await intake(page, { coverageNow: () => coverage, submit: (_call, count) => count === 1 ? { abort: true } : {} });
+    await submitButton(page).click();
+    await expect(summary(page)).toContainText("We couldn’t confirm whether your request was saved.");
+    coverage = "uncovered";
+    await page.evaluate(() => {
+      const draft = JSON.parse(sessionStorage.getItem("nextRequestFlowState") ?? "{}");
+      sessionStorage.setItem("nextRequestFlowState", JSON.stringify({ ...draft, zipCode: "33999", streetAddress: "9 Edited Synthetic Way", firstName: "", email: "" }));
+    });
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Check and finish submitting" })).toBeEnabled();
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits).toHaveLength(2);
+    expect(record.submits[1].key).toBe(record.submits[0].key);
+    expect(record.submits[1].payload).toEqual(record.submits[0].payload);
+    expect(JSON.stringify(record.submits[1].payload)).not.toContain("33999");
+    expect(record.interest).toHaveLength(0);
+  });
+
   test("a key conflict requires checking before an explicit new submission", async ({ page }) => {
     let savedKey = "";
     // The first key already belongs to a request saved with different details.
@@ -622,6 +667,57 @@ test.describe("honest confirmation (I6)", () => {
     await expect(page.getByText("Online payment isn’t available for a plan with more than one service, so payment wasn’t requested.")).toBeVisible();
     expect(record.checkouts).toBe(0);
     expect(record.matching).toEqual([requestIdFor(1)]);
+  });
+
+  // P6-R2: a reload after later activity shows the database's current state, gates checkout
+  // and matching, and never repeats submission-time payment claims.
+  test("a reload shows the current lifecycle and payment instead of the initial acceptance", async ({ page }) => {
+    let current: Outcome = {};
+    const record = await intake(page, {
+      readback: (ids) => ids.map((id) => ({ id, status: "pending", matching_status: "awaiting_match", pricing_mode: "fixed", total_amount: 100, contractor_id: null, payment_status: "pending", quote_status: null, quote_amount: null, ...current })),
+    });
+    await submitButton(page).click();
+    const card = page.getByRole("list", { name: "Saved requests" }).getByRole("listitem");
+    await expect(page.getByRole("button", { name: "Continue to secure checkout" })).toBeVisible();
+    const checkouts = record.checkouts;
+    const assigned = { matching_status: "matched", contractor_id: "00000000-0000-4000-8000-000000000002" };
+    for (const [state, label, summaryText, paymentText] of [
+      [{ ...assigned, status: "scheduled", payment_status: "captured" }, "Scheduled", "A time is scheduled.", "Payment confirmed."],
+      [{ ...assigned, status: "in_progress", payment_status: "captured" }, "In progress", "Work is in progress.", "Payment confirmed."],
+      [{ ...assigned, status: "homeowner_confirmed", payment_status: "released" }, "Completed", "This request is complete.", "Payment confirmed."],
+      [{ ...assigned, status: "cancelled", payment_status: "refunded" }, "Cancelled", "This request was cancelled.", "Payment refunded."],
+      [{ ...assigned, status: "scheduled", payment_status: "pending" }, "Scheduled", "A time is scheduled.", "Submitted at $100.00 fixed price. See your dashboard for the current price and payment status."],
+    ] as const) {
+      current = state;
+      await page.reload();
+      await expect(card).toContainText(summaryText);
+      await expect(card).toContainText(label);
+      await expect(card).toContainText(paymentText);
+      await expect(card).not.toContainText("A provider accepted this request.");
+      await expect(page.getByRole("button", { name: "Continue to secure checkout" })).toHaveCount(0);
+    }
+    expect(record.checkouts).toBe(checkouts);
+    expect(record.matching).toHaveLength(0);
+  });
+
+  test("a reload after an accepted quote shows it and doesn't claim nothing was charged", async ({ page }) => {
+    let current: Outcome = {};
+    const record = await intake(page, {
+      outcomes: (selection) => quote(selection.service_id),
+      readback: (ids) => ids.map((id) => ({ id, status: "pending", matching_status: "awaiting_match", pricing_mode: "custom_quote", total_amount: null, contractor_id: null, payment_status: "pending", quote_status: null, quote_amount: null, ...current })),
+    });
+    await submitButton(page).click();
+    const card = page.getByRole("list", { name: "Saved requests" }).getByRole("listitem");
+    await expect(card).toContainText("nothing has been charged");
+    expect(record.matching).toHaveLength(1);
+    current = { status: "matched", matching_status: "matched", contractor_id: "00000000-0000-4000-8000-000000000002", quote_status: "accepted", quote_amount: 240 };
+    await page.reload();
+    await expect(card).toContainText("You accepted a quote. Nothing is scheduled until a time is confirmed with you.");
+    await expect(card).toContainText("Accepted quote: $240.00.");
+    await expect(card).not.toContainText(/nothing has been charged|no amount is set/i);
+    await expect(card.getByRole("button", { name: "Try finding a provider again" })).toHaveCount(0);
+    expect(record.matching).toHaveLength(1);
+    expect(record.checkouts).toBe(0);
   });
 
   test("a status read-back failure is reported with a retry", async ({ page }) => {
