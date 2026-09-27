@@ -1,6 +1,21 @@
 # Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — P6-R1 role repair implemented (TRACE-095)
+## Current checkpoint — 6.2 intake implemented (TRACE-098)
+
+- Branch `codex/phase6-intake`, **stacked on the P6-R1 repair `c2b9b81`** (PR #59, not yet
+  re-reviewed or merged) at the owner's request. Migration `20260928000000`: read-only anonymous
+  `preview_service_request_selections` (mirrors the command; no identities) over answer-aware
+  eligibility (five-argument wrapper unchanged in behavior). Intake reworked: early per-ZIP
+  availability and interest, locked saved result with photo/matching/checkout recovery, honest
+  per-service confirmation, sign-up continuation.
+- Evidence: SQL 066 68/68; clean reset 3244 / 57 PASS; script 32/32 on the main local stack;
+  274 unit; request browser suite and axe matrix (see the report). No human screen-reader checks.
+  [Report](../../governance/PHASE-6-INTAKE.md).
+- Open: P6-R1 re-review/merge, then Codex review of 6.2 (D1–D9, notably D6 promotion refusal and
+  D7 intake orphan retention), PR/CI, human AT/visual, checkout Edge function locally. No
+  external activation.
+
+## Previous checkpoint — P6-R1 role repair implemented (TRACE-095)
 
 - Branch `codex/phase6-role-repair` from `ab17e99` (PR #58 head). Migration `20260927020000`:
   public `submit_service_requests` now requires the homeowner role before validation, replay

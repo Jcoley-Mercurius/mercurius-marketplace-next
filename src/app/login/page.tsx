@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,6 +15,7 @@ import {
   fetchRoles,
   postLoginPathForRoles,
 } from "@/lib/auth/roles";
+import { requestContinuationPath } from "@/lib/auth/continuation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -24,6 +25,13 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
   const router = useRouter();
+  const [continuation, setContinuation] = useState<"/request" | null>(null);
+
+  useEffect(() => {
+    // Read after mount so the server and client render the same link.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setContinuation(requestContinuationPath(new URLSearchParams(window.location.search).get("redirect")));
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -172,7 +180,7 @@ export default function LoginPage() {
           <p className="mt-8 text-center text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link
-              href="/register"
+              href={continuation ? `/register?redirect=${encodeURIComponent(continuation)}` : "/register"}
               className="font-medium text-accent hover:underline"
             >
               Create one

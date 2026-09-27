@@ -7090,6 +7090,10 @@ export type Database = {
         Returns: undefined
       }
       offer_next_for_request: { Args: { _request_id: string }; Returns: string }
+      preview_service_request_selections: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       pricing_server_now: { Args: never; Returns: string }
       record_job_operation: {
         Args: {

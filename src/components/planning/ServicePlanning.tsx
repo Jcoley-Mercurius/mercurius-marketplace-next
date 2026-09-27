@@ -65,6 +65,7 @@ export function PlanningServiceCard({
   disabled = false,
   requestedProviderName,
   showSingleFrequency = true,
+  localStatus,
 }: {
   service: PlanningService;
   selected: boolean;
@@ -76,11 +77,13 @@ export function PlanningServiceCard({
   disabled?: boolean;
   requestedProviderName?: string;
   showSingleFrequency?: boolean;
+  /** Address-specific state (TRACE-098). Replaces the network badge, price and cadence choice. */
+  localStatus?: { label: string; detail: string };
 }) {
   const dark = variant === "dark";
   const liveFrequencies = planningLiveFrequencies(service);
-  const availableNow = service.availability === "fixed" && liveFrequencies.length > 0;
-  const cardPrice = planningCardPriceLabel(service);
+  const availableNow = !localStatus && service.availability === "fixed" && liveFrequencies.length > 0;
+  const cardPrice = localStatus ? null : planningCardPriceLabel(service);
   const selectedPackage = service.packageSelections?.[frequency];
   const providerProofs = (selected ? service.providerProofsByFrequency?.[frequency] : service.providerProofs)
     ?? service.providerProofs
@@ -131,7 +134,9 @@ export function PlanningServiceCard({
               </div>
               <p className={cn("mt-1 text-sm leading-5", dark ? "text-white/50" : "text-muted-foreground")}>{service.description}</p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <PlanningAvailabilityBadge availability={availableNow ? "fixed" : service.availability} variant={variant} />
+                {localStatus
+                  ? <Badge variant="secondary" className="w-fit border-border-strong bg-muted text-foreground">{localStatus.label}</Badge>
+                  : <PlanningAvailabilityBadge availability={availableNow ? "fixed" : service.availability} variant={variant} />}
                 {layout === "tile" && <PlanningCardPrice variant={variant} label={cardPrice} />}
                 {layout === "row" && <span className="sm:hidden"><PlanningCardPrice variant={variant} label={cardPrice} /></span>}
               </div>
@@ -164,7 +169,7 @@ export function PlanningServiceCard({
 
       {selected && !availableNow && (
         <div className={cn("border-t px-5 py-3 text-xs leading-5", dark ? "border-white/10 bg-white/[0.025] text-white/50 sm:px-6" : "border-border bg-muted/30 text-muted-foreground")}>
-          Continue with your request. Mercurius will coordinate provider matching and confirm pricing before booking.
+          {localStatus?.detail ?? "Continue with your request. Mercurius will coordinate provider matching and confirm pricing before booking."}
         </div>
       )}
 
@@ -285,7 +290,7 @@ export function PlanningPlanSummary({
     <>
       <div className={cn("border-b px-5 py-5 sm:px-6", dark ? "border-white/10 bg-white/[0.035]" : "border-accent-border bg-accent-subtle")}>
         <h3 className="flex items-center gap-2 text-lg font-semibold"><ReceiptText className={cn("h-5 w-5", dark ? "text-coral" : "text-accent")} />{title}</h3>
-        <p className={cn("mt-1 text-xs leading-5", dark ? "text-white/45" : "text-muted-foreground")}>Live prices and matching requests stay separate until every rate is confirmed.</p>
+        <p className={cn("mt-1 text-xs leading-5", dark ? "text-white/45" : "text-foreground")}>Live prices and matching requests stay separate until every rate is confirmed.</p>
       </div>
       <div className="space-y-5 p-5 sm:p-6">
         {items.length === 0 ? (
