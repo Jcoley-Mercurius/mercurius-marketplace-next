@@ -91,7 +91,8 @@ P6-R1 repair, 2026-09-27 (branch `codex/phase6-role-repair`): migration 20260927
 requires the homeowner role before submission or replay (core moved to `private`); SQL 065
 29/29 (11 failed before the fix), script 23/23 incl. REST vendor-only refusal, clean reset
 3176 assertions / 56 files. [Report](PHASE-6-REQUEST-SUBMISSION.md#p6-r1-repair-homeowner-role-enforcement-2026-09-27-branch-codex-phase6-role-repair-from-ab17e99).
-Awaiting Codex re-review before TRACE-098 implementation starts.
+Codex re-review remains open; TRACE-098 implementation proceeded with the owner’s authorization,
+as recorded in [the intake status](PHASE-6-INTAKE.md).
 
 | ID | Requirement | Authority | Phase | Implementation | Acceptance evidence | Open gates | Status |
 |---|---|---|---|---|---|---|---|

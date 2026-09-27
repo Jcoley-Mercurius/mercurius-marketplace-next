@@ -483,30 +483,33 @@ begin
       end if;
     end if;
 
-    if not exists (
-      select 1 from private.find_eligible_packages_with_answers(
+    -- Reuse one onboarding-filtered eligibility result for this selection.
+    with eligible as materialized (
+      select eligible.* from private.find_eligible_packages_with_answers(
         null, service.id, wanted_frequency, zip, selected_provider, rule_answers) eligible
       where private.vendor_matching_eligible(eligible.contractor_id)
-    ) then
+    ), selected as materialized (
+      select eligible.* from eligible
+      where (selected_provider is null or eligible.contractor_id = selected_provider)
+        and (wanted_package is null or eligible.package_id = wanted_package)
+    )
+    select chosen.*, pool.has_eligible, pool.package_ids into candidate
+    from (
+      select exists (select 1 from eligible) as has_eligible,
+        (select array_agg(selected.package_id) from selected) as package_ids
+    ) pool
+    left join lateral (
+      select selected.* from selected
+      order by (selected.path = 'fixed') desc, selected.effective_price asc nulls last, selected.rank_order
+      limit 1
+    ) chosen on true;
+
+    if not candidate.has_eligible then
       outcomes := outcomes || (outcome || jsonb_build_object('outcome', 'unavailable', 'reason', 'no_eligible_provider'));
       continue;
     end if;
+    candidate_packages := candidate.package_ids;
 
-    select array_agg(eligible.package_id) into candidate_packages
-    from private.find_eligible_packages_with_answers(
-      null, service.id, wanted_frequency, zip, selected_provider, rule_answers) eligible
-    where private.vendor_matching_eligible(eligible.contractor_id)
-      and (selected_provider is null or eligible.contractor_id = selected_provider)
-      and (wanted_package is null or eligible.package_id = wanted_package);
-
-    select eligible.* into candidate
-    from private.find_eligible_packages_with_answers(
-      null, service.id, wanted_frequency, zip, selected_provider, rule_answers) eligible
-    where private.vendor_matching_eligible(eligible.contractor_id)
-      and (selected_provider is null or eligible.contractor_id = selected_provider)
-      and (wanted_package is null or eligible.package_id = wanted_package)
-    order by (eligible.path = 'fixed') desc, eligible.effective_price asc nulls last, eligible.rank_order
-    limit 1;
     if candidate.contractor_id is null then
       outcomes := outcomes || (outcome || jsonb_build_object('outcome',
         case when wanted_package is not null then 'package_unavailable' else 'preferred_provider_unavailable' end));
