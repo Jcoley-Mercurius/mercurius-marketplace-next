@@ -98,6 +98,10 @@ emergency requires the old page. New tables are additive. Hosted rollout is Phas
 
 ## Decisions for Codex review
 
+Reviewed on 2026-09-27 at `0e4793b`: [D1–D7 dispositions and ZIP boundary review](PHASE-6-DECISION-REVIEW.md).
+D3 requires a forward role-enforcement repair before 6.2 implementation. The statements
+below preserve the implementation's original review questions, not new policy approval.
+
 - D1 Plans are all or nothing and uncataloged services (including **Something Else**) are
   unavailable → explicit interest (owner, DEC-2026-020). **Something Else** stays visible on the
   Services step and is refused at submission; slice 6.2 should present this earlier.

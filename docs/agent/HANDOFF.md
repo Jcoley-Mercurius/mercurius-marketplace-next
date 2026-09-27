@@ -1,6 +1,20 @@
 # Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — 6.1 merged (PR #56); post-merge cleanup (TRACE-095)
+## Current checkpoint — Codex 6.1 decisions reviewed; 6.2 brief prepared
+
+- Branch `codex/phase6-cleanup`; reviewed base `0e4793b` (main merge `b85c887`).
+  [Focused review](../../governance/PHASE-6-DECISION-REVIEW.md): D3 requires P6-R1,
+  enforcing the existing homeowner capability at submission/replay. Other D1–D7
+  dispositions and both owner-confirmed ZIP boundary calls are recorded there.
+- New local evidence: SQL 063 65/65, SQL 064 16/16; rollback-only role reproduction
+  4/4 confirms vendor-only submission. These are focused checks, not full acceptance.
+- [6.2 brief](../../governance/PHASE-6-INTAKE-BRIEF.md), TRACE-098, is ready for Claude
+  after the TRACE-095 role repair and Codex re-review. No 6.2 code implemented.
+- Open: repair/re-review, merged follow-up/CI, script CI wiring, local checkout
+  integration, human accessibility, hosted coverage reconciliation (Phase 8).
+  Next: Claude implements the bounded D3 forward fix. No external activation.
+
+## Previous checkpoint — 6.1 merged (PR #56); post-merge cleanup (TRACE-095)
 
 - Branch `codex/phase6-cleanup` from main `b85c887` (main CI 36292614304 passed). Scope: review-step
   copy fix (CodeRabbit on #56), stale Phase 4 line in PHASE-6-SCOPE.md, and the Lee County
