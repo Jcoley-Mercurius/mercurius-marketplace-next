@@ -10,10 +10,11 @@
   per-service confirmation, sign-up continuation.
 - Evidence: SQL 066 68/68; clean reset 3244 / 57 PASS; script 32/32 on the main local stack;
   274 unit; request browser suite and axe matrix. Owner-reported visual review and screen-reader
-  checklist in Chrome on a laptop: no errors (reader, OS and a mobile pass not yet recorded).
+  checklist in Chrome on a laptop: no errors; the owner closed the human accessibility/visual gate.
   [Report](../../governance/PHASE-6-INTAKE.md).
 - Open: P6-R1 re-review/merge, then Codex review of 6.2 (D1–D9, notably D6 promotion refusal and
-  D7 intake orphan retention), PR #60 CI, screen-reader evidence details, checkout Edge function locally. No
+  D7 intake orphan retention), PR #60 CI, checkout Edge function locally. Next: 6.3 after
+  PR #60 is done. No
   external activation.
 
 ## Previous checkpoint — P6-R1 role repair implemented (TRACE-095)

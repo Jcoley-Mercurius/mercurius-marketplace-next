@@ -125,12 +125,9 @@ checks aren't captured in any file or recording.
 | Visual review | Josh Coley | Laptop, Google Chrome (OS not stated) | Intake flow in light and dark mode, “all those modes” | No errors; “everything looks well improved” |
 | Screen-reader and keyboard checklist (step announcements, error summary, availability rows, photo picker, review/submit, uncovered ZIP 34110) | Josh Coley | Laptop, Google Chrome (OS not stated) | The six-item checklist given in the session | Owner reports all tested, no errors. **Screen reader not named.** |
 
-Gaps to close for full I7 evidence:
-- Name the screen reader (for example NVDA) and its version.
-- Name the operating system.
-- Add a mobile screen-reader pass (VoiceOver on iOS or TalkBack), which wasn't reported.
-- 200% browser zoom on the laptop wasn't separately reported; automated reflow evidence covers
-  it at 640 CSS px.
+**Closed by owner decision (2026-09-27).** The owner accepted this review as the human
+accessibility and visual evidence for 6.2. The screen reader, its version, the OS and a mobile
+pass were not recorded, and the owner chose not to require them.
 
 ## Decisions for Codex review
 
@@ -168,9 +165,8 @@ Gaps to close for full I7 evidence:
 
 ## Open gates
 
-P6-R1 re-review and merge; Codex review of this slice; final-head CI on PR #60; screen-reader
-evidence details (reader and version, OS, a mobile pass), since the owner-reported visual and
-checklist review is recorded above; checkout Edge function not served locally (checkout
+P6-R1 re-review and merge; Codex review of this slice; final-head CI on PR #60; (human
+accessibility and visual review is closed by owner decision; see above); checkout Edge function not served locally (checkout
 continuation is exercised only with scripted responses, so the integration gate stays open);
 adding the script to CI; hosted migration and ZIP reconciliation (Phase 8); Phase 7 notification
 delivery. 6.3 owns offer, fallback and exclusivity changes; matching is only read back here.
