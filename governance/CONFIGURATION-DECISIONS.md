@@ -14,6 +14,7 @@
 - **Change authority:** Project owner.
 - **Acceptance evidence:** The committed coverage configuration must match the approved backend allowlist; covered and uncovered boundary ZIPs must pass automated request-flow tests.
 - **Implementation note:** Export and reconcile the existing backend coverage records during backend reconstruction. Do not invent, expand, or silently remove ZIP codes.
+- **Allowlist (DEC-2026-021, 2026-09-27):** The owner approved the 47 USPS Lee County ZIPs, committed in migration `20260927010000_cfg001_lee_county_coverage.sql`. Hosted rows are reconciled against it during the hosted migration.
 
 ## CFG-002 — Service visibility and unavailable supply
 

@@ -1,6 +1,16 @@
-# Agent handoff — 2026-09-26 UTC
+# Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — Phase 6 slice 6.1 implemented (TRACE-095)
+## Current checkpoint — 6.1 merged (PR #56); post-merge cleanup (TRACE-095)
+
+- Branch `codex/phase6-cleanup` from main `b85c887` (main CI 36292614304 passed). Scope: review-step
+  copy fix (CodeRabbit on #56), stale Phase 4 line in PHASE-6-SCOPE.md, and the Lee County
+  allowlist: migration `20260927010000` with the 47 USPS Lee County ZIPs (owner DEC-2026-021).
+- Evidence: SQL 064 (16), 3147 assertions / 55 suites on a clean reset; script 21/21;
+  `npm run check`; 16/16 request browser tests. [Follow-up](../../governance/PHASE-6-REQUEST-SUBMISSION.md#post-merge-follow-up-2026-09-27-branch-codex-phase6-cleanup-from-main-b85c887).
+- Open: PR/CI; Codex review of 6.1 (D1–D7) and this follow-up; script CI wiring; hosted
+  coverage reconciliation (Phase 8). Next: Codex writes the 6.2 brief. No external activation.
+
+## Previous checkpoint — Phase 6 slice 6.1 implemented (TRACE-095)
 
 - Branch `codex/phase6-request-submission` from main `2ed8036`. Migration `20260927000000`
   (`submit_service_requests`, browser INSERT revoked, homeowner ZIP edit closed); intake adapted.

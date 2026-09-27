@@ -1,5 +1,5 @@
 -- TRACE-095: authoritative, duplicate-safe request submission. Synthetic identities and
--- synthetic 000xx ZIPs only; no approved Lee County allowlist is committed (CFG-001 export open).
+-- synthetic 000xx ZIPs only. The Lee County allowlist and its real boundary ZIPs are covered by 064.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();

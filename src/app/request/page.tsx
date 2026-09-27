@@ -1979,8 +1979,8 @@ function ContactStep(props: ContactStepProps) {
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                 <p>
                   Live rates are re-checked when you submit. If a selected rate
-                  is no longer eligible, that service becomes a quote or
-                  matching request instead.
+                  or service is no longer available, nothing is submitted and
+                  we show you what changed before you submit again.
                 </p>
               </div>}
             </div>

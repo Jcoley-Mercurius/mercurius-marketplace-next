@@ -114,8 +114,7 @@ emergency requires the old page. New tables are additive. Hosted rollout is Phas
 
 ## Not performed / open
 
-- No approved Lee County ZIP allowlist is committed (CFG-001 export pending). Boundary tests use
-  synthetic `000xx` ZIPs; "boundary ZIPs from approved data" remains open.
+- ~~No approved Lee County ZIP allowlist is committed.~~ Closed in the post-merge follow-up below.
 - Checkout Edge function not served locally. The unchanged handler returns the review URL or
   `COMMERCIAL_REVIEW_REQUIRED`; the browser path is covered with scripted responses.
 - The concurrency script is not wired into CI (same pending owner decision as TRACE-097's).
@@ -124,3 +123,17 @@ emergency requires the old page. New tables are additive. Hosted rollout is Phas
   hosted `NEXT_PUBLIC_SUPABASE_URL` made unauthenticated read-only catalog requests to the
   hosted project (public catalog tables and `pricing_server_now`). No writes, no sign-in and no
   customer data. Evidence runs used the documented fixture build.
+
+## Post-merge follow-up (2026-09-27, branch `codex/phase6-cleanup` from main `b85c887`)
+
+- **Review-step copy** (CodeRabbit finding on PR #56): the intake said an ineligible rate
+  "becomes a quote or matching request instead", which DEC-2026-020 no longer does. It now says
+  nothing is submitted and the homeowner sees what changed first.
+- **Allowlist (DEC-2026-021):** migration `20260927010000_cfg001_lee_county_coverage.sql`
+  activates the 47 USPS Lee County ZIPs. SQL 064 (16 assertions) checks the exact list, that no
+  other real ZIP is active, and submissions at covered split/island ZIPs (33917, 33936, 34134,
+  33921, 33957) versus uncovered neighbors (33955, 33948, 34110, 34119, 33935).
+- **Scope doc:** PHASE-6-SCOPE.md no longer says Phase 4 is unaccepted (DEC-2026-019).
+- Evidence: clean local reset, 3147 assertions / 55 suites; `phase6-request-submission.mjs` 21/21;
+  `npm run check` (secrets, lint, typecheck, 231 unit, build); request browser tests 16/16 on the
+  fixture build. Hosted migration is not performed.
