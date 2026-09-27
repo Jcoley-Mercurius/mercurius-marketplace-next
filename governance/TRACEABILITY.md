@@ -87,6 +87,12 @@ in [PHASE-6-DECISION-REVIEW.md](PHASE-6-DECISION-REVIEW.md). New evidence: SQL 0
 without homeowner can submit. **P6-R1 / D3 requires changes**; full slice acceptance,
 CI wiring, checkout integration, manual AT and hosted gates remain open.
 
+P6-R1 repair, 2026-09-27 (branch `codex/phase6-role-repair`): migration 20260927020000
+requires the homeowner role before submission or replay (core moved to `private`); SQL 065
+29/29 (11 failed before the fix), script 23/23 incl. REST vendor-only refusal, clean reset
+3176 assertions / 56 files. [Report](PHASE-6-REQUEST-SUBMISSION.md#p6-r1-repair-homeowner-role-enforcement-2026-09-27-branch-codex-phase6-role-repair-from-ab17e99).
+Awaiting Codex re-review before TRACE-098 implementation starts.
+
 | ID | Requirement | Authority | Phase | Implementation | Acceptance evidence | Open gates | Status |
 |---|---|---|---|---|---|---|---|
 | TRACE-098 | Accessible homeowner intake, auth/draft continuation, explicit interest, recoverable photos and honest per-service commercial/confirmation states | MPS §§4/6.1/6.2/6.5; MDS §§3–5/8–10; MTS §§4–7/11/13; CFG-001–003/009/010; DEC-2026-015/020/021; roadmap 6.2 | 6 | PHASE-6-INTAKE-BRIEF.md; Claude implementation pending | Planned I1–I7 evidence; no 6.2 implementation or acceptance evidence yet | TRACE-095 D3 repair/re-review; merged submission/ZIP base; implementation, automated/browser/visual/human acceptance and Codex review | PLANNED |

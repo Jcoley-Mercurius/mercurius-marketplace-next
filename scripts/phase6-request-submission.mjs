@@ -54,6 +54,7 @@ const ids = {
   other: "d1000000-0000-4000-8000-000000000002",
   vendorUser: "d1000000-0000-4000-8000-000000000003",
   admin: "d1000000-0000-4000-8000-000000000004",
+  vendorOnly: "d1000000-0000-4000-8000-000000000005",
   fixed: "d2000000-0000-4000-8000-000000000001",
   quote: "d2000000-0000-4000-8000-000000000002",
 };
@@ -87,8 +88,10 @@ await cleanup();
 await sql(`
   insert into auth.users(id,raw_user_meta_data) values
    ('${ids.owner}','{"full_name":"Synthetic homeowner A"}'),('${ids.other}','{"full_name":"Synthetic homeowner B"}'),
-   ('${ids.vendorUser}','{"full_name":"Synthetic provider"}'),('${ids.admin}','{"full_name":"Synthetic operator"}');
-  insert into public.user_roles(user_id,role) values ('${ids.vendorUser}','vendor'),('${ids.admin}','admin');
+   ('${ids.vendorUser}','{"full_name":"Synthetic provider"}'),('${ids.admin}','{"full_name":"Synthetic operator"}'),
+   ('${ids.vendorOnly}','{"full_name":"Synthetic provider only"}');
+  insert into public.user_roles(user_id,role) values ('${ids.vendorUser}','vendor'),('${ids.admin}','admin'),('${ids.vendorOnly}','vendor');
+  delete from public.user_roles where user_id='${ids.vendorOnly}' and role='homeowner';
   insert into public.coverage_areas(zip_code,city,is_active) values ('00030','Synthetic covered',true);
   insert into public.contractors(id,user_id,name,is_active,marketing_enabled) values
    ('${ids.fixed}','${ids.vendorUser}','Synthetic fixed provider',true,true),('${ids.quote}',null,'Synthetic quote provider',true,true);
@@ -117,6 +120,17 @@ try {
       assert.equal(response.body.code, "42501");
     });
   }
+  await check("provider-only account without the homeowner role is refused (P6-R1)", async () => {
+    const response = await submit(ids.vendorOnly, randomUUID(), plan("00030", [lawn]));
+    assert.equal(response.status, 403, JSON.stringify(response.body));
+    assert.equal(response.body.code, "42501");
+    assert.equal(await requestCount(ids.vendorOnly), 0);
+  });
+  await check("provider who is also a homeowner submits their own request", async () => {
+    const response = await submit(ids.vendorUser, randomUUID(), plan("00030", [lawn]));
+    assert.deepEqual([response.status, response.body.status], [200, "submitted"], JSON.stringify(response.body));
+    assert.equal(await requestCount(ids.vendorUser), 1);
+  });
   await check("uncovered ZIP creates nothing", async () => {
     const response = await submit(ids.owner, randomUUID(), plan("00031", [lawn]));
     assert.equal(response.status, 200);

@@ -141,3 +141,34 @@ below preserve the implementation's original review questions, not new policy ap
 - Evidence: clean local reset, 3147 assertions / 55 suites; `phase6-request-submission.mjs` 21/21;
   `npm run check` (secrets, lint, typecheck, 231 unit, build); request browser tests 16/16 on the
   fixture build. Hosted migration is not performed.
+
+## P6-R1 repair: homeowner role enforcement (2026-09-27, branch `codex/phase6-role-repair` from `ab17e99`)
+
+Codex's [decision review](PHASE-6-DECISION-REVIEW.md#p6-r1--p2--authenticated-identity-substitutes-for-homeowner-authorization)
+found that `submit_service_requests` accepted any authenticated identity (D3).
+
+- **Migration `20260927020000_trace095_homeowner_role.sql`** moves the unchanged 6.1 body to
+  `private.submit_service_requests_core` (no EXECUTE for anon, authenticated or service_role) and
+  puts a same-signature public wrapper in front, following the `money_prepare_checkout`
+  precedent. The wrapper refuses a missing user, then a caller without `homeowner`
+  (`42501 Homeowner authorization required`), before validation, the replay lookup or any write.
+  Dual-role homeowner+vendor/admin accounts keep working. Signup roles, data, coverage,
+  eligibility, pricing, replay and dispatch semantics are unchanged; no other caller exists.
+  Generated types are unchanged. Forward recovery: a later migration can replace the wrapper;
+  the core is untouched.
+- **SQL 065** (29 assertions): privileges on command and core; homeowner, homeowner+vendor and
+  homeowner+admin submit; forged payload owner ignored; no-role, vendor-only and admin-only
+  refused with nothing stored; no-user, anonymous and direct core calls refused; RLS read
+  isolation; replay and new submission refused after role removal, original request preserved,
+  replay works again once the role is restored. Before the migration, 11 of its behavioral
+  assertions failed (the defect); after it, 29/29.
+- **Script** `phase6-request-submission.mjs`, now 23 checks: adds a real REST vendor-only refusal
+  (403/42501, no request) and a dual-role provider+homeowner submission.
+- Evidence (local synthetic stack `vugqqyemuptlvcieihww`): upgrade from head `20260927010000`
+  with 063 65/65, 064 16/16, 065 29/29, script 23/23; the rollback-only
+  [D3 characterization](review-evidence/trace-095-role-scope.sql) now stops at its submission
+  with `Homeowner authorization required` (it characterized the defect and is kept unchanged as
+  review evidence). Clean `supabase db reset --local`: 169 migrations, head `20260927020000`;
+  `supabase test db` 3176 assertions / 56 files PASS; script 23/23 again; `supabase gen types`
+  identical to the committed file. No application code changed, so `npm run check` and browser
+  suites were not rerun. Hosted migration remains Phase 8.
