@@ -120,7 +120,7 @@ export function RequestConfirmation({ services, loading, readbackFailed, photos,
 function ReselectPhotos({ onSelect, disabled }: { onSelect: (files: File[]) => void; disabled: boolean }) {
   return (
     <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-background px-4 text-sm font-medium has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-3 has-[:focus-visible]:outline-focus-ring"
-      onDragOver={(event: DragEvent) => event.preventDefault()} onDrop={(event: DragEvent) => { event.preventDefault(); onSelect(Array.from(event.dataTransfer.files)); }}>
+      onDragOver={(event: DragEvent) => event.preventDefault()} onDrop={(event: DragEvent) => { event.preventDefault(); if (!disabled) onSelect(Array.from(event.dataTransfer.files)); }}>
       <ImagePlus aria-hidden="true" className="size-4" /> Choose photos again
       <input type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" multiple disabled={disabled}
         onChange={(event) => { onSelect(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
