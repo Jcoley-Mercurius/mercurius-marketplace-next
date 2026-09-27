@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -11,6 +11,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { requestContinuationPath } from "@/lib/auth/continuation";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +22,14 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const { signUp } = useAuth();
   const router = useRouter();
+  const [continuation, setContinuation] = useState<"/request" | null>(null);
+  const loginPath = continuation ? `/login?redirect=${encodeURIComponent(continuation)}` : "/login";
+
+  useEffect(() => {
+    // Read after mount so the server and client render the same link.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setContinuation(requestContinuationPath(new URLSearchParams(window.location.search).get("redirect")));
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,9 +47,11 @@ export default function RegisterPage() {
         return;
       }
       toast.success("Check your email", {
-        description: "We sent you a verification link. Please verify your email to sign in.",
+        description: continuation
+          ? "We sent you a verification link. After you verify, sign in here to finish your request; keep this tab open."
+          : "We sent you a verification link. Please verify your email to sign in.",
       });
-      router.replace("/login");
+      router.replace(loginPath);
     } catch (error) {
       toast.error("Unable to create your account", {
         description: error instanceof Error ? error.message : "Please try again.",
@@ -106,7 +117,7 @@ export default function RegisterPage() {
           </form>
 
           <p className="mt-8 text-center text-muted-foreground">
-            Already have an account? <Link href="/login" className="font-medium text-accent hover:underline">Sign in</Link>
+            Already have an account? <Link href={loginPath} className="font-medium text-accent hover:underline">Sign in</Link>
           </p>
           </div>
         </section>
