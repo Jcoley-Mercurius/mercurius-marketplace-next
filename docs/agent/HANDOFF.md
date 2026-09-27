@@ -1,6 +1,18 @@
 # Agent handoff — 2026-09-26 UTC
 
-## Current checkpoint — Phase 4 accepted; Phase 6 released (DEC-2026-019)
+## Current checkpoint — Phase 6 slice 6.1 implemented (TRACE-095)
+
+- Branch `codex/phase6-request-submission` from main `2ed8036`. Migration `20260927000000`
+  (`submit_service_requests`, browser INSERT revoked, homeowner ZIP edit closed); intake adapted.
+  Owner decisions DEC-2026-020 (all-or-nothing plans; uncataloged → interest).
+- Evidence: SQL 063 (65), 3131 assertions / 54 suites, script 21/21 with concurrency, 11/12 SQL
+  mutants (1 equivalent), 231 unit, 16/16 request browser tests, 251/252 non-visual browser (homeowner light 1440px
+  axe contrast/timeout, unchanged code), `npm run check`.
+  [Report](../../governance/PHASE-6-REQUEST-SUBMISSION.md).
+- Open: Codex review (D1–D7), PR/CI, approved ZIP allowlist (CFG-001), script CI wiring.
+  Next: slice 6.2 after review. No external activation.
+
+## Previous checkpoint — Phase 4 accepted; Phase 6 released (DEC-2026-019)
 
 - Owner accepted Phase 4 and released the Phase 6 hold after the TRACE-097 repair (PR #55) and a
   Codex re-review the owner reported as clear (not yet written in the repo).
