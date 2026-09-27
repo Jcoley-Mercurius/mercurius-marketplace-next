@@ -9,10 +9,11 @@
   availability and interest, locked saved result with photo/matching/checkout recovery, honest
   per-service confirmation, sign-up continuation.
 - Evidence: SQL 066 68/68; clean reset 3244 / 57 PASS; script 32/32 on the main local stack;
-  274 unit; request browser suite and axe matrix (see the report). No human screen-reader checks.
+  274 unit; request browser suite and axe matrix. Owner-reported visual review and screen-reader
+  checklist in Chrome on a laptop: no errors (reader, OS and a mobile pass not yet recorded).
   [Report](../../governance/PHASE-6-INTAKE.md).
 - Open: P6-R1 re-review/merge, then Codex review of 6.2 (D1–D9, notably D6 promotion refusal and
-  D7 intake orphan retention), PR/CI, human AT/visual, checkout Edge function locally. No
+  D7 intake orphan retention), PR #60 CI, screen-reader evidence details, checkout Edge function locally. No
   external activation.
 
 ## Previous checkpoint — P6-R1 role repair implemented (TRACE-095)

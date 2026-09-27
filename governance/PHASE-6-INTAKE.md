@@ -115,11 +115,22 @@ Totals:
 - Browser: see [Validation run](#validation-run).
 - Types: regeneration adds only `preview_service_request_selections`.
 
-### Human and manual checks — NOT DONE
+### Human and manual checks (owner-reported, 2026-09-27)
 
-No screen reader (VoiceOver, NVDA or TalkBack), real-device zoom or human visual review was
-performed. Axe is not screen-reader evidence. These remain open and prevent claiming complete
-slice acceptance.
+Recorded as the owner (Josh Coley) reported them in the implementation session on PR #60. These
+checks aren't captured in any file or recording.
+
+| Check | Tester | Device / browser | Scope | Result |
+|---|---|---|---|---|
+| Visual review | Josh Coley | Laptop, Google Chrome (OS not stated) | Intake flow in light and dark mode, “all those modes” | No errors; “everything looks well improved” |
+| Screen-reader and keyboard checklist (step announcements, error summary, availability rows, photo picker, review/submit, uncovered ZIP 34110) | Josh Coley | Laptop, Google Chrome (OS not stated) | The six-item checklist given in the session | Owner reports all tested, no errors. **Screen reader not named.** |
+
+Gaps to close for full I7 evidence:
+- Name the screen reader (for example NVDA) and its version.
+- Name the operating system.
+- Add a mobile screen-reader pass (VoiceOver on iOS or TalkBack), which wasn't reported.
+- 200% browser zoom on the laptop wasn't separately reported; automated reflow evidence covers
+  it at 640 CSS px.
 
 ## Decisions for Codex review
 
@@ -157,8 +168,9 @@ slice acceptance.
 
 ## Open gates
 
-P6-R1 re-review and merge; Codex review of this slice; PR and final-head CI; human
-screen-reader, zoom and visual checks; checkout Edge function not served locally (checkout
+P6-R1 re-review and merge; Codex review of this slice; final-head CI on PR #60; screen-reader
+evidence details (reader and version, OS, a mobile pass), since the owner-reported visual and
+checklist review is recorded above; checkout Edge function not served locally (checkout
 continuation is exercised only with scripted responses, so the integration gate stays open);
 adding the script to CI; hosted migration and ZIP reconciliation (Phase 8); Phase 7 notification
 delivery. 6.3 owns offer, fallback and exclusivity changes; matching is only read back here.
@@ -179,5 +191,5 @@ All runs on 2026-09-27, final head of this branch, local synthetic stack, synthe
 | Request visual baselines (4 new: review/confirmation × light/dark, 390px) | created with `--update-snapshots` as `-linux` files, then 4/4 on re-run. Linux-only; the Windows workstation would need its own baselines, and CI doesn't run `@visual`. |
 | Existing brand/MDS visual baselines | Not verifiable here: only `-win32` baselines are committed and CI runs the non-visual suite. A Linux `--grep @visual` run wrote missing Linux baselines (reported as 6 failures); those files were deleted, not committed. This slice doesn't touch those pages. |
 
-Not done: CI on the final head (no PR opened); human assistive-technology and visual review;
+Not done at the time of this run: CI on the final head; human review. The owner's review was recorded later (see above);
 checkout Edge function served locally.
