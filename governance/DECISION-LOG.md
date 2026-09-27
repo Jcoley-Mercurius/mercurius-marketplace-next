@@ -23,6 +23,24 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-020 — Request submission: all-or-nothing plans and uncataloged services
+
+**Status:** APPROVED owner decision. **Date:** 2026-09-26 UTC.
+
+Asked during TRACE-095 (slice 6.1), the owner chose:
+
+1. **Mixed plans are refused whole.** If any selected service is unavailable, invalid, stale or
+   priced differently from what was shown, no request is created. The homeowner sees each
+   service's outcome, may register interest in unavailable ones, removes or fixes them and
+   submits again. No partial success.
+2. **Uncataloged services are unavailable.** "Something Else" and provider-page service names
+   that are not active catalog services create no active request (CFG-002, MPS §6.1). The
+   homeowner may send the description as explicit interest instead.
+
+Alternatives declined: creating the eligible subset; keeping free-form requests as
+admin-sourcing quote requests. Evidence: SQL 063 and PHASE-6-REQUEST-SUBMISSION.md. This
+authorizes no external activation.
+
 ### DEC-2026-019 — Accept Phase 4 and release the Phase 6 hold
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-26 UTC.

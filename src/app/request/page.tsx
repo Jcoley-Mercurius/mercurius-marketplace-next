@@ -69,18 +69,22 @@ import {
   createRequestPhotoDraft,
   type RequestPhotoDraft,
 } from "@/lib/requestPhotos";
+import {
+  isSubmissionKey,
+  isSubmissionKeyConflict,
+  newSubmissionKey,
+  parseSubmissionResult,
+  refusalMessage,
+  submissionValidationMessage,
+  type SelectionResult,
+  type SubmissionPayload,
+  type SubmissionResult,
+} from "@/lib/requestSubmission";
 import { createClient } from "@/lib/supabase/client";
 import type { ServiceProviderProof } from "@/lib/serviceData";
 import { cn } from "@/lib/utils";
 import {
   isPricingFrequency,
-  isPubliclyEligibleFixedPackage,
-  isPubliclyEligibleQuotePackage,
-  promotionForPackage,
-  publiclyEligibleFixedFrequencies,
-  resolveEffectiveTierPrice,
-  tierPricingFrequency,
-  type PackagePromotion,
   type PackageQualifyingQuestion,
   type PricingFrequency,
   type PublicPackageSelection,
@@ -117,7 +121,6 @@ type RequestCategory = { id: string; name: string; description: string };
 
 type BuilderRequestedService = { id: string; name: string; availability: "fixed" | "quote" | "sourcing"; descriptor?: string; defaultFrequency?: Frequency; frequencies?: Frequency[]; prices?: Partial<Record<Frequency, number>>; basePrices?: Partial<Record<Frequency, number>>; promotionLabels?: Partial<Record<Frequency, string>>; promotionIds?: Partial<Record<Frequency, string>>; packageId?: string; tierId?: string; pricingMode?: "fixed" | "deposit_quote" | "custom_quote"; questions?: PackageQualifyingQuestion[]; packageName?: string; packageDescription?: string | null; tierName?: string; tierIncludes?: string[]; preferredContractorId?: string; preferredContractorName?: string };
 type PackageSelection = PublicPackageSelection;
-type ResolvedPackage = PackageSelection & { contractorId: string; price: number | null; basePrice?: number; promotionId?: string; promotionLabel?: string };
 type CompletionKind = "quote" | "payment_pending" | "multi_service" | "coverage_interest";
 
 const serviceOptions: ServiceOption[] = [
@@ -185,6 +188,10 @@ export default function RequestServicePage() {
   const [completionKind, setCompletionKind] = useState<CompletionKind>("quote");
   const [coverageStatus, setCoverageStatus] = useState<RequestCoverageStatus>("idle");
   const [coverageResult, setCoverageResult] = useState<RequestCoverageResult | null>(null);
+  // One key per draft binds retries (including after sign-in) to a single submission.
+  const [submissionKey, setSubmissionKey] = useState("");
+  const [refusal, setRefusal] = useState<SubmissionResult | null>(null);
+  const [interestSentFor, setInterestSentFor] = useState<string[]>([]);
   const { user } = useAuth();
   const router = useRouter();
   const { services: catalogServices, categories: catalogCategories, loading: catalogLoading } = useServiceCatalog();
@@ -225,6 +232,7 @@ export default function RequestServicePage() {
         if (value.preferredProviderNames && typeof value.preferredProviderNames === "object") setPreferredProviderNames(value.preferredProviderNames as Record<string, string>);
         if (value.packageSelections && typeof value.packageSelections === "object") setPackageSelections(value.packageSelections as Record<string, PackageSelection>);
         if (value.questionAnswers && typeof value.questionAnswers === "object") setQuestionAnswers(value.questionAnswers as Record<string, Record<string, string>>);
+        if (isSubmissionKey(value.submissionKey)) setSubmissionKey(value.submissionKey);
       }
       if (builder) {
         const value = JSON.parse(builder) as { selectedServiceIds?: unknown; frequencies?: unknown; requestedServices?: unknown; matchingZip?: unknown };
@@ -293,6 +301,7 @@ export default function RequestServicePage() {
     } catch {
       window.sessionStorage.removeItem(storageKey);
     } finally {
+      setSubmissionKey((current) => current || newSubmissionKey());
       setHydrated(true);
     }
     return () => { active = false; };
@@ -357,8 +366,9 @@ export default function RequestServicePage() {
       serviceOverrides, preferredProviders, preferredProviderNames,
       packageSelections,
       questionAnswers,
+      submissionKey,
     }));
-  }, [accessMethod, city, description, email, entryInstructions, firstName, frequencies, hydrated, isComplete, lastName, otherServiceDetails, packageSelections, parkingNotes, petStatus, phone, preferredDate, preferredEndDate, preferredProviderNames, preferredProviders, questionAnswers, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, timeOfDay, zipCode]);
+  }, [accessMethod, city, description, email, entryInstructions, firstName, frequencies, hydrated, isComplete, lastName, otherServiceDetails, packageSelections, parkingNotes, petStatus, phone, preferredDate, preferredEndDate, preferredProviderNames, preferredProviders, questionAnswers, selectedIds, serviceOverrides, smsUpdates, stateCode, step, streetAddress, submissionKey, timeOfDay, zipCode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -563,6 +573,87 @@ export default function RequestServicePage() {
     addPhotos(Array.from(event.dataTransfer.files));
   }
 
+  function applyRefusal(result: SubmissionResult) {
+    setRefusal(result);
+    setInterestSentFor([]);
+    const nextErrors: FormErrors = {};
+    for (const outcome of result.outcomes) {
+      const service = selectedServices.find((item) => item.id === outcome.service_id);
+      const message = refusalMessage(outcome, service?.name ?? formatServiceName(outcome.service_id), formatMoney);
+      if (message) nextErrors[`submission-${outcome.service_id}`] = message;
+      if (outcome.outcome === "price_changed" && service) {
+        // Show the server's current terms; the next submission is compared against them.
+        const frequency = frequencies[service.id] ?? service.defaultFrequency;
+        const fixed = outcome.pricing_mode === "fixed" && typeof outcome.total === "number";
+        setServiceOverrides((current) => ({
+          ...current,
+          [service.id]: {
+            ...current[service.id],
+            availability: fixed ? "fixed" : "quote",
+            livePrices: { ...(current[service.id]?.livePrices ?? service.livePrices), [frequency]: fixed ? outcome.total! : 0 },
+            promotionIds: { ...(current[service.id]?.promotionIds ?? service.promotionIds), [frequency]: undefined },
+          },
+        }));
+      }
+    }
+    setErrors(nextErrors);
+  }
+
+  function dismissRefusal(serviceId: string) {
+    setRefusal((current) => current && { ...current, outcomes: current.outcomes.filter((outcome) => outcome.service_id !== serviceId) });
+    setErrors((current) => withoutKey(current, `submission-${serviceId}`));
+  }
+
+  function removeRefusedService(serviceId: string) {
+    if (selectedIds.includes(serviceId)) toggleService(serviceId);
+    dismissRefusal(serviceId);
+  }
+
+  // Clearing the preference is the homeowner's explicit consent to another eligible provider.
+  function matchAnotherProvider(serviceId: string) {
+    setPreferredProviders((current) => withoutKey(current, serviceId));
+    setPreferredProviderNames((current) => withoutKey(current, serviceId));
+    setPackageSelections((current) => withoutKey(current, serviceId));
+    dismissRefusal(serviceId);
+  }
+
+  async function registerServiceInterest(serviceId: string) {
+    const service = selectedServices.find((item) => item.id === serviceId);
+    try {
+      const response = await fetch("/api/contact-submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim() || null,
+          subject: `Service interest — ${zipCode.trim()}`,
+          message: [
+            "Service interest submitted from /request.",
+            `Service: ${service?.name ?? formatServiceName(serviceId)} (not available yet in this area)`,
+            serviceId === otherServiceId && otherServiceDetails.trim() ? `Requested work: ${otherServiceDetails.trim()}` : "",
+            `Location: ${city.trim()}, ${stateCode.trim().toUpperCase()} ${zipCode.trim()}`,
+            "No service_request was created. No provider was assigned. No payment was collected.",
+          ].filter(Boolean).join("\n"),
+          intake: intakePayload(),
+        }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "We couldn’t save your interest.");
+      setInterestSentFor((current) => [...current, serviceId]);
+      toast.success("Interest saved", { description: "We’ll contact you if this service becomes available. No request was created." });
+    } catch (reason) {
+      toast.error("Interest not saved", { description: reason instanceof Error ? reason.message : "Please try again." });
+    }
+  }
+
+  const refusalItems = (refusal?.outcomes ?? []).flatMap((outcome) => {
+    const service = selectedServices.find((item) => item.id === outcome.service_id);
+    const message = service ? refusalMessage(outcome, service.name, formatMoney) : null;
+    return service && message ? [{ serviceId: service.id, outcome: outcome.outcome, message, interestSent: interestSentFor.includes(service.id) }] : [];
+  });
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     // Enter validates the current step rather than hidden contact fields.
@@ -574,8 +665,10 @@ export default function RequestServicePage() {
     }
     const emailInput = formRef.current?.querySelector<HTMLInputElement>("#email");
     if (email.trim() && emailInput?.validity.typeMismatch) nextErrors.email = "Enter a valid email address.";
+    if (selectedServices.length === 0) nextErrors["request-step"] = "Go back to Services and choose at least one service.";
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
     setErrors({});
+    setRefusal(null);
     setIsSubmitting(true);
     try {
       const currentCoverage = await verifyCoverage();
@@ -630,119 +723,105 @@ export default function RequestServicePage() {
       }
 
       const supabase = createClient();
-      let resolvedPackages: Record<string, ResolvedPackage> = {};
+      const payload: SubmissionPayload = {
+        location: { address: streetAddress.trim(), city: city.trim(), state: stateCode.trim().toUpperCase(), zip_code: zipCode.trim() },
+        preferred_date: preferredDate || undefined,
+        preferred_time: schedulingPreferenceValue(preferredDate, preferredEndDate, timeOfDay),
+        selections: selectedServices.map((service) => {
+          const frequency = frequencies[service.id] ?? service.defaultFrequency;
+          const selection = packageSelections[service.id];
+          const shownPrice = servicePrice(service, frequency);
+          return {
+            service_id: service.id,
+            frequency,
+            description: requestDescription(service, { projectNotes: description, otherServiceDetails, accessMethod, petStatus, entryInstructions, parkingNotes }),
+            preferred_contractor_id: preferredProviders[service.id],
+            package_id: selection?.packageId,
+            tier_id: selection?.packageId ? selection.tierId : undefined,
+            answers: questionAnswers[service.id],
+            expected: shownPrice > 0 ? { pricing_mode: "fixed" as const, total: shownPrice } : { pricing_mode: "quote" as const },
+          };
+        }),
+      };
+
+      let result: SubmissionResult;
       try {
-        resolvedPackages = await resolveLivePackages(
-          supabase,
-          selectedServices,
-          frequencies,
-          preferredProviders,
-          packageSelections,
-          questionAnswers,
-        );
+        const { data, error } = await supabase.rpc("submit_service_requests", { p_submission_key: submissionKey, p_payload: payload });
+        if (error) throw error;
+        result = parseSubmissionResult(data);
       } catch (reason) {
-        console.error("Unable to verify live package pricing; submitting as quote requests", reason);
-        toast.info("Live checkout is unavailable", { description: "Your request will still be submitted. We’ll confirm pricing before any payment is due." });
+        if (isSubmissionKeyConflict(reason)) {
+          // A request from this form was saved with different details; a deliberate new
+          // submission needs a new key.
+          setSubmissionKey(newSubmissionKey());
+          throw new Error("This form was already submitted with different details. Check your dashboard before submitting again.");
+        }
+        const validation = submissionValidationMessage(reason);
+        if (validation) throw new Error(`${validation}.`);
+        console.error("Unable to verify request submission", reason);
+        throw new Error("We couldn’t verify availability and pricing right now, so your request wasn’t confirmed. Try again — resubmitting this form won’t create a duplicate request.");
       }
 
-      const inserts = selectedServices.map((service) => {
-        const frequency = frequencies[service.id] ?? service.defaultFrequency;
-        const livePackage = resolvedPackages[service.id];
-        const isVerifiedFixed = livePackage?.pricingMode === "fixed" && Boolean(livePackage.tierId) && Number(livePackage.price) > 0;
-        const requestPricingMode = isVerifiedFixed
-          ? "fixed"
-          : livePackage?.pricingMode === "deposit_quote"
-            ? "deposit_quote"
-            : "custom_quote";
-        return {
-          customer_id: user.id,
-          service_type: service.name,
-          contractor_id: null,
-          preferred_contractor_id: preferredProviders[service.id] ?? null,
-          address: streetAddress.trim(),
-          city: city.trim(),
-          state: stateCode.trim().toUpperCase(),
-          zip_code: zipCode.trim(),
-          preferred_date: preferredDate || null,
-          preferred_time: schedulingPreferenceValue(preferredDate, preferredEndDate, timeOfDay),
-          description: requestDescription(service, {
-            projectNotes: description,
-            otherServiceDetails,
-            accessMethod,
-            petStatus,
-            entryInstructions,
-            parkingNotes,
-          }),
-          status: "pending",
-          frequency,
-          pricing_mode: requestPricingMode,
-          quote_only: !isVerifiedFixed,
-          total_amount: isVerifiedFixed ? livePackage.price : null,
-          service_catalog_id: service.id,
-          package_id: livePackage?.packageId ?? null,
-          package_tier_id: isVerifiedFixed ? livePackage.tierId : null,
-          package_question_answers: answerSnapshot(packageSelections[service.id]?.questions ?? [], questionAnswers[service.id] ?? {}),
-          ...(isVerifiedFixed && livePackage.promotionId ? { base_amount: livePackage.basePrice, promotion_id: livePackage.promotionId } : {}),
-        };
-      });
-      const { data: insertedRequests, error } = await supabase
-        .from("service_requests")
-        .insert(inserts)
-        .select("id, pricing_mode, quote_only, package_id, package_tier_id");
-      if (error) throw error;
+      if (result.status === "refused") {
+        if (result.coverage !== "covered") {
+          setCoverageStatus(result.coverage);
+          setCoverageResult({ status: result.coverage, area: null, checkedZip: zipCode.trim() });
+          throw new Error("This ZIP code isn’t in the current service area, so no request was created.");
+        }
+        applyRefusal(result);
+        return;
+      }
+      setRefusal(null);
 
-      const requestIds = (insertedRequests ?? []).map((request) => request.id).filter(Boolean);
+      const createdRequests = result.requests;
+      const requestIds = createdRequests.map((request) => request.request_id);
       if (photos.length > 0) {
-        setPhotoUploadProgress({ completed: 0, total: photos.length });
-        try {
-          await attachRequestPhotos({
-            supabase,
-            userId: user.id,
-            requestIds,
-            photos,
-            onProgress: (completed, total) => setPhotoUploadProgress({ completed, total }),
-          });
-        } catch (reason) {
-          const rollback = requestIds.length
-            ? await supabase
-                .from("service_requests")
-                .delete()
-                .in("id", requestIds)
-                .eq("customer_id", user.id)
-                .eq("status", "pending")
-            : { error: null };
-          if (rollback.error) {
-            console.error("Request photo upload failed and request rollback was unavailable", rollback.error);
-            throw new Error("Your request was saved, but its photos could not be attached. Please check your dashboard before trying again.");
+        // A replay after a failed photo step reattaches only if nothing was attached yet.
+        const attached = result.reused
+          ? await supabase.from("job_photos").select("id", { count: "exact", head: true }).eq("service_request_id", requestIds[0]).eq("uploaded_by", user.id)
+          : null;
+        if (attached?.error) throw new Error("Your request was saved, but we couldn’t check its photos. Submit again to retry — your request won’t be duplicated.");
+        if (!attached?.count) {
+          setPhotoUploadProgress({ completed: 0, total: photos.length });
+          try {
+            await attachRequestPhotos({
+              supabase,
+              userId: user.id,
+              requestIds,
+              photos,
+              onProgress: (completed, total) => setPhotoUploadProgress({ completed, total }),
+            });
+          } catch (reason) {
+            console.error("Request photo upload failed after the request was saved", reason);
+            throw new Error(`Your request was saved, but its photos couldn’t be attached. Submit again to retry the photos — your request won’t be duplicated. ${errorMessage(reason)}`);
           }
-          throw new Error(`Your photos could not be uploaded, so no request was submitted. ${errorMessage(reason)}`);
         }
       }
 
-      const requestsReadyForMatching = (insertedRequests ?? []).filter(
+      const requestsReadyForMatching = createdRequests.filter(
         (request) => request.pricing_mode !== "fixed" || request.quote_only,
       );
       const matchingResults = await Promise.all(
-        requestsReadyForMatching.map((request) => supabase.rpc("start_request_matching", { _request_id: request.id })),
+        requestsReadyForMatching.map((request) => supabase.rpc("start_request_matching", { _request_id: request.request_id })),
       );
-      matchingResults.forEach((result, index) => {
-        if (result.error) {
+      matchingResults.forEach((matching, index) => {
+        if (matching.error) {
           console.error("Unable to start request matching", {
-            requestId: requestsReadyForMatching[index]?.id,
-            error: result.error.message,
+            requestId: requestsReadyForMatching[index]?.request_id,
+            error: matching.error.message,
           });
         }
       });
 
       window.sessionStorage.removeItem(storageKey);
       photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
-      const payable = insertedRequests?.length === 1 && insertedRequests[0]?.pricing_mode === "fixed" && !insertedRequests[0]?.quote_only && insertedRequests[0]?.package_tier_id
-        ? insertedRequests[0]
+      const payable = createdRequests.length === 1 && createdRequests[0].pricing_mode === "fixed" && !createdRequests[0].quote_only && createdRequests[0].package_tier_id
+        ? createdRequests[0]
         : null;
 
       if (payable) {
         const { data: checkout, error: checkoutError } = await supabase.functions.invoke("checkout-request", {
-          body: { request_id: payable.id },
+          body: { request_id: payable.request_id },
         });
         const reviewUrl = checkoutError ? null : sameOriginReviewUrl(checkout?.review_url, window.location.origin);
         if (reviewUrl) {
@@ -765,7 +844,7 @@ export default function RequestServicePage() {
         return;
       }
 
-      setCompletionKind(insertedRequests && insertedRequests.length > 1 ? "multi_service" : "quote");
+      setCompletionKind(createdRequests.length > 1 ? "multi_service" : "quote");
       setIsComplete(true);
       toast.success("Request submitted", { description: "No payment was collected. We’ll confirm pricing and next steps." });
     } catch (error) {
@@ -827,7 +906,7 @@ export default function RequestServicePage() {
               <IntakeTrapField inputRef={trapRef} />
               {step === "services" && <ServicesStep services={requestServiceOptions} categories={catalogCategories} catalogLoading={catalogLoading} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} otherServiceDetails={otherServiceDetails} onOtherServiceDetails={setOtherServiceDetails} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} estimate={estimate} onContinue={continueFromServices} />}
               {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} selectedServices={selectedServices} frequencies={frequencies} packageSelections={packageSelections} preferredProviderNames={preferredProviderNames} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => setQuestionAnswers((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? {}), [questionKey]: answer } }))} onStreetAddress={setStreetAddress} onCity={setCity} onStateCode={setStateCode} onZipCode={setZipCode} onPreferredDate={(value) => { setPreferredDate(value); if (preferredEndDate && preferredEndDate < value) setPreferredEndDate(value); }} onPreferredEndDate={setPreferredEndDate} onTimeOfDay={setTimeOfDay} onDescription={setDescription} onAccessMethod={setAccessMethod} onPetStatus={setPetStatus} onEntryInstructions={setEntryInstructions} onParkingNotes={setParkingNotes} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onBack={() => changeStep("services")} onContinue={continueFromDetails} />}
-              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected && coverageStatus === "covered"} hasQuoteServices={fixedServices.length !== selectedServices.length} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onRetryCoverage={() => void verifyCoverage()} onBack={() => changeStep("details")} />}
+              {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} preferredProviderNames={preferredProviderNames} estimate={estimate} directCheckoutExpected={directCheckoutExpected && coverageStatus === "covered"} hasQuoteServices={fixedServices.length !== selectedServices.length} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} refusalItems={refusalItems} onRemoveService={removeRefusedService} onMatchAnotherProvider={matchAnotherProvider} onRegisterInterest={(serviceId) => void registerServiceInterest(serviceId)} onFirstName={setFirstName} onLastName={setLastName} onEmail={setEmail} onPhone={setPhone} onSmsUpdates={setSmsUpdates} onRetryCoverage={() => void verifyCoverage()} onBack={() => changeStep("details")} />}
             </form>
             </FormErrorsContext>
           </div>
@@ -1646,6 +1725,10 @@ type ContactStepProps = {
   smsUpdates: boolean;
   isSubmitting: boolean;
   isSignedIn: boolean;
+  refusalItems: { serviceId: string; outcome: SelectionResult["outcome"]; message: string; interestSent: boolean }[];
+  onRemoveService: (serviceId: string) => void;
+  onMatchAnotherProvider: (serviceId: string) => void;
+  onRegisterInterest: (serviceId: string) => void;
   onFirstName: (value: string) => void;
   onLastName: (value: string) => void;
   onEmail: (value: string) => void;
@@ -1711,6 +1794,33 @@ function ContactStep(props: ContactStepProps) {
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-6">
           <CoverageStatusPanel status={props.coverageStatus} result={props.coverageResult} onRetry={props.onRetryCoverage} review />
+
+          {props.refusalItems.length > 0 && (
+            <Card className="border-destructive/40 shadow-sm">
+              <CardHeader>
+                <CardTitle><h3>Some services can’t be requested yet</h3></CardTitle>
+                <p className="text-sm text-muted-foreground">Nothing was submitted. Update these services, then submit again.</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {props.refusalItems.map((item) => (
+                  <div key={item.serviceId} id={`submission-${item.serviceId}`} tabIndex={-1} className="scroll-mt-24 rounded-xl border border-border bg-card p-4">
+                    <p className="text-sm font-medium">{item.message}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.outcome === "preferred_provider_unavailable" && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => props.onMatchAnotherProvider(item.serviceId)}>Match me with another provider</Button>
+                      )}
+                      {item.outcome === "unavailable" && (
+                        <Button type="button" variant="outline" size="sm" disabled={item.interestSent} onClick={() => props.onRegisterInterest(item.serviceId)}>
+                          {item.interestSent ? "Interest saved" : "Notify me when available"}
+                        </Button>
+                      )}
+                      <Button type="button" variant="ghost" size="sm" onClick={() => props.onRemoveService(item.serviceId)}>Remove from this request</Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-accent-border bg-accent-subtle/25 shadow-sm">
             <CardHeader>
@@ -2186,17 +2296,6 @@ function questionOptions(value: unknown): string[] {
   return [];
 }
 
-function answerSnapshot(questions: PackageQualifyingQuestion[], answers: Record<string, string>) {
-  return Object.fromEntries(questions.flatMap((question) => {
-    const answer = answers[question.question_key]?.trim();
-    return answer ? [[question.question_key, {
-      question: question.question_label,
-      answer,
-      unit: question.unit || null,
-    }]] : [];
-  }));
-}
-
 function servicePriceLabel(service: ServiceOption, frequency: Frequency) {
   return planningPriceLabel(toPlanningService(service), frequency);
 }
@@ -2234,129 +2333,6 @@ function formatServiceName(id: string) {
 
 function isFrequency(value: unknown): value is Frequency {
   return isPricingFrequency(value);
-}
-
-async function resolveLivePackages(
-  supabase: ReturnType<typeof createClient>,
-  services: ServiceOption[],
-  frequencies: Record<string, Frequency>,
-  preferredProviders: Record<string, string>,
-  explicitSelections: Record<string, PackageSelection>,
-  questionAnswers: Record<string, Record<string, string>>,
-) {
-  if (services.length === 0) return {};
-  type PackageCandidate = { id: string; contractor_id: string; service_id: string; default_frequency: string; pricing_mode: string; deposit_amount: number | null; is_active: boolean; needs_review: boolean | null };
-  type TierCandidate = { id: string; package_id: string; price: number | null; frequency: string | null; rule_question_key: string | null; rule_min: number | null; rule_max: number | null };
-
-  const { data: packageData, error: packageError } = await supabase
-    .from("vendor_packages")
-    .select("id, contractor_id, service_id, default_frequency, pricing_mode, deposit_amount, is_active, needs_review, contractors!inner(is_active)")
-    .in("service_id", services.map((service) => service.id))
-    .eq("is_active", true)
-    .eq("needs_review", false)
-    .eq("contractors.is_active", true);
-  if (packageError) throw packageError;
-
-  const packageRows = (packageData ?? []) as unknown as PackageCandidate[];
-  const fixedPackageIds = packageRows.filter((item) => item.pricing_mode === "fixed").map((item) => item.id);
-  const [tierResult, promotionResult, clockResult] = await Promise.all([
-    fixedPackageIds.length
-      ? supabase.from("package_tiers").select("id, package_id, price, frequency, rule_question_key, rule_min, rule_max").in("package_id", fixedPackageIds)
-      : Promise.resolve({ data: [] as TierCandidate[], error: null }),
-    fixedPackageIds.length
-      ? supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").in("package_id", fixedPackageIds).eq("is_enabled", true)
-      : Promise.resolve({ data: [] as PackagePromotion[], error: null }),
-    supabase.rpc("pricing_server_now"),
-  ]);
-  if (tierResult.error) throw tierResult.error;
-  if (promotionResult.error) throw promotionResult.error;
-  if (clockResult.error || typeof clockResult.data !== "string") throw clockResult.error ?? new Error("The pricing clock is unavailable.");
-  const tiers = (tierResult.data ?? []) as TierCandidate[];
-  const promotions = (promotionResult.data ?? []) as PackagePromotion[];
-  const serverNow = clockResult.data;
-  const packages = packageRows.filter((item) => item.pricing_mode === "fixed"
-    ? isPubliclyEligibleFixedPackage({ ...item, tiers: tiers.filter((tier) => tier.package_id === item.id) })
-    : isPubliclyEligibleQuotePackage(item),
-  );
-
-  const resolved: Record<string, ResolvedPackage> = {};
-  for (const service of services) {
-    const frequency = frequencies[service.id] ?? service.defaultFrequency;
-    const preferredProvider = preferredProviders[service.id];
-    const explicit = explicitSelections[service.id];
-    if (!explicit && service.availability !== "fixed") continue;
-    const candidates = packages.filter((item) =>
-      item.service_id === service.id
-      && (!preferredProvider || item.contractor_id === preferredProvider)
-      && (!explicit || item.id === explicit.packageId),
-    );
-
-    const livePairs = candidates
-      .filter((item) => item.pricing_mode === "fixed" && publiclyEligibleFixedFrequencies({ ...item, tiers: tiers.filter((tier) => tier.package_id === item.id) }, isFrequency(item.default_frequency) ? item.default_frequency : "one-time").includes(frequency))
-      .flatMap((item) => tiers
-        .filter((tier) => tier.package_id === item.id && Number(tier.price) > 0 && tierPricingFrequency(tier, isFrequency(item.default_frequency) ? item.default_frequency : "one-time") === frequency && tierMatchesAnswers(tier, questionAnswers[service.id] ?? {}))
-        .map((tier) => ({ package: item, tier, price: resolveEffectiveTierPrice(tier.price, promotionForPackage(promotions, item.id), serverNow, tiers.filter((candidate) => candidate.package_id === item.id).length) })))
-      .sort((left, right) => left.price.effectivePrice - right.price.effectivePrice);
-    const explicitPackage = explicit ? candidates.find((item) => item.id === explicit.packageId) : undefined;
-    const explicitHasRuleTiers = explicit ? tiers.some((tier) => tier.package_id === explicit.packageId && Boolean(tier.rule_question_key)) : false;
-    const selectedPair = explicitHasRuleTiers
-      ? livePairs.find((pair) => pair.package.id === explicit?.packageId)
-      : explicit?.tierId
-      ? livePairs.find((pair) => pair.package.id === explicit.packageId && pair.tier.id === explicit.tierId)
-        ?? livePairs.find((pair) => pair.package.id === explicit.packageId)
-      : explicit
-        ? livePairs.find((pair) => pair.package.id === explicit.packageId)
-        : livePairs[0];
-    const selectedPackage = explicitPackage ?? selectedPair?.package;
-    if (!selectedPackage) continue;
-
-    if (selectedPackage.pricing_mode !== "fixed") {
-      resolved[service.id] = {
-        packageId: selectedPackage.id,
-        pricingMode: isPricingMode(selectedPackage.pricing_mode) ? selectedPackage.pricing_mode : "custom_quote",
-        contractorId: selectedPackage.contractor_id,
-        price: null,
-      };
-      continue;
-    }
-
-    const tier = selectedPair?.tier;
-    const selectedDefaultFrequency = isFrequency(selectedPackage.default_frequency) ? selectedPackage.default_frequency : "one-time";
-    if (!tier || tierPricingFrequency(tier, selectedDefaultFrequency) !== frequency) continue;
-
-    const verifiedResult = await supabase.rpc("resolve_package_tier_price", { p_package_id: selectedPackage.id, p_tier_id: tier.id });
-    if (verifiedResult.error) throw verifiedResult.error;
-    const verified = Array.isArray(verifiedResult.data) ? verifiedResult.data[0] : verifiedResult.data;
-    if (!verified || Number(verified.effective_price) <= 0 || Number(verified.base_price) <= 0) continue;
-
-    resolved[service.id] = {
-      packageId: selectedPackage.id,
-      tierId: tier.id,
-      pricingMode: "fixed",
-      contractorId: selectedPackage.contractor_id,
-      price: Number(verified.effective_price),
-      basePrice: Number(verified.base_price),
-      promotionId: typeof verified.promotion_id === "string" ? verified.promotion_id : undefined,
-      promotionLabel: typeof verified.promotion_label === "string" ? verified.promotion_label : undefined,
-    };
-  }
-  return resolved;
-}
-
-function tierMatchesAnswers(
-  tier: { rule_question_key: string | null; rule_min: number | null; rule_max: number | null },
-  answers: Record<string, string>,
-) {
-  if (!tier.rule_question_key) return true;
-  const answer = Number(answers[tier.rule_question_key]);
-  if (!Number.isFinite(answer)) return false;
-  if (tier.rule_min != null && answer < Number(tier.rule_min)) return false;
-  if (tier.rule_max != null && answer > Number(tier.rule_max)) return false;
-  return true;
-}
-
-function isPricingMode(value: string): value is PackageSelection["pricingMode"] {
-  return value === "fixed" || value === "deposit_quote" || value === "custom_quote";
 }
 
 function withoutKey<T>(record: Record<string, T>, key: string) {

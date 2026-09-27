@@ -622,6 +622,59 @@ export type Database = {
           },
         ]
       }
+      job_completion_evidence: {
+        Row: {
+          attempt: number
+          bucket_id: string
+          id: string
+          job_id: string
+          minimum_photos: number
+          object_id: string
+          object_name: string
+          position: number
+          recorded_at: string
+          recorded_by: string | null
+          rule_version: number
+          uploader_id: string
+        }
+        Insert: {
+          attempt: number
+          bucket_id: string
+          id?: string
+          job_id: string
+          minimum_photos: number
+          object_id: string
+          object_name: string
+          position: number
+          recorded_at?: string
+          recorded_by?: string | null
+          rule_version: number
+          uploader_id: string
+        }
+        Update: {
+          attempt?: number
+          bucket_id?: string
+          id?: string
+          job_id?: string
+          minimum_photos?: number
+          object_id?: string
+          object_name?: string
+          position?: number
+          recorded_at?: string
+          recorded_by?: string | null
+          rule_version?: number
+          uploader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_completion_evidence_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_events: {
         Row: {
           actor_id: string | null
@@ -4295,6 +4348,66 @@ export type Database = {
         }
         Relationships: []
       }
+      service_request_submission_items: {
+        Row: {
+          selection_index: number
+          service_request_id: string
+          submission_id: string
+        }
+        Insert: {
+          selection_index: number
+          service_request_id: string
+          submission_id: string
+        }
+        Update: {
+          selection_index?: number
+          service_request_id?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_request_submission_items_service_request_id_fkey"
+            columns: ["service_request_id"]
+            isOneToOne: true
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_request_submission_items_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "service_request_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_request_submissions: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          payload_hash: string
+          result: Json
+          submission_key: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          payload_hash: string
+          result: Json
+          submission_key: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          payload_hash?: string
+          result?: Json
+          submission_key?: string
+        }
+        Relationships: []
+      }
       service_requests: {
         Row: {
           address: string
@@ -5950,6 +6063,42 @@ export type Database = {
           },
         ]
       }
+      vendor_retention_deletion_requests: {
+        Row: {
+          actor: string
+          business_key: string
+          created_at: string
+          id: string
+          reason: string
+          scope: string
+          sequence: number
+          storage_path: string
+          subject_id: string
+        }
+        Insert: {
+          actor: string
+          business_key: string
+          created_at?: string
+          id?: string
+          reason: string
+          scope: string
+          sequence?: never
+          storage_path: string
+          subject_id: string
+        }
+        Update: {
+          actor?: string
+          business_key?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          scope?: string
+          sequence?: never
+          storage_path?: string
+          subject_id?: string
+        }
+        Relationships: []
+      }
       vendor_retention_hold_events: {
         Row: {
           action: string
@@ -5988,6 +6137,38 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vendor_onboarding"
             referencedColumns: ["contractor_id"]
+          },
+        ]
+      }
+      vendor_retention_storage_deletions: {
+        Row: {
+          created_at: string
+          id: string
+          request_id: string
+          sequence: number
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          request_id: string
+          sequence?: never
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          request_id?: string
+          sequence?: never
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_retention_storage_deletions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_retention_deletion_requests"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6112,6 +6293,15 @@ export type Database = {
           _user_id: string
         }
         Returns: undefined
+      }
+      completion_evidence_unverified: {
+        Args: never
+        Returns: {
+          job_id: string
+          reference_count: number
+          status: Database["public"]["Enums"]["request_status"]
+          vendor_completed_at: string
+        }[]
       }
       consent_to_provider_fallback: {
         Args: { _request_id: string }
@@ -6245,6 +6435,14 @@ export type Database = {
       intake_record_submission: {
         Args: { p_email_hash: string; p_form: string; p_ip_hash: string }
         Returns: string
+      }
+      job_completion_evidence_visible: {
+        Args: { p_bucket: string; p_name: string }
+        Returns: boolean
+      }
+      job_photo_delete_allowed: {
+        Args: { p_bucket: string; p_name: string }
+        Returns: boolean
       }
       job_transition_actor_allowed: {
         Args: {
@@ -6966,6 +7164,10 @@ export type Database = {
           visibility: Database["public"]["Enums"]["review_visibility"]
         }[]
       }
+      submit_service_requests: {
+        Args: { p_payload: Json; p_submission_key: string }
+        Returns: Json
+      }
       tier_for_points: {
         Args: { _pts: number }
         Returns: Database["public"]["Enums"]["loyalty_tier"]
@@ -6990,6 +7192,10 @@ export type Database = {
       vendor_accept_job: { Args: { _job_id: string }; Returns: undefined }
       vendor_account_link_overview: {
         Args: { p_contractor: string }
+        Returns: Json
+      }
+      vendor_application_attach_documents: {
+        Args: { p_application: string; p_paths: string[] }
         Returns: Json
       }
       vendor_application_retention_overview: {
@@ -7274,6 +7480,14 @@ export type Database = {
         Returns: Json
       }
       vendor_require_operator: { Args: never; Returns: string }
+      vendor_retention_deletion_requested: {
+        Args: { p_bucket: string; p_name: string }
+        Returns: boolean
+      }
+      vendor_retention_storage_delete_allowed: {
+        Args: { p_bucket: string; p_name: string }
+        Returns: boolean
+      }
       vendor_start_onboarding_review: {
         Args: {
           p_application: string
