@@ -38,6 +38,12 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
  preferred_date+(n-1)*7,timezone,id,('a6000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid
  from public.service_requests cross join generate_series(2,3)n where id='a5000000-0000-4000-8000-000000000001';
 
+insert into private.r0_lee_zips values ('00009');
+insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
+select 'a1000000-0000-4000-8000-000000000001','00009',service_id,
+ 'a1000000-0000-4000-8000-000000000001'
+from public.vendor_packages where id='a3000000-0000-4000-8000-000000000001';
+
 create temp table f(key text primary key,id uuid,terms jsonb);
 grant select,insert,update on f to authenticated;
 create function pg_temp.terms(request uuid) returns jsonb language sql as $$ select jsonb_build_object(

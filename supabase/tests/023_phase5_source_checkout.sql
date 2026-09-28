@@ -18,6 +18,12 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
  select ('73000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'71000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000001',
  'Synthetic','Synthetic source address','scheduled',(select service_id from public.vendor_packages where id='75000000-0000-4000-8000-000000000001'),'one-time','00000','fixed',
  '75000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000001' from generate_series(1,4)n;
+insert into private.r0_lee_zips values ('00000');
+insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
+select '71000000-0000-4000-8000-000000000001','00000',service_id,
+ '71000000-0000-4000-8000-000000000001'
+from public.vendor_packages where id='75000000-0000-4000-8000-000000000001';
+
 create temp table source_fixture(key text primary key,id uuid,terms jsonb);
 grant select on source_fixture to authenticated;
 create function pg_temp.source_terms(request uuid) returns jsonb language sql as $$ select jsonb_build_object(
