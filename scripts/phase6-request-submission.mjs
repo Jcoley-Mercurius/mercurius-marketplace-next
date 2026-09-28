@@ -54,6 +54,7 @@ const ids = {
   other: "d1000000-0000-4000-8000-000000000002",
   vendorUser: "d1000000-0000-4000-8000-000000000003",
   admin: "d1000000-0000-4000-8000-000000000004",
+  vendorOnly: "d1000000-0000-4000-8000-000000000005",
   fixed: "d2000000-0000-4000-8000-000000000001",
   quote: "d2000000-0000-4000-8000-000000000002",
 };
@@ -87,8 +88,10 @@ await cleanup();
 await sql(`
   insert into auth.users(id,raw_user_meta_data) values
    ('${ids.owner}','{"full_name":"Synthetic homeowner A"}'),('${ids.other}','{"full_name":"Synthetic homeowner B"}'),
-   ('${ids.vendorUser}','{"full_name":"Synthetic provider"}'),('${ids.admin}','{"full_name":"Synthetic operator"}');
-  insert into public.user_roles(user_id,role) values ('${ids.vendorUser}','vendor'),('${ids.admin}','admin');
+   ('${ids.vendorUser}','{"full_name":"Synthetic provider"}'),('${ids.admin}','{"full_name":"Synthetic operator"}'),
+   ('${ids.vendorOnly}','{"full_name":"Synthetic provider only"}');
+  insert into public.user_roles(user_id,role) values ('${ids.vendorUser}','vendor'),('${ids.admin}','admin'),('${ids.vendorOnly}','vendor');
+  delete from public.user_roles where user_id='${ids.vendorOnly}' and role='homeowner';
   insert into public.coverage_areas(zip_code,city,is_active) values ('00030','Synthetic covered',true);
   insert into public.contractors(id,user_id,name,is_active,marketing_enabled) values
    ('${ids.fixed}','${ids.vendorUser}','Synthetic fixed provider',true,true),('${ids.quote}',null,'Synthetic quote provider',true,true);
@@ -117,6 +120,17 @@ try {
       assert.equal(response.body.code, "42501");
     });
   }
+  await check("provider-only account without the homeowner role is refused (P6-R1)", async () => {
+    const response = await submit(ids.vendorOnly, randomUUID(), plan("00030", [lawn]));
+    assert.equal(response.status, 403, JSON.stringify(response.body));
+    assert.equal(response.body.code, "42501");
+    assert.equal(await requestCount(ids.vendorOnly), 0);
+  });
+  await check("provider who is also a homeowner submits their own request", async () => {
+    const response = await submit(ids.vendorUser, randomUUID(), plan("00030", [lawn]));
+    assert.deepEqual([response.status, response.body.status], [200, "submitted"], JSON.stringify(response.body));
+    assert.equal(await requestCount(ids.vendorUser), 1);
+  });
   await check("uncovered ZIP creates nothing", async () => {
     const response = await submit(ids.owner, randomUUID(), plan("00031", [lawn]));
     assert.equal(response.status, 200);
@@ -213,6 +227,69 @@ try {
     const offer = await rest(ids.owner, "POST", "rpc/start_request_matching", { _request_id: quote.body.requests[0].request_id });
     assert.equal(offer.status, 200);
     assert.equal(await sql(`select contractor_id from public.job_match_attempts where id='${offer.body}'`), ids.quote);
+  });
+
+  // TRACE-098: the intake's read-only preview, status read-back and photo reconciliation.
+  const preview = (user, payload) => rest(user, "POST", "rpc/preview_service_request_selections", { p_payload: payload });
+  await check("an anonymous visitor previews local availability and price without an identity", async () => {
+    const response = await preview(null, { stage: "final", ...plan("00030", [{ service_id: "lawn-mowing", frequency: "one-time" }, { service_id: "house-cleaning", frequency: "monthly" }, { service_id: "general-home-service", frequency: "one-time" }]) });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.deepEqual(response.body.outcomes.map((outcome) => [outcome.outcome, outcome.total ?? null]), [["eligible_fixed", 100], ["eligible_quote", null], ["unavailable", null]]);
+    assert.doesNotMatch(JSON.stringify(response.body), /d2000000|Synthetic (fixed|quote) provider|contractor/);
+  });
+  await check("the preview writes nothing", async () => {
+    const before = await sql("select count(*) from public.service_requests");
+    await preview(null, { stage: "final", ...plan("00030", [{ service_id: "lawn-mowing", frequency: "one-time" }]) });
+    assert.equal(await sql("select count(*) from public.service_requests"), before);
+  });
+  await check("submitting exactly what the preview showed is accepted at that price", async () => {
+    const shown = (await preview(ids.other, { stage: "final", ...plan("00030", [{ service_id: "lawn-mowing", frequency: "one-time" }]) })).body.outcomes[0];
+    const response = await submit(ids.other, randomUUID(), plan("00030", [{ service_id: "lawn-mowing", frequency: "one-time", expected: { pricing_mode: shown.pricing_mode, total: shown.total } }]));
+    assert.deepEqual([response.body.status, response.body.requests[0].total_amount, response.body.requests[0].package_tier_id], ["submitted", shown.total, shown.tier_id]);
+  });
+  const planResult = await submit(ids.owner, randomUUID(), plan("00030", [lawn, cleaning]));
+  const planIds = planResult.body.requests.map((request) => request.request_id);
+  await check("the homeowner reads back the confirmation status of their own plan", async () => {
+    const response = await rest(ids.owner, "GET", `service_requests?id=in.(${planIds.join(",")})&select=id,status,matching_status,pricing_mode,total_amount,contractor_id,payment_status`);
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.deepEqual(response.body.map((row) => [row.pricing_mode, row.matching_status, row.contractor_id, row.payment_status]).sort(), [["custom_quote", "awaiting_match", null, "pending"], ["fixed", "awaiting_match", null, "pending"]]);
+    const other = await rest(ids.other, "GET", `service_requests?id=in.(${planIds.join(",")})&select=id`);
+    assert.deepEqual(other.body, []);
+  });
+  const shared = `${ids.owner}/${planIds[0]}/intake-${randomUUID()}.png`;
+  const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4b50000000049454e44ae426082", "hex");
+  const upload = (user, path) => fetch(`${stack.API_URL}/storage/v1/object/job-photos/${path}`, { method: "POST", headers: { ...headers(user), "Content-Type": "image/png", "x-upsert": "false" }, body: png });
+  await check("a repeated upload to the same stable path is recognized as already uploaded", async () => {
+    assert.equal((await upload(ids.owner, shared)).status, 200);
+    const again = await upload(ids.owner, shared);
+    const body = await again.json();
+    assert.ok(String(body.statusCode) === "409" || /already exists|duplicate/i.test(`${body.error} ${body.message}`), JSON.stringify(body));
+  });
+  const links = () => rest(ids.owner, "GET", `job_photos?service_request_id=in.(${planIds.join(",")})&photo_url=in.(${shared})&uploaded_by=eq.${ids.owner}&select=service_request_id,photo_url`);
+  await check("one object links to every request in the plan", async () => {
+    const response = await rest(ids.owner, "POST", "job_photos", planIds.map((id) => ({ service_request_id: id, uploaded_by: ids.owner, uploader_role: "homeowner", photo_url: shared, photo_type: "evidence", caption: "Homeowner request intake photo" })));
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    assert.equal((await links()).body.length, 2);
+  });
+  await check("the reconciliation read finds existing links, so a retry inserts nothing", async () => {
+    const existing = new Set((await links()).body.map((row) => `${row.service_request_id}|${row.photo_url}`));
+    assert.equal(planIds.filter((id) => !existing.has(`${id}|${shared}`)).length, 0);
+  });
+  await check("the owner lists their plan folder for cleanup; another homeowner sees nothing", async () => {
+    const list = (user) => fetch(`${stack.API_URL}/storage/v1/object/list/job-photos`, { method: "POST", headers: headers(user), body: JSON.stringify({ prefix: `${ids.owner}/${planIds[0]}`, limit: 100 }) }).then((response) => response.json());
+    const orphan = `${ids.owner}/${planIds[0]}/intake-${randomUUID()}.png`;
+    assert.equal((await upload(ids.owner, orphan)).status, 200);
+    assert.deepEqual((await list(ids.owner)).map((item) => item.name).sort(), [shared, orphan].map((path) => path.split("/").pop()).sort());
+    assert.deepEqual(await list(ids.other), []);
+    const removed = await fetch(`${stack.API_URL}/storage/v1/object/job-photos`, { method: "DELETE", headers: headers(ids.other), body: JSON.stringify({ prefixes: [orphan] }) }).then((response) => response.json());
+    assert.deepEqual(removed, []);
+    const cleaned = await fetch(`${stack.API_URL}/storage/v1/object/job-photos`, { method: "DELETE", headers: headers(ids.owner), body: JSON.stringify({ prefixes: [orphan] }) }).then((response) => response.json());
+    assert.equal(cleaned.length, 1);
+  });
+  await check("another homeowner can't upload into the owner's folder or read the photo links", async () => {
+    assert.notEqual((await upload(ids.other, `${ids.owner}/${planIds[0]}/intake-${randomUUID()}.png`)).status, 200);
+    const response = await rest(ids.other, "GET", `job_photos?service_request_id=in.(${planIds.join(",")})&select=id`);
+    assert.deepEqual(response.body, []);
   });
   console.log(`1..${results.length}`);
 } finally {

@@ -38,6 +38,9 @@ export function useServiceCatalog() {
   const [services, setServices] = useState<Service[]>(() => fallbackServices.map((service) => ({ ...service, availability: "sourcing" })));
   const [categories, setCategories] = useState<ServiceCategory[]>(fallbackCategories);
   const [loading, setLoading] = useState(true);
+  // A failed lookup is reported, never presented as a catalog without live supply.
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -52,6 +55,9 @@ export function useServiceCatalog() {
       supabase.rpc("pricing_server_now"),
     ]).then(async ([categoryResult, serviceResult, packageResult, tierResult, promotionResult, clockResult]) => {
       if (!active) return;
+      const failed = Boolean(categoryResult.error || serviceResult.error || packageResult.error || tierResult.error || promotionResult.error || clockResult.error);
+      // Public pages keep their existing fallback; the intake treats this as an error.
+      setError(failed);
       const categoryRows = (categoryResult.data ?? []) as CategoryRow[];
       const serviceRows = (serviceResult.data ?? []) as ServiceRow[];
       const packageRows = (packageResult.data ?? []) as unknown as PackageRow[];
@@ -182,15 +188,16 @@ export function useServiceCatalog() {
         }));
       }
       setLoading(false);
-    }).catch(() => { if (active) setLoading(false); }); };
+    }).catch(() => { if (active) { setError(true); setLoading(false); } }); };
 
     load();
     const clockRefresh = window.setInterval(load, 60_000);
 
     return () => { active = false; window.clearInterval(clockRefresh); };
-  }, []);
+  }, [attempt]);
 
-  return { services, categories, loading };
+  const retry = () => { setLoading(true); setAttempt((value) => value + 1); };
+  return { services, categories, loading, error, retry };
 }
 
 function lowerPrice(current: PricePoint | undefined, candidate: PricePoint) {

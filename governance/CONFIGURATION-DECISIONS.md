@@ -15,6 +15,7 @@
 - **Acceptance evidence:** The committed coverage configuration must match the approved backend allowlist; covered and uncovered boundary ZIPs must pass automated request-flow tests.
 - **Implementation note:** Export and reconcile the existing backend coverage records during backend reconstruction. Do not invent, expand, or silently remove ZIP codes.
 - **Allowlist (DEC-2026-021, 2026-09-27):** The owner approved the 47 USPS Lee County ZIPs, committed in migration `20260927010000_cfg001_lee_county_coverage.sql`. Hosted rows are reconciled against it during the hosted migration.
+- **Boundary clarification (owner reaffirmed 2026-09-27):** 33917, 33921, 33936 and 34134 are covered in full; 33955, 34110 and 34119 are excluded. ZIP enforcement does not trim coverage to county portions. Existing hosted rows must be reconciled before activation; the additive migration preserves other rows. See [Codex review](PHASE-6-DECISION-REVIEW.md#zip-boundary-calls).
 
 ## CFG-002 — Service visibility and unavailable supply
 

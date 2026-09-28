@@ -1,6 +1,63 @@
 # Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — 6.1 merged (PR #56); post-merge cleanup (TRACE-095)
+## Current checkpoint — Codex 6.2 review; 6.3 brief prepared
+
+- Reviewed `codex/phase6-intake` head `634837a`, implementation base `c2b9b81`.
+  [Review](../../governance/PHASE-6-INTAKE-REVIEW.md), TRACE-098: changes required.
+  P6-R2: confirmation ignores current lifecycle on saved reload (4 reproduced failures).
+  P6-R3: coverage/form validation precedes unknown-attempt replay (code-path finding).
+- P6-R1 local code re-review is clear. New evidence: SQL 063–066 **178/178**;
+  focused units **70/70**; typecheck PASS; real RPC/concurrency/Storage script **32/32**,
+  fixtures cleaned. No new browser/build/manual/CI result; owner-closed human gate preserved.
+- Next: Claude repairs P6-R2/P6-R3 under TRACE-098, returns regression evidence for
+  Codex re-review, then implements [6.3 / TRACE-099](../../governance/PHASE-6-MATCHING-BRIEF.md)
+  from the reviewed merged base (or explicitly authorized stack).
+- Open: merge/final-head and post-merge CI, local checkout integration, script CI wiring,
+  promotion backend refusal/data cutover and intake orphan-retention decision; hosted
+  rollout/reconciliation and delivery stay in their named later phases. No external activation.
+
+## Previous checkpoint — 6.2 intake implemented (TRACE-098)
+
+- Branch `codex/phase6-intake`, **stacked on the P6-R1 repair `c2b9b81`** (PR #59, not yet
+  re-reviewed or merged) at the owner's request. Migration `20260928000000`: read-only anonymous
+  `preview_service_request_selections` (mirrors the command; no identities) over answer-aware
+  eligibility (five-argument wrapper unchanged in behavior). Intake reworked: early per-ZIP
+  availability and interest, locked saved result with photo/matching/checkout recovery, honest
+  per-service confirmation, sign-up continuation.
+- Evidence: SQL 066 68/68; clean reset 3244 / 57 PASS; script 32/32 on the main local stack;
+  274 unit; request browser suite and axe matrix. Owner-reported visual review and screen-reader
+  checklist in Chrome on a laptop: no errors; the owner closed the human accessibility/visual gate.
+  [Report](../../governance/PHASE-6-INTAKE.md).
+- Open: P6-R1 re-review/merge, then Codex review of 6.2 (D1–D9, notably D6 promotion refusal and
+  D7 intake orphan retention), PR #60 CI, checkout Edge function locally. Next: 6.3 after
+  PR #60 is done. No
+  external activation.
+
+## Previous checkpoint — P6-R1 role repair implemented (TRACE-095)
+
+- Branch `codex/phase6-role-repair` from `ab17e99` (PR #58 head). Migration `20260927020000`:
+  public `submit_service_requests` now requires the homeowner role before validation, replay
+  or writes; the unchanged 6.1 body is `private.submit_service_requests_core`.
+- Evidence: SQL 065 29/29 (11 failed pre-fix), 063 65/65, 064 16/16, script 23/23; clean reset
+  3176 / 56 PASS; types unchanged. [Report](../../governance/PHASE-6-REQUEST-SUBMISSION.md#p6-r1-repair-homeowner-role-enforcement-2026-09-27-branch-codex-phase6-role-repair-from-ab17e99).
+- Open: Codex re-review; PR/CI; merge of #58 and this repair to main. Next: after re-review,
+  Claude starts 6.2 (TRACE-098) on `codex/phase6-intake` from merged main. No external activation.
+
+## Previous checkpoint — Codex 6.1 decisions reviewed; 6.2 brief prepared
+
+- Branch `codex/phase6-cleanup`; reviewed base `0e4793b` (main merge `b85c887`).
+  [Focused review](../../governance/PHASE-6-DECISION-REVIEW.md): D3 requires P6-R1,
+  enforcing the existing homeowner capability at submission/replay. Other D1–D7
+  dispositions and both owner-confirmed ZIP boundary calls are recorded there.
+- New local evidence: SQL 063 65/65, SQL 064 16/16; rollback-only role reproduction
+  4/4 confirms vendor-only submission. These are focused checks, not full acceptance.
+- [6.2 brief](../../governance/PHASE-6-INTAKE-BRIEF.md), TRACE-098, is ready for Claude
+  after the TRACE-095 role repair and Codex re-review. No 6.2 code implemented.
+- Open: repair/re-review, merged follow-up/CI, script CI wiring, local checkout
+  integration, human accessibility, hosted coverage reconciliation (Phase 8).
+  Next: Claude implements the bounded D3 forward fix. No external activation.
+
+## Previous checkpoint — 6.1 merged (PR #56); post-merge cleanup (TRACE-095)
 
 - Branch `codex/phase6-cleanup` from main `b85c887` (main CI 36292614304 passed). Scope: review-step
   copy fix (CodeRabbit on #56), stale Phase 4 line in PHASE-6-SCOPE.md, and the Lee County

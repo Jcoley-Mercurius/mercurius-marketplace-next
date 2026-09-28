@@ -5,6 +5,11 @@ Status: planned under DEC-2026-017; **hold released** and Phase 4 accepted (DEC-
 Phase 4 review findings P4-R1/P4-R2 were repaired by TRACE-097 ([report](PHASE-4-COMPLETION-INTEGRITY.md)).
 Codex scopes and reviews; Claude implements one bounded slice at a time.
 
+2026-09-27 checkpoint: [6.1 D1–D7 and ZIP review](PHASE-6-DECISION-REVIEW.md)
+recorded the bounded D3 role repair under TRACE-095. The [6.2 review](PHASE-6-INTAKE-REVIEW.md)
+clears its local re-review and requires P6-R2/P6-R3 intake fixes under TRACE-098.
+[6.3 starting brief](PHASE-6-MATCHING-BRIEF.md), TRACE-099, follows their repair/re-review.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed
@@ -15,8 +20,8 @@ for later slices follow before their implementation.
 | Slice | Roadmap area | Bounded result |
 |---|---|---|
 | 6.1 / TRACE-095 | Coverage and intake | Authoritative, duplicate-safe request submission; server/database coverage, eligible supply and pricing-mode enforcement |
-| 6.2 | Coverage and intake | Accessible intake, property/details/photos, authentication continuation, interest, price review and honest confirmation; hide public promotions on these surfaces |
-| 6.3 | Matching and offers | Homeowner provider selection/status and vendor accept/decline/expiry; four-hour exclusivity, fallback consent and honest exhaustion |
+| 6.2 / TRACE-098 | Coverage and intake | Accessible intake, property/details/photos, authentication continuation, interest, price review and honest confirmation; hide public promotions on these surfaces |
+| 6.3 / TRACE-099 | Matching and offers | Homeowner provider selection/status and vendor accept/decline/expiry; four-hour exclusivity, fallback consent and honest exhaustion |
 | 6.4 | Quotes and scheduling | Quote creation/revision/expiry and acceptance/decline with immutable commercial review and payment/deposit failure recovery |
 | 6.5 | Quotes and scheduling | One-time appointment confirmation, shared timezone and schedule history |
 | 6.6 | Quotes and scheduling | Recurring occurrence generation and charge timing after an owner operating decision; auditable visit identities and duplicate-safe generation |

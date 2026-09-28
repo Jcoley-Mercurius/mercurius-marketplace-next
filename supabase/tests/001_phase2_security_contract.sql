@@ -115,7 +115,9 @@ select is(
        'find_public_eligible_providers',
        'get_completed_job_counts',
        'pricing_server_now',
-       'resolve_package_tier_price'
+       'resolve_package_tier_price',
+       -- TRACE-098: read-only intake preview of public inventory; no writes, no identities.
+       'preview_service_request_selections'
      )),
   0::bigint,
   'anonymous can execute only the approved public RPC surface'
