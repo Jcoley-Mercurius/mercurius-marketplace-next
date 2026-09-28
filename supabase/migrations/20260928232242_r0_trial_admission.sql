@@ -178,14 +178,15 @@ begin
     or jsonb_typeof(selections) is distinct from 'array'
     or jsonb_array_length(selections) = 0 then return true; end if;
   zip := left(zip, 5);
-  -- Existing request validation reports uncovered and invalid selections without
-  -- exposing the admission roster. Neither path can create a request.
+  -- A replay can return before the core revalidates coverage or catalog state.
+  -- Keep admission authoritative for formerly active cells, even after either
+  -- underlying row is deactivated. Unknown cells retain core diagnostics.
   if not exists (select 1 from public.coverage_areas
-      where zip_code = zip and is_active = true) then return true; end if;
+      where zip_code = zip) then return true; end if;
   if exists (select 1 from jsonb_array_elements(selections) item
       where jsonb_typeof(item) <> 'object'
         or not exists (select 1 from public.services_catalog s
-          where s.id = item ->> 'service_id' and s.is_active = true))
+          where s.id = item ->> 'service_id'))
     then return true; end if;
   for selection in select value from jsonb_array_elements(selections) loop
     if jsonb_typeof(selection) <> 'object' or selection ->> 'service_id' is null

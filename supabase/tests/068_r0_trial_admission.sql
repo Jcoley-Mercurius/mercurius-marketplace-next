@@ -116,6 +116,12 @@ select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
  'r0-admission-key-0004',pg_temp.plan())$$,
  '42501','Trial invitation required for this service and area',
  'revocation blocks exact-key replay');
+update public.coverage_areas set is_active=false where zip_code='00068';
+update public.services_catalog set is_active=false where id='lawn-mowing';
+select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
+ 'r0-admission-key-0004',pg_temp.plan())$$,
+ '42501','Trial invitation required for this service and area',
+ 'deactivated coverage and service cannot restore a revoked replay');
 select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
  'r0-admission-key-0005',pg_temp.plan())$$,
  '42501','Trial invitation required for this service and area',
