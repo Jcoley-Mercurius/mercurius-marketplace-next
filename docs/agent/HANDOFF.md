@@ -1,6 +1,20 @@
 # Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — Codex 6.2 review; 6.3 brief prepared
+## Current checkpoint — P6-R2/P6-R3 repaired; awaiting Codex re-review
+
+- Uncommitted on `codex/phase6-intake` review branch `c9a4a23` (Codex review + `464ab34`), TRACE-098. P6-R2: the saved confirmation
+  uses `canonicalRequestState` for scheduled and later states, and `quote_status`/`quote_amount`
+  from the dashboard's existing readback for quotes. Paid, refunded or unknown payment is never
+  shown as "nothing charged". Checkout and matching retry run only while the request is at
+  intake (`intakeCheckoutAllowed`/`intakeMatchingAllowed`). P6-R3: an unknown attempt replays
+  its persisted key/payload before contact validation, coverage or preview. The submit button
+  stays enabled and labelled for replay whatever the coverage state.
+- Evidence: Codex repro 4/4 pass; units 286/286 (20 new); typecheck, lint, synthetic build PASS;
+  request browser suite 82/82 on `c9a4a23` incl. 4 new cases and visual (an earlier run on
+  `0a02320` had one axe `frame.evaluate` timeout, 3/3 on rerun). No SQL/migration change; no DB, manual or CI run.
+- Next: Codex re-reviews; then 6.3 / TRACE-099.
+
+## Previous checkpoint — Codex 6.2 review; 6.3 brief prepared
 
 - Reviewed `codex/phase6-intake` head `634837a`, implementation base `c2b9b81`.
   [Review](../../governance/PHASE-6-INTAKE-REVIEW.md), TRACE-098: changes required.
