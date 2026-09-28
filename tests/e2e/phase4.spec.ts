@@ -42,10 +42,12 @@ test("Phase 4: homeowner fallback requires explicit confirmation", async ({ page
     const rows = await response.json();
     await route.fulfill({ response, json: rows.map((row: { id: string }) => row.id.endsWith("010") ? { ...row, matching_status: "awaiting_consent" } : row) });
   });
+  // TRACE-099: the outcome is read from the consent record; none exists here, so it isn't saved.
+  await page.route("**/rest/v1/matching_fallback_consents?**", route => route.fulfill({ json: [] }));
   await page.goto("/dashboard?tab=upcoming");
   await page.getByRole("button", { name: "Open Synthetic Lawn Service details" }).click();
   await expect(page.getByText("Awaiting provider", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Find another provider" }).click();
+  await page.getByRole("button", { name: "Allow another provider" }).click();
   const confirm = page.getByRole("alertdialog", { name: "Allow another provider?" });
   await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
   const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/consent_to_provider_fallback"));
@@ -77,7 +79,7 @@ test("Phase 4: quoted vendor offer guidance agrees with the acceptance control",
     await route.fulfill({ response, json: rows.map((row: { id: string }) => row.id.endsWith("010") ? { ...row, status: "quoted", matching_status: "offered" } : row) });
   });
   await page.goto("/vendor/jobs");
-  await expect(page.getByRole("button", { name: "Accept request", exact: true })).toBeEnabled();
-  await expect(page.getByText(/Accept confirms the assignment/)).toBeVisible();
-  await expect(page.getByText("Not open yet", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Accept offer", exact: true })).toBeEnabled();
+  await expect(page.getByText(/Accepting commits you to this request/)).toBeVisible();
+  await expect(page.getByText("Not open for a response", { exact: true })).toHaveCount(0);
 });

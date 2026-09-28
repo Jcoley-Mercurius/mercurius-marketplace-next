@@ -68,9 +68,9 @@ test("vendor confirmation, mobile navigation and completion upload failure", asy
   await expect(menu).toBeFocused();
   const decline = page.getByRole("button", { name: "Decline", exact: true });
   await decline.click();
-  const confirm = page.getByRole("alertdialog", { name: "Decline this request?" });
+  const confirm = page.getByRole("alertdialog", { name: "Decline this offer?" });
   await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
-  await confirm.getByRole("button", { name: "Decline request", exact: true }).click();
+  await confirm.getByRole("button", { name: "Decline offer", exact: true }).click();
   await expect(confirm.getByRole("alert")).toBeFocused();
   await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(decline).toBeFocused();

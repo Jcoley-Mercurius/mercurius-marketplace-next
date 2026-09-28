@@ -8,7 +8,7 @@ Codex scopes and reviews; Claude implements one bounded slice at a time.
 2026-09-27 checkpoint: [6.1 D1–D7 and ZIP review](PHASE-6-DECISION-REVIEW.md)
 recorded the bounded D3 role repair under TRACE-095. The [6.2 review](PHASE-6-INTAKE-REVIEW.md)
 clears its local re-review and requires P6-R2/P6-R3 intake fixes under TRACE-098.
-[6.3 starting brief](PHASE-6-MATCHING-BRIEF.md), TRACE-099, follows their repair/re-review.
+[6.3 starting brief](PHASE-6-MATCHING-BRIEF.md), TRACE-099: implemented, awaiting review ([report](PHASE-6-MATCHING.md)).
 
 ## Count and order
 

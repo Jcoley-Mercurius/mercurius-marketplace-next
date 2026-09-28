@@ -7,12 +7,13 @@ import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
 
 /** UI duplicate guard only. The caller still owns server authorization/idempotency. */
-export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, reasonLabel = "Reason", reasonHelp = "Explain why this change is needed.", disabled = false, confirmationTone = "destructive", onConfirm }: {
+export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, reasonLabel = "Reason", reasonHelp = "Explain why this change is needed.", disabled = false, confirmationTone = "destructive", triggerVariant = "outline", onConfirm }: {
   triggerLabel: string; title: string; consequence: string; entity: string;
   confirmLabel: string; requireReason?: boolean; disabled?: boolean;
   reasonLabel?: string; reasonHelp?: string;
   onConfirm: (reason: string) => Promise<void>;
   confirmationTone?: "destructive" | "commitment";
+  triggerVariant?: "outline" | "commitment";
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -48,7 +49,7 @@ export function ConfirmAction({ triggerLabel, title, consequence, entity, confir
       setOpen(nextOpen);
       if (nextOpen) { setReason(""); setError(""); setResult(""); }
     }}>
-      <AlertDialog.Trigger disabled={disabled} render={<Button variant="outline" />}>{triggerLabel}</AlertDialog.Trigger>
+      <AlertDialog.Trigger disabled={disabled} render={<Button variant={triggerVariant} />}>{triggerLabel}</AlertDialog.Trigger>
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/50" />
         <AlertDialog.Popup initialFocus={cancelRef} className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 overflow-y-auto rounded-xl border bg-popover p-6 text-popover-foreground shadow-xl">

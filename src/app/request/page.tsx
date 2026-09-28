@@ -60,6 +60,8 @@ import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { paymentFunctionError, sameOriginReviewUrl } from "@/lib/payments";
 import {
   describeConfirmation,
+  intakeCheckoutAllowed,
+  intakeMatchingAllowed,
   type CheckoutState,
   type MatchingStart,
   type RequestReadback,
@@ -808,7 +810,7 @@ export default function RequestServicePage() {
   const readRequests = useCallback(async (record: SavedSubmission) => {
     const ids = record.result.requests.map((request) => request.request_id);
     const { data, error } = await createClient().from("service_requests")
-      .select("id, status, matching_status, pricing_mode, total_amount, contractor_id, payment_status")
+      .select("id, status, matching_status, pricing_mode, total_amount, contractor_id, payment_status, quote_status, quote_amount")
       .in("id", ids);
     return error ? null : (data ?? []) as RequestReadback[];
   }, []);
@@ -866,7 +868,7 @@ export default function RequestServicePage() {
     const matching: Record<string, MatchingStart> = {};
     for (const request of requests.filter((item) => item.pricing_mode !== "fixed")) {
       const row = rows?.find((item) => item.id === request.request_id);
-      if (row && row.matching_status !== "awaiting_match") continue;
+      if (row && !intakeMatchingAllowed(row)) continue;
       if (!row && rows) continue;
       const { error } = await createClient().rpc("start_request_matching", { _request_id: request.request_id });
       matching[request.request_id] = error ? "failed" : "started";
@@ -874,8 +876,8 @@ export default function RequestServicePage() {
     if (Object.keys(matching).length) rows = await readRequests(record);
     setPostSave((current) => current && { ...current, loading: false, readback: rows, readbackFailed: rows === null, matching: { ...current.matching, ...matching } });
 
-    const paid = rows?.find((row) => row.id === payable?.request_id)?.payment_status === "captured";
-    if (payable && autoCheckout && photosAttached && !paid) await startCheckout(payable.request_id);
+    const payableRow = rows?.find((row) => row.id === payable?.request_id);
+    if (payable && autoCheckout && photosAttached && intakeCheckoutAllowed(payableRow)) await startCheckout(payable.request_id);
   }, [attachPhotos, readRequests, startCheckout]);
 
   // A saved submission survives a reload: recover its status without resubmitting.
@@ -904,7 +906,7 @@ export default function RequestServicePage() {
     if (!saved || files.length === 0) return;
     const attached = await attachPhotos(saved, files);
     const payable = saved.result.requests.length === 1 && saved.result.requests[0].pricing_mode === "fixed" ? saved.result.requests[0] : null;
-    if (attached && payable && postSave?.checkout.kind === "pending") await startCheckout(payable.request_id);
+    if (attached && payable && postSave?.checkout.kind === "pending" && intakeCheckoutAllowed(postSave.readback?.find((row) => row.id === payable.request_id))) await startCheckout(payable.request_id);
   }
 
   function reselectPhotos(files: File[]) {
@@ -973,6 +975,15 @@ export default function RequestServicePage() {
   }
 
   async function submitReview(options: { newKey?: boolean } = {}) {
+    // P6-R3: an unconfirmed earlier attempt is resolved first with its exact persisted key
+    // and payload, independent of the current form, coverage or preview. Only the command's
+    // answer decides whether anything was saved.
+    if (submissionUnknown && draft.inFlight && !options.newKey) {
+      if (!user) { router.push("/login?redirect=/request"); return; }
+      await sendSubmission(draft.inFlight, submissionKey);
+      return;
+    }
+
     const nextErrors = contactErrors();
     if (selectedServices.length === 0) nextErrors["request-step"] = "Go back to Services and choose at least one service.";
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
@@ -991,12 +1002,6 @@ export default function RequestServicePage() {
     if (!user) {
       // The draft (never files or credentials) is kept in this tab for the return trip.
       router.push("/login?redirect=/request");
-      return;
-    }
-
-    // An unconfirmed earlier attempt is resolved with its exact payload first.
-    if (submissionUnknown && draft.inFlight && !options.newKey) {
-      await sendSubmission(draft.inFlight, submissionKey);
       return;
     }
 
@@ -1108,7 +1113,7 @@ export default function RequestServicePage() {
     });
     const single = saved.result.requests.length === 1 ? saved.result.requests[0] : null;
     const checkoutAvailable = Boolean(single && single.pricing_mode === "fixed" && single.package_tier_id && saved.photosPending === 0
-      && postSave && !postSave.loading && postSave.readback?.find((row) => row.id === single.request_id)?.payment_status !== "captured");
+      && postSave && !postSave.loading && intakeCheckoutAllowed(postSave.readback?.find((row) => row.id === single.request_id)));
     return pageShell(<RequestConfirmation
       services={confirmations}
       loading={postSave?.loading ?? true}
@@ -1900,9 +1905,9 @@ function ContactStep(props: ContactStepProps) {
     return !availability || availability === "error" || !((availability.kind === "fixed" && availability.exact) || availability.kind === "quote");
   });
   const singleFixed = props.availabilityItems.length === 1 && fixed.length === 1;
-  const submitLabel = !covered
+  const submitLabel = props.submissionUnknown ? "Check and finish submitting"
+    : !covered
     ? props.coverageStatus === "waitlist" ? "Join the service-area list" : props.coverageStatus === "error" ? "Check coverage again" : "Notify me when coverage expands"
-    : props.submissionUnknown ? "Check and finish submitting"
     : props.isSignedIn ? "Request service" : "Sign in to request service";
 
   return (
@@ -2066,10 +2071,10 @@ function ContactStep(props: ContactStepProps) {
         <Button type="button" variant="outline" size="lg" onClick={props.onBack}>
           <ArrowLeft aria-hidden="true" className="h-4 w-4" /> Back
         </Button>
-        <Button type="submit" size="lg" aria-busy={props.isSubmitting} disabled={props.isSubmitting || props.coverageStatus === "checking" || props.coverageStatus === "idle" || (covered && blocked && !props.submissionUnknown) || props.interestOnly} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
+        <Button type="submit" size="lg" aria-busy={props.isSubmitting} disabled={props.isSubmitting || (!props.submissionUnknown && (props.coverageStatus === "checking" || props.coverageStatus === "idle" || (covered && blocked) || props.interestOnly))} className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active">
           {props.isSubmitting ? (
-            <><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> {props.photoUploadProgress.total > 0 ? `Uploading photos ${props.photoUploadProgress.completed} of ${props.photoUploadProgress.total}` : covered ? "Submitting…" : "Saving…"}</>
-          ) : props.coverageStatus === "checking" || props.coverageStatus === "idle" ? "Checking coverage…" : submitLabel}
+            <><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> {props.photoUploadProgress.total > 0 ? `Uploading photos ${props.photoUploadProgress.completed} of ${props.photoUploadProgress.total}` : covered || props.submissionUnknown ? "Submitting…" : "Saving…"}</>
+          ) : !props.submissionUnknown && (props.coverageStatus === "checking" || props.coverageStatus === "idle") ? "Checking coverage…" : submitLabel}
         </Button>
       </div>
       {covered && blocked && !props.submissionUnknown && !props.interestOnly && (

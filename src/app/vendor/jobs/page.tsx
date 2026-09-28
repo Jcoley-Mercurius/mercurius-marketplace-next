@@ -18,6 +18,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatEastern, isOpenVendorOffer, isQuoteWork, offerTimeLeft, vendorOfferOutcome } from "@/lib/offerStatus";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -51,14 +52,16 @@ type Job = {
 
 type Mode = "loading" | "live" | "unlinked" | "error";
 type Action = { id: string; kind: string } | null;
+type Notice = { tone: "success" | "warning" | "error"; title: string; text: string } | null;
 
-const incoming = new Set(["matched", "pending"]);
-const isIncoming = (job: Job) => incoming.has(job.status) || (job.status === "quoted" && job.matching_status === "offered");
+// TRACE-099: an offer is actionable only in the stored offer state; the server decides expiry.
+const isIncoming = (job: Job) => isOpenVendorOffer(job) || job.status === "pending";
+const readbackColumns = "status, matching_status, contractor_id, pricing_mode, quote_only, scheduled_start_at";
 const finished = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed", "cancelled"]);
 const statusConfig: Record<string, [string, string]> = {
-  matched: ["New request", "border-status-info bg-status-info-bg text-status-info"],
+  matched: ["New offer", "border-status-info bg-status-info-bg text-status-info"],
   pending: ["Preparing match", "border-status-info bg-status-info-bg text-status-info"],
-  quoted: ["Quote pending", "border-status-info bg-status-info-bg text-status-info"],
+  quoted: ["Quote offer", "border-status-info bg-status-info-bg text-status-info"],
   scheduled: ["Scheduled", "border-status-info bg-status-info-bg text-status-info"],
   in_progress: ["In Progress", "border-accent/20 bg-accent/10 text-accent"],
   pending_review: ["Pending Confirmation", "border-status-warning bg-status-warning-bg text-status-warning"],
@@ -82,6 +85,13 @@ export default function VendorJobsPage() {
   const [selected, setSelected] = useState<Job | null>(null);
   const [completing, setCompleting] = useState<Job | null>(null);
   const [now, setNow] = useState(0);
+  const [contractorId, setContractorId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
+  const [staleRefresh, setStaleRefresh] = useState(false);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef(false);
+  useEffect(() => { if (notice) noticeRef.current?.focus(); }, [notice]);
 
   useEffect(() => {
     // The response-window clock begins only after hydration.
@@ -91,10 +101,12 @@ export default function VendorJobsPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!user) return;
-    setMode("loading");
-    setError("");
+    if (!silent) {
+      setMode("loading");
+      setError("");
+    }
     try {
       const supabase = createClient();
       const expiryResult = await supabase.rpc("expire_stale_matches");
@@ -103,9 +115,11 @@ export default function VendorJobsPage() {
       if (contractorResult.error) throw contractorResult.error;
       if (!contractorResult.data) {
         setJobs([]);
+        setContractorId(null);
         setMode("unlinked");
         return;
       }
+      setContractorId(contractorResult.data.id);
       const result = await supabase
         .from("service_requests")
         .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at, service_catalog_id")
@@ -123,8 +137,16 @@ export default function VendorJobsPage() {
         }
       }
       setJobs(liveJobs.map((job) => ({ ...job, homeowner_name: names.get(job.customer_id) ?? null })));
+      setNow(Date.now());
+      setStaleRefresh(false);
       setMode("live");
     } catch (reason) {
+      if (silent) {
+        // Keep the last list but say it may be out of date; actions still recheck the server.
+        console.warn("Unable to refresh vendor jobs", reason);
+        setStaleRefresh(true);
+        return;
+      }
       console.error("Unable to load vendor jobs", reason);
       setJobs([]);
       setError(reason instanceof Error ? reason.message : "The jobs queue could not be loaded.");
@@ -138,49 +160,90 @@ export default function VendorJobsPage() {
     void load();
   }, [load]);
 
+  // Offers change while the page is in the background; re-read them on return.
+  useEffect(() => {
+    let last = 0;
+    function refresh() {
+      if (document.visibilityState !== "visible" || actionRef.current || Date.now() - last < 10_000) return;
+      last = Date.now();
+      void load({ silent: true });
+    }
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [load]);
+
   const queues = useMemo(() => ({
     requests: jobs.filter((job) => isIncoming(job)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     active: jobs.filter((job) => !isIncoming(job) && !finished.has(job.status)).sort(sortBySchedule),
     completed: jobs.filter((job) => finished.has(job.status)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)),
   }), [jobs]);
 
-  async function update(job: Job, kind: "accept" | "decline" | "start") {
+  // TRACE-099: accept/decline outcomes come from reading the request back, whether the call
+  // succeeded, failed or lost its response. A hidden row means the offer left this vendor.
+  async function respond(job: Job, kind: "accept" | "decline") {
+    if (!contractorId || actionRef.current) return false;
+    actionRef.current = true;
     setAction({ id: job.id, kind });
+    setNotice(null);
+    setCardErrors((current) => { const next = { ...current }; delete next[job.id]; return next; });
     const supabase = createClient();
     try {
-      if (kind === "accept") {
-        const result = await supabase.rpc("vendor_accept_job", { _job_id: job.id });
-        if (result.error) throw result.error;
-        const refreshed = await supabase.from("service_requests").select("status, contractor_id").eq("id", job.id).maybeSingle();
-        if (refreshed.error) throw refreshed.error;
-        if (refreshed.data?.status === "scheduled" && refreshed.data.contractor_id) {
-          replaceStatus(job.id, "scheduled");
-          toast.success("Request accepted", { description: "The assignment is confirmed and now appears in Active Jobs. Use Messages to coordinate details before starting work." });
-        } else {
-          await load();
-          toast.info("Offer no longer available", { description: "Eligibility or the response window changed, so Mercurius continued matching the request." });
-        }
-      } else if (kind === "decline") {
-        const result = await supabase.rpc("vendor_decline_job", { _job_id: job.id, _reason: "Vendor declined" });
-        if (result.error) throw result.error;
-        setJobs((current) => current.filter((item) => item.id !== job.id));
-        requestAnimationFrame(() => document.getElementById("vendor-jobs-heading")?.focus());
-        toast.success("Request declined", { description: "Mercurius will check the next eligible provider and report if service is unavailable." });
-      } else {
-        const result = await supabase.rpc("transition_job_status", { _job_id: job.id, _to_status: "in_progress" });
-        if (result.error) throw result.error;
-        replaceStatus(job.id, "in_progress");
-        toast.success("Job started");
+      const call = kind === "accept"
+        ? await supabase.rpc("vendor_accept_job", { _job_id: job.id })
+        : await supabase.rpc("vendor_decline_job", { _job_id: job.id, _reason: "Vendor declined" });
+      const read = await supabase.from("service_requests").select(readbackColumns).eq("id", job.id).maybeSingle();
+      const outcome = vendorOfferOutcome(read.data, contractorId, Boolean(read.error));
+      const message = call.error?.message ?? "";
+
+      if (outcome.kind === "accepted") {
+        setJobs((current) => current.map((item) => item.id === job.id ? { ...item, ...read.data, updated_at: new Date().toISOString() } : item));
+        setNotice({ tone: "success", title: kind === "accept" ? "Offer accepted" : "This offer was already accepted", text: [
+          `${job.service_type} is now in Active Jobs.`,
+          outcome.quote ? "This is quote work, so the price isn’t set yet." : null,
+          outcome.appointment ? `Appointment: ${outcome.appointment}.` : "No appointment time is recorded yet.",
+        ].filter(Boolean).join(" ") });
+        return true;
       }
-      return true;
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "Please try again.";
-      const expired = message.toLowerCase().includes("expired");
-      toast.error(kind === "accept" && expired ? "Response window closed" : "Unable to update this job", {
-        description: expired ? "This request returned to matching and is no longer available." : message,
-      });
-      if (expired) void load();
+      if (outcome.kind === "gone") {
+        setJobs((current) => current.filter((item) => item.id !== job.id));
+        setNotice(kind === "decline" && !call.error
+          ? { tone: "success", title: "Offer declined", text: `${job.service_type} won’t be offered to you again.` }
+          : { tone: "warning", title: "Offer no longer available", text: `${job.service_type} expired, was withdrawn or was reassigned, so your response wasn’t recorded.` });
+        return true;
+      }
+      if (outcome.kind === "unknown") {
+        setCardErrors((current) => ({ ...current, [job.id]: "We couldn’t confirm whether your response was saved. Check again before responding." }));
+        return false;
+      }
+      // Still open: the server refused the response and the offer stays with this vendor.
+      if (/expired/i.test(message)) {
+        await load({ silent: true });
+        setNotice({ tone: "warning", title: "Response window closed", text: `${job.service_type} wasn’t accepted because its response window closed.` });
+        return true;
+      }
+      setCardErrors((current) => ({ ...current, [job.id]: /no longer eligible/i.test(message)
+        ? "You aren’t currently eligible for this request, so it wasn’t accepted. Check your compliance status and coverage, or decline the offer."
+        : `Your response wasn’t saved. ${message || "Please try again."}` }));
       return false;
+    } finally {
+      actionRef.current = false;
+      setAction(null);
+    }
+  }
+
+  async function start(job: Job) {
+    setAction({ id: job.id, kind: "start" });
+    try {
+      const result = await createClient().rpc("transition_job_status", { _job_id: job.id, _to_status: "in_progress" });
+      if (result.error) throw result.error;
+      replaceStatus(job.id, "in_progress");
+      toast.success("Job started");
+    } catch (reason) {
+      toast.error("Unable to update this job", { description: reason instanceof Error ? reason.message : "Please try again." });
     } finally {
       setAction(null);
     }
@@ -208,23 +271,30 @@ export default function VendorJobsPage() {
         <ErrorState message={error} retry={() => void load()} />
       ) : (
         <Tabs defaultValue="requests">
+          {notice && <div ref={noticeRef} tabIndex={-1} role={notice.tone === "error" ? "alert" : "status"} className={cn("mb-6 rounded-lg border p-4 text-sm",
+            notice.tone === "success" ? "border-status-success bg-status-success-bg text-status-success" : "border-status-warning bg-status-warning-bg text-status-warning")}>
+            <p className="font-semibold">{notice.title}</p><p className="mt-1">{notice.text}</p>
+          </div>}
           <div className="mb-6 overflow-x-auto border-b border-border">
             <TabsList variant="line" className="min-h-11 w-full flex-wrap gap-2 p-0 sm:w-auto sm:gap-5">
-              <TabsTrigger value="requests" className="px-1">Requests <Count n={queues.requests.length} /></TabsTrigger>
+              <TabsTrigger value="requests" className="px-1">Offers <Count n={queues.requests.length} /></TabsTrigger>
               <TabsTrigger value="active" className="px-1">Active Jobs <Count n={queues.active.length} /></TabsTrigger>
               <TabsTrigger value="completed" className="px-1">Completed <Count n={queues.completed.length} /></TabsTrigger>
             </TabsList>
           </div>
           <TabsContent value="requests">
-            <Heading title="Incoming Requests" copy="Accept before the response window closes, or decline so we can promptly rematch the homeowner." />
+            <Heading title="Offers" copy="Each offer is exclusive to you until its response deadline. Accept or decline before it closes." />
+            {staleRefresh && <p role="status" className="mb-4 rounded-lg border border-status-warning bg-status-warning-bg p-3 text-sm text-status-warning">We couldn’t refresh your offers. Accept and decline still check the current offer. <Button variant="link" className="h-auto min-h-0 p-0" onClick={() => void load()}>Refresh now</Button></p>}
             {queues.requests.length ? <div className="space-y-4">{queues.requests.map((job) => (
-              <RequestCard key={job.id} job={job} now={now} action={action} view={() => setSelected(job)} accept={() => void update(job, "accept")} decline={async () => { if (!await update(job, "decline")) throw new Error("Decline failed"); }} />
-            ))}</div> : <Empty icon={Inbox} title="No incoming requests" copy="New service matches will appear here when assigned to your business." />}
+              <RequestCard key={job.id} job={job} now={now} action={action} error={cardErrors[job.id]} recheck={() => void load()} view={() => setSelected(job)}
+                accept={async () => { if (!await respond(job, "accept")) throw new Error("Accept not recorded"); }}
+                decline={async () => { if (!await respond(job, "decline")) throw new Error("Decline not recorded"); }} />
+            ))}</div> : <Empty icon={Inbox} title="No open offers" copy="When Mercurius offers you a request, it appears here with its response deadline." />}
           </TabsContent>
           <TabsContent value="active">
             <Heading title="Active Jobs" copy="Upcoming and in-progress work, including jobs awaiting homeowner confirmation." />
             {queues.active.length ? <div className="space-y-4">{queues.active.map((job) => (
-              <JobCard key={job.id} job={job} busy={action?.id === job.id} view={() => setSelected(job)} start={() => void update(job, "start")} complete={() => setCompleting(job)} />
+              <JobCard key={job.id} job={job} busy={action?.id === job.id} view={() => setSelected(job)} start={() => void start(job)} complete={() => setCompleting(job)} />
             ))}</div> : <Empty icon={Briefcase} title="No active jobs" copy="Accepted requests will move into this queue." />}
           </TabsContent>
           <TabsContent value="completed">
@@ -241,21 +311,26 @@ export default function VendorJobsPage() {
   );
 }
 
-function RequestCard({ job, now, action, view, accept, decline }: {
-  job: Job; now: number; action: Action; view: () => void; accept: () => void; decline: () => Promise<void>;
+function RequestCard({ job, now, action, error, recheck, view, accept, decline }: {
+  job: Job; now: number; action: Action; error?: string; recheck: () => void; view: () => void; accept: () => Promise<void>; decline: () => Promise<void>;
 }) {
-  const deadline = matchDeadline(job);
-  const expired = Boolean(now && deadline && deadline <= now);
+  const deadline = formatEastern(job.match_expires_at);
+  const left = offerTimeLeft(job.match_expires_at, now);
+  // The browser clock only disables the buttons; the server still decides expiry.
+  const closed = left === "Response window closed";
   const busy = action?.id === job.id;
-  const canAccept = (job.status === "matched" || (job.status === "quoted" && job.matching_status === "offered")) && !expired;
+  const open = isOpenVendorOffer(job);
+  const canRespond = open && !closed && !busy;
+  const quote = isQuoteWork(job);
   const price = priceContext(job);
   const note = customerNote(job);
+  const entity = `${job.service_type} · ${job.city}, ${job.state}`;
   return (
-    <Card className={cn("overflow-hidden border-l-4 border-l-accent shadow-sm transition-shadow hover:shadow-md", expired && "border-l-destructive")}>
+    <Card className={cn("overflow-hidden border-l-4 border-l-accent shadow-sm transition-shadow hover:shadow-md", closed && "border-l-destructive")}>
       <CardHeader className="border-b bg-muted/20 pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Service request</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{open ? "Exclusive offer" : "Service request"}</p>
             <div className="flex flex-wrap items-center gap-2"><CardTitle className="font-heading text-xl">{job.service_type}</CardTitle><Status status={job.status} /></div>
             <p className="mt-1.5 text-xs text-muted-foreground">Received {relative(job.created_at, now)}<span aria-hidden="true"> · </span>{formatDateTime(job.created_at)}</p>
           </div>
@@ -265,19 +340,27 @@ function RequestCard({ job, now, action, view, accept, decline }: {
       <CardContent className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <DecisionField icon={MapPin} label="Address / area"><span>{job.address}</span><span className="block text-muted-foreground">{job.city}, {job.state} {job.zip_code}</span></DecisionField>
-          <DecisionField icon={Calendar} label="Preferred timing"><span>{job.preferred_date ? formatDate(job.preferred_date) : "Date to be confirmed"}</span>{job.preferred_time && <span className="block text-muted-foreground">{job.preferred_time}</span>}</DecisionField>
+          <DecisionField icon={Calendar} label="Preferred timing"><span>{job.preferred_date ? formatDate(job.preferred_date) : "No preferred date"}</span>{job.preferred_time && <span className="block text-muted-foreground">{job.preferred_time}</span>}</DecisionField>
           <DecisionField icon={DollarSign} label={price.label}><span>{price.value}</span><span className="block text-muted-foreground">{price.note}</span></DecisionField>
-          <DecisionField icon={Clock} label="Response window"><span className={cn(expired && "font-medium text-destructive")}>{responseWindow(job, now)}</span>{deadline && <span className="block text-muted-foreground">{formatDeadline(deadline)}</span>}</DecisionField>
+          <DecisionField icon={Clock} label="Respond by">{open ? <><span className={cn(closed && "text-destructive")}>{deadline ?? "No deadline recorded"}</span>{left && <span className={cn("block text-muted-foreground", closed && "font-medium text-destructive")}>{left}</span>}</> : <span>Not open for a response</span>}</DecisionField>
         </div>
         <div className="rounded-xl border bg-background p-4"><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><FileText className="h-4 w-4 text-accent" />Customer note</p><p className={cn("whitespace-pre-wrap text-sm leading-6", !note && "text-muted-foreground")}>{note || "No customer note was provided."}</p></div>
-        {job.scheduled_start_at && <p>Appointment: {new Date(job.scheduled_start_at).toLocaleString("en-US", { timeZone: "America/New_York" })} Eastern</p>}
-    <QuestionAnswers job={job} />
+        <QuestionAnswers job={job} />
+        {error && <div role="alert" className="space-y-2 rounded-lg border border-status-danger bg-status-danger-bg p-3 text-sm text-status-danger"><p>{error}</p><Button variant="outline" size="sm" onClick={recheck}><RefreshCw />Check again</Button></div>}
       </CardContent>
       <CardFooter className="flex flex-col gap-4 border-t bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex max-w-xl items-start gap-2 text-xs leading-5 text-muted-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><span>{canAccept ? "Accept confirms the assignment and moves it to Active Jobs. Coordinate through Messages before using Start Job when work begins." : "Mercurius is still preparing this match. Accept becomes available when the request is actively matched to you."}</span></div>
-        <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-          <ConfirmAction triggerLabel="Decline" title="Decline this request?" entity={`${job.service_type} · ${job.id.slice(0, 8)}`} consequence="The request will return to Mercurius for another provider match." confirmLabel="Decline request" disabled={busy || expired} onConfirm={decline} />
-          <Button className="min-h-11 flex-1 bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active sm:min-w-40" disabled={busy || !canAccept} onClick={accept}>{busy && action?.kind === "accept" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Accept request</Button>
+        <p className="max-w-xl text-xs leading-5 text-muted-foreground">{!open
+          ? "Mercurius is still preparing this request. You can respond once it’s offered to you."
+          : closed ? "The response window has closed. Mercurius will move this request on; refresh to see your current offers."
+          : quote ? "Quote work: accepting commits you to this request; the price is set later by quote."
+          : "Accepting commits you to this request at the fixed price shown."}</p>
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+          <ConfirmAction triggerLabel="Decline" title="Decline this offer?" entity={entity}
+            consequence="It won’t be offered to you again. Mercurius may offer it to another eligible provider, ask the homeowner how to proceed, or tell them it isn’t available yet."
+            confirmLabel="Decline offer" disabled={!canRespond} onConfirm={decline} />
+          <ConfirmAction triggerLabel="Accept offer" triggerVariant="commitment" confirmationTone="commitment" title="Accept this offer?" entity={entity}
+            consequence={`${quote ? "This is quote work: the price isn’t set until a quote is agreed." : job.total_amount !== null ? `You agree to the fixed price of ${money(job.total_amount)}.` : "You agree to the fixed price on this request."} The request moves to Active Jobs as scheduled, with no appointment time until one is recorded. If you cancel later, Mercurius rematches the homeowner and records a provider cancellation.`}
+            confirmLabel="Accept offer" disabled={!canRespond} onConfirm={accept} />
         </div>
       </CardFooter>
     </Card>
@@ -297,7 +380,7 @@ function JobCard({ job, busy, view, start, complete }: {
         <div className="mb-4 flex flex-wrap items-center gap-3"><h3 className="font-heading text-lg font-semibold">{job.service_type}</h3><Status status={job.status} /></div>
         <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
           <span className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.address}, {job.city}, {job.state}</span>
-          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.preferred_date ? formatDate(job.preferred_date) : "Date to be confirmed"}{job.preferred_time ? " · " + job.preferred_time : ""}</span>
+          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.scheduled_start_at ? `Appointment: ${formatEastern(job.scheduled_start_at)}` : job.status === "scheduled" ? "No appointment time recorded yet" : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}${job.preferred_time ? " · " + job.preferred_time : ""}` : "No preferred date"}</span>
           <span className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.homeowner_name ?? "Homeowner"}</span>
         </div>
       </div>
@@ -329,7 +412,7 @@ function Details({ job, close, saved }: { job: Job | null; close: () => void; sa
       <Block icon={DollarSign} title={price.label}>{price.value}<br /><span className="text-muted-foreground">{price.note}</span></Block>
     </div>
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
-    {job.scheduled_start_at && <p>Appointment: {new Date(job.scheduled_start_at).toLocaleString("en-US", { timeZone: "America/New_York" })} Eastern</p>}
+    {job.scheduled_start_at && <p>Appointment: {formatEastern(job.scheduled_start_at)}</p>}
     {["scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="vendor" onSaved={saved} />}
     <QuestionAnswers job={job} />
     {!isIncoming(job) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} onClick={close} className={cn(buttonVariants({ variant: "outline" }), "w-full")}><MessageSquare />Open Messages</Link>}
@@ -428,8 +511,6 @@ function Empty({ icon: Icon, title, copy }: { icon: typeof MapPin; title: string
 function ErrorState({ message, retry }: { message: string; retry: () => void }) { return <Card className="border-destructive/20 bg-destructive/5"><CardContent className="py-14 text-center"><AlertCircle className="mx-auto mb-4 h-10 w-10 text-destructive" /><p className="font-heading text-lg font-semibold">We could not load your jobs</p><p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">No preview jobs have been substituted. {message}</p><Button className="mt-5" variant="outline" onClick={retry}><RefreshCw />Try again</Button></CardContent></Card>; }
 function Loading() { return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" />Loading jobs...</div>; }
 function sortBySchedule(a: Job, b: Job) { if (!a.preferred_date) return 1; if (!b.preferred_date) return -1; return a.preferred_date.localeCompare(b.preferred_date); }
-function matchDeadline(job: Job) { return job.match_expires_at ? Date.parse(job.match_expires_at) : null; }
-function countdown(ms: number) { const minutes = Math.max(0, Math.ceil(ms / 60_000)); const hours = Math.floor(minutes / 60); if (hours >= 24) return Math.ceil(hours / 24) + " days remaining"; return hours ? hours + "h " + minutes % 60 + "m remaining" : minutes + "m remaining"; }
 function relative(value: string, now: number) { if (!now) return "recently"; const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60_000)); if (minutes < 1) return "just now"; if (minutes < 60) return minutes + "m ago"; const hours = Math.floor(minutes / 60); if (hours < 24) return hours + "h ago"; const days = Math.floor(hours / 24); return days === 1 ? "1 day ago" : days + " days ago"; }
 function money(value: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value)); }
 function formatDate(value: string) { const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + "T12:00:00") : new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
@@ -448,16 +529,14 @@ function QuestionAnswers({ job }: { job: Job }) {
   return <div className="rounded-xl border bg-accent-subtle p-4"><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-accent" />Service answers</p><dl className="space-y-3">{answers.map((item) => <div key={item.key}><dt className="text-xs text-muted-foreground">{item.question}</dt><dd className="mt-0.5 text-sm font-medium text-foreground">{item.answer}{item.unit ? ` ${item.unit}` : ""}</dd></div>)}</dl></div>;
 }
 
-function responseWindow(job: Job, now: number) {
-  if (!(job.status === "matched" || (job.status === "quoted" && job.matching_status === "offered"))) return "Not open yet";
-  const deadline = matchDeadline(job);
-  if (!deadline) return "No deadline recorded";
-  if (!now) return "Calculating…";
-  return deadline <= now ? "Window closed" : countdown(deadline - now);
-}
 
 function priceContext(job: Job) {
   const payment = paymentNote(job.payment_status);
+  if (isQuoteWork(job)) {
+    return job.quote_amount === null
+      ? { label: "Price", value: "Quote required", note: "No price is set yet" }
+      : { label: "Quoted amount", value: money(job.quote_amount), note: payment ?? "Quote recorded on request" };
+  }
   if (job.total_amount !== null) {
     const fixed = job.pricing_mode === "fixed" && !job.quote_only;
     return { label: fixed ? "Fixed price" : "Estimated value", value: money(job.total_amount), note: payment ?? (fixed ? "Provider-backed rate" : "Recorded request amount") };
@@ -482,7 +561,3 @@ function formatDateTime(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function formatDeadline(value: number) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : `Closes ${date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
-}
