@@ -682,11 +682,11 @@ test.describe("honest confirmation (I6)", () => {
     const checkouts = record.checkouts;
     const assigned = { matching_status: "matched", contractor_id: "00000000-0000-4000-8000-000000000002" };
     for (const [state, label, summaryText, paymentText] of [
-      [{ ...assigned, status: "scheduled", payment_status: "captured" }, "Scheduled", "A time is scheduled.", "Payment confirmed."],
+      [{ ...assigned, status: "scheduled", payment_status: "captured" }, "Scheduled", "Scheduled with your provider.", "Payment confirmed."],
       [{ ...assigned, status: "in_progress", payment_status: "captured" }, "In progress", "Work is in progress.", "Payment confirmed."],
       [{ ...assigned, status: "homeowner_confirmed", payment_status: "released" }, "Completed", "This request is complete.", "Payment confirmed."],
       [{ ...assigned, status: "cancelled", payment_status: "refunded" }, "Cancelled", "This request was cancelled.", "Payment refunded."],
-      [{ ...assigned, status: "scheduled", payment_status: "pending" }, "Scheduled", "A time is scheduled.", "Submitted at $100.00 fixed price. See your dashboard for the current price and payment status."],
+      [{ ...assigned, status: "scheduled", payment_status: "pending" }, "Scheduled", "Scheduled with your provider.", "Submitted at $100.00 fixed price. See your dashboard for the current price and payment status."],
     ] as const) {
       current = state;
       await page.reload();

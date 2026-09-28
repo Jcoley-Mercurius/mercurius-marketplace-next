@@ -32,6 +32,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
+import { providerStatus } from "@/lib/offerStatus";
 import { contactHrefForRequest } from "@/lib/requestContext";
 import {
   serviceRequestStatusLabel,
@@ -64,6 +65,10 @@ export type HomeownerDashboardJob = {
   photo_proof_urls: string[] | null;
   total_amount: number | null;
   created_at: string;
+  preferred_contractor_id?: string | null;
+  match_expires_at?: string | null;
+  pricing_mode?: string | null;
+  quote_only?: boolean | null;
 };
 
 type JobAction =
@@ -115,8 +120,10 @@ export function HomeownerJobDetailDialog({
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (actionError && !document.querySelector('[role=alertdialog]')) errorRef.current?.focus(); }, [actionError]);
   const [provider, setProvider] = useState<ProviderSummary | null>(null);
+  // TRACE-099: contractor_id is set while an offer is only pending; show a provider only after acceptance.
+  const assignedContractorId = job && providerStatus(job).assigned ? job.contractor_id : null;
   const [providerMode, setProviderMode] = useState<ProviderMode>(
-    job?.contractor_id ? "loading" : "idle",
+    assignedContractorId ? "loading" : "idle",
   );
   const [publicRating, setPublicRating] = useState<number | null>(null);
   const [publicReviewCount, setPublicReviewCount] = useState(0);
@@ -152,7 +159,7 @@ export function HomeownerJobDetailDialog({
   }, [job, open]);
 
   useEffect(() => {
-    const contractorId = job?.contractor_id;
+    const contractorId = assignedContractorId;
     if (!open || !contractorId) return;
     let active = true;
 
@@ -223,7 +230,7 @@ export function HomeownerJobDetailDialog({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [job?.contractor_id, open]);
+  }, [assignedContractorId, open]);
 
   if (!job) return null;
   const currentJob = job;
@@ -235,6 +242,7 @@ export function HomeownerJobDetailDialog({
   );
   const needsReview = job.status === "review_requested" || (job.status === "completed" && !!job.homeowner_confirmed_at);
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
+  const providerState = providerStatus(job);
   const displayRating = hoveredRating || rating;
 
   function close() {
@@ -328,6 +336,38 @@ export function HomeownerJobDetailDialog({
     }
   }
 
+  // TRACE-099: the stored consent record, not the call's response, decides the outcome, so a
+  // lost response or a duplicate submit never reports a false failure or records twice.
+  async function consentToFallback() {
+    if (!actionsEnabled || busyAction) return;
+    setActionError("");
+    setBusyAction("provider-fallback");
+    const supabase = createClient();
+    try {
+      const call = await supabase.rpc("consent_to_provider_fallback", { _request_id: currentJob.id });
+      const record = await supabase.from("matching_fallback_consents").select("request_id").eq("request_id", currentJob.id).maybeSingle();
+      if (record.error) {
+        setActionError("We couldn’t confirm whether your choice was saved. Check this request again before retrying.");
+        throw new Error("Consent read-back failed");
+      }
+      if (!record.data) {
+        setActionError(call.error?.message ? `Your choice wasn’t saved. ${call.error.message}` : "Your choice wasn’t saved. Please try again.");
+        throw new Error("Consent not recorded");
+      }
+      toast.success("Other providers allowed", { description: "Your preferred provider stays on record. The request’s current status is shown on your dashboard." });
+      onOpenChange(false);
+      try {
+        await onRefresh();
+      } catch (error) {
+        toast.warning("Choice saved, but the dashboard could not refresh", {
+          description: error instanceof Error ? error.message : "Refresh the page to see the latest status.",
+        });
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   function respondToQuote(approve: boolean) {
     const supabase = createClient();
     return runAction(
@@ -414,13 +454,12 @@ export function HomeownerJobDetailDialog({
         {job.quote_status === "expired" && <p role="status">This quote expired. Contact Mercurius for a new quote; the service has not been cancelled.</p>}
         {job.quote_status === "legacy_review" && <p role="status">Mercurius must resend this quote with current terms before you can approve it.</p>}
 
-        {job.matching_status === "awaiting_consent" && <section className="space-y-3 rounded-xl border p-4">
-          <p>Your selected provider is unavailable. You can allow Mercurius to offer this request to another eligible provider.</p>
-          <ConfirmAction disabled={!actionsEnabled || !!busyAction} triggerLabel="Find another provider" title="Allow another provider?" entity={job.service_type} consequence="Mercurius may offer this request to other eligible providers. This records your consent to provider fallback." confirmLabel="Allow other providers" onConfirm={async () => {
-            const saved = await runAction("provider-fallback", currentJob.status, () => createClient().rpc("consent_to_provider_fallback", { _request_id: currentJob.id }), "Provider preference updated", "Mercurius will check other eligible providers.");
-            if (!saved) throw new Error("Your consent was not saved.");
-          }} />
-        </section>}
+        <section aria-labelledby={`provider-status-${job.id}`} className="space-y-3 rounded-xl border p-4">
+          <h3 id={`provider-status-${job.id}`} className="text-sm font-semibold">{providerState.line}</h3>
+          <p className="text-sm leading-6 text-muted-foreground">{providerState.explanation}</p>
+          {providerState.nextAction && <p className="text-sm font-medium">{providerState.nextAction}</p>}
+          {providerState.kind === "consent_needed" && <ConfirmAction disabled={!actionsEnabled || !!busyAction} confirmationTone="commitment" triggerLabel="Allow another provider" title="Allow another provider?" entity={job.service_type} consequence="Mercurius may offer this request to one eligible provider at a time instead of your preferred provider. If none accepts, it will show as not available yet in your area." confirmLabel="Allow other providers" onConfirm={consentToFallback} />}
+        </section>
 
         <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2">
           <Detail icon={Calendar} label="Preferred date">
@@ -457,7 +496,7 @@ export function HomeownerJobDetailDialog({
           </div>
         )}
 
-        {job.contractor_id && (
+        {providerState.assigned && job.contractor_id && (
           <AssignedProviderCard
             contractorId={job.contractor_id}
             jobId={job.id}

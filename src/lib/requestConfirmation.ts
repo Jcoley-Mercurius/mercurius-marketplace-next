@@ -54,7 +54,8 @@ export type ConfirmationInput = {
 // matching state and the submission-time terms. Details the intake doesn't read stay in
 // the dashboard rather than being guessed here.
 const laterStates = {
-  scheduled: "A time is scheduled. See your dashboard for the appointment.",
+  // DEC-2026-007: acceptance schedules the service; an appointment time is recorded separately.
+  scheduled: "Scheduled with your provider. Any appointment time appears in your dashboard once it’s recorded.",
   in_progress: "Work is in progress. See your dashboard for updates.",
   completion_pending: "The provider reported the work complete. Review it in your dashboard.",
   completed: "This request is complete.",

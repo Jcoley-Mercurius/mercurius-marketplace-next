@@ -1,6 +1,19 @@
 # Agent handoff — 2026-09-27 UTC
 
-## Current checkpoint — P6-R2/P6-R3 repaired; awaiting Codex re-review
+## Current checkpoint — 6.3 implemented (TRACE-099); awaiting Codex review
+
+- Branch `codex/phase6-matching-offers`, stacked on `63f1537` (PR #62, unreviewed) by owner instruction.
+  Presentation helper `offerStatus.ts`; homeowner offer/consent/exhaustion states; vendor confirmed,
+  read-back accept/decline with ET deadline. Migration `20260929000000` repairs the vendor write-scope
+  trigger (definer bypass let offered/assigned vendors rewrite homeowner address/ZIP). [Report](../../governance/PHASE-6-MATCHING.md).
+- Evidence: SQL 067 54/54 (red check 5 fails pre-repair); full SQL and isolated clean reset 3298/58;
+  scripts 11/11 (6.3), 32/32 (6.1), 62/62 (TRACE-097); unit 299/299; browser 328/328 non-visual;
+  typecheck, secrets, full lint. No human screen-reader/zoom, @visual, CI or hosted run.
+- PR to `main` also carries the P6-R2/P6-R3 repair `63f1537`: PR #62 merged into the already-merged
+  review branch, so the repair was not in `main` after #63.
+- Next: Codex reviews 6.3 and decisions 1–7; P6-R2/P6-R3 re-review; hosted trigger check needs owner authorization.
+
+## Previous checkpoint — P6-R2/P6-R3 repaired; awaiting Codex re-review
 
 - Uncommitted on `codex/phase6-intake` review branch `c9a4a23` (Codex review + `464ab34`), TRACE-098. P6-R2: the saved confirmation
   uses `canonicalRequestState` for scheduled and later states, and `quote_status`/`quote_amount`
