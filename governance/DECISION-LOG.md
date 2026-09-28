@@ -503,3 +503,18 @@ visit; and moderation for spam, personal information, threats/abuse, or content
 unrelated to the service, never for a low rating alone. Email/reminder timing
 stays inactive until separately configured. These decisions do not authorize
 Cron activation, real messages, charges, refunds, payouts, merge or deployment.
+
+
+### DEC-2026-022 — Stage public recruiting before transactional beta
+
+**Status:** APPROVED founder decision. **Date:** 2026-09-28 (America/New_York).
+
+The founder approved R0 public recruiting in the rebuilt app, R1 invited transactions and R2 evidence-led wider opening. [The decision record](LAYERED-LAUNCH-DECISION.md) is the complete scoped contract; CFG-014 records the launch configuration. This is a staged release of the existing MPS product, not acceptance of unfinished Phases 6–10.
+
+**MPS impact:** R0 adds honest exploration, interest, optional verified accounts and vendor preparation before homeowner transactions. An account or homeowner role alone does not authorize a new request. R1 starts the beta and Founding Vendor 90-day clocks.
+
+**MDS impact:** During R0, public request and signup entry points lead to early access; the normal “Request service” commitment CTA is reserved for an admitted homeowner. All waiting, invitation, closed and error states need responsive and accessible designs.
+
+**MTS impact:** Admission must be enforced by authoritative request and checkout boundaries with audited service/area grants and safe revocation. Recruiting records, consent, suppression, retention, hosted delivery, monitoring and rollback are R0 release concerns. R0 cannot inherit the full transactional production gate as though all Phase 6–10 functionality were active, and cannot waive it for R1.
+
+**Implementation:** R0 slices and acceptance are TRACE-100–105. Production schema, email, deployment, domain and transaction activation remain separate owner decisions. The companion early-access design and Credits/Founding Vendor authority artifacts named in the founder packet were not present in this checkout; reconcile them before accepting those detailed implementations.

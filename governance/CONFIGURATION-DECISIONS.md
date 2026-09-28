@@ -131,8 +131,20 @@
 
 ## Remaining release decisions
 
-The system and configuration baselines are approved. The remaining owner decisions are evidence-based checkpoints rather than pre-build configuration:
+The system and configuration baselines are approved. CFG-014 adds a distinct R0 recruiting go/no-go before the later transactional checkpoints. Remaining owner decisions are evidence-based:
 
-1. Private-beta activation after the beta gate is green.
-2. Production activation after the production gate is green.
-3. Expansion beyond Lee County or a material change to the approved commercial/policy model.
+1. R0 public recruiting activation after its hosted and operator gate is green.
+2. R1 invited transactional beta activation after its booking, money, payout and Credits gate is green.
+3. R2 wider Lee County booking after measured outcomes and owner expansion decision.
+4. Expansion beyond Lee County or a material change to the approved commercial/policy model.
+
+
+## CFG-014 — Layered recruiting and transactional opening
+
+- **Status:** APPROVED by founder, 2026-09-28 (America/New_York).
+- **Decision:** Release the rebuilt app for public recruiting (R0), then open an invited transactional beta (R1), then widen homeowner booking by verified service/ZIP cells (R2). See [the full approved contract](LAYERED-LAUNCH-DECISION.md) and DEC-2026-022.
+- **R0:** Live homeowner interest and optional verified account; real vendor applications and approved-vendor preparation. Non-invited homeowners cannot create new service requests or check out through direct URLs, RPCs or APIs. Existing legitimate history and support remains available.
+- **R1 clock:** The 90-day beta Day 1 and Founding Vendor qualification begin when R1 transactions actually open, never at R0 or an assumed September 30 date.
+- **R0 interest:** Email, Lee County ZIP, service interests or “still exploring”; optional first name; separate expansion-interest path for other ZIPs; independent unchecked marketing consent. Retention and withdrawal follow the full contract.
+- **Activation:** Merges are implementation evidence only. Hosted migration, email, deployment, domain and R0 activation each need the release procedure and specific owner go/no-go. R1 money/payout and Credits have a separate later gate.
+- **Acceptance evidence:** TRACE-100–105 and the R0 gate in the rebuild roadmap.

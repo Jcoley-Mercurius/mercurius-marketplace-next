@@ -347,3 +347,10 @@ Each component is labeled:
 9. Perform rendered route review in light/dark, mobile/desktop, keyboard, zoom, and screen readers.
 
 This blueprint was approved by the owner on 2026-08-29. Component conformance and rendered accessibility remain implementation gates, not assumptions granted by approval.
+
+
+## Approved R0 route and state addendum — 2026-09-28
+
+During R0 recruiting (DEC-2026-022), public request/signup entry points lead to homeowner early access, while vendor entry points lead to the existing real application. The normal “Request service” commitment action is reserved for an admitted homeowner. Public services and approved, eligible provider profiles remain explorable; booking is described as “Opening by invitation.” No mock price or unsupported provider/trust claim appears as live. This R0 exception to the public CTA in §6 preserves that CTA for R1 and admitted customers.
+
+The signed-in waiting home prioritizes status, ZIP/interests, editing, factual exploration and account/support controls without an unusable request/payment action or empty-job promise. Existing legitimate history and support stay reachable. Design list-only confirmation, optional account creation, verified waiting, invited, revoked/closed and error states at mobile/desktop, light/dark, keyboard, screen reader and 200% zoom. Approved invited vendors can prepare truthful profile, coverage, availability and actual offers; the Work area explains the no-jobs-yet state while transactions are closed. Reconcile the founder-approved homeowner early-access experience artifact before detailed route/state implementation.

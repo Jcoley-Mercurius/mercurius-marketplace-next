@@ -1,7 +1,7 @@
 # Mercurius Rebuild and Implementation Roadmap
 
-**Status:** IN PROGRESS — Phase 4 accepted and Phase 5 closed; Phase 6 implementation released (DEC-2026-019, 2026-09-26)
-**Implementation checkpoint:** `main` at `417e642` (PR #52, TRACE-092–094, merged 2026-09-26 UTC); the original planning baseline was `94d608a`
+**Status:** IN PROGRESS — Phase 6 continues; R0 public recruiting added as a parallel, separately gated release (DEC-2026-022, 2026-09-28)
+**Implementation checkpoint:** remote `main` at `37d212e` (2026-09-28 read-only recheck); open Phase 6 PR #64 remains separate. Original planning baseline: `94d608a`
 **Authority:** owner-approved MPS, MDS, and MTS
 **Delivery model:** stabilize and rebuild in vertical slices; do not perform a blind rewrite
 
@@ -221,6 +221,25 @@ Remove or hide the public Admin link, premature Vendor Plans, and Smart Picks un
 
 **Gate:** critical journeys pass desktop/mobile, light/dark, keyboard, screen-reader, role, database, and visual acceptance.
 
+### Release R0 — Rebuilt-app public recruiting (parallel with Phases 6–8)
+
+**Status:** APPROVED for planning and bounded implementation (DEC-2026-022, CFG-014); not accepted or externally activated. **Clock:** R0 does not start the 90-day beta or Founding Vendor qualification.
+
+**Outcome:** Publish the rebuilt Marketplace app for truthful service/provider discovery, live homeowner early access and optional verified accounts, real vendor applications, and approved/invited vendor preparation. Preserve ongoing Phase 6 work. Non-invited homeowners cannot create new service requests or check out through direct pages, RPCs, APIs or Edge Functions; account creation alone does not grant access.
+
+**Ordered, reviewable branches** from a refreshed main or an explicitly reviewed stack, one concern per PR:
+
+1. **R0.0 authority — TRACE-100:** reconcile this staged release into MPS/MDS/MTS, configuration, decision log, traceability and roadmap; record missing companion artifacts and conflicts. No app behavior changes.
+2. **R0.1 default-closed transaction boundary — TRACE-101:** add audited, scoped admission/revocation at the authoritative request command and defense-in-depth checkout; preserve existing transactions, legitimate account history and admin correction. Prove role-negative/direct URL/RPC/API/Edge refusal and concurrency on an isolated database. This lands before any public recruiting route.
+3. **R0.2 interest, consent, linkage and retention — TRACE-102:** add minimal email/ZIP/service-interest or still-exploring records, separate expansion interest, independent marketing preference, verified-account linkage without duplicates, update/withdrawal/suppression and observable R2+90-day list-only retention. Add abuse and privacy tests. Do not collect phone/address/photos/payment/SMS choice in this form.
+4. **R0.3 public and account experience — TRACE-103:** compose MDS early-access form/result, optional account, waiting/invited/closed/error states and truthful service/provider discovery. Route all public request/signup entry points into early access while R0 is closed; keep legitimate existing history/support. Test every affected desktop/mobile/light/dark/keyboard/screen-reader/zoom state.
+5. **R0.4 vendor/operator readiness — TRACE-104:** preserve application/review and private documents; verify approved-vendor invitation, identity binding, profile/coverage/availability/actual offers and no-jobs-yet state. Add missed-email detection/recovery, named backup admin, confirmed support/privacy contacts. Public listings require approval, eligibility and real content. This may reuse reviewed Phase 5/6 work without a conflicting branch.
+6. **R0.5 hosted release candidate and go/no-go — TRACE-105:** reconcile the full migration backlog against production-shaped data in isolation; prepare and verify app/Auth/Resend/Storage/admin/vendor/homeowner flows, admission refusal, accessibility, observability and rollback. Document a dated owner decision for the specific hosted schema, email, deployment and domain actions. Do not promote or move the domain from a code merge.
+
+**R0 gate:** all six trace entries have reviewable diffs and required automated/manual/hosted evidence; production-safe rollout and rollback are rehearsed; backup admin and contact path are staffed; the owner records R0 go/no-go. September 30 is a target, not an automatic release. The existing [hosted migration plan](../governance/HOSTED-MIGRATION-ROLLOUT.md) is dated and must be recalculated for the fixed R0 commit and data state.
+
+**R1 gate:** later, Phase 9 proves booking → dispatch → completion → support/refund → payout plus both-role Credits C0–C4 earning/correction/finance, vetted terms and money reconciliation; owner activates the invited cells and records actual Day 1. No signup, referral or review Credits. Founding Vendor recognition cannot appear before its terms and hosted acceptance. **R2 gate:** measured match/response/paid-completion/support/incident outcomes and owner expansion decision. Quote Tool, Route Tool, My Home and Commercial pilot keep their separate R1-relative gates; they are not R0 claims.
+
 ### Phase 7 — Communications, analytics, and operations
 
 **Outcome:** the team can see, measure, and recover every important marketplace outcome.
@@ -284,7 +303,9 @@ Work:
 Phase 0 → Phase 1 → Phase 2
                     ├─→ Phase 3
                     └─→ Phase 4
-Phase 3 + Phase 4 → Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 → Phase 10
+Phase 3 + Phase 4 → Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 (R1) → Phase 10 (R2)
+                              └─→ R0.0 authority → R0.1 gate → R0.2 interest → R0.3 experience
+                                                        └─→ R0.4 vendor readiness → R0.5 hosted R0 gate
 ```
 
 Phase 3 component work and Phase 4 lifecycle work can proceed in parallel after the backend contract is known. Money work must not precede the schema authority. Broad UI route migration must not precede stable components and lifecycle semantics.

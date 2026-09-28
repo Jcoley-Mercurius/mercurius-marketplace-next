@@ -1,4 +1,11 @@
-# Agent handoff — 2026-09-27 UTC
+# Agent handoff — 2026-09-28 UTC
+
+## R0 authority checkpoint — 2026-09-28
+
+- Branch `codex/r0-launch-authority` from remote main `37d212e`, isolated from open Phase 6 PR #64. Founder-approved R0/R1/R2 decision is recorded as DEC-2026-022/CFG-014, with R0.0–R0.5 in the roadmap and TRACE-100–105.
+- Read-only recheck: Vercel latest production deployment `735df91` (2026-09-04); hosted Mercurius Supabase migration latest `20260731172714` (83 entries); `vercel.json` disables Git deploy. The dated hosted rollout plan must be recalculated.
+- Open: companion early-access design, Founding Vendor and Credits source files are absent from this checkout; exact copy/mechanics need reconciliation. R0.1 default-closed request/checkout gate is the next bounded code slice. No hosted mutation, deployment, domain move or transaction activation.
+
 
 ## Current checkpoint — Codex 6.2 review; 6.3 brief prepared
 
