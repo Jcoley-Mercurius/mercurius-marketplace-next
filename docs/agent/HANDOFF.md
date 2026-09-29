@@ -1,4 +1,9 @@
-# Agent handoff — 2026-09-28 UTC
+# Agent handoff — 2026-09-29
+
+## R0 early-access design checkpoint — 2026-09-29
+
+- On branch `codex/r0-experience` from `9cc4295`, Josh's approved 2026-09-28 [homeowner experience](../../governance/HOMEOWNER-EARLY-ACCESS-EXPERIENCE.md) is in governance with [route/state reconciliation](../../governance/HOMEOWNER-EARLY-ACCESS-RECONCILIATION.md), TRACE-100/103 links, and MDS/roadmap references. Documentation only; Phase 6 branch and code remain untouched.
+- Next bounded implementation remains R0.1 / TRACE-101 default-closed request and checkout authorization, before R0.2 interest storage and R0.3 public route work. External activation remains gated.
 
 ## R0 authority checkpoint — 2026-09-28
 
