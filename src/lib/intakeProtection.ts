@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // limits recorded in the database (the network limit is TRACE-089; DEC-2026-014). Every refusal gets the same response, so a sender cannot tell which check
 // refused it.
 
-export type IntakeForm = "contact" | "vendor_application";
+export type IntakeForm = "contact" | "vendor_application" | "early_access";
 
 export const MIN_FILL_MS = 3_000;
 
