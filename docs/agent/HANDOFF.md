@@ -3,7 +3,7 @@
 ## R0.1 local checkpoint — 2026-09-28
 
 - Branch `codex/r0-admission` stacked on R0 authority commit `87baae7`, isolated from Phase 6. Migration `20260928232242` defaults request/checkout admission closed; owner clarification DEC-2026-023 blocks every new checkout after revocation.
-- Isolated Supabase stack (ports 5642x): migration applied, SQL 068 22/22, six affected suites 240/240, full 58-file SQL suite 3266/3266, security advisor no issues. No shared Phase 6 database reset.
+- Isolated Supabase stack (ports 5642x): migration applied. `e7ccb07` regressed SQL 063 (inactive/waitlist cells refused as uninvited); fixed so inactive cells gate only with admission history. SQL 068 27/27, full 58-file suite 3270/3270, security advisor no issues at `e7ccb07`. No shared Phase 6 database reset.
 - Open: independent code review, direct Edge/browser and concurrency proof, CI, operator provisioning, already-issued Stripe session expiration for R1, hosted migration. R0.2 interest/consent follows reviewed R0.1; no external activation.
 
 ## R0 authority checkpoint — 2026-09-28

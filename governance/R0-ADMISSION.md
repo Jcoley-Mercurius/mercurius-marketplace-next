@@ -19,9 +19,9 @@ An account or homeowner role alone does not grant admission. Revocation prevents
 ## Verification — isolated local stack, 2026-09-28
 
 - A separate Supabase local project on ports 5642x applied all 171 branch migrations including R0.1. The existing Phase 6 stack on ports 5542x was neither reset nor changed.
-- `supabase test db --local supabase/tests/068_r0_trial_admission.sql`: **23/23 pass**. Covers default denial, no request write, operator roster, least privilege, Lee boundary, actor and cell scoping, grant, revocation, replay denial after coverage/service deactivation, checkout refusal, preserved history and two audit events.
-- Six affected source/request/coverage/role/intake suites: **240/240 pass** after test fixtures explicitly seed synthetic admissions.
-- Full `supabase test db --local supabase/tests`: **3266/3266 pass across 58 files**.
+- `supabase test db --local supabase/tests/068_r0_trial_admission.sql`: **23/23 pass** at `e7ccb07`. Covers default denial, no request write, operator roster, least privilege, Lee boundary, actor and cell scoping, grant, revocation, replay denial after coverage/service deactivation, checkout refusal, preserved history and two audit events.
+- Six affected source/request/coverage/role/intake suites: **240/240 pass** and full suite **3266/3266 across 58 files**, both recorded before the `e7ccb07` replay fix.
+- **Regression found and fixed (2026-09-28, R0.2 preparation):** `e7ccb07` made every *known* coverage/service cell admission-gated, so a never-admitted homeowner asking about an inactive or waitlist cell got “Trial invitation required” instead of the core waitlist/unavailable diagnostic. SQL 063 aborted at assertion 18. CI did not reach the SQL step because the image pull from public.ecr.aws was rate-limited. The fix gates an active cell always, and an inactive cell whenever the homeowner has any grant or revocation for it, so the revoked-replay denial remains. SQL 068 adds three cases and moves the deactivation step after the two active-cell refusals it had been masking: **27/27**. Full suite with the fix, one rolled-back transaction per file on the isolated R0 stack (ports 5642x, unchanged): **3270/3270 across 58 files, 0 errors**; 063 **65/65**.
 - `supabase db advisors --local --type security --level warn --fail-on error`: **no issues**.
 - `git diff --check`: pass. No production schema/data, email, Vercel deployment, DNS, Stripe or domain change.
 

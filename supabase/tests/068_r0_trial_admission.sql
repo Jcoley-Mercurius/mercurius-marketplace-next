@@ -116,12 +116,6 @@ select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
  'r0-admission-key-0004',pg_temp.plan())$$,
  '42501','Trial invitation required for this service and area',
  'revocation blocks exact-key replay');
-update public.coverage_areas set is_active=false where zip_code='00068';
-update public.services_catalog set is_active=false where id='lawn-mowing';
-select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
- 'r0-admission-key-0004',pg_temp.plan())$$,
- '42501','Trial invitation required for this service and area',
- 'deactivated coverage and service cannot restore a revoked replay');
 select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
  'r0-admission-key-0005',pg_temp.plan())$$,
  '42501','Trial invitation required for this service and area',
@@ -130,6 +124,23 @@ select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
  'r0-admission-key-0006',pg_temp.plan('00069'))$$,
  '42501','Trial invitation required for this service and area',
  'revocation does not create another cell');
+update public.coverage_areas set is_active=false where zip_code='00068';
+update public.services_catalog set is_active=false where id='lawn-mowing';
+select throws_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000001',
+ 'r0-admission-key-0004',pg_temp.plan())$$,
+ '42501','Trial invitation required for this service and area',
+ 'deactivated coverage and service cannot restore a revoked replay');
+select lives_ok($$select pg_temp.submit('e6800000-0000-4000-8000-000000000002',
+ 'r0-admission-key-0007',pg_temp.plan())$$,
+ 'inactive cell without admission history keeps core diagnostics');
+insert into public.coverage_areas(zip_code,city,is_active,has_waitlist)
+ values ('00067','Synthetic',false,true);
+insert into private.r0_lee_zips values ('00067');
+select is(pg_temp.submit('e6800000-0000-4000-8000-000000000002',
+ 'r0-admission-key-0008',pg_temp.plan('00067'))->>'coverage','waitlist',
+ 'never-admitted homeowner sees the waitlist outcome, not an invitation refusal');
+select is((select count(*) from public.service_requests where customer_id='e6800000-0000-4000-8000-000000000002'),
+ 0::bigint,'core diagnostics for inactive cells create no request');
 select set_config('request.jwt.claims',
  '{"role":"authenticated","sub":"e6800000-0000-4000-8000-000000000001"}',true);
 set local role authenticated;

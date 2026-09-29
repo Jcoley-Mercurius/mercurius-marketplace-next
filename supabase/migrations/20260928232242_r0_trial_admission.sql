@@ -178,9 +178,7 @@ begin
     or jsonb_typeof(selections) is distinct from 'array'
     or jsonb_array_length(selections) = 0 then return true; end if;
   zip := left(zip, 5);
-  -- A replay can return before the core revalidates coverage or catalog state.
-  -- Keep admission authoritative for formerly active cells, even after either
-  -- underlying row is deactivated. Unknown cells retain core diagnostics.
+  -- Unknown cells retain core diagnostics.
   if not exists (select 1 from public.coverage_areas
       where zip_code = zip) then return true; end if;
   if exists (select 1 from jsonb_array_elements(selections) item
@@ -191,8 +189,21 @@ begin
   for selection in select value from jsonb_array_elements(selections) loop
     if jsonb_typeof(selection) <> 'object' or selection ->> 'service_id' is null
       then return true; end if;
-    if not private.r0_trial_admitted(p_homeowner, zip, selection ->> 'service_id')
-      then return false; end if;
+    -- An active cell always requires admission. An inactive cell also does once this
+    -- homeowner has any grant or revocation for it: a replay can return before the core
+    -- revalidates coverage or catalog state, so deactivation must not restore a revoked
+    -- replay. An inactive cell without admission history keeps the core's waitlist or
+    -- unavailable diagnostics, which cannot create a request.
+    if (exists (select 1 from public.coverage_areas
+          where zip_code = zip and is_active = true)
+        and exists (select 1 from public.services_catalog
+          where id = selection ->> 'service_id' and is_active = true))
+      or exists (select 1 from private.r0_trial_admissions
+          where homeowner_id = p_homeowner and zip_code = zip
+            and service_id = selection ->> 'service_id') then
+      if not private.r0_trial_admitted(p_homeowner, zip, selection ->> 'service_id')
+        then return false; end if;
+    end if;
   end loop;
   return true;
 end $$;
