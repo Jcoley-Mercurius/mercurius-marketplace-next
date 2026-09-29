@@ -32,7 +32,7 @@ Independent review must check the SQL privilege boundary, lock order, multi-serv
 ## Required checkout fields — 2026-09-29, TRACE-101
 
 Review confirmed that legacy templates and occurrences can retain NULL `zip_code`
-or `service_catalog_id`. Forward migration `20260929000000` recovers a missing
+or `service_catalog_id`. Forward migration `20260929000500` (renamed from `20260929000000` on main integration) recovers a missing
 service from the linked catalog package and missing occurrence keys from a matching
 same-homeowner template. It preserves existing values and requests with money
 obligations. Unresolved rows retain their history and require source reconciliation;
@@ -54,3 +54,38 @@ Local evidence at base `612a9ab2210eb4b89c27f1e7988880840363026d` plus this patc
 - CodeRabbit review was unavailable: the task runtime reports review disabled.
 
 This is local repair evidence; the existing hosted and R1 activation gates remain open.
+
+## Main integration — 2026-09-29, TRACE-101
+
+PR #66 merged into `codex/r0-launch-authority` after that branch had already merged to
+`main` (#65), so R0.1 never reached `main`. Branch `codex/r0-admission-main` merges the
+recorded #66 head `7e582e6` onto `main` `9cc4295` plus the approved-experience docs
+commit `8fcf303`, keeping the evidence SHAs above reachable. It now runs with Phase 6.3
+(TRACE-099, `63f1537`/`be58eee`).
+
+- **Migration version collision:** this slice's `20260929000000_r0_checkout_required_fields`
+  shared its version with 6.3's `20260929000000_trace099_vendor_request_write_scope`.
+  It is renamed `20260929000500`, after 6.3 and before R0.2's `20260929001000`; the SQL
+  is unchanged and neither migration touches the other's objects. Hosted has neither
+  version. A local database that applied the old R0 version needs a reset.
+- **Script fixture:** `phase6-request-submission.mjs` did not admit the provider who is
+  also a homeowner, or `tree-trimming` for the mixed-plan check, so default-closed
+  admission refused checks 6 and 15 before the behavior they test. Both are now admitted.
+  The admission refusal itself remains covered by SQL 068.
+
+Evidence on a throwaway local stack (`mercurius_r0_integration`, ports 5652x) with the
+branch config; the Phase 6 stack (5542x) and earlier isolated R0 stack were not touched:
+
+- Clean start applied all migrations in order, including 6.3 and both R0.1 migrations.
+- Full SQL suite **3327/3327 across 59 files**. Per file: 023 42/42, 028 20/20,
+  063 65/65, 064 16/16, 065 29/29, 066 68/68, 067 (6.3) 54/54, 068 29/29.
+- `supabase/migration-tests/r0_checkout_required_fields.sql` via `psql -v ON_ERROR_STOP=1`:
+  **12/12**, rolled back.
+- Real REST/RPC scripts: `phase6-matching-offers.mjs` (6.3) **11/11**, fixtures cleaned;
+  `phase6-request-submission.mjs` **32/32** after the fixture fix (it failed at check 6
+  before it). `phase5-concurrency.mjs` including provider refunds: **PASS** after a clean
+  reset, run from copies with only the container name changed.
+- Unit **299/299**; typecheck, lint, secret scan and `git diff --check` pass.
+
+Not run: CI, Playwright browser suite (no app code changed in R0.1), direct Edge
+checkout call, security advisor, hosted checks. Earlier open acceptance items still apply.

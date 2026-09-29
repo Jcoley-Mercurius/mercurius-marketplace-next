@@ -35,7 +35,7 @@ insert into public.service_requests(id,customer_id,service_type,address,city,sta
 values ('e6900000-0000-4000-8000-000000000027',
  'e6900000-0000-4000-8000-000000000001','Unknown','3 Synthetic Way','Synthetic','FL','weekly');
 
-\ir ../migrations/20260929000000_r0_checkout_required_fields.sql
+\ir ../migrations/20260929000500_r0_checkout_required_fields.sql
 
 select is((select service_catalog_id from public.service_requests
  where id='e6900000-0000-4000-8000-000000000020'),'lawn-mowing',

@@ -103,11 +103,14 @@ await sql(`
    ('d4000000-0000-4000-8000-000000000001','${ids.fixed}','lawn-mowing','Synthetic fixed','fixed','one-time',true,false),
    ('d4000000-0000-4000-8000-000000000002','${ids.quote}','house-cleaning','Synthetic quote','custom_quote','monthly',true,false);
   insert into public.package_tiers(package_id,frequency,price,name) values ('d4000000-0000-4000-8000-000000000001','one-time',100,'Synthetic basic');
-  -- TRACE-101: request submission is closed by default; admit both synthetic homeowners.
+  -- TRACE-101: request submission is closed by default; admit both synthetic homeowners
+  -- and the provider who is also a homeowner. Tree trimming is admitted but has no
+  -- provider, so the mixed-plan check reaches the core unavailable diagnostic.
   insert into private.r0_lee_zips values ('00030');
   insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
-   select u, '00030', s, '${ids.admin}' from unnest(array['${ids.owner}','${ids.other}']::uuid[]) u,
-   unnest(array['lawn-mowing','house-cleaning']) s;`);
+   select u, '00030', s, '${ids.admin}'
+   from unnest(array['${ids.owner}','${ids.other}','${ids.vendorUser}']::uuid[]) u,
+   unnest(array['lawn-mowing','house-cleaning','tree-trimming']) s;`);
 
 const results = [];
 const check = async (label, fn) => {

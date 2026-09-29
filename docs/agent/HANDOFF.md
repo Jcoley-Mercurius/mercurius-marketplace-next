@@ -1,5 +1,11 @@
 # Agent handoff — 2026-09-29
 
+## R0.1 main integration — 2026-09-29
+
+- PRs #66/#67 merged into already-merged stack branches, so R0.1/R0.2 never reached `main`. Branch `codex/r0-admission-main` = `main` `9cc4295` + experience docs `8fcf303` + merge of #66 head `7e582e6` + integration fix. R0.1 checkout migration renamed `20260929000500` (collided with 6.3's `20260929000000`); request script fixture admits the provider-homeowner and `tree-trimming`.
+- Throwaway stack 5652x: full SQL 3327/3327 (59 files) incl. 067 and 068; migration replay 12/12; request script 32/32; 6.3 matching 11/11; concurrency PASS; unit 299/299; typecheck/lint/secrets. [Report](../../governance/R0-ADMISSION.md#main-integration--2026-09-29-trace-101).
+- Next: Codex reviews R0.1 PR; R0.2 integration (`codex/r0-interest-main`) is stacked on it. Open: CI, Edge/browser, independent review, hosted. No R0.3 or hosted action.
+
 ## R0 early-access design checkpoint — 2026-09-29
 
 - On branch `codex/r0-experience` from `9cc4295`, Josh's approved 2026-09-28 [homeowner experience](../../governance/HOMEOWNER-EARLY-ACCESS-EXPERIENCE.md) is in governance with [route/state reconciliation](../../governance/HOMEOWNER-EARLY-ACCESS-RECONCILIATION.md), TRACE-100/103 links, and MDS/roadmap references. Documentation only; Phase 6 branch and code remain untouched.
