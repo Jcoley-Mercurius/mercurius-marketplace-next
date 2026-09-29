@@ -23,6 +23,10 @@ select is((select count(*) from public.coverage_areas where zip_code in ('33955'
 
 insert into auth.users(id,raw_user_meta_data) values ('c6400000-0000-4000-8000-000000000001','{"full_name":"Synthetic homeowner"}');
 
+insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
+select 'c6400000-0000-4000-8000-000000000001',z.zip_code,'lawn-mowing',
+ 'c6400000-0000-4000-8000-000000000001' from lee_zips z;
+
 create function pg_temp.submit(p_key text, p_zip text) returns jsonb language plpgsql as $$
 declare r jsonb; begin
   perform set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub','c6400000-0000-4000-8000-000000000001')::text,true);

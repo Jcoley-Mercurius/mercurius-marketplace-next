@@ -25,7 +25,8 @@ insert into auth.users(id,raw_user_meta_data) values('${owner}','{}'),('${actor}
 insert into public.user_roles(user_id,role) values('${actor}','admin'),('${reviewer}','admin');
 insert into public.money_authorities(user_id,granted_by,reason) values('${actor}','${reviewer}','synthetic'),('${reviewer}','${actor}','synthetic');
 insert into public.contractors(id,name,is_active) values('62000000-0000-4000-8000-000000000001','Synthetic concurrent provider',false);
-insert into public.service_requests(id,customer_id,contractor_id,service_type,address) values('${request}','${owner}','62000000-0000-4000-8000-000000000001','house-cleaning','Synthetic concurrency');
+insert into public.service_requests(id,customer_id,contractor_id,service_type,address,zip_code,service_catalog_id) values('${request}','${owner}','62000000-0000-4000-8000-000000000001','house-cleaning','Synthetic concurrency','33901','house-cleaning');
+insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by) values('${owner}','33901','house-cleaning','${reviewer}');
 insert into public.request_quotes(id,request_id,revision,amount,sender_id,reason,status,decision_actor,decided_at) values('65000000-0000-4000-8000-000000000001','${request}',1,117,'${actor}','Synthetic quote','accepted','${owner}',now());
 update public.service_requests set status='scheduled',current_quote_id='65000000-0000-4000-8000-000000000001',quote_revision=1,quote_status='accepted' where id='${request}';
 create temporary table terms as select jsonb_build_object('service',10000,'addons',0,'discount',0,'adjustment',0,'subtotal',10000,'tax',700,'tip',1000,'deposit',3000,'total',11700,'currency','usd','source_version',private.money_source('${request}')->>'version','policy_version','CFG-005','tax_evidence','synthetic','reason','synthetic','expires_at',now()+interval '1 day') value;
