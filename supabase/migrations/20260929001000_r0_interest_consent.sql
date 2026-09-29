@@ -514,9 +514,14 @@ begin
     or p_reason is null or p_reason not in ('bounce', 'complaint', 'operator') then
     raise exception 'Invalid suppression' using errcode = '22023';
   end if;
-  perform private.r0_set_marketing(v_email, false, 'provider', null, false, 'provider');
+  perform pg_advisory_xact_lock(hashtextextended('r0-marketing:' || hash, 0));
   insert into private.r0_email_suppressions (email_hash, scope, reason)
   values (hash, p_scope, p_reason) on conflict do nothing;
+  if p_scope = 'all' then
+    insert into private.r0_email_suppressions (email_hash, scope, reason)
+    values (hash, 'marketing', p_reason) on conflict do nothing;
+  end if;
+  perform private.r0_set_marketing(v_email, false, 'provider', null, false, 'provider');
   perform private.r0_log(null, 'suppressed', 'provider', null);
 end $$;
 revoke all on function public.r0_record_email_suppression(text,text,text) from public, anon, authenticated, service_role;

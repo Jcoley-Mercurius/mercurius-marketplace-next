@@ -14,7 +14,7 @@ function sql(source) {
   });
 }
 const as = (role, sub, statement) => `begin; set local role ${role};
-select set_config('request.jwt.claims','${JSON.stringify({ role, sub })}',true);
+set local request.jwt.claims = '${JSON.stringify({ role, sub })}';
 ${statement}; commit;`;
 const service = statement => sql(as('service_role', null, statement));
 const hash = email => `encode(extensions.digest('${email}','sha256'),'hex')`;

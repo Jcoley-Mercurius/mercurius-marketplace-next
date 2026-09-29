@@ -252,6 +252,34 @@ select is(pg_temp.run('e6900000-0000-4000-8000-000000000006','authenticated','se
 select ok(exists(select 1 from private.r0_email_suppressions where email_hash=pg_temp.hash('market@example.test')
  and reason='account'),'account opt-out suppresses marketing');
 
+-- Provider reasons survive consent revocation for either scope, including retries.
+create temp table provider_cases as
+ select scope, reason, scope || '.' || reason || '@example.test' as email
+ from unnest(array['marketing','all']) scope,
+      unnest(array['bounce','complaint','operator']) reason;
+select private.r0_set_marketing(email,true,'early_access_form',null,false,'public_form')
+ from provider_cases;
+select pg_temp.svc(format('select to_jsonb(public.r0_record_email_suppression(%L,%L,%L))',
+ email,scope,reason)) from provider_cases;
+select pg_temp.svc(format('select to_jsonb(public.r0_record_email_suppression(%L,%L,%L))',
+ email,scope,reason)) from provider_cases;
+select is((select s.reason from private.r0_email_suppressions s
+ where s.email_hash=pg_temp.hash(c.email) and s.scope=c.scope), c.reason,
+ format('%s/%s preserves the requested suppression reason on retry',c.scope,c.reason))
+ from provider_cases c;
+select is((select s.reason from private.r0_email_suppressions s
+ where s.email_hash=pg_temp.hash(c.email) and s.scope='marketing'), c.reason,
+ format('%s/%s preserves the provider reason for marketing',c.scope,c.reason))
+ from provider_cases c;
+select ok((select not opted_in and email is null and source='provider'
+ from private.r0_marketing_preferences where email_hash=pg_temp.hash(c.email)),
+ format('%s/%s ends consent and clears the address',c.scope,c.reason))
+ from provider_cases c;
+select is((select count(*) from private.r0_email_suppressions s
+ where s.email_hash=pg_temp.hash(c.email)), case when c.scope='all' then 2 else 1 end::bigint,
+ format('%s/%s creates only the intended suppression scopes',c.scope,c.reason))
+ from provider_cases c;
+
 -- Provider suppression ('all') stops every mail class and ends consent.
 select pg_temp.svc($$select to_jsonb(public.r0_record_email_suppression('outside@example.test','all','complaint'))$$);
 select is(pg_temp.svc($$select to_jsonb(public.r0_email_allowed('outside@example.test','early_access'))$$),
