@@ -28,3 +28,29 @@ An account or homeowner role alone does not grant admission. Revocation prevents
 ## Open acceptance and rollback
 
 Independent review must check the SQL privilege boundary, lock order, multi-service refusal, operator provisioning and interaction with Phase 6 PR #64. Independent review found the deactivated-cell replay gap, which is fixed and covered by the focused test. The isolated migration replay applied all branch migrations, although the CLI reset ended on a local Storage health failure after schema application. A direct REST/RPC/Edge integration and browser route matrix are still needed; the UI still points to request/checkout until TRACE-103. Concurrency and final-head CI remain open. Hosted migration requires the R0.5 rehearsal, backup and explicit external-action authorization. The rollback for code is to return to the prior deployment while keeping the additive schema; a database forward fix is required if the migration has been applied.
+
+## Required checkout fields — 2026-09-29, TRACE-101
+
+Review confirmed that legacy templates and occurrences can retain NULL `zip_code`
+or `service_catalog_id`. Forward migration `20260929000000` recovers a missing
+service from the linked catalog package and missing occurrence keys from a matching
+same-homeowner template. It preserves existing values and requests with money
+obligations. Unresolved rows retain their history and require source reconciliation;
+checkout rejects either missing key with `22023` before calling the admission probe.
+New occurrences inherit repaired template keys, and incomplete future rows encounter
+the same checkout guard. Existing grants, revocation and commercial-source checks
+still apply. A backfill that changes a quoted request requires renewed source review.
+
+Local evidence at base `612a9ab2210eb4b89c27f1e7988880840363026d` plus this patch:
+
+- Clean synthetic Supabase startup applied all migrations and reference seed.
+- SQL 023, 028 and 068: **91 assertions passed**, covering source checkout, recurring
+  identities, admission/revocation and each NULL-key combination.
+- `supabase/migration-tests/r0_checkout_required_fields.sql`: **12 assertions passed**
+  via `psql -v ON_ERROR_STOP=1 -f`, with the adjacent `migrations/` directory present.
+  This rollback-only test replays the migration over legacy fixtures. Run it separately
+  from `supabase test db`, whose test mounts omit the sibling migration directory.
+- Unit tests **274/274**, secret scan and whitespace check passed.
+- CodeRabbit review was unavailable: the task runtime reports review disabled.
+
+This is local repair evidence; the existing hosted and R1 activation gates remain open.

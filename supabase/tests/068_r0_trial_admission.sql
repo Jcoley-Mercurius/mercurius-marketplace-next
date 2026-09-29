@@ -149,6 +149,32 @@ select throws_ok($$select public.money_prepare_checkout(
  '42501','Trial invitation required for checkout',
  'revocation blocks new checkout even for a prior request');
 reset role;
+-- Legacy templates and visits may still lack an admission key. Reject them
+-- before the trial probe, preserving the request and its financial history.
+update public.service_requests set zip_code=null
+ where customer_id='e6800000-0000-4000-8000-000000000001';
+set local role authenticated;
+select throws_ok($$select public.money_prepare_checkout(
+ 'e6800000-0000-4000-8000-000000000021','full')$$,
+ '22023','Request ZIP and catalog service required for checkout',
+ 'missing ZIP is rejected before the admission probe');
+reset role;
+update public.service_requests set zip_code='00068',service_catalog_id=null
+ where customer_id='e6800000-0000-4000-8000-000000000001';
+set local role authenticated;
+select throws_ok($$select public.money_prepare_checkout(
+ 'e6800000-0000-4000-8000-000000000021','full')$$,
+ '22023','Request ZIP and catalog service required for checkout',
+ 'missing catalog service is rejected before the admission probe');
+reset role;
+update public.service_requests set zip_code=null
+ where customer_id='e6800000-0000-4000-8000-000000000001';
+set local role authenticated;
+select throws_ok($$select public.money_prepare_checkout(
+ 'e6800000-0000-4000-8000-000000000021','full')$$,
+ '22023','Request ZIP and catalog service required for checkout',
+ 'both missing keys are rejected before the admission probe');
+reset role;
 select is((select count(*) from public.money_checkout_attempts),0::bigint,
  'checkout refusal creates no attempt');
 select is((select count(*) from public.service_requests where customer_id='e6800000-0000-4000-8000-000000000001'),
