@@ -367,3 +367,10 @@ After approval, this document should become the product authority and be version
 - a project-level `AGENTS.md` directing implementation agents to preserve the approved product contract.
 
 This document was approved by the owner on 2026-08-29. Explicitly unset configuration values and release evidence remain open; approval does not manufacture values or proof that the document requires implementation to produce.
+
+
+## Approved layered-release addendum — 2026-09-28
+
+Under DEC-2026-022 and CFG-014, the rebuilt app opens first as **R0 public recruiting**: truthful service and approved, eligible provider exploration, homeowner early-access interest and optional verified accounts, real vendor applications, reviewed approvals and invited vendor profile/offer preparation. A homeowner role or verified account alone cannot create a new request or check out. Josh, or a later explicitly authorized admin, grants or revokes audited trial access by service and area. Revocation prevents new transactions while preserving legitimate history and support. The full [interest, consent, withdrawal, vendor and operator contract](../governance/LAYERED-LAUNCH-DECISION.md) governs R0.
+
+**R1** is the invited transactional beta after full booking, money, payout, support and both-role Credits C0–C4 acceptance and owner activation. Its actual opening begins the 90-day beta Day 1 and Founding Vendor qualification. **R2** widens booking by service and Lee County coverage only after measured outcomes and owner decision. The Section 12 transactional checklist remains an R1 gate; R0 has a separate hosted recruiting and backend-refusal gate in the rebuild roadmap. This addendum does not change existing coverage, provider eligibility, price, fee, payout or lifecycle semantics.

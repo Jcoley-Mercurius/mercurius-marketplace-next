@@ -1,7 +1,7 @@
 # Hosted migration rollout — proposed plan
 
-**Status:** PROPOSED; awaiting owner approval. **Date:** 2026-09-24 UTC.
-Nothing in this plan has been performed. Each hosted step below needs explicit owner
+**Status:** SUPERSEDED AS AN EXECUTION ORDER by DEC-2026-022/R0.5; historical read-only analysis. **Date:** 2026-09-24 UTC.
+The counts, commit and deploy/migrate sequence below are dated observations and must be recalculated for the fixed R0 release candidate. Nothing in this plan has been performed. Each hosted step below needs explicit owner
 authorization for that action (AGENTS.md, "Required working behavior").
 
 ## Observed state (read-only checks, 2026-09-24)

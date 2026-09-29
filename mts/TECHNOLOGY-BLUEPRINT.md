@@ -385,3 +385,10 @@ The architecture is implementation-ready only when:
 - preview and production use isolated data and provider modes;
 - monitoring, backup, restore, rollback, replay, and incident procedures are proven;
 - all P0/P1 findings are closed or formally risk-accepted by an accountable owner.
+
+
+## Approved staged-release architecture addendum — 2026-09-28
+
+Under DEC-2026-022, R0 may publish the rebuilt app for recruiting only after its own hosted acceptance and owner go/no-go. The database is the authoritative, default-closed homeowner admission boundary for new request creation, with checkout refusing an unadmitted source as defense in depth. Client navigation and a `NEXT_PUBLIC_` flag cannot authorize transactions. Grants and revocations require actor, time and service/area scope; historical transactions remain accessible. R0 interest, consent, Auth linkage, withdrawal, suppression and observable retention use least-privilege data boundaries. Invitation email and owner-application notification are separate delivery paths.
+
+Preview remains isolated. Hosted migration rehearsal, coordinated deployment, monitoring and rollback precede public exposure. The existing transactional, money, recovery and security gates remain mandatory for R1. No production schema, email, domain or transaction activation follows merely from merging code.
