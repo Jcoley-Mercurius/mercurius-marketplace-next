@@ -79,6 +79,9 @@ async function cleanup() {
     delete from public.vendor_packages where contractor_id::text like 'd2000000-%';
     delete from public.contractor_service_zips where contractor_id::text like 'd2000000-%';
     delete from public.contractors where id::text like 'd2000000-%';
+    delete from private.r0_trial_admissions where homeowner_id::text like 'd1000000-%';
+    delete from private.r0_trial_admission_events where homeowner_id::text like 'd1000000-%';
+    delete from private.r0_lee_zips where zip_code in ('00030','00031');
     delete from public.coverage_areas where zip_code in ('00030','00031');
     delete from public.user_roles where user_id::text like 'd1000000-%';
     delete from auth.users where id::text like 'd1000000-%';`);
@@ -99,7 +102,12 @@ await sql(`
   insert into public.vendor_packages(id,contractor_id,service_id,name,pricing_mode,default_frequency,is_active,needs_review) values
    ('d4000000-0000-4000-8000-000000000001','${ids.fixed}','lawn-mowing','Synthetic fixed','fixed','one-time',true,false),
    ('d4000000-0000-4000-8000-000000000002','${ids.quote}','house-cleaning','Synthetic quote','custom_quote','monthly',true,false);
-  insert into public.package_tiers(package_id,frequency,price,name) values ('d4000000-0000-4000-8000-000000000001','one-time',100,'Synthetic basic');`);
+  insert into public.package_tiers(package_id,frequency,price,name) values ('d4000000-0000-4000-8000-000000000001','one-time',100,'Synthetic basic');
+  -- TRACE-101: request submission is closed by default; admit both synthetic homeowners.
+  insert into private.r0_lee_zips values ('00030');
+  insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
+   select u, '00030', s, '${ids.admin}' from unnest(array['${ids.owner}','${ids.other}']::uuid[]) u,
+   unnest(array['lawn-mowing','house-cleaning']) s;`);
 
 const results = [];
 const check = async (label, fn) => {
