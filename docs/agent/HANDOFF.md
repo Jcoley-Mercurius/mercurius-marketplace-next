@@ -1,5 +1,11 @@
 # Agent handoff — 2026-09-28 UTC
 
+## R0.2 local checkpoint — 2026-09-28
+
+- Branch `codex/r0-interest` stacked on R0.1 `5e31d55` (which fixes an `e7ccb07` regression that refused inactive/waitlist cells as uninvited; SQL 063 65/65, 068 27/27, full 3270/3270). R0.1 CI failures were public.ecr.aws image-pull rate limits, not code.
+- R0.2/TRACE-102: private interest/consent/suppression/retention records and service-key, verified-account and operator commands; three public routes. Evidence and open decisions: [R0-INTEREST.md](../../governance/R0-INTEREST.md). Host memory was exhausted, so tests ran in rolled-back transactions on the existing R0 stack (5642x), which is unchanged.
+- Open: companion early-access experience artifact (requested from owner), blank-reset replay, advisors, CI, concurrency/route integration, email delivery, double opt-in and expansion-retention decisions. No external action.
+
 ## R0.1 local checkpoint — 2026-09-28
 
 - Branch `codex/r0-admission` stacked on R0 authority commit `87baae7`, isolated from Phase 6. Migration `20260928232242` defaults request/checkout admission closed; owner clarification DEC-2026-023 blocks every new checkout after revocation.
