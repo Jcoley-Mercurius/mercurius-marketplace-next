@@ -84,6 +84,8 @@ jobs:
         run: node scripts/phase5-document-attach-concurrency.mjs
       - name: Concurrent intake submissions against the per-email limit
         run: node scripts/phase5-intake-limit-concurrency.mjs
+      - name: Concurrent early-access joins, consent, linkage and retention
+        run: node scripts/r0-interest-concurrency.mjs
       - name: Concurrent finance operator commands
         run: node scripts/phase5-finance-command-concurrency.mjs
       - name: Concurrent finance refund and chargeback commands
