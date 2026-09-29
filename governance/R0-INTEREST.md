@@ -51,3 +51,40 @@ Host memory and swap were exhausted, so no new stack was started. The existing i
 ## Rollback
 
 Code: redeploy the previous build; the routes disappear and the tables stay untouched. Database: the migration is additive (new private tables and functions, one widened constraint and limiter form list). Once applied, roll forward by revoking the new command grants in a reviewed migration; do not drop tables holding consent or suppression records without an owner retention decision.
+
+## Main integration — 2026-09-29, TRACE-102
+
+PR #67 merged into `codex/r0-admission` after R0.1 (#66) had merged into an
+already-merged branch, so R0.2 never reached `main`. Branch `codex/r0-interest-main`
+merges the recorded #67 head `2c2e697` onto the integrated R0.1 branch
+`codex/r0-admission-main` (see [R0-ADMISSION.md](R0-ADMISSION.md#main-integration--2026-09-29-trace-101)),
+which carries Phase 6.3 and R0.1's renamed `20260929000500` migration. The R0.2
+migration version `20260929001000` is unique and still applies last. No R0.2 source
+change was needed.
+
+- **Review fix not reported above:** `219e85b` (in #67) preserves provider suppression
+  reasons during consent revocation, adds 24 assertions to SQL 069 and fixes the
+  concurrency script output. It edited the unapplied migration in place.
+- **Experience artifact:** the approved [homeowner early-access experience](HOMEOWNER-EARLY-ACCESS-EXPERIENCE.md)
+  and its [reconciliation](HOMEOWNER-EARLY-ACCESS-RECONCILIATION.md) are now in this
+  checkout (open gate 1). Server messages remain provisional; exact copy and states are
+  accepted under R0.3 / TRACE-103, not here.
+
+Evidence on the throwaway local stack (`mercurius_r0_integration`, ports 5652x); the
+Phase 6 stack (5542x) and earlier isolated R0 stack were not touched:
+
+- **Blank reset replay:** `supabase db reset --local` applied every migration in order
+  (6.3 `20260929000000`, R0.1 `20260929000500`, R0.2 `20260929001000`) and the seed.
+- Full SQL suite **3491/3491 across 60 files** (3327 with R0.1 plus 164 in 069).
+  Per file: 063 65/65, 067 (6.3) 54/54, 068 29/29, 069 164/164.
+- `supabase db advisors --local --type security --level warn --fail-on error`: **no issues**.
+- Real scripts: `r0-interest-concurrency.mjs` **passed** (first local run);
+  `phase6-matching-offers.mjs` **11/11**; `phase6-request-submission.mjs` **32/32**;
+  `phase5-concurrency.mjs` including provider refunds **PASS** (copies with only the
+  container name changed).
+- Unit **320/320** (20 files); typecheck, lint and secret scan pass; `git diff --check`
+  passes apart from the CRLF line endings of the experience file, which is kept byte-for-byte as supplied.
+- Synthetic production build (CI env values): **PASS**, 70 pages; `/api/early-access`, `/manage` and `/unsubscribe` built as dynamic routes.
+
+Still open: CI, direct route integration against a running Next server, and open
+gates 2–6 above. No email is sent and no hosted schema, scheduler or admission changed.

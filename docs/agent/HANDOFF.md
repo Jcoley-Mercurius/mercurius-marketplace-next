@@ -1,5 +1,11 @@
 # Agent handoff — 2026-09-29
 
+## R0.2 main integration — 2026-09-29
+
+- Branch `codex/r0-interest-main` = `codex/r0-admission-main` + merge of #67 head `2c2e697` (R0.2 incl. review fix `219e85b`) + evidence docs. No R0.2 source change; migration `20260929001000` applies after 6.3 and R0.1.
+- Throwaway stack 5652x after blank reset: full SQL 3491/3491 (60 files), 069 164/164; security advisor no issues; interest concurrency PASS (first local run); 6.3 matching 11/11; request 32/32; Phase 5 concurrency PASS; unit 320/320; typecheck/lint/secrets; build per [report](../../governance/R0-INTEREST.md#main-integration--2026-09-29-trace-102).
+- Merge order: experience docs PR → R0.1 PR → R0.2 PR, each to `main` with merge commits. Next: Codex review. Open: CI, route/Edge/browser integration, email, double opt-in, expansion retention, hosted. R0.3 not started.
+
 ## R0.1 main integration — 2026-09-29
 
 - PRs #66/#67 merged into already-merged stack branches, so R0.1/R0.2 never reached `main`. Branch `codex/r0-admission-main` = `main` `9cc4295` + experience docs `8fcf303` + merge of #66 head `7e582e6` + integration fix. R0.1 checkout migration renamed `20260929000500` (collided with 6.3's `20260929000000`); request script fixture admits the provider-homeowner and `tree-trimming`.
