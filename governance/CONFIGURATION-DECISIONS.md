@@ -144,6 +144,7 @@ The system and configuration baselines are approved. CFG-014 adds a distinct R0 
 - **Status:** APPROVED by founder, 2026-09-28 (America/New_York).
 - **Decision:** Release the rebuilt app for public recruiting (R0), then open an invited transactional beta (R1), then widen homeowner booking by verified service/ZIP cells (R2). See [the full approved contract](LAYERED-LAUNCH-DECISION.md) and DEC-2026-022.
 - **R0:** Live homeowner interest and optional verified account; real vendor applications and approved-vendor preparation. Non-invited homeowners cannot create new service requests or check out through direct URLs, RPCs or APIs. Existing legitimate history and support remains available.
+- **Revocation:** Blocks every new checkout, including for a request created before revocation (DEC-2026-023), while preserving legitimate history.
 - **R1 clock:** The 90-day beta Day 1 and Founding Vendor qualification begin when R1 transactions actually open, never at R0 or an assumed September 30 date.
 - **R0 interest:** Email, Lee County ZIP, service interests or “still exploring”; optional first name; separate expansion-interest path for other ZIPs; independent unchecked marketing consent. Retention and withdrawal follow the full contract.
 - **Activation:** Merges are implementation evidence only. Hosted migration, email, deployment, domain and R0 activation each need the release procedure and specific owner go/no-go. R1 money/payout and Credits have a separate later gate.
