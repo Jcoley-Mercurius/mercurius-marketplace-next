@@ -13,6 +13,10 @@ The owner has stated that no additional product-authority approval chain is requ
 
 The approved authority chain is now **MPS → MDS → MTS → implementation evidence**. No additional system-level approval is outstanding.
 
+## Homeowner early-access experience — 2026-09-28
+
+Josh approved the [homeowner early-access experience v0.1](HOMEOWNER-EARLY-ACCESS-EXPERIENCE.md) on 2026-09-28 ET: public form composition, optional account step, signed-in waiting home, and route/state sweep. The [reconciliation](HOMEOWNER-EARLY-ACCESS-RECONCILIATION.md) records MDS/roadmap precedence and remaining R0 gates. Design approval does not activate live collection, booking, hosted email, deployment or domain changes.
+
 ## Phase 4 acceptance and Phase 6 start — 2026-09-26
 
 The owner accepted Phase 4 and released the Phase 6 review-before-start hold (DEC-2026-019),
