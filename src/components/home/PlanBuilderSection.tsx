@@ -31,6 +31,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
+import { useTrialAccess } from "@/hooks/useTrialAccess";
+import { EARLY_ACCESS_CTA, bookingState, earlyAccessHref } from "@/lib/earlyAccessExperience";
 import { cn } from "@/lib/utils";
 import type { PricingFrequency, PublicPackageSelection } from "@/lib/vendorPricing";
 import type { ServiceProviderProof } from "@/lib/serviceData";
@@ -191,6 +193,10 @@ export function PlanBuilderSection() {
   const [frequencies, setFrequencies] = useState<Record<string, Frequency>>({});
   const [matchingZip, setMatchingZip] = useState("");
   const router = useRouter();
+  // TRACE-103 (R0.3): only an admitted account continues to the request; everyone else
+  // joins early access with the services they chose.
+  const trial = useTrialAccess();
+  const invited = trial.status === "ready" && bookingState(trial.access) === "invited";
 
   const services = useMemo<Service[]>(() => fallbackBuilderServices.map((service) => {
     const catalogService = catalogServices.find((item) => item.id === service.id);
@@ -324,11 +330,13 @@ export function PlanBuilderSection() {
   };
 
   const matchMe = () => {
+    if (!invited) return router.push(earlyAccessHref(selectedIds));
     savePlanDraft();
     router.push("/request");
   };
 
   const chooseProvider = (serviceId: string, provider: EligibleProvider) => {
+    if (!invited) return router.push(earlyAccessHref([serviceId]));
     savePlanDraft({ serviceId, provider });
     router.push("/request");
   };
@@ -457,11 +465,13 @@ export function PlanBuilderSection() {
               <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] p-4 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h3 className="text-xl font-semibold text-white">Choose a pro, or let us match you</h3>
-                    <p className="mt-1 max-w-xl text-sm leading-6 text-white/55">Enter the service ZIP to see only currently eligible providers. Match me continues without requiring a provider choice.</p>
+                    <h3 className="text-xl font-semibold text-white">{invited ? "Choose a pro, or let us match you" : "See eligible pros for your ZIP"}</h3>
+                    <p className="mt-1 max-w-xl text-sm leading-6 text-white/55">{invited
+                      ? "Enter the service ZIP to see only currently eligible providers. Match me continues without requiring a provider choice."
+                      : "Enter the service ZIP to see currently eligible providers. Booking opens by invitation; join early access to be considered for these services."}</p>
                   </div>
                   <Button type="button" onClick={matchMe} className="shrink-0 rounded-xl bg-coral px-5 font-semibold text-coral-foreground hover:bg-coral-dark">
-                    Match me <ArrowRight className="h-4 w-4" />
+                    {invited ? "Match me" : EARLY_ACCESS_CTA} <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
 
@@ -494,6 +504,7 @@ export function PlanBuilderSection() {
                         frequency={getFrequency(service)}
                         zipCode={matchingZip}
                         onChoose={(provider) => chooseProvider(service.id, provider)}
+                        invited={invited}
                       />
                     ))}
                   </div>
@@ -510,9 +521,9 @@ export function PlanBuilderSection() {
               title="Your home plan"
               emptyTitle="Select services to start your plan"
               emptyCopy="Live prices appear only where an eligible provider package is available."
-              actionLabel="Match me"
-              actionHref="/request"
-              onActionBeforeNavigate={() => savePlanDraft()}
+              actionLabel={invited ? "Match me" : EARLY_ACCESS_CTA}
+              actionHref={invited ? "/request" : earlyAccessHref(selectedIds)}
+              onActionBeforeNavigate={invited ? () => savePlanDraft() : undefined}
               onRemove={toggleService}
               actionClassName="h-14 text-base"
               footer={selectedServices.length > 0 ? <><div className="rounded-xl border border-white/10 bg-white/5 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/40">Service area</p><p className="mt-1 text-sm text-foreground">Cape Coral &amp; Fort Myers, Florida</p></div><Button size="sm" variant="ghost" onClick={clearPlan} className="w-full text-white/40 hover:text-foreground">Clear Plan</Button><p className="text-center text-[10px] uppercase leading-relaxed tracking-wider text-white/25">Live prices come from active vendor packages. Quote and matching requests are confirmed before work begins.</p></> : null}

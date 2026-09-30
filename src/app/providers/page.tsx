@@ -27,6 +27,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 type Category = {
   id: string;
@@ -303,18 +304,18 @@ export default function ProvidersPage() {
 
         <section className="bg-primary/5 py-16">
           <div className="container-wide mx-auto max-w-2xl text-center">
-            <h2 className="mb-4 text-2xl font-bold text-foreground md:text-3xl">Ready to Book a Service?</h2>
+            <h2 className="mb-4 text-2xl font-bold text-foreground md:text-3xl">Booking Is Opening by Invitation</h2>
             <p className="mb-6 text-muted-foreground">
-              Build your plan and we&apos;ll work to match your request with a vetted local provider based on current service coverage.
+              Join early access and we&apos;ll invite Lee County homeowners in stages as approved providers and services are ready in their area.
             </p>
             <Link
-              href="/#bundle-builder"
+              href={EARLY_ACCESS_PATH}
               className={cn(
                 buttonVariants({ size: "lg" }),
                 "rounded-full bg-accent px-8 text-accent-foreground hover:bg-accent-hover",
               )}
             >
-              Build Your Plan
+              {EARLY_ACCESS_CTA}
             </Link>
           </div>
         </section>
@@ -415,10 +416,10 @@ function DirectoryUnavailable() {
         <ShieldCheck className="mx-auto h-11 w-11 text-accent" />
         <h2 className="mt-5 text-2xl font-bold">Live provider availability is temporarily unavailable</h2>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-          We couldn&apos;t confirm current directory coverage. Submit a request and our team will check for a vetted local professional before anything is booked.
+          We couldn&apos;t confirm current directory coverage. Please try again later. Booking is opening by invitation, and you can join early access now.
         </p>
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/request" className={buttonVariants({ size: "lg" })}>Request a Service</Link>
+          <Link href={EARLY_ACCESS_PATH} className={buttonVariants({ size: "lg" })}>{EARLY_ACCESS_CTA}</Link>
           <Link href="/contact" className={buttonVariants({ variant: "outline", size: "lg" })}>Contact Us</Link>
         </div>
       </div>
@@ -435,10 +436,10 @@ function GrowingNetwork() {
         </div>
         <h2 className="mt-6 text-2xl font-bold md:text-3xl">Our provider network is growing</h2>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-          We don&apos;t have public provider profiles to show in your area yet. Tell us what you need and we&apos;ll work to source a qualified local pro—without pretending coverage is already available.
+          We don&apos;t have public provider profiles to show in your area yet. Join early access to tell us what you need, and we&apos;ll let you know when services are ready in your area.
         </p>
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/request" className={buttonVariants({ size: "lg" })}>Request a Service</Link>
+          <Link href={EARLY_ACCESS_PATH} className={buttonVariants({ size: "lg" })}>{EARLY_ACCESS_CTA}</Link>
           <Link href="/vendors/apply" className={buttonVariants({ variant: "outline", size: "lg" })}>Join as a Provider</Link>
         </div>
       </div>

@@ -1,5 +1,12 @@
 # Agent handoff — 2026-09-29
 
+## R0.3 early-access experience implemented (TRACE-103); awaiting Codex review
+
+- Branch `codex/r0-early-access-ui` from PR #70 head `1965383` merged with PR #69 head `6c20314` (`791e1c9`). Public CTAs lead to `/early-access`; waiting/invited/closed account states; `/request` and checkout closed for unadmitted accounts; new read-only `r0_my_trial_access()` (migration `20260929002000`). [Report](../../governance/R0-EXPERIENCE.md).
+- Evidence: SQL 070 17/17 (rolled back on the integration stack); unit 331/331; typecheck, lint, secret scan, synthetic build; browser non-visual 401/401. Not run: `@visual`, CI, full SQL/reset, human screen reader and real zoom.
+- Working tree also has an unrelated `undici` addition in `package.json`/lockfile that this slice did not make; it is not committed here.
+- Next: Codex reviews D1–D11; human accessibility pass; regenerate `@visual` baselines. No deployment or activation.
+
 ## R0.2 main integration — 2026-09-29
 
 - Branch `codex/r0-interest-main` = `codex/r0-admission-main` + merge of #67 head `2c2e697` (R0.2 incl. review fix `219e85b`) + evidence docs. No R0.2 source change; migration `20260929001000` applies after 6.3 and R0.1.

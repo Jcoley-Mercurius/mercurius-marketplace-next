@@ -1,6 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Provider logos and gallery URLs are user-managed Supabase assets. */
 
+import { useTrialAccess } from "@/hooks/useTrialAccess";
+import { EARLY_ACCESS_CTA, bookingState, earlyAccessHref } from "@/lib/earlyAccessExperience";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -171,6 +173,10 @@ const serviceFallbacks: Record<string, string> = {
 export default function ProviderStorefrontPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  // TRACE-103 (R0.3): only an admitted account continues to a request; everyone else joins
+  // early access with this provider's service selected.
+  const trial = useTrialAccess();
+  const invited = trial.status === "ready" && bookingState(trial.access) === "invited";
   const contractorId = typeof params.id === "string" ? params.id : "";
   const [contractor, setContractor] = useState<Contractor | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -353,6 +359,10 @@ export default function ProviderStorefrontPage() {
   ) {
     if (!contractor) return;
     const serviceId = selectedPackage?.service_id ?? contractor.services?.[0];
+    if (!invited) {
+      router.push(earlyAccessHref([serviceId]));
+      return;
+    }
     const serviceName = serviceId ? displayService(serviceId, serviceNames) : contractor.verified_specialty ?? "Home service";
     const cadenceOptions = selectedPackage?.pricing_mode === "fixed"
       ? effectiveFrequencyOptions(selectedPackage, serverNow)
@@ -428,7 +438,7 @@ export default function ProviderStorefrontPage() {
     : null;
   const primaryPackage = fixedPackages[0];
   const isPublished = Boolean(contractor.is_active);
-  const heroCta = fixedPackages.length ? "Book This Provider" : "Request This Provider";
+  const heroCta = !invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Book This Provider" : "Request This Provider";
   const hasQuickStats = averageRating !== null
     || completedJobCount !== null
     || contractor.years_experience !== null
@@ -462,7 +472,7 @@ export default function ProviderStorefrontPage() {
                   {heroCta}<ArrowRight />
                 </Button>
                 <p className="mt-2 max-w-64 text-xs leading-relaxed text-muted-foreground sm:text-right">
-                  {fixedPackages.length ? "Confirm your home and scheduling details next." : "Mercurius will coordinate scope and pricing before booking is confirmed."}
+                  {!invited ? "Booking opens by invitation as services are ready in your area." : fixedPackages.length ? "Confirm your home and scheduling details next." : "Mercurius will coordinate scope and pricing before booking is confirmed."}
                 </p>
               </div>
             </div>
@@ -501,11 +511,11 @@ export default function ProviderStorefrontPage() {
                 </SectionCard>}
 
                 {quotePackages.length > 0 && <SectionCard title="Services Requiring a Quote">
-                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p><Badge variant="outline" className="border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p>{item.pricing_mode === "deposit_quote" && item.deposit_amount && <p className="mt-2 text-xs text-muted-foreground">A {money(item.deposit_amount)} deposit may apply after scope, final pricing, and booking details are confirmed. Nothing is charged with the initial request.</p>}<PublicPackageAddons addons={item.addons} /></div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>Request &amp; Match<ArrowRight /></Button></div>)}</div>
+                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p><Badge variant="outline" className="border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p>{item.pricing_mode === "deposit_quote" && item.deposit_amount && <p className="mt-2 text-xs text-muted-foreground">A {money(item.deposit_amount)} deposit may apply after scope, final pricing, and booking details are confirmed. Nothing is charged with the initial request.</p>}<PublicPackageAddons addons={item.addons} /></div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>{invited ? "Request & Match" : EARLY_ACCESS_CTA}<ArrowRight /></Button></div>)}</div>
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Mercurius will coordinate the details with you and the provider before the work is confirmed. No unpublished price is presented as bookable.</p>
                 </SectionCard>}
 
-                {packages.length === 0 && <SectionCard title="Request a Service"><p className="text-sm leading-relaxed text-muted-foreground">This provider has not published a live fixed price yet. Submit your service details and Mercurius will confirm provider availability, scope, and pricing before booking.</p><Button className="mt-4 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest()}>Request This Provider<ArrowRight /></Button></SectionCard>}
+                {packages.length === 0 && <SectionCard title={invited ? "Request a Service" : "Opening by Invitation"}><p className="text-sm leading-relaxed text-muted-foreground">{invited ? "This provider has not published a live fixed price yet. Submit your service details and Mercurius will confirm provider availability, scope, and pricing before booking." : "This provider has not published a live fixed price yet. Booking opens by invitation; join early access to be considered when services are ready in your area."}</p><Button className="mt-4 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest()}>{invited ? "Request This Provider" : EARLY_ACCESS_CTA}<ArrowRight /></Button></SectionCard>}
 
                 {(contractor.badges?.length ?? 0) > 0 && <SectionCard title="Credentials"><div className="flex flex-wrap gap-3">{contractor.badges?.map((badge) => <div key={badge} className="flex items-center gap-2 rounded-lg bg-sage-light px-3 py-2 text-sm font-medium text-sage-dark"><BadgeCheck className="h-4 w-4" />{badge}</div>)}</div></SectionCard>}
 
@@ -523,7 +533,7 @@ export default function ProviderStorefrontPage() {
               <aside className="space-y-6 md:sticky md:top-24 md:self-start">
                 <Card className="border-accent/20 shadow-sm"><CardHeader><CardTitle className="text-lg">Pricing Overview</CardTitle></CardHeader><CardContent>
                   {fixedPackages.length > 0 ? <StorefrontPriceOverview item={fixedPackages[0]} serverNow={serverNow} /> : <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Pricing depends on the scope. Mercurius will confirm availability and price before work begins.</p>}
-                  <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest(primaryPackage)}>{fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
+                  <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest(primaryPackage)}>{!invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
                 </CardContent></Card>
 
                 <Card><CardHeader><CardTitle className="text-lg">Service Area</CardTitle></CardHeader><CardContent><div className="flex min-h-40 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">Southwest Florida</p><p className="mt-1 text-xs">Coverage is confirmed for your service address.</p></div></div>{contractor.location && <p className="mt-3 text-center text-sm text-muted-foreground">Based in {contractor.location}</p>}</CardContent></Card>

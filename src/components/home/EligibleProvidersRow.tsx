@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, BadgeCheck, Loader2, MapPin, RefreshCw, SearchX, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EARLY_ACCESS_CTA } from "@/lib/earlyAccessExperience";
 import { createClient } from "@/lib/supabase/client";
 import type { PricingFrequency } from "@/lib/vendorPricing";
 
@@ -29,12 +30,15 @@ export function EligibleProvidersRow({
   frequency,
   zipCode,
   onChoose,
+  invited = false,
 }: {
   serviceId: string;
   serviceName: string;
   frequency: PricingFrequency;
   zipCode: string;
   onChoose: (provider: EligibleProvider) => void;
+  /** TRACE-103: without an admitted account, choosing leads to early access instead. */
+  invited?: boolean;
 }) {
   const [providers, setProviders] = useState<EligibleProvider[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">("loading");
@@ -102,7 +106,7 @@ export function EligibleProvidersRow({
         <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 px-6 text-center">
           <SearchX className="h-6 w-6 text-white/35" />
           <p className="mt-3 text-sm font-medium text-white">No eligible provider is published for this ZIP yet.</p>
-          <p className="mt-1 max-w-md text-xs leading-5 text-white/50">Choose Match me to send a sourcing request. We’ll confirm coverage before presenting a provider or price.</p>
+          <p className="mt-1 max-w-md text-xs leading-5 text-white/50">{invited ? "Choose Match me to send a sourcing request. We’ll confirm coverage before presenting a provider or price." : "Booking opens by invitation. Join early access to be considered when this service opens in your area."}</p>
         </div>
       )}
 
@@ -110,7 +114,7 @@ export function EligibleProvidersRow({
         <div className="-mx-4 overflow-x-auto px-4 pb-3 [scrollbar-color:hsl(220_16%_34%)_transparent] sm:-mx-2 sm:px-2">
           <div className="flex w-max snap-x snap-mandatory gap-4">
             {providers.map((provider) => (
-              <ProviderCard key={`${provider.contractor_id}:${provider.package_id}:${provider.package_tier_id ?? "quote"}`} provider={provider} zipCode={zipCode} onChoose={onChoose} />
+              <ProviderCard key={`${provider.contractor_id}:${provider.package_id}:${provider.package_tier_id ?? "quote"}`} provider={provider} zipCode={zipCode} onChoose={onChoose} invited={invited} />
             ))}
           </div>
         </div>
@@ -119,7 +123,7 @@ export function EligibleProvidersRow({
   );
 }
 
-function ProviderCard({ provider, zipCode, onChoose }: { provider: EligibleProvider; zipCode: string; onChoose: (provider: EligibleProvider) => void }) {
+function ProviderCard({ provider, zipCode, onChoose, invited }: { provider: EligibleProvider; zipCode: string; onChoose: (provider: EligibleProvider) => void; invited: boolean }) {
   const badges = (provider.badges ?? []).filter((badge) => badge.trim() && badge.toLowerCase() !== "top rated").slice(0, 3);
   const initials = provider.contractor_name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "MP";
   const fixedPrice = provider.path === "fixed" && provider.effective_price !== null ? Number(provider.effective_price) : null;
@@ -146,7 +150,7 @@ function ProviderCard({ provider, zipCode, onChoose }: { provider: EligibleProvi
           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-white/50">{provider.path === "fixed" ? "Fixed" : "Quote"}</span>
         </div>
         <Button type="button" className="w-full rounded-xl bg-coral font-semibold text-coral-foreground hover:bg-coral-dark" onClick={() => onChoose(provider)}>
-          Choose this pro <ArrowRight className="h-4 w-4" />
+          {invited ? "Choose this pro" : EARLY_ACCESS_CTA} <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
     </article>

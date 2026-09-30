@@ -62,8 +62,9 @@ test("public mobile menu has one trigger, a name, scroll access, trap and restor
   await expect.poll(() => dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Shift+Tab");
   await expect(close).toBeFocused();
-  await dialog.getByRole("link", { name: "Request service", exact: true }).scrollIntoViewIfNeeded();
-  await expect(dialog.getByRole("link", { name: "Request service", exact: true })).toBeInViewport();
+  // TRACE-103: the public header's booking entry point is early access during R0.
+  await dialog.getByRole("link", { name: "Join early access", exact: true }).scrollIntoViewIfNeeded();
+  await expect(dialog.getByRole("link", { name: "Join early access", exact: true })).toBeInViewport();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();

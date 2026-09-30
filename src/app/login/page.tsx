@@ -221,7 +221,7 @@ export default function LoginPage() {
               Home care, clearly coordinated.
             </h2>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-primary-foreground/80">
-              Sign in to review service requests, follow job progress, and keep important home-service details in one place.
+              Sign in to see your early-access status, review service requests, follow job progress, and keep important home-service details in one place.
             </p>
           </div>
         </section>

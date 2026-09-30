@@ -11,6 +11,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import type { Service } from "@/lib/serviceData";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH, earlyAccessHref } from "@/lib/earlyAccessExperience";
 
 const iconMap = LucideIcons as unknown as Record<string, LucideIcon>;
 const getIcon = (iconName: string) => iconMap[iconName] || Star;
@@ -52,15 +53,12 @@ export default function PricingPage() {
                         const availability = service.availability ?? "sourcing";
                         const recurring = getRecurringPrice(service);
                         const hasPromotion = Boolean(service.promotionIds && Object.keys(service.promotionIds).length);
-                        const requestHref = `/request?service=${availability === "sourcing" ? "general-home-service" : service.id}&requested=${encodeURIComponent(service.name)}`;
-                        const requestFrequencies = getRequestFrequencies(service);
-                        const requestDefaultFrequency = requestFrequencies.includes(service.defaultFrequency as RequestFrequency) ? service.defaultFrequency as RequestFrequency : requestFrequencies[0] ?? "one-time";
                         return (
-                          <Link key={service.id} href={requestHref} onClick={() => window.sessionStorage.setItem("homePlanSelection", JSON.stringify({ selectedServiceIds: [service.id], frequencies: { [service.id]: requestDefaultFrequency }, requestedServices: [{ id: service.id, name: service.name, descriptor: service.descriptor, availability, defaultFrequency: requestDefaultFrequency, frequencies: requestFrequencies, prices: { weekly: service.weeklyPrice ?? 0, "bi-monthly": service.biMonthlyPrice ?? 0, monthly: service.avgMonthlyPrice, quarterly: service.quarterlyPrice ?? 0, "one-time": service.oneTimePrice }, ...service.packageSelections?.[requestDefaultFrequency] }] }))} className={cn("group grid grid-cols-12 items-center gap-4 px-6 py-5 transition-colors hover:bg-muted/30", index !== categoryServices.length - 1 && "border-b border-border/30", availability === "sourcing" && "bg-muted/15")}>
+                          <Link key={service.id} href={earlyAccessHref([service.id])} aria-label={`${service.name}: join early access`} className={cn("group grid grid-cols-12 items-center gap-4 px-6 py-5 transition-colors hover:bg-muted/30", index !== categoryServices.length - 1 && "border-b border-border/30", availability === "sourcing" && "bg-muted/15")}>
                             <div className="col-span-12 flex items-center gap-3 md:col-span-5"><div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", availability === "sourcing" ? "bg-muted" : "bg-sage-light/60")}><Icon className={cn("h-4 w-4", availability === "sourcing" ? "text-muted-foreground" : "text-sage")} /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-medium text-foreground">{service.name}</p>{availability === "fixed" && <Badge className="border-accent/20 bg-accent/10 px-1.5 py-0 text-[10px] text-accent">Live price</Badge>}{hasPromotion && <Badge className="border-coral/25 bg-coral/10 px-1.5 py-0 text-[10px] text-coral">Promotion</Badge>}{availability === "quote" && <Badge className="border-info/20 bg-info/10 px-1.5 py-0 text-[10px] text-info">Quote available</Badge>}</div><p className="line-clamp-1 text-xs text-muted-foreground">{service.descriptor}</p></div></div>
                             {availability === "fixed" && <><div className="col-span-6 md:col-span-3 md:text-right"><p className="text-[10px] uppercase tracking-wide text-muted-foreground md:hidden">One-Time</p>{service.oneTimePrice > 0 ? <PublicPrice service={service} frequency="one-time" suffix="" /> : <p className="text-sm text-muted-foreground">Not offered</p>}</div><div className="col-span-6 md:col-span-3 md:text-right"><p className="text-[10px] uppercase tracking-wide text-muted-foreground md:hidden">Recurring</p>{recurring ? <PublicPrice service={service} frequency={recurring.frequency} suffix={recurring.label} accent /> : <p className="text-sm text-muted-foreground">Not offered</p>}</div></>}
-                            {availability === "quote" && <div className="col-span-12 rounded-xl bg-info/5 px-4 py-3 md:col-span-6"><p className="text-sm font-medium text-foreground">Provider coverage is available</p><p className="mt-0.5 text-xs text-muted-foreground">Request a scoped quote before work begins.</p></div>}
-                            {availability === "sourcing" && <div className="col-span-12 rounded-xl border border-dashed border-border bg-card/70 px-4 py-3 md:col-span-6"><p className="flex items-center gap-2 text-sm font-medium text-foreground"><Clock3 className="h-4 w-4 text-coral" />Not available yet in your area</p><p className="mt-1 text-xs font-medium text-accent">Request this service — we&apos;ll source a vetted pro</p></div>}
+                            {availability === "quote" && <div className="col-span-12 rounded-xl bg-info/5 px-4 py-3 md:col-span-6"><p className="text-sm font-medium text-foreground">Provider coverage is available</p><p className="mt-0.5 text-xs text-muted-foreground">Quotes are scoped before work begins.</p></div>}
+                            {availability === "sourcing" && <div className="col-span-12 rounded-xl border border-dashed border-border bg-card/70 px-4 py-3 md:col-span-6"><p className="flex items-center gap-2 text-sm font-medium text-foreground"><Clock3 className="h-4 w-4 text-coral" />Not available yet in your area</p><p className="mt-1 text-xs font-medium text-accent">Join early access to show interest</p></div>}
                             <div className="col-span-1 hidden justify-end md:flex"><ArrowRight className="h-4 w-4 text-muted-foreground" /></div>
                           </Link>
                         );
@@ -87,7 +85,7 @@ export default function PricingPage() {
           </div>
         </section>
 
-        <section className="bg-cta-section section text-white"><div className="container-wide text-center"><h2 className="mb-4 text-3xl font-bold text-white md:text-4xl">Ready to check your service?</h2><p className="mx-auto mb-8 max-w-xl text-lg text-white/80">Choose what you need. We&apos;ll use live pricing where coverage exists—or help source a vetted provider when it doesn&apos;t.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Start My Request <ArrowRight className="ml-2 h-5 w-5" /></Link><Link href="/services" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-11 border-white/30 bg-white/10 px-8 text-white hover:bg-white/20 hover:text-white")}>Browse All Services</Link></div></div></section>
+        <section className="bg-cta-section section text-white"><div className="container-wide text-center"><h2 className="mb-4 text-3xl font-bold text-white md:text-4xl">Ready to check your service?</h2><p className="mx-auto mb-8 max-w-xl text-lg text-white/80">See live pricing where coverage exists. Booking opens by invitation—join early access and we&apos;ll let you know when services are ready in your area.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><Link href={EARLY_ACCESS_PATH} className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>{EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" /></Link><Link href="/services" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-11 border-white/30 bg-white/10 px-8 text-white hover:bg-white/20 hover:text-white")}>Browse All Services</Link></div></div></section>
       </main>
       <Footer />
     </div>
@@ -110,14 +108,3 @@ function PublicPrice({ service, frequency, suffix, accent = false }: { service: 
 }
 
 type RequestFrequency = "weekly" | "bi-monthly" | "monthly" | "quarterly" | "one-time";
-
-function getRequestFrequencies(service: Service): RequestFrequency[] {
-  if (service.availability !== "fixed") return ["one-time"];
-  return [
-    service.weeklyPrice ? "weekly" as const : null,
-    service.biMonthlyPrice ? "bi-monthly" as const : null,
-    service.avgMonthlyPrice ? "monthly" as const : null,
-    service.quarterlyPrice ? "quarterly" as const : null,
-    service.oneTimePrice ? "one-time" as const : null,
-  ].filter((frequency): frequency is RequestFrequency => frequency !== null);
-}

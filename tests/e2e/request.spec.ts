@@ -4,6 +4,8 @@ import { syntheticSession } from "../fixtures/browser-session";
 
 // TRACE-095/098: homeowner intake. Synthetic session and scripted Supabase responses only; the
 // database contracts are proven by SQL 063–066 and scripts/phase6-request-submission.mjs.
+// TRACE-103: /request opens only for an admitted account (r0_my_trial_access); scenarios
+// default to an invited homeowner, and the closed states are covered below.
 const app = "http://127.0.0.1:3103";
 const supabase = "http://127.0.0.1:55831";
 const homeownerId = "00000000-0000-4000-8000-000000000001";
@@ -30,8 +32,19 @@ const quote = (service_id: string, offering_mode = "custom_quote") => ({ service
 const unavailable = (service_id: string, reason = "no_eligible_provider") => ({ service_id, outcome: "unavailable", reason });
 const requestIdFor = (index: number) => `00000000-0000-4000-8000-0000000005${index}0`;
 
+type Trial = "invited" | "waiting" | "revoked" | "unavailable" | "not_homeowner" | "error";
+const trialCell = (state: string) => ({ zip_code: "33904", service_id: "lawn-mowing", service_name: "Lawn Mowing", state, changed_at: "2026-09-29T12:00:00Z" });
+const trialAccess: Record<Exclude<Trial, "error">, unknown> = {
+  invited: { homeowner: true, cells: [trialCell("active")] },
+  waiting: { homeowner: true, cells: [] },
+  revoked: { homeowner: true, cells: [trialCell("revoked")] },
+  unavailable: { homeowner: true, cells: [trialCell("unavailable")] },
+  not_homeowner: { homeowner: false, cells: [] },
+};
+
 type Scenario = {
   signedIn?: boolean;
+  trial?: Trial;
   role?: "homeowner" | "vendor" | "admin";
   draft?: Record<string, unknown>;
   width?: number;
@@ -58,6 +71,7 @@ class Recorder {
   photoRows: { service_request_id: string; photo_url: string }[] = [];
   removed: string[] = [];
   checkouts = 0;
+  trialReads = 0;
 }
 
 function submittedFor(selections: Selection[], reused = false) {
@@ -99,6 +113,11 @@ async function intake(page: Page, scenario: Scenario = {}) {
     // Catalog: an empty live catalog, so the static references show without live supply.
     if (/\/rest\/v1\/(service_categories|services_catalog|vendor_packages|package_tiers|package_promotions|package_qualifying_questions)$/.test(path)) return route.fulfill({ json: [] });
     if (path === "/rest/v1/rpc/pricing_server_now") return route.fulfill({ json: new Date().toISOString() });
+    if (path === "/rest/v1/rpc/r0_my_trial_access") {
+      record.trialReads += 1;
+      const trial = scenario.trial ?? "invited";
+      return trial === "error" ? route.fulfill({ status: 500, json: { message: "Synthetic outage" } }) : route.fulfill({ json: trialAccess[trial] });
+    }
     if (path === "/rest/v1/rpc/preview_service_request_selections") {
       const payload = request.postDataJSON().p_payload as { stage: string; selections: Selection[] };
       record.previews.push({ stage: payload.stage, selections: payload.selections });
@@ -384,19 +403,23 @@ test.describe("provider consent, answers and current terms (I2, I6)", () => {
 });
 
 test.describe("authentication and retry (I3, I4)", () => {
-  test("anonymous visitors can't submit; sign-in continuation keeps the draft and key and never auto-submits", async ({ page }) => {
+  test("anonymous visitors get the closed state; an invited sign-in keeps the draft and never auto-submits", async ({ page }) => {
+    // TRACE-103: before R0 an anonymous visitor could plan here and sign in to submit.
     const record = await intake(page, { signedIn: false });
-    await page.getByRole("button", { name: "Sign in to request service" }).click();
-    await expect(page).toHaveURL(/\/login\?redirect=\/request$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Booking is opening by invitation" })).toBeFocused();
+    await expect(page.getByRole("button", { name: /request service/i })).toHaveCount(0);
+    await page.getByRole("link", { name: "Sign in to request service" }).click();
+    await expect(page).toHaveURL(/\/login\?redirect=%2Frequest$/);
     await expect(page.getByRole("link", { name: "Create one" })).toHaveAttribute("href", "/register?redirect=%2Frequest");
-    const key = (await storedDraft(page)).submissionKey as string;
-    expect(key).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    expect((await storedDraft(page)).streetAddress).toBe("123 Synthetic Test Lane");
     expect(record.submits).toHaveLength(0);
     await syntheticSession(page.context(), "homeowner");
     await page.goto("/request");
     await expect(page.getByRole("heading", { name: "Review and confirm" })).toBeVisible();
     await expect(page.getByLabel("Street address (required)")).toHaveCount(0);
     expect(record.submits).toHaveLength(0);
+    const key = (await storedDraft(page)).submissionKey as string;
+    expect(key).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
     await submitButton(page).click();
     await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
     expect(record.submits.map((call) => call.key)).toEqual([key]);
@@ -515,11 +538,10 @@ test.describe("authentication and retry (I3, I4)", () => {
   });
 
   test("a signed-out visitor can't see a signed-in account's draft", async ({ page }) => {
+    // TRACE-103: the closed state replaces the form, so nothing from the draft renders.
     await intake(page, { draft: { ownerId: homeownerId }, signedIn: false });
-    await expect(page.getByRole("heading", { name: "Sign in to continue this request" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Booking is opening by invitation" })).toBeVisible();
     await expect(page.locator("main")).not.toContainText("123 Synthetic Test Lane");
-    await page.getByRole("button", { name: "Start over" }).click();
-    await expect(page.getByRole("heading", { name: "What does your home need?" })).toBeVisible();
   });
 
   test("an identity without the homeowner role is refused without losing the draft", async ({ page }) => {
@@ -568,10 +590,12 @@ test.describe("photos (I5)", () => {
     await expect(page.getByText("5 of 6 photos selected.")).toBeVisible();
   });
 
-  test("signed-out visitors are told before leaving that photos must be chosen again", async ({ page }) => {
-    await intake(page, { signedIn: false, draft: { step: "details" } });
-    await page.locator("#requestPhotos").setInputFiles({ name: "synthetic.png", mimeType: "image/png", buffer: png });
-    await expect(page.getByText("You’ll need to choose these photos again after signing in.")).toBeVisible();
+  test("signed-out visitors get the closed state instead of a photo picker", async ({ page }) => {
+    // TRACE-103: before R0 a signed-out visitor could choose photos and was warned before sign-in.
+    const record = await intake(page, { signedIn: false, draft: { step: "details" } });
+    await expect(page.getByRole("heading", { name: "Booking is opening by invitation" })).toBeVisible();
+    await expect(page.locator("#requestPhotos")).toHaveCount(0);
+    expect(record.uploads).toHaveLength(0);
   });
 
   test("photos link once to every request in the plan after an upload failure, and never upload for interest", async ({ page }) => {
@@ -730,6 +754,63 @@ test.describe("honest confirmation (I6)", () => {
     await page.getByRole("button", { name: "Check again" }).click();
     await expect(page.getByRole("alert").filter({ hasText: "We couldn’t load the latest status." })).toHaveCount(0);
   });
+});
+
+test.describe("R0 admission states (TRACE-103)", () => {
+  const closed: [Trial | "signed_out", string, string][] = [
+    ["signed_out", "Booking is opening by invitation", "Join early access"],
+    ["waiting", "Booking is opening by invitation", "See my early-access status"],
+    ["revoked", "Your invitation to book has ended", "Go to my dashboard"],
+    ["unavailable", "Your invited service isn’t available right now", "Go to my dashboard"],
+    ["not_homeowner", "A homeowner account is needed to request service", "Join early access"],
+  ];
+  for (const [trial, heading, action] of closed) {
+    test(`${trial}: direct navigation shows the closed state and never submits`, async ({ page }) => {
+      const record = await intake(page, trial === "signed_out" ? { signedIn: false } : { trial });
+      await expect(page.getByRole("heading", { level: 1, name: heading })).toBeFocused();
+      await expect(page.getByRole("main").getByRole("link", { name: action })).toBeVisible();
+      await expect(page.locator("form")).toHaveCount(0);
+      expect(record.submits).toHaveLength(0);
+      expect(record.previews).toHaveLength(0);
+      // The unsubmitted draft is kept, not cleared or shown.
+      expect((await storedDraft(page)).streetAddress).toBe("123 Synthetic Test Lane");
+    });
+  }
+
+  test("the closed state keeps the requested service for early access", async ({ page }) => {
+    await intake(page, { signedIn: false, draft: null });
+    await page.goto("/request?service=lawn-mowing");
+    await expect(page.getByRole("main").getByRole("link", { name: "Join early access" })).toHaveAttribute("href", "/early-access?service=lawn-mowing");
+  });
+
+  test("an access check failure is closed, announced and retryable", async ({ page }) => {
+    const record = await intake(page, { trial: "error" });
+    await expect(page.getByRole("heading", { level: 1, name: "We couldn’t check your booking access" })).toBeFocused();
+    const reads = record.trialReads;
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect.poll(() => record.trialReads).toBeGreaterThan(reads);
+    expect(record.submits).toHaveLength(0);
+  });
+
+  test("an invited account sees its scope, and a refusal outside it is explained", async ({ page }) => {
+    const record = await intake(page, { submit: () => ({ status: 403, json: { code: "42501", message: "Trial invitation required for this service and area" } }) });
+    await expect(page.getByText("Invited to book: Lawn Mowing in 33904.")).toBeVisible();
+    await submitButton(page).click();
+    await expect(summary(page)).toContainText("Your invitation covers Lawn Mowing in 33904.");
+    await expect(summary(page)).toContainText("Nothing was submitted.");
+    expect(record.submits).toHaveLength(1);
+    expect((await storedDraft(page)).streetAddress).toBe("123 Synthetic Test Lane");
+  });
+
+  for (const theme of ["light", "dark"]) {
+    for (const width of [320, 1440]) {
+      test(`closed state ${theme} ${width}px: axe and reflow`, async ({ page }) => {
+        await intake(page, { signedIn: false, width, theme });
+        await expect(page.getByRole("heading", { name: "Booking is opening by invitation" })).toBeVisible();
+        await expectAccessible(page);
+      });
+    }
+  }
 });
 
 test.describe("accessibility matrix (I7)", () => {

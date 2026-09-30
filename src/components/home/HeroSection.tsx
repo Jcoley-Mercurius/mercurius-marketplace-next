@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 export function HeroSection() {
   return (
@@ -91,13 +92,13 @@ export function HeroSection() {
               className="flex flex-col gap-4 sm:flex-row"
             >
               <Link
-                href="#bundle-builder"
+                href={EARLY_ACCESS_PATH}
                 className={cn(
                   buttonVariants({ size: "lg" }),
                   "btn-hero-primary h-11 gap-2 rounded-md bg-accent px-8 text-base shadow-md shadow-accent/25 transition-all duration-300 hover:shadow-lg hover:shadow-accent/30",
                 )}
               >
-                Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" />
+                {EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
               <Link
                 href="/services"

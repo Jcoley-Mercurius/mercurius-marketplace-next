@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { fetchRoles } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useNotifications } from "@/hooks/useNotifications";
 
@@ -310,7 +311,7 @@ export function Header() {
             </DropdownMenu>
           )}
 
-          <Link href="/request" className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Request service</Link>
+          <Link href={EARLY_ACCESS_PATH} className={cn(buttonVariants(), "rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>{EARLY_ACCESS_CTA}</Link>
         </div>
 
         {/* Mobile Menu */}
@@ -474,7 +475,7 @@ export function Header() {
                       Loading Account...
                     </Button>
                   )}
-                  <Link href="/request" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>Request service</Link>
+                  <Link href={EARLY_ACCESS_PATH} onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full rounded-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active")}>{EARLY_ACCESS_CTA}</Link>
                 </div>
               </div>
             </SheetContent>

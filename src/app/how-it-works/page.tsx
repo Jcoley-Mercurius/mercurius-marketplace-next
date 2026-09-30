@@ -21,6 +21,7 @@ import { Header } from "@/components/layout/Header";
 import { RevealItem, ScrollReveal } from "@/components/home/ScrollReveal";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 const steps = [
   {
@@ -78,7 +79,7 @@ export default function HowItWorksPage() {
               <span className="mb-6 inline-flex items-center rounded-full bg-sage-light px-4 py-2 text-sm font-medium text-sage-dark shadow-sm ring-1 ring-sage/20"><Wrench className="mr-2 h-4 w-4" />How It Works</span>
               <h1 className="mb-6 text-4xl font-bold leading-tight text-foreground md:text-5xl lg:text-6xl">Three Steps to a <span className="hero-gradient-text">Stress-Free Home</span></h1>
               <p className="mx-auto mb-8 max-w-2xl text-xl leading-relaxed text-muted-foreground">Upfront pricing on fixed packages. No arguing with contractors. No wondering if the job got done. Here&apos;s how Mercurius handles the hard parts.</p>
-              <div className="flex flex-col justify-center gap-4 sm:flex-row"><ActionLink href="/#bundle-builder">Get Started <ArrowRight className="ml-2 h-5 w-5" /></ActionLink><ActionLink href="/services" outline>Browse Services</ActionLink></div>
+              <div className="flex flex-col justify-center gap-4 sm:flex-row"><ActionLink href={EARLY_ACCESS_PATH}>{EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" /></ActionLink><ActionLink href="/services" outline>Browse Services</ActionLink></div>
             </div>
           </div>
         </section>
@@ -123,7 +124,7 @@ export default function HowItWorksPage() {
 
         <section ref={ctaRef} onMouseMove={handleCtaMouseMove} className="bg-cta-section section relative overflow-hidden text-primary-foreground">
           <div className="pointer-events-none absolute h-[500px] w-[500px] rounded-full opacity-60 blur-[120px] transition-opacity duration-500" style={{ background: "radial-gradient(circle, hsl(150 35% 45% / 0.35) 0%, transparent 70%)", left: `${ctaGlow.x}%`, top: `${ctaGlow.y}%`, transform: "translate(-50%, -50%)" }} />
-          <div className="container-wide relative text-center"><div className="mx-auto max-w-2xl"><span className="mb-6 inline-block rounded-full bg-accent/20 px-4 py-1.5 text-sm font-medium text-accent-on-dark ring-1 ring-accent/30">Get started today</span><h2 className="mb-4 text-3xl font-bold leading-tight text-primary-foreground md:text-4xl">Ready to Make Home Services Predictable?</h2><p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/70">Clear pricing. Managed jobs. Photo proof. One platform between you and your service provider.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><ActionLink href="/#bundle-builder" shadow>Build My Plan <ArrowRight className="ml-2 h-5 w-5" /></ActionLink><ActionLink href="/services" dark>Browse Services</ActionLink></div></div></div>
+          <div className="container-wide relative text-center"><div className="mx-auto max-w-2xl"><span className="mb-6 inline-block rounded-full bg-accent/20 px-4 py-1.5 text-sm font-medium text-accent-on-dark ring-1 ring-accent/30">Opening by invitation</span><h2 className="mb-4 text-3xl font-bold leading-tight text-primary-foreground md:text-4xl">Ready to Make Home Services Predictable?</h2><p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/70">Clear pricing. Managed jobs. Photo proof. One platform between you and your service provider.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><ActionLink href={EARLY_ACCESS_PATH} shadow>{EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" /></ActionLink><ActionLink href="/services" dark>Browse Services</ActionLink></div></div></div>
         </section>
       </main>
       <Footer />

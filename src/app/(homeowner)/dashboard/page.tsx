@@ -22,6 +22,9 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useHomeownerAccess } from "@/components/homeowner/HomeownerAccessProvider";
+import { AccessCheckFailed, ClosedBookingBanner, InvitedBanner, WaitingHome } from "@/components/early-access/AccountBookingState";
+import { InterestsCard } from "@/components/early-access/InterestsCard";
 import {
   HomeownerJobDetailDialog,
   type HomeownerDashboardJob,
@@ -96,6 +99,7 @@ export default function DashboardPage() {
   const [openingPortal, setOpeningPortal] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<PaymentNotice | null>(null);
   const { user, loading: authLoading } = useAuth();
+  const access = useHomeownerAccess();
   const router = useRouter();
   const searchParams = useSearchParams();
   const paymentCallbackPresent =
@@ -318,6 +322,13 @@ export default function DashboardPage() {
   const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
   const firstName = fullName.split(" ")[0] || "Homeowner";
   const openInvoices = invoices.filter((invoice) => payableStatuses.has(invoice.status));
+  // TRACE-103 (R0.3): request actions appear only for an admitted account. A new account
+  // with no history and no admission gets the waiting home; history is never hidden.
+  const booking = access.status === "ready" ? access.booking : null;
+  const canRequest = booking === "invited";
+  if (booking && booking !== "invited" && dataMode === "live" && requests.length === 0 && invoices.length === 0) {
+    return <WaitingHome booking={booking} firstName={firstName} />;
+  }
 
   return (
     <>
@@ -335,16 +346,9 @@ export default function DashboardPage() {
               from one place.
             </p>
           </div>
-          <Link
-            href="/request"
-            className={cn(
-              buttonVariants({ size: "lg" }),
-              "h-11 w-full shrink-0 bg-accent px-4 text-accent-foreground hover:bg-accent-hover sm:w-auto",
-            )}
-          >
-            <Plus className="h-4 w-4" /> Request Service
-          </Link>
         </header>
+        {access.status === "error" && <AccessCheckFailed onRetry={access.retry} />}
+        {access.status === "ready" && (canRequest ? <InvitedBanner access={access.access} /> : dataMode === "live" && <ClosedBookingBanner booking={access.booking as Exclude<typeof access.booking, "invited">} />)}
         {paymentError && <div ref={paymentErrorRef} role="alert" tabIndex={-1} className="mb-6 scroll-mt-24 rounded-xl border border-status-danger bg-status-danger-bg p-4 text-sm text-status-danger">{paymentError}</div>}
 
             {dataMode === "error" ? (
@@ -386,7 +390,7 @@ export default function DashboardPage() {
                 <div>
                   <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Quick actions</h2>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <QuickAction href="/request" icon={Plus} label="Request a Service" />
+                    {canRequest && <QuickAction href="/request" icon={Plus} label="Request a Service" />}
                     <QuickAction href="/messages" icon={MessageSquare} label="Messages" />
                     <QuickAction href="/contact" icon={AlertTriangle} label="Report an Issue" />
                   </div>
@@ -404,6 +408,8 @@ export default function DashboardPage() {
                   </Card>
                 )}
 
+                {access.status === "ready" && !canRequest && dataMode === "live" && <InterestsCard />}
+
                 <div className="grid gap-8 lg:grid-cols-2">
                   <Card>
                     <CardHeader className="flex-row items-center justify-between">
@@ -411,7 +417,7 @@ export default function DashboardPage() {
                       <Button variant="link" size="sm" onClick={() => router.push(dashboardSectionHref("upcoming"), { scroll: false })}>View All <ArrowRight className="h-3 w-3" /></Button>
                     </CardHeader>
                     <CardContent>
-                      {dataMode === "loading" ? <ListLoading /> : upcoming.length === 0 ? <EmptyState icon={Calendar} title="No upcoming services" description="When you request a service, its status and schedule will appear here." actionHref="/request" actionLabel="Request a Service" compact /> : (
+                      {dataMode === "loading" ? <ListLoading /> : upcoming.length === 0 ? <EmptyState icon={Calendar} title="No upcoming services" description="When you request a service, its status and schedule will appear here." actionHref={canRequest ? "/request" : undefined} actionLabel="Request a Service" compact /> : (
                         <div className="space-y-3">{upcoming.slice(0, 2).map((job) => <ServiceRow key={job.id} job={job} compact onOpen={() => setSelectedJob(job)} />)}</div>
                       )}
                     </CardContent>
@@ -437,7 +443,7 @@ export default function DashboardPage() {
                 <Card>
                   <CardHeader><CardTitle>Upcoming Services</CardTitle><CardDescription>Track requests, quotes, schedules, and active work.</CardDescription></CardHeader>
                   <CardContent>
-                    {dataMode === "loading" ? <ListLoading large /> : upcoming.length === 0 ? <EmptyState icon={Calendar} title="No upcoming services scheduled" description="Build a service plan whenever your home needs attention." actionHref="/request" actionLabel="Request a Service" /> : (
+                    {dataMode === "loading" ? <ListLoading large /> : upcoming.length === 0 ? <EmptyState icon={Calendar} title="No upcoming services scheduled" description="Build a service plan whenever your home needs attention." actionHref={canRequest ? "/request" : undefined} actionLabel="Request a Service" /> : (
                       <div className="space-y-4">{upcoming.map((job) => <ServiceRow key={job.id} job={job} onOpen={() => setSelectedJob(job)} />)}</div>
                     )}
                   </CardContent>

@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import type { Service, ServiceFrequency } from "@/lib/serviceData";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH, earlyAccessHref } from "@/lib/earlyAccessExperience";
 
 const iconMap = LucideIcons as unknown as Record<string, LucideIcon>;
 const getIcon = (iconName: string) => iconMap[iconName] || Star;
@@ -21,8 +22,8 @@ export default function ServicesPage() {
   const liveCoverageCount = filtered.filter((service) => service.availability !== "sourcing").length;
 
   return <MarketingShell>
-    <MarketingHero eyebrow="Our Services" title={<>Explore Home Services, <span className="hero-gradient-text">Coordinated Locally</span></>} description="Browse the service catalog, see live package pricing where coverage exists, and request Mercurius coordination for the work you need.">
-      <Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-7 text-accent-foreground hover:bg-accent-hover")}>Request a Service<ArrowRight /></Link>
+    <MarketingHero eyebrow="Our Services" title={<>Explore Home Services, <span className="hero-gradient-text">Coordinated Locally</span></>} description="Browse the service catalog and see live package pricing where coverage exists. Booking opens by invitation; join early access to be considered when services are ready in your area.">
+      <Link href={EARLY_ACCESS_PATH} className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-7 text-accent-foreground hover:bg-accent-hover")}>{EARLY_ACCESS_CTA}<ArrowRight /></Link>
     </MarketingHero>
 
     <section className="section-sm"><div className="container-wide">
@@ -33,15 +34,12 @@ export default function ServicesPage() {
         const categoryName = categories.find((item) => item.id === service.categoryId)?.name;
         const availability = service.availability ?? "sourcing";
         const livePrice = availability === "fixed" ? getLivePrice(service) : null;
-        const requestHref = `/request?service=${availability === "sourcing" ? "general-home-service" : service.id}&requested=${encodeURIComponent(service.name)}`;
-        const requestFrequencies = getRequestFrequencies(service);
-        const requestDefaultFrequency = requestFrequencies.includes(service.defaultFrequency) ? service.defaultFrequency : requestFrequencies[0] ?? "one-time";
-        return <article key={service.id} className="group flex h-full flex-col rounded-2xl border border-border/50 bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-md"><div className="flex items-start justify-between"><span className="flex h-13 w-13 items-center justify-center rounded-2xl bg-sage-light transition group-hover:bg-accent"><Icon className="h-6 w-6 text-sage-dark group-hover:text-accent-foreground" /></span>{service.popular && <Badge className="border-accent/20 bg-accent/10 text-accent">Popular</Badge>}</div><h2 className="mt-5 text-lg font-semibold">{service.name}</h2><p className="mt-1 text-xs text-muted-foreground">{categoryName}</p><p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{service.descriptor}</p><div className="mt-5 flex items-end justify-between gap-3 border-t pt-4"><div>{availability === "fixed" && livePrice ? <><p className="text-xs text-muted-foreground">Live package price</p><p className="font-semibold text-accent">From ${livePrice.price}<span className="text-xs font-normal text-muted-foreground">{livePrice.suffix}</span></p></> : availability === "quote" ? <><p className="font-semibold text-foreground">Quote available</p><p className="text-xs text-muted-foreground">Price confirmed before work begins</p></> : <><p className="font-semibold text-foreground">Not available yet</p><p className="text-xs text-muted-foreground">Request to source a vetted provider</p></>}</div><Link href={requestHref} onClick={() => storeRequestContext(service, availability, requestDefaultFrequency, requestFrequencies)} aria-label={`Request ${service.name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted transition hover:bg-accent hover:text-accent-foreground"><ArrowRight className="h-4 w-4" /></Link></div></article>;
+        return <article key={service.id} className="group flex h-full flex-col rounded-2xl border border-border/50 bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-md"><div className="flex items-start justify-between"><span className="flex h-13 w-13 items-center justify-center rounded-2xl bg-sage-light transition group-hover:bg-accent"><Icon className="h-6 w-6 text-sage-dark group-hover:text-accent-foreground" /></span>{service.popular && <Badge className="border-accent/20 bg-accent/10 text-accent">Popular</Badge>}</div><h2 className="mt-5 text-lg font-semibold">{service.name}</h2><p className="mt-1 text-xs text-muted-foreground">{categoryName}</p><p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{service.descriptor}</p><div className="mt-5 flex items-end justify-between gap-3 border-t pt-4"><div>{availability === "fixed" && livePrice ? <><p className="text-xs text-muted-foreground">Live package price</p><p className="font-semibold text-accent">From ${livePrice.price}<span className="text-xs font-normal text-muted-foreground">{livePrice.suffix}</span></p></> : availability === "quote" ? <><p className="font-semibold text-foreground">Quote available</p><p className="text-xs text-muted-foreground">Price confirmed before work begins</p></> : <><p className="font-semibold text-foreground">Not available yet</p><p className="text-xs text-muted-foreground">Join early access to show interest</p></>}</div><Link href={earlyAccessHref([service.id])} aria-label={`Join early access for ${service.name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted transition hover:bg-accent hover:text-accent-foreground"><ArrowRight className="h-4 w-4" /></Link></div></article>;
       })}</div></>}
     </div></section>
 
-    <section className="section-sm bg-muted/60"><div className="container-narrow"><span className="badge-accent">The Mercurius Standard</span><h2 className="mt-4 text-3xl font-bold">Ready to Get Started?</h2><p className="mt-3 text-muted-foreground">Browse our services and request what you need. See live pricing where available, and if quality falls short, we work with the provider to make it right.</p><ul className="mt-6 grid gap-3 sm:grid-cols-2">{["Vetted professionals", "Transparent pricing", "Simple scheduling", "Provider resolution support"].map((item) => <li key={item} className="flex items-center gap-2 text-sm font-medium"><CheckCircle2 className="h-4 w-4 text-accent" />{item}</li>)}</ul></div></section>
-    <MarketingCta title="Ready to Get Started?" description="Browse our services and request what you need. See live pricing where available, and if quality falls short, we work with the provider to make it right." primaryLabel="Request a Service" secondaryLabel="Contact Us" secondaryHref="/contact" />
+    <section className="section-sm bg-muted/60"><div className="container-narrow"><span className="badge-accent">The Mercurius Standard</span><h2 className="mt-4 text-3xl font-bold">Ready to Get Started?</h2><p className="mt-3 text-muted-foreground">Browse our services now and join early access to book when invitations reach your area. See live pricing where available, and if quality falls short, we work with the provider to make it right.</p><ul className="mt-6 grid gap-3 sm:grid-cols-2">{["Vetted professionals", "Transparent pricing", "Simple scheduling", "Provider resolution support"].map((item) => <li key={item} className="flex items-center gap-2 text-sm font-medium"><CheckCircle2 className="h-4 w-4 text-accent" />{item}</li>)}</ul></div></section>
+    <MarketingCta title="Ready to Get Started?" description="Booking opens by invitation across Lee County. Join early access and we’ll let you know when services are ready in your area." secondaryLabel="Contact Us" secondaryHref="/contact" />
   </MarketingShell>;
 }
 
@@ -56,38 +54,4 @@ function getLivePrice(service: Service) {
     service.oneTimePrice ? { frequency: "one-time" as const, price: service.oneTimePrice, suffix: " one-time" } : null,
   ].filter((price): price is { frequency: ServiceFrequency; price: number; suffix: string } => price !== null);
   return prices.find((price) => price.frequency === service.defaultFrequency) ?? prices[0] ?? null;
-}
-
-function getRequestFrequencies(service: Service): ServiceFrequency[] {
-  if (service.availability !== "fixed") return ["one-time"];
-  return [
-    service.weeklyPrice ? "weekly" as const : null,
-    service.biMonthlyPrice ? "bi-monthly" as const : null,
-    service.avgMonthlyPrice ? "monthly" as const : null,
-    service.quarterlyPrice ? "quarterly" as const : null,
-    service.oneTimePrice ? "one-time" as const : null,
-  ].filter((frequency): frequency is ServiceFrequency => frequency !== null);
-}
-
-function storeRequestContext(service: Service, availability: "fixed" | "quote" | "sourcing", defaultFrequency: ServiceFrequency, frequencies: ServiceFrequency[]) {
-  window.sessionStorage.setItem("homePlanSelection", JSON.stringify({
-    selectedServiceIds: [service.id],
-    frequencies: { [service.id]: defaultFrequency },
-    requestedServices: [{
-      id: service.id,
-      name: service.name,
-      descriptor: service.descriptor,
-      availability,
-      defaultFrequency,
-      frequencies,
-      prices: {
-        weekly: service.weeklyPrice ?? 0,
-        "bi-monthly": service.biMonthlyPrice ?? 0,
-        monthly: service.avgMonthlyPrice,
-        quarterly: service.quarterlyPrice ?? 0,
-        "one-time": service.oneTimePrice,
-      },
-      ...service.packageSelections?.[defaultFrequency],
-    }],
-  }));
 }
