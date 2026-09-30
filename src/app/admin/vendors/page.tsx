@@ -55,6 +55,8 @@ type Vendor = {
   special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
+  // TRACE-105: hidden as a test or excluded record (R0.4 listing exclusion). Kept for history.
+  archived: boolean;
 };
 
 type NewVendor = {
@@ -88,17 +90,20 @@ export default function AdminVendorsPage() {
     setError("");
     try {
       const supabase = createClient();
-      const [vendorResult, contactResult] = await Promise.all([
+      const [vendorResult, contactResult, archivedResult] = await Promise.all([
         supabase.from("contractors").select(SAFE_SELECT).order("created_at", { ascending: false }),
         supabase.rpc("admin_list_contractor_contacts"),
+        supabase.rpc("r0_excluded_provider_ids"),
       ]);
       if (vendorResult.error) throw vendorResult.error;
       if (contactResult.error) throw contactResult.error;
+      if (archivedResult.error) throw archivedResult.error;
+      const archived = new Set((archivedResult.data ?? []) as string[]);
       const contactMap = new Map(
         ((contactResult.data ?? []) as { id: string; email: string | null; phone: string | null }[])
           .map((contact) => [contact.id, contact]),
       );
-      const next = ((vendorResult.data ?? []) as Omit<Vendor, "email" | "phone">[]).map((vendor) => ({
+      const next = ((vendorResult.data ?? []) as Omit<Vendor, "email" | "phone" | "archived">[]).map((vendor) => ({
         ...vendor,
         email: contactMap.get(vendor.id)?.email ?? null,
         phone: contactMap.get(vendor.id)?.phone ?? null,
@@ -106,6 +111,7 @@ export default function AdminVendorsPage() {
         badges: vendor.badges ?? [],
         is_active: Boolean(vendor.is_active),
         marketing_enabled: Boolean(vendor.marketing_enabled),
+        archived: archived.has(vendor.id),
       }));
       setVendors(next);
       setSelected((current) => current ? next.find((vendor) => vendor.id === current.id) ?? null : null);
@@ -176,7 +182,10 @@ export default function AdminVendorsPage() {
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return vendors.filter((vendor) => {
-      const matchesStatus = status === "all" || (status === "active" ? vendor.is_active : !vendor.is_active);
+      // Archived records leave the normal lists and stay available in their own view.
+      const matchesStatus = status === "archived"
+        ? vendor.archived
+        : !vendor.archived && (status === "all" || (status === "active" ? vendor.is_active : !vendor.is_active));
       return matchesStatus && (!query || [vendor.name, vendor.email ?? "", vendor.location ?? "", ...vendor.services].some((value) => value.toLowerCase().includes(query)));
     });
   }, [search, status, vendors]);
@@ -187,13 +196,13 @@ export default function AdminVendorsPage() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Provider operations</p><h1 className="font-heading text-3xl font-semibold tracking-tight">Vendors</h1><p className="mt-2 text-sm text-muted-foreground">{vendors.length} registered vendor{vendors.length === 1 ? "" : "s"}</p></div>
+        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Provider operations</p><h1 className="font-heading text-3xl font-semibold tracking-tight">Vendors</h1><p className="mt-2 text-sm text-muted-foreground">{vendors.filter((vendor) => !vendor.archived).length} current vendor{vendors.filter((vendor) => !vendor.archived).length === 1 ? "" : "s"}</p></div>
         <div className="flex gap-2"><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button><Button onClick={() => setAddOpen(true)}><Plus />Add Vendor</Button></div>
       </header>
 
-      <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, contact, location, or service..." className="bg-card pl-9" /></div><select aria-label="Filter vendors" value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-44"><option value="all">All vendors</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+      <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, contact, location, or service..." className="bg-card pl-9" /></div><select aria-label="Filter vendors" value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-44"><option value="all">All current vendors</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="archived">Archived (hidden)</option></select></div>
 
-      <Card><CardContent className="p-0">{filtered.length === 0 ? <EmptyState icon={UserCheck} title={vendors.length ? "No vendors match these filters" : "No vendors have been created"} /> : <div className="overflow-x-auto"><table className="w-full min-w-[950px] text-sm"><thead className="border-b bg-muted/60"><tr className="text-left">{["Vendor", "Services", "Location", "Rating", "Jobs", "Account", "Status", "Actions"].map((heading) => <th key={heading} className="p-4 font-medium text-muted-foreground">{heading}</th>)}</tr></thead><tbody className="divide-y">{filtered.map((vendor) => <tr key={vendor.id} className="transition-colors hover:bg-muted/30"><td className="p-4"><Link href={`/providers/${vendor.id}`} target="_blank" className="font-medium hover:text-accent hover:underline">{vendor.name}</Link><p className="mt-1 text-xs text-muted-foreground">{vendor.email ?? "No contact email"}</p></td><td className="p-4 text-xs text-muted-foreground">{vendor.services.slice(0, 2).join(", ") || "—"}{vendor.services.length > 2 && ` +${vendor.services.length - 2}`}</td><td className="p-4 text-muted-foreground">{vendor.location ?? "—"}</td><td className="p-4">{vendor.rating === null ? "—" : <span className="flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />{Number(vendor.rating).toFixed(1)}</span>}</td><td className="p-4">{vendor.jobs_completed ?? 0}</td><td className="p-4"><Badge variant={vendor.user_id ? "secondary" : "outline"}>{vendor.user_id ? "Linked" : "Not linked"}</Badge></td><td className="p-4"><Badge className={vendor.is_active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border bg-muted text-muted-foreground"}>{vendor.is_active ? "Active" : "Inactive"}</Badge></td><td className="p-4"><div className="flex gap-1"><Button variant="ghost" size="sm" onClick={() => setSelected(vendor)} title="Quick view"><Eye /></Button><Link href={`/providers/${vendor.id}`} target="_blank" className={buttonVariants({ variant: "ghost", size: "sm" })} title="Preview storefront"><ExternalLink /></Link><Link href={`/admin/vendors/${vendor.id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>Edit</Link></div></td></tr>)}</tbody></table></div>}</CardContent></Card>
+      <Card><CardContent className="p-0">{filtered.length === 0 ? <EmptyState icon={UserCheck} title={vendors.length ? "No vendors match these filters" : "No vendors have been created"} /> : <div className="overflow-x-auto"><table className="w-full min-w-[950px] text-sm"><thead className="border-b bg-muted/60"><tr className="text-left">{["Vendor", "Services", "Location", "Rating", "Jobs", "Account", "Status", "Actions"].map((heading) => <th key={heading} className="p-4 font-medium text-muted-foreground">{heading}</th>)}</tr></thead><tbody className="divide-y">{filtered.map((vendor) => <tr key={vendor.id} className="transition-colors hover:bg-muted/30"><td className="p-4"><Link href={`/providers/${vendor.id}`} target="_blank" className="font-medium hover:text-accent hover:underline">{vendor.name}</Link><p className="mt-1 text-xs text-muted-foreground">{vendor.email ?? "No contact email"}</p></td><td className="p-4 text-xs text-muted-foreground">{vendor.services.slice(0, 2).join(", ") || "—"}{vendor.services.length > 2 && ` +${vendor.services.length - 2}`}</td><td className="p-4 text-muted-foreground">{vendor.location ?? "—"}</td><td className="p-4">{vendor.rating === null ? "—" : <span className="flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />{Number(vendor.rating).toFixed(1)}</span>}</td><td className="p-4">{vendor.jobs_completed ?? 0}</td><td className="p-4"><Badge variant={vendor.user_id ? "secondary" : "outline"}>{vendor.user_id ? "Linked" : "Not linked"}</Badge></td><td className="p-4"><Badge className={vendor.archived ? "border-border bg-muted text-muted-foreground" : vendor.is_active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border bg-muted text-muted-foreground"}>{vendor.archived ? "Archived" : vendor.is_active ? "Active" : "Inactive"}</Badge></td><td className="p-4"><div className="flex gap-1"><Button variant="ghost" size="sm" onClick={() => setSelected(vendor)} title="Quick view"><Eye /></Button><Link href={`/providers/${vendor.id}`} target="_blank" className={buttonVariants({ variant: "ghost", size: "sm" })} title="Preview storefront"><ExternalLink /></Link><Link href={`/admin/vendors/${vendor.id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>Edit</Link></div></td></tr>)}</tbody></table></div>}</CardContent></Card>
 
       <Dialog open={addOpen} onOpenChange={(open) => { if (!creating) setAddOpen(open); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl"><DialogHeader><DialogTitle>Add Vendor</DialogTitle><DialogDescription>Create the contractor record first, then link its vendor account from the full profile.</DialogDescription></DialogHeader><div className="space-y-4"><Field label="Business name *"><Input value={newVendor.name} onChange={(event) => setNewVendor({ ...newVendor, name: event.target.value })} placeholder="Gulf Coast Lawn Co." /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Email"><Input type="email" value={newVendor.email} onChange={(event) => setNewVendor({ ...newVendor, email: event.target.value })} placeholder="vendor@example.com" /></Field><Field label="Phone"><Input value={newVendor.phone} onChange={(event) => setNewVendor({ ...newVendor, phone: event.target.value })} placeholder="(239) 555-0100" /></Field></div><Field label="Location"><Input value={newVendor.location} onChange={(event) => setNewVendor({ ...newVendor, location: event.target.value })} placeholder="Cape Coral, FL" /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Services (comma separated)"><Input value={newVendor.services} onChange={(event) => setNewVendor({ ...newVendor, services: event.target.value })} placeholder="Lawn Care, Pressure Washing" /></Field><Field label="Years of experience"><Input type="number" min="0" value={newVendor.years_experience} onChange={(event) => setNewVendor({ ...newVendor, years_experience: event.target.value })} /></Field></div><Field label="Bio"><textarea rows={4} value={newVendor.bio} onChange={(event) => setNewVendor({ ...newVendor, bio: event.target.value })} placeholder="Short description of the business..." className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /></Field></div><DialogFooter><Button variant="outline" disabled={creating} onClick={() => setAddOpen(false)}>Cancel</Button><Button disabled={creating || !newVendor.name.trim()} onClick={() => void createVendor()}>{creating && <Loader2 className="animate-spin" />}{creating ? "Creating..." : "Create Vendor"}</Button></DialogFooter></DialogContent></Dialog>
 

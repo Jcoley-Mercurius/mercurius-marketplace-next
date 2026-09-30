@@ -117,3 +117,58 @@ test("password setup preserves the invitation and requires explicit acceptance",
   ).toBeVisible();
   expect(acceptances).toBe(0);
 });
+
+// TRACE-105: access to an existing business profile uses its own wording and receipt.
+for (const [theme, width] of [
+  ["light", 320],
+  ["dark", 1440],
+] as const) {
+  test(`existing-provider access acceptance ${theme} ${width}px`, async ({ page }) => {
+    await syntheticSession(page.context(), "homeowner");
+    await page.addInitScript((theme) => localStorage.setItem("theme", theme), theme);
+    await page.setViewportSize({ width, height: 900 });
+    let requests = 0;
+    await page.route("**/functions/v1/vendor-invite", async (route) => {
+      expect(route.request().postDataJSON()).toEqual({
+        action: "accept",
+        source: "existing_provider",
+        attempt_id: attempt,
+      });
+      requests++;
+      await route.fulfill({ json: { status: "accepted", activated: false } });
+    });
+    await page.goto(`/invitation?attempt=${attempt}&kind=existing_provider`);
+    await expect(page.getByRole("heading", { name: "Confirm access to your business profile" })).toBeVisible();
+    await expect(page.getByText("does not approve your business", { exact: false })).toBeVisible();
+    expect(
+      (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations,
+    ).toEqual([]);
+    expect(await page.locator("main").evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+    await page.getByRole("button", { name: "Accept invitation" }).click();
+    await expect(page.getByRole("heading", { name: "Invitation accepted" })).toBeVisible();
+    await expect(page.getByText("Mercurius will confirm the connection to your business profile", { exact: false })).toBeVisible();
+    await expect(page.getByText("activated", { exact: false })).toHaveCount(0);
+    expect(requests).toBe(1);
+  });
+}
+
+test("existing-provider access keeps its kind through sign-in and password setup", async ({ page }) => {
+  await page.goto(`/invitation?attempt=${attempt}&kind=existing_provider`);
+  await expect(page.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute(
+    "href",
+    `/login?redirect=${encodeURIComponent(`/invitation?attempt=${attempt}&kind=existing_provider`)}`,
+  );
+  await syntheticSession(page.context(), "homeowner");
+  let acceptances = 0;
+  await page.route("**/functions/v1/vendor-invite", async (route) => {
+    acceptances++;
+    await route.fulfill({ json: { status: "accepted", activated: false } });
+  });
+  await page.goto(`/set-password?invitation=${attempt}&kind=existing_provider`);
+  await page.getByLabel("New password", { exact: true }).fill("Synthetic-only-Password-42");
+  await page.getByLabel("Confirm password", { exact: true }).fill("Synthetic-only-Password-42");
+  await page.getByRole("button", { name: "Set password & continue" }).click();
+  await expect(page).toHaveURL(`/invitation?attempt=${attempt}&kind=existing_provider`, { timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Confirm access to your business profile" })).toBeVisible();
+  expect(acceptances).toBe(0);
+});

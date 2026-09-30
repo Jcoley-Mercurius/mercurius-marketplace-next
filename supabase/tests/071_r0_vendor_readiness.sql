@@ -226,7 +226,7 @@ select throws_ok($$select pg_temp.user(2,'select public.r0_public_listing_invent
 
 -- Vendor readback ---------------------------------------------------------------------------
 select is(pg_temp.user(3,$$select public.r0_my_provider_listing()$$)-'contractor_id',
- '{"held": false, "active": true, "linked": true, "listed": true, "approved": true, "has_name": true, "service_zips": ["33901"], "accepting_work": true, "has_description": true, "has_catalog_service": true}'::jsonb,
+ '{"held": false, "active": true, "linked": true, "listed": true, "approved": true, "has_name": true, "service_zips": ["33901"], "setup_access": false, "accepting_work": true, "has_description": true, "has_catalog_service": true}'::jsonb,
  'a listed vendor reads its own readiness and coverage');
 update public.contractors set bio='' where id='e7120000-0000-4000-8000-00000000000a';
 select is(pg_temp.user(3,$$select public.r0_my_provider_listing()$$)->>'listed','false','clearing the description removes the public listing');

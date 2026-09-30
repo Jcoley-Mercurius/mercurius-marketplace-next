@@ -65,6 +65,8 @@ export type MyProviderListing =
       accepting_work: boolean;
       approved: boolean;
       held: boolean;
+      // TRACE-105: portal access came from a reviewed access binding; no approval yet.
+      setup_access?: boolean;
       has_name: boolean;
       has_description: boolean;
       has_catalog_service: boolean;

@@ -65,9 +65,17 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/r0_my_provider_listing") return send(user.testRole !== "vendor" ? { linked: false } : {
     linked: true, contractor_id: contractor, listed: false, active: true, accepting_work: true, approved: true, held: false,
     has_name: true, has_description: false, has_catalog_service: true, service_zips: ["33904"] });
-  if (/\/rpc\/r0_(application_notification_overview|invitation_attention|public_listing_inventory)$/.test(url.pathname) && user.testRole !== "admin") {
+  if (/\/rpc\/r0_(application_notification_overview|invitation_attention|public_listing_inventory|provider_access_queue)$/.test(url.pathname) && user.testRole !== "admin") {
     return send({ code: "42501", message: "Onboarding operator required" }, 403);
   }
+  // TRACE-105 readbacks: archived provider ids and existing-provider access queue.
+  if (url.pathname === "/rest/v1/rpc/r0_excluded_provider_ids") return send(user.testRole === "admin" ? ["00000000-0000-4000-8000-000000000070"] : []);
+  if (url.pathname === "/rest/v1/rpc/r0_provider_access_queue") return send({ checked_at: now.toISOString(), items: [
+    { contractor_id: "00000000-0000-4000-8000-000000000071", name: "Synthetic Legacy Services", email: "owner@example.invalid",
+      account_linked: false, bound_by_access: false, attempt_id: "00000000-0000-4000-8000-000000000072", mode: "new_account",
+      status: "accepted", dispatch_state: "provider_accepted", expires_at: new Date(now.getTime() + 86400000).toISOString(),
+      accepted: true, attention: "awaiting_binding" },
+  ] });
   if (url.pathname === "/rest/v1/rpc/r0_application_notification_overview") return send({ checked_at: now.toISOString(), stale_after_minutes: 10, items: [
     { application_id: "00000000-0000-4000-8000-000000000050", business_name: "Synthetic Applicant Services", application_status: "pending",
       submitted_at: now.toISOString(), state: "failed", attempts: 1, last_error: "Resend returned 422: invalid from address.", sent_at: null,

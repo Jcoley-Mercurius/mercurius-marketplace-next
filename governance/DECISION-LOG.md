@@ -23,6 +23,30 @@ Supersedes:
 
 ## Decisions
 
+### DEC-2026-024 — Existing-provider profile-setup access; vendor role at reviewed binding
+
+**Status:** APPROVED owner decision. **Date:** 2026-09-30 (America/New_York).
+
+**Decision:** Existing providers created before the rebuilt onboarding, which have no application, may be given access to set up their existing profile through a bounded path (TRACE-105): an auditable owner-confirmed contact for the exact contractor; an access invitation with the TRACE-063 reservation, dispatch, expiry, refusal, reconciliation, acceptance and receipt protections; an operator-reviewed binding of the accepted account; and, at that binding, the `vendor` role for portal access. This changes TRACE-068's role timing for this path only. Application-based onboarding is unchanged.
+
+**Context:** None of the eight owner-confirmed real vendors has an application; TRACE-065 refuses application review for an existing provider and the canonical invitation reads its recipient from an application snapshot. Fabricating applications, consent or evidence was ruled out.
+
+**Rationale and limits:** The `vendor` role gates only the `/vendor` routes; data rights come from `contractors.user_id`. Profile edits are column-restricted, job actions need an assigned request or an eligible live offer, and no money command is vendor-callable. The one gap was TRACE-060 compatibility (legacy `is_active` made a provider matching-eligible and therefore listable), so an access-managed provider no longer counts as eligible on that flag. Setup access is not compliance approval, listing, matching, activation or permission to transact.
+
+**MPS impact:** R0 profile preparation reaches existing providers without an application; invited, bound (setup), approved/activated and listed stay distinct. **MDS impact:** email, acceptance, vendor card and operator panels say setup is separate from approval and listing; no promise of jobs, booking, listing, Founding Vendor or Credits. **MTS impact:** private append-only records, operator commands with reasons and idempotency, service-only receipt writers, onboarding interlock; migration `20260930001000`. **Data/payment/security impact:** identity is proven by exact account ID against the confirmed contact; no new money capability; no production data in source.
+
+**Required evidence:** SQL 072, `vendor-invite` runtime tests, local end-to-end, hosted owner-mailbox test before real invitations. **Open:** the compliance path for access-managed providers is a separate slice.
+
+### DEC-2026-025 — Owner-only operational coverage for R0 (backup-administrator exception)
+
+**Status:** Owner instruction recorded as a requested exception. **Date:** 2026-09-30 (America/New_York).
+
+Josh is the sole administrator and operational contact for R0; there is no independent backup administrator. The layered-launch R0 contract requires a named least-privilege backup admin. Josh requested an exception. No duplicate account is created to imply backup coverage, and Josh is not described as his own backup.
+
+Compensating arrangements (not a substitute): MFA and stored recovery codes for Supabase, Vercel, GoDaddy, Resend and Google Workspace; admin sign-in on the controlled `mercuriusmarketplace.com` mailbox; a daily `/admin/recruiting` check; honest response expectations under CFG-010; an incident note that nothing transactional is live in R0, so unavailability delays recruiting responses rather than harming bookings or payments.
+
+Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and must be restated there. It does not carry to R1. Two production admin accounts on `@mercurius.com` (domain ownership unconfirmed) are not trusted coverage and stay unchanged until their identities and dependencies are resolved.
+
 ### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.

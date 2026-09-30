@@ -21,7 +21,42 @@ import {
 } from "@/lib/recruitingReadiness";
 import { cn } from "@/lib/utils";
 
+// TRACE-105: existing providers reaching their profile through an owner-confirmed contact.
+type AccessItem = {
+  contractor_id: string;
+  name: string;
+  email: string;
+  account_linked: boolean;
+  bound_by_access: boolean;
+  attempt_id: string | null;
+  mode: "new_account" | "existing_account" | null;
+  status: string | null;
+  dispatch_state: string | null;
+  expires_at: string | null;
+  accepted: boolean;
+  attention: "uncertain" | "refused" | "awaiting_binding" | "expired" | "link_lapsed" | null;
+};
+
+const accessAttentionLabel: Record<NonNullable<AccessItem["attention"]>, string> = {
+  uncertain: "Send result unknown — reconcile",
+  refused: "Refused: address already has an account",
+  awaiting_binding: "Accepted — review and bind",
+  expired: "Invitation expired",
+  link_lapsed: "3-hour link lapsed without acceptance",
+};
+
+function accessStateLabel(item: AccessItem) {
+  if (item.bound_by_access) return "Bound — profile setup access";
+  if (item.account_linked) return "Linked outside this path";
+  if (!item.status) return "Contact confirmed — not prepared";
+  if (item.status === "prepared") return "Prepared — nothing sent";
+  if (item.status === "submitted")
+    return item.dispatch_state === "provider_accepted" ? "Accepted by Auth — delivery not confirmed" : "Send reserved";
+  return item.status.charAt(0).toUpperCase() + item.status.slice(1);
+}
+
 type Data = {
+  access: AccessItem[];
   notifications: NotificationItem[];
   invitations: InvitationAttention[];
   listings: ListingInventoryItem[];
@@ -47,15 +82,17 @@ export default function AdminRecruitingPage() {
     setError("");
     const supabase = createClient();
     try {
-      const [notifications, invitations, listings] = await Promise.all([
+      const [notifications, invitations, listings, access] = await Promise.all([
         supabase.rpc("r0_application_notification_overview"),
         supabase.rpc("r0_invitation_attention"),
         supabase.rpc("r0_public_listing_inventory"),
+        supabase.rpc("r0_provider_access_queue"),
       ]);
-      const failure = notifications.error ?? invitations.error ?? listings.error;
+      const failure = notifications.error ?? invitations.error ?? listings.error ?? access.error;
       if (failure) throw failure;
       const read = (value: unknown) => ((value as { items?: unknown[] } | null)?.items ?? []);
       setData({
+        access: read(access.data) as AccessItem[],
         notifications: read(notifications.data) as NotificationItem[],
         invitations: read(invitations.data) as InvitationAttention[],
         listings: read(listings.data) as ListingInventoryItem[],
@@ -242,6 +279,44 @@ export default function AdminRecruitingPage() {
                   </div>
                   <Link href={`/admin/applications?application=${item.application_id}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border px-3 text-sm hover:bg-muted">
                     Open invitation<ArrowRight className="h-4 w-4" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg"><UserPlus className="h-5 w-5 text-accent" />Existing provider access</CardTitle>
+          <CardDescription>
+            Existing profiles without an application reach their owner through an owner-confirmed contact. Sent means accepted by Auth, not
+            delivered. Binding gives profile-setup access only; approval, listing and work stay separate. Act from the provider&apos;s profile.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.access.length === 0 ? (
+            <p role="status" className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">No existing provider has a confirmed contact yet.</p>
+          ) : (
+            <ul className="divide-y divide-border rounded-xl border border-border">
+              {data.access.map((item) => (
+                <li key={item.contractor_id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="break-words font-medium">{item.name}</p>
+                      <Badge variant="outline">{accessStateLabel(item)}</Badge>
+                      {item.attention && (
+                        <Badge className="border border-status-warning bg-status-warning-bg text-status-warning">{accessAttentionLabel[item.attention]}</Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
+                      {item.email}
+                      {item.expires_at ? ` · expires ${formatDateTime(item.expires_at)}` : ""}
+                    </p>
+                  </div>
+                  <Link href={`/admin/vendors/${item.contractor_id}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border px-3 text-sm hover:bg-muted">
+                    Open profile<ArrowRight className="h-4 w-4" />
                   </Link>
                 </li>
               ))}
