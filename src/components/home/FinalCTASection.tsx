@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowRight, Briefcase } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 export function FinalCTASection() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -50,13 +51,13 @@ export function FinalCTASection() {
               and your provider.
             </p>
             <Link
-              href="#bundle-builder"
+              href={EARLY_ACCESS_PATH}
               className={cn(
                 buttonVariants({ size: "lg" }),
                 "h-11 w-full gap-2 rounded-md bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent-hover active:bg-accent-active sm:w-auto",
               )}
             >
-              Build My Plan <ArrowRight className="ml-2 h-5 w-5" />
+              {EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
           </div>
 

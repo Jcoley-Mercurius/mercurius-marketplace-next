@@ -11,6 +11,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 const steps = [
   { step: "1", title: "Pick Your Services", desc: "Use our Plan Builder to choose lawn care, cleaning, repairs, or more." },
@@ -44,7 +45,7 @@ export default function HomeownersPage() {
               ))}
             </div>
             <div className="mt-10 text-center">
-              <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Get Started <ArrowRight className="ml-2 h-5 w-5" /></Link>
+              <Link href={EARLY_ACCESS_PATH} className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>{EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" /></Link>
             </div>
           </div>
         </section>
@@ -58,11 +59,11 @@ export default function HomeownersPage() {
         >
           <div className="pointer-events-none absolute inset-0 transition-opacity duration-300" style={{ background: `radial-gradient(600px circle at ${mousePos.x}% ${mousePos.y}%, hsl(150 35% 45% / 0.18) 0%, transparent 60%)` }} />
           <div className="container-wide relative text-center">
-            <span className="mb-4 inline-block rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90">Get started today</span>
+            <span className="mb-4 inline-block rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90">Opening by invitation</span>
             <h2 className="mb-4 text-3xl font-bold text-primary-foreground md:text-4xl">Ready to Simplify Your Home Maintenance?</h2>
             <p className="mx-auto mb-8 max-w-xl text-lg text-primary-foreground/80">Built for homeowners across Fort Myers &amp; Cape Coral who want less service coordination and more of their weekends back.</p>
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
-              <Link href="/#bundle-builder" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>Build My Home Plan <ArrowRight className="ml-2 h-5 w-5" /></Link>
+              <Link href={EARLY_ACCESS_PATH} className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground hover:bg-accent-hover")}>{EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" /></Link>
               <Link href="/services" className={cn(buttonVariants({ size: "lg", variant: "outline" }), "h-11 border-primary-foreground/30 bg-primary-foreground/10 px-8 text-primary-foreground transition-all duration-200 hover:bg-primary-foreground/20 hover:text-primary-foreground")}>Browse Services</Link>
             </div>
           </div>

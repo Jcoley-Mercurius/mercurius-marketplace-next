@@ -2,9 +2,13 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { syntheticSession } from '../fixtures/browser-session';
 
+// TRACE-103: checkout is offered only to an account admitted for the request's cell. The
+// synthetic invoice's request is Synthetic Pool Service in 33904; admit it unless a test closes it.
+const admitted = { homeowner: true, cells: [{ zip_code: '33904', service_id: 'synthetic-pool-service', service_name: 'Synthetic Pool Service', state: 'active', changed_at: '2026-09-29T12:00:00Z' }] };
 test.beforeEach(async ({ page }) => {
   await syntheticSession(page.context(), 'homeowner');
   await page.route('**/*', route => ['http://127.0.0.1:3103', 'http://127.0.0.1:55831'].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort());
+  await page.route('**/rest/v1/rpc/r0_my_trial_access', route => route.fulfill({ json: admitted }));
 });
 const review = '/checkout/00000000-0000-4000-8000-000000000030';
 for (const theme of ['light', 'dark']) for (const width of [320, 1440]) {
@@ -50,5 +54,31 @@ test('another role cannot review homeowner payment', async ({ page }) => {
   const error = page.getByRole('main').getByRole('alert');
   await expect(error).toContainText('unavailable');
   await expect(error).toBeFocused();
+  await expect(page.getByRole('button', { name: /Continue with/ })).toHaveCount(0);
+});
+
+for (const [name, access, message] of [
+  ['never invited', { homeowner: true, cells: [] }, 'this account isn’t invited to pay for this service and area'],
+  ['revoked', { homeowner: true, cells: [{ ...admitted.cells[0], state: 'revoked' }] }, 'Your invitation to book has ended, so new payments are closed'],
+  ['invited for another cell', { homeowner: true, cells: [{ ...admitted.cells[0], zip_code: '33990' }] }, 'this account isn’t invited to pay for this service and area'],
+] as const) {
+  test(`${name}: the breakdown stays on record but checkout is not offered`, async ({ page }) => {
+    await page.route('**/rest/v1/rpc/r0_my_trial_access', route => route.fulfill({ json: access }));
+    let launches = 0;
+    await page.route('**/functions/v1/checkout-request', route => { launches += 1; return route.abort(); });
+    await page.goto(review);
+    await expect(page.getByRole('definition').filter({ hasText: '$117.00' }).first()).toBeVisible();
+    const status = page.getByRole('status').filter({ hasText: message });
+    await expect(status).toBeVisible();
+    await expect(status.getByRole('link', { name: 'Contact support' })).toHaveAttribute('href', '/contact');
+    await expect(page.getByRole('button', { name: /Continue with/ })).toHaveCount(0);
+    expect(launches).toBe(0);
+    expect((await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+  });
+}
+test('an access check failure closes checkout', async ({ page }) => {
+  await page.route('**/rest/v1/rpc/r0_my_trial_access', route => route.fulfill({ status: 500, json: { message: 'Synthetic outage' } }));
+  await page.goto(review);
+  await expect(page.getByText('We couldn’t check whether payments are open for your account')).toBeVisible();
   await expect(page.getByRole('button', { name: /Continue with/ })).toHaveCount(0);
 });

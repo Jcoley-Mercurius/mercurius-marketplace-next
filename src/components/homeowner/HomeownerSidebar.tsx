@@ -19,6 +19,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useHomeownerAccess } from "@/components/homeowner/HomeownerAccessProvider";
 import { Button } from "@/components/ui/button";
 import {
   type DashboardSection,
@@ -51,6 +52,13 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { signOut } = useAuth();
+  const access = useHomeownerAccess();
+  // TRACE-103 (R0.3): Request Service only for an admitted account. A waiting account with
+  // no history sees no empty job, invoice, payment or message areas; history keeps them.
+  const canRequest = access.status === "ready" && access.booking === "invited";
+  const waitingOnly = access.status === "ready" && access.booking !== "invited" && !access.hasHistory;
+  const serviceLinks = waitingOnly ? dashboardNavigation.filter((item) => item.section === "overview") : dashboardNavigation;
+  const accountLinks = waitingOnly ? accountNavigation.filter((item) => item.href !== "/messages") : accountNavigation;
   const activeSection = dashboardSectionFromParam(searchParams.get("tab"));
 
   async function handleSignOut() {
@@ -88,20 +96,22 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <nav aria-label="homeowner navigation" className="min-h-0 flex-1 overflow-y-auto p-3">
-        <Link
-          href="/request"
-          onClick={onNavigate}
-          className="mb-4 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-colors hover:bg-accent-hover active:bg-accent-active"
-        >
-          <Plus className="h-4 w-4" />
-          Request Service
-        </Link>
+        {canRequest && (
+          <Link
+            href="/request"
+            onClick={onNavigate}
+            className="mb-4 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-colors hover:bg-accent-hover active:bg-accent-active"
+          >
+            <Plus className="h-4 w-4" />
+            Request Service
+          </Link>
+        )}
 
         <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Services
         </p>
         <div className="space-y-1">
-          {dashboardNavigation.map((item) => {
+          {serviceLinks.map((item) => {
             const active =
               pathname === "/dashboard" && activeSection === item.section;
             const Icon = item.icon;
@@ -129,7 +139,7 @@ export function HomeownerSidebar({ onNavigate }: { onNavigate?: () => void }) {
           Account
         </p>
         <div className="space-y-1">
-          {accountNavigation.map((item) => {
+          {accountLinks.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (

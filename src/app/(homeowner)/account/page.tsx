@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { defaultPathForRoles, fetchRoles } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/client";
+import { EmailPreferences } from "@/components/early-access/EmailPreferences";
 
 const PASSWORD_SET_BY_USER_KEY = "password_set_by_user";
 
@@ -269,8 +270,8 @@ export default function AccountPage() {
               Account settings
             </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Keep your basic contact details current and manage the password you
-              use to sign in.
+              Keep your basic contact details current, manage the password you
+              use to sign in, and choose which emails you get.
             </p>
           </div>
 
@@ -483,6 +484,7 @@ export default function AccountPage() {
                   </form>
                 </CardContent>
               </Card>
+              <EmailPreferences />
             </div>
           )}
     </div>

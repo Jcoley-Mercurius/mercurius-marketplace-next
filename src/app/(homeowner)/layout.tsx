@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2, Menu } from "lucide-react";
 import { HomeownerSidebar } from "@/components/homeowner/HomeownerSidebar";
+import { HomeownerAccessProvider } from "@/components/homeowner/HomeownerAccessProvider";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -90,6 +91,7 @@ export default function HomeownerPortalLayout({ children }: { children: ReactNod
   }
 
   return (
+    <HomeownerAccessProvider>
     <div className="flex min-h-screen bg-muted/40">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">
         <Suspense fallback={<SidebarLoading />}>
@@ -122,6 +124,7 @@ export default function HomeownerPortalLayout({ children }: { children: ReactNod
         </main>
       </div>
     </div>
+    </HomeownerAccessProvider>
   );
 }
 

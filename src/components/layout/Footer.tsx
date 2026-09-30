@@ -11,6 +11,7 @@ const footerLinks = {
     { name: "All Services", href: "/services" },
   ],
   company: [
+    { name: "Join Early Access", href: "/early-access" },
     { name: "How It Works", href: "/how-it-works" },
     { name: "Services", href: "/services" },
     { name: "Pricing", href: "/pricing" },

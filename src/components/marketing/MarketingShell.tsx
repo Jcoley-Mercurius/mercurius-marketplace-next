@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 export function MarketingShell({ children }: { children: ReactNode }) {
   return (
@@ -29,7 +30,7 @@ export function MarketingHero({ eyebrow, title, description, children }: { eyebr
   );
 }
 
-export function MarketingCta({ title, description, primaryLabel = "Request a Service", primaryHref = "/request", secondaryLabel, secondaryHref }: { title: string; description: string; primaryLabel?: string; primaryHref?: string; secondaryLabel?: string; secondaryHref?: string }) {
+export function MarketingCta({ title, description, primaryLabel = EARLY_ACCESS_CTA, primaryHref = EARLY_ACCESS_PATH, secondaryLabel, secondaryHref }: { title: string; description: string; primaryLabel?: string; primaryHref?: string; secondaryLabel?: string; secondaryHref?: string }) {
   return (
     <section className="bg-cta-section py-16 text-primary-foreground md:py-20">
       <div className="container-narrow text-center">

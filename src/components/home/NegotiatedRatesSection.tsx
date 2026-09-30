@@ -5,6 +5,7 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Phone, X, CheckCircle2, TrendingDown, Tag, Handshake, ShieldCheck, Sparkles, Award, DollarSign, Gift, Rocket } from "lucide-react";
+import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 /**
  * Live Package Rates Section
@@ -289,13 +290,13 @@ const NegotiatedRatesSection = () => {
           <div className="relative">
             <Sparkles className="h-7 w-7 text-accent mx-auto mb-4" />
             <h3 className="text-2xl md:text-3xl font-bold text-primary-foreground mb-3">
-              Check coverage or tell us what you need.
+              Booking is opening by invitation.
             </h3>
             <p className="text-primary-foreground/70 mb-6 max-w-xl mx-auto">
-              Continue with a live-priced service, request a quote, or ask us to source a vetted provider.
+              Explore services and approved providers now. Join early access and we’ll invite Lee County homeowners in stages as services are ready in their area.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/request" className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent-hover active:bg-accent-active")}>Start a Request <ArrowRight className="ml-2 h-5 w-5" /></Link>
+              <Link href={EARLY_ACCESS_PATH} className={cn(buttonVariants({ size: "lg" }), "h-11 bg-accent px-8 text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent-hover active:bg-accent-active")}>{EARLY_ACCESS_CTA} <ArrowRight className="ml-2 h-5 w-5" /></Link>
               <Link href="/providers" className={cn(buttonVariants({ size: "lg" }), "h-11 border border-primary-foreground/30 bg-primary-foreground/10 px-8 text-primary-foreground hover:bg-primary-foreground/20")}>Browse Providers</Link>
             </div>
           </div>

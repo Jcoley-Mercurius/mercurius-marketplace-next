@@ -54,6 +54,9 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/auth/v1/user") return send({ id: user.sub, aud: "authenticated", role: "authenticated", email: `${user.testRole}@example.invalid`, app_metadata: {}, user_metadata: {}, created_at: now.toISOString() });
   if (url.pathname === "/rest/v1/rpc/has_role") return send(body._user_id === user.sub && body._role === user.testRole);
   if (url.pathname === "/rest/v1/rpc/expire_stale_matches") return send(null);
+  // TRACE-103 R0 readbacks: closed by default (no admission, no interest); specs override per case.
+  if (url.pathname === "/rest/v1/rpc/r0_my_trial_access") return send({ homeowner: user.testRole === "homeowner", cells: [] });
+  if (url.pathname === "/rest/v1/rpc/r0_my_interest") return send({ verified: true, interests: [], marketing_opted_in: false });
   if (url.pathname === "/rest/v1/rpc/vendor_compliance_operations") return send({
     evaluated_at: new Date().toISOString(),
     control: { enforced: false, finalized_at: null, reason: null },
@@ -140,7 +143,7 @@ const server = createServer(async (request, response) => {
         service: 10000, addons: 2000, discount: 1000, adjustment: -1000, tax: 700, tip: 1000, deposit: 3000, total: 11700,
         policy_version: 'CFG-005 / synthetic-v1', expires_at: new Date(Date.now() + (id.endsWith('32') ? -3600000 : 3600000)).toISOString() });
     }
-    if (table === "money_obligations") return send({ current_snapshot_id: '00000000-0000-4000-8000-000000000030', captured: 0, refunded_service: 0, refunded_tax: 0, refunded_tip: 0 });
+    if (table === "money_obligations") return send({ current_snapshot_id: '00000000-0000-4000-8000-000000000030', captured: 0, refunded_service: 0, refunded_tax: 0, refunded_tip: 0, service_request_id: '00000000-0000-4000-8000-000000000011' });
     if (table === "user_roles") return send([{ role: user.testRole }]);
     if (table === "invoices") return send([{ id: "00000000-0000-4000-8000-000000000020", invoice_number: "MDS-INV-001", amount: 125, status: "pending", created_at: now.toISOString(), paid_at: null }]);
     if (table === "reviews") return send([]);
@@ -155,7 +158,11 @@ const server = createServer(async (request, response) => {
       license_number: null, insurance_policy_number: null, credentials: [], other_certification: null,
       additional_notes: null, document_urls: [],
     }]);
-    if (table === "service_requests") return send(user.testRole === "homeowner" ? [...jobs, job("12", "Synthetic Quote Service", "quoted"), job("13", "Synthetic Pending Service", "pending"), job("14", "Synthetic Review Service", "review_requested"), job("15", "Synthetic Completed Service", "vendor_completed")] : jobs);
+    if (table === "service_requests") {
+      const rows = user.testRole === "homeowner" ? [...jobs, job("12", "Synthetic Quote Service", "quoted"), job("13", "Synthetic Pending Service", "pending"), job("14", "Synthetic Review Service", "review_requested"), job("15", "Synthetic Completed Service", "vendor_completed")] : jobs;
+      const id = url.searchParams.get("id");
+      return send(id?.startsWith("eq.") ? rows.filter(row => row.id === id.slice(3)) : rows);
+    }
     if (table === "profiles") return send([{ user_id: homeowner, full_name: "Synthetic Homeowner" }]);
     if (table === "contractors") {
       const rows = [{ id: contractor, user_id: users.vendor, name: "Synthetic Vendor", services: [], is_active: true }];

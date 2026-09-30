@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { requestContinuationPath } from "@/lib/auth/continuation";
+import { EARLY_ACCESS_EMAIL_KEY, isExistingAccountSignUpError } from "@/lib/earlyAccessExperience";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -21,15 +21,26 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { signUp } = useAuth();
-  const router = useRouter();
   const [continuation, setContinuation] = useState<"/request" | null>(null);
+  const [sent, setSent] = useState(false);
+  const sentHeading = useRef<HTMLHeadingElement>(null);
   const loginPath = continuation ? `/login?redirect=${encodeURIComponent(continuation)}` : "/login";
 
   useEffect(() => {
     // Read after mount so the server and client render the same link.
+    const params = new URLSearchParams(window.location.search);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setContinuation(requestContinuationPath(new URLSearchParams(window.location.search).get("redirect")));
+    setContinuation(requestContinuationPath(params.get("redirect")));
+    // TRACE-103: the address just joined in this tab, passed without putting it in a URL.
+    if (params.get("from") === "early-access") {
+      try {
+        const joined = window.sessionStorage.getItem(EARLY_ACCESS_EMAIL_KEY);
+        if (joined) setEmail(joined);
+      } catch { /* The field stays empty. */ }
+    }
   }, []);
+
+  useEffect(() => { if (sent) sentHeading.current?.focus(); }, [sent]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,16 +53,14 @@ export default function RegisterPage() {
     try {
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
       const { error } = await signUp(email.trim(), password, fullName);
-      if (error) {
+      // TRACE-103: new and existing addresses get the same answer, so this public step
+      // never reveals whether an account exists. Other errors (such as a weak password) show.
+      if (error && !isExistingAccountSignUpError(error as { code?: unknown; message?: unknown })) {
         toast.error("Sign up failed", { description: error.message });
         return;
       }
-      toast.success("Check your email", {
-        description: continuation
-          ? "We sent you a verification link. After you verify, sign in here to finish your request; keep this tab open."
-          : "We sent you a verification link. Please verify your email to sign in.",
-      });
-      router.replace(loginPath);
+      try { window.sessionStorage.removeItem(EARLY_ACCESS_EMAIL_KEY); } catch { /* Nothing to clear. */ }
+      setSent(true);
     } catch (error) {
       toast.error("Unable to create your account", {
         description: error instanceof Error ? error.message : "Please try again.",
@@ -75,8 +84,18 @@ export default function RegisterPage() {
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Homeowner</span>
           </Link>
 
+          {sent ? (
+            <section aria-labelledby="register-sent-heading" role="status">
+              <MailCheck aria-hidden="true" className="mb-4 h-9 w-9 text-sage-dark" />
+              <h1 id="register-sent-heading" ref={sentHeading} tabIndex={-1} className="mb-3 text-3xl font-semibold tracking-tight text-foreground">Check your email</h1>
+              <p className="text-muted-foreground">If this email address can be used for a new account, we’ve sent a verification link to it. Open the link, then sign in to see your early-access status.</p>
+              <p className="mt-3 text-sm text-muted-foreground">Your account isn’t active until the email is verified. Didn’t get an email? Check spam, or sign in if you already have an account.</p>
+              <Link href={loginPath} className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-accent px-4 font-medium text-accent-foreground hover:bg-accent-hover">Go to sign in</Link>
+            </section>
+          ) : <>
           <h1 className="mb-2 text-3xl font-semibold tracking-tight text-foreground">Create your homeowner account</h1>
-          <p className="mb-8 text-muted-foreground">Manage your home services with Mercurius</p>
+          <p className="mb-2 text-muted-foreground">Keep your account ready and see your early-access status.</p>
+          <p className="mb-8 text-sm text-muted-foreground">Booking opens by invitation. Creating an account doesn’t book a service or guarantee an invitation.</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
@@ -119,6 +138,10 @@ export default function RegisterPage() {
           <p className="mt-8 text-center text-muted-foreground">
             Already have an account? <Link href={loginPath} className="font-medium text-accent hover:underline">Sign in</Link>
           </p>
+          <p className="mt-3 text-center text-sm text-muted-foreground">
+            Not ready for an account? <Link href="/early-access" className="font-medium text-accent hover:underline">Join early access without one</Link>
+          </p>
+          </>}
           </div>
         </section>
 
@@ -141,7 +164,7 @@ export default function RegisterPage() {
               A clearer way to care for your home.
             </h2>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-primary-foreground/80">
-              Create your account to request local services, follow confirmed work, and keep important home-service details organized.
+              Explore local services now. Booking opens to invited Lee County homeowners in stages as approved providers become available.
             </p>
           </div>
         </section>

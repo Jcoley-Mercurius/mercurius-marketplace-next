@@ -51,9 +51,9 @@ const faqs: FAQCategory[] = [
     questions: [
       {
         q: "How does requesting a service work?",
-        a: "Start by telling us what you need, where the service will take place, and your preferred timing. If the service has current provider-backed pricing, you can move toward booking more directly by confirming details such as the property, date, and time. If the service requires a quote or provider match, Mercurius coordinates the scope, availability, provider fit, and price with you before the booking is confirmed. We are building toward more automated, AI-assisted matching and booking over time, while keeping launch availability and confirmation steps clear.",
-        href: "/request",
-        linkLabel: "Start a service request",
+        a: "Booking is opening by invitation. Lee County homeowners can join early access now, and we invite homeowners in stages as approved providers become available. Once invited, you tell us what you need, where the service will take place, and your preferred timing. If the service has current provider-backed pricing, you can move toward booking more directly by confirming details such as the property, date, and time. If the service requires a quote or provider match, Mercurius coordinates the scope, availability, provider fit, and price with you before the booking is confirmed. We are building toward more automated, AI-assisted matching and booking over time, while keeping launch availability and confirmation steps clear.",
+        href: "/early-access",
+        linkLabel: "Join early access",
       },
       {
         q: "What services can I request?",

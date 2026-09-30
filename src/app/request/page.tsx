@@ -57,6 +57,9 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkflowStepper, type WorkflowStep } from "@/components/ui/workflow-stepper";
 import { useServiceCatalog } from "@/hooks/useServiceCatalog";
+import { useTrialAccess } from "@/hooks/useTrialAccess";
+import { BookingClosedState } from "@/components/early-access/BookingClosedState";
+import { activeCells, bookingState, describeCells, earlyAccessServicesFromQuery } from "@/lib/earlyAccessExperience";
 import { paymentFunctionError, sameOriginReviewUrl } from "@/lib/payments";
 import {
   describeConfirmation,
@@ -202,7 +205,36 @@ function prefersReducedMotion() {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+// TRACE-103 (R0.3): direct navigation shows the closed booking state unless this account
+// holds an active R0 trial admission. The request command enforces admission itself
+// (TRACE-101); this gate only keeps an unusable form from being offered.
 export default function RequestServicePage() {
+  const trial = useTrialAccess();
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  useEffect(() => {
+    // Read after mount so the server and client render the same closed state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setServiceIds(earlyAccessServicesFromQuery(new URLSearchParams(window.location.search).getAll("service")));
+  }, []);
+  const shell = (content: ReactNode) => (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main id="main-content" tabIndex={-1}>{content}</main>
+      <Footer />
+    </div>
+  );
+  if (trial.status === "loading") {
+    return shell(<div className="container-narrow px-4 py-16"><PageState kind="loading" title="Checking your booking access" /></div>);
+  }
+  if (trial.status === "signed_out") return shell(<BookingClosedState reason="signed_out" serviceIds={serviceIds} />);
+  if (trial.status === "error") return shell(<BookingClosedState reason="error" onRetry={trial.retry} />);
+  if (!trial.access.homeowner) return shell(<BookingClosedState reason="not_homeowner" serviceIds={serviceIds} />);
+  const booking = bookingState(trial.access);
+  if (booking !== "invited") return shell(<BookingClosedState reason={booking} serviceIds={serviceIds} />);
+  return <RequestExperience invitedScope={describeCells(activeCells(trial.access))} />;
+}
+
+function RequestExperience({ invitedScope }: { invitedScope: string }) {
   const [errors, setErrors] = useState<FormErrors>({});
   const formRef = useRef<HTMLFormElement>(null);
   const focusNextStep = useRef(false);
@@ -754,6 +786,11 @@ export default function RequestServicePage() {
         return;
       }
       const code = (reason as { code?: unknown } | null)?.code;
+      if (code === "42501" && /trial invitation/i.test(String((reason as { message?: unknown }).message ?? ""))) {
+        update({ inFlight: null });
+        setErrors({ "request-step": `Your invitation covers ${invitedScope}. Remove any other service or use an invited ZIP code, or contact us. Nothing was submitted.` });
+        return;
+      }
       if (code === "42501") {
         update({ inFlight: null });
         setErrors({ "request-step": "This account can’t request homeowner services. Sign in with a homeowner account to continue. Nothing was submitted." });
@@ -1076,7 +1113,14 @@ export default function RequestServicePage() {
   const pageShell = (content: ReactNode) => (
     <div className="min-h-screen bg-background">
       <Header />
-      <main id="main-content" tabIndex={-1}>{content}</main>
+      <main id="main-content" tabIndex={-1}>
+        <div className="container-wide px-4 pt-6">
+          <p className="rounded-xl border border-status-info bg-status-info-bg px-4 py-3 text-sm text-status-info">
+            <span className="font-semibold">Invited to book:</span> {invitedScope}. Other services and areas are still opening by invitation.
+          </p>
+        </div>
+        {content}
+      </main>
       <Footer />
     </div>
   );
