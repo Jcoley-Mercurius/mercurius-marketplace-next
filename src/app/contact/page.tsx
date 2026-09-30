@@ -218,8 +218,8 @@ function ContactPageContent() {
                   </div>
                   <div className="relative divide-y divide-primary-foreground/10">
                     <ContactItem icon={Mail} title="Email">
-                      <a href="mailto:hello@mercurius.com" className="text-primary-foreground/80 transition-colors hover:text-accent">
-                        hello@mercurius.com
+                      <a href="mailto:hello@mercuriusmarketplace.com" className="text-primary-foreground/80 transition-colors hover:text-accent">
+                        hello@mercuriusmarketplace.com
                       </a>
                       <p className="mt-1 text-sm text-primary-foreground/50">We respond within 24 hours</p>
                     </ContactItem>

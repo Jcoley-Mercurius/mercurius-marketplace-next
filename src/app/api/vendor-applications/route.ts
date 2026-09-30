@@ -10,7 +10,7 @@ import {
   type VendorDocumentDescriptor,
 } from "@/lib/vendorApplicationDocuments";
 import { signVendorDocumentUploadGrant } from "@/lib/vendorApplicationUploadToken";
-import { sendOwnerNotification } from "@/lib/ownerNotifications";
+import { deliverApplicationNotification } from "@/lib/applicationNotifications";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
 import {
   INTAKE_REFUSAL_MESSAGE,
@@ -301,29 +301,15 @@ export async function POST(request: Request) {
           })
         : null;
 
-    const submittedAt = new Date().toISOString();
-    const businessSummary = application.business_name.replace(/\s+/g, " ").slice(0, 100);
+    // TRACE-104: the application row and its delivery record were saved together. The
+    // email is best effort after the response; any failure stays visible to operators.
     after(async () => {
-      const result = await sendOwnerNotification({
-        subject: `New vendor application — ${businessSummary}`,
-        replyTo: application.email,
-        text: [
-          "New Mercurius vendor application",
-          "",
-          `Submitted: ${submittedAt}`,
-          `Business: ${application.business_name}`,
-          `Contact: ${`${application.first_name} ${application.last_name}`.trim()}`,
-          `Email: ${application.email}`,
-          `Phone: ${application.phone}`,
-          `Primary category: ${application.primary_category}`,
-          `Services: ${application.services.join(", ") || "Not provided"}`,
-          `Service areas: ${application.service_areas ?? "Not provided"}`,
-        ].join("\n"),
-      });
-      if (!result.ok) {
-        console.error("Vendor application owner notification failed", {
+      try {
+        await deliverApplicationNotification(supabase, applicationId, "initial");
+      } catch (error) {
+        console.error("Vendor application owner notification could not start", {
           applicationId,
-          error: result.error,
+          message: error instanceof Error ? error.message : "Unknown error",
         });
       }
     });

@@ -54,8 +54,6 @@ type Contractor = {
   badges: string[] | null;
   services: string[] | null;
   years_experience: number | null;
-  is_active: boolean | null;
-  marketing_enabled: boolean | null;
   special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
@@ -127,24 +125,6 @@ type GalleryItem = {
 
 type PageMode = "loading" | "ready" | "missing" | "error";
 
-const contractorSafeSelect = [
-  "id",
-  "name",
-  "logo_url",
-  "bio",
-  "location",
-  "badges",
-  "services",
-  "years_experience",
-  "is_active",
-  "marketing_enabled",
-  "special_offer",
-  "our_promise",
-  "verified_specialty",
-  "video_url",
-  "website",
-  "tagline",
-].join(", ");
 
 const serviceFallbacks: Record<string, string> = {
   "lawn-care": "Lawn Care",
@@ -205,7 +185,8 @@ export default function ProviderStorefrontPage() {
           return null;
         });
       const [contractorResult, reviewsResult, packagesResult, catalogResult, galleryResult] = await Promise.all([
-        supabase.from("contractors").select(contractorSafeSelect).eq("id", contractorId).maybeSingle(),
+        // TRACE-104: an unlisted provider has no public profile.
+        supabase.rpc("r0_public_providers", { p_contractor: contractorId }).maybeSingle(),
         supabase
           .from("reviews")
           .select("id, contractor_id, rating, comment, created_at, visibility")
@@ -437,7 +418,6 @@ export default function ProviderStorefrontPage() {
     ? reviews.reduce((total, review) => total + Number(review.rating), 0) / reviews.length
     : null;
   const primaryPackage = fixedPackages[0];
-  const isPublished = Boolean(contractor.is_active);
   const heroCta = !invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Book This Provider" : "Request This Provider";
   const hasQuickStats = averageRating !== null
     || completedJobCount !== null
@@ -458,7 +438,6 @@ export default function ProviderStorefrontPage() {
               <div className="min-w-0 flex-1">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{contractor.name}</h1>
-                  {!isPublished && <Badge variant="outline">Not publicly listed</Badge>}
                 </div>
                 {contractor.tagline && <p className="mb-3 max-w-2xl text-base text-foreground/75">{contractor.tagline}</p>}
                 <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
@@ -468,7 +447,7 @@ export default function ProviderStorefrontPage() {
                 </div>
               </div>
               <div className="w-full shrink-0 sm:w-auto">
-                <Button size="lg" disabled={!isPublished} className="min-h-11 w-full bg-accent px-5 text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest(primaryPackage)}>
+                <Button size="lg" className="min-h-11 w-full bg-accent px-5 text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest(primaryPackage)}>
                   {heroCta}<ArrowRight />
                 </Button>
                 <p className="mt-2 max-w-64 text-xs leading-relaxed text-muted-foreground sm:text-right">
@@ -515,7 +494,7 @@ export default function ProviderStorefrontPage() {
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Mercurius will coordinate the details with you and the provider before the work is confirmed. No unpublished price is presented as bookable.</p>
                 </SectionCard>}
 
-                {packages.length === 0 && <SectionCard title={invited ? "Request a Service" : "Opening by Invitation"}><p className="text-sm leading-relaxed text-muted-foreground">{invited ? "This provider has not published a live fixed price yet. Submit your service details and Mercurius will confirm provider availability, scope, and pricing before booking." : "This provider has not published a live fixed price yet. Booking opens by invitation; join early access to be considered when services are ready in your area."}</p><Button className="mt-4 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest()}>{invited ? "Request This Provider" : EARLY_ACCESS_CTA}<ArrowRight /></Button></SectionCard>}
+                {packages.length === 0 && <SectionCard title={invited ? "Request a Service" : "Opening by Invitation"}><p className="text-sm leading-relaxed text-muted-foreground">{invited ? "This provider has not published a live fixed price yet. Submit your service details and Mercurius will confirm provider availability, scope, and pricing before booking." : "This provider has not published a live fixed price yet. Booking opens by invitation; join early access to be considered when services are ready in your area."}</p><Button className="mt-4 bg-accent text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest()}>{invited ? "Request This Provider" : EARLY_ACCESS_CTA}<ArrowRight /></Button></SectionCard>}
 
                 {(contractor.badges?.length ?? 0) > 0 && <SectionCard title="Credentials"><div className="flex flex-wrap gap-3">{contractor.badges?.map((badge) => <div key={badge} className="flex items-center gap-2 rounded-lg bg-sage-light px-3 py-2 text-sm font-medium text-sage-dark"><BadgeCheck className="h-4 w-4" />{badge}</div>)}</div></SectionCard>}
 
@@ -533,7 +512,7 @@ export default function ProviderStorefrontPage() {
               <aside className="space-y-6 md:sticky md:top-24 md:self-start">
                 <Card className="border-accent/20 shadow-sm"><CardHeader><CardTitle className="text-lg">Pricing Overview</CardTitle></CardHeader><CardContent>
                   {fixedPackages.length > 0 ? <StorefrontPriceOverview item={fixedPackages[0]} serverNow={serverNow} /> : <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Pricing depends on the scope. Mercurius will confirm availability and price before work begins.</p>}
-                  <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" disabled={!isPublished} onClick={() => startRequest(primaryPackage)}>{!invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
+                  <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest(primaryPackage)}>{!invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
                 </CardContent></Card>
 
                 <Card><CardHeader><CardTitle className="text-lg">Service Area</CardTitle></CardHeader><CardContent><div className="flex min-h-40 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">Southwest Florida</p><p className="mt-1 text-xs">Coverage is confirmed for your service address.</p></div></div>{contractor.location && <p className="mt-3 text-center text-sm text-muted-foreground">Based in {contractor.location}</p>}</CardContent></Card>

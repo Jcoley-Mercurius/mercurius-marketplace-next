@@ -131,7 +131,7 @@ export default function PrivacyPolicyPage() {
                   <li>You may update certain account information through the Platform when those controls are available.</li>
                 </ul>
                 <p>
-                  Submit a privacy request by emailing <a href="mailto:hello@mercurius.com">hello@mercurius.com</a> or using our <Link href="/contact">Contact page</Link>. If applicable law provides an appeal process, you may use the same contact methods to ask us to reconsider a decision.
+                  Submit a privacy request by emailing <a href="mailto:hello@mercuriusmarketplace.com">hello@mercuriusmarketplace.com</a> or using our <Link href="/contact">Contact page</Link>. If applicable law provides an appeal process, you may use the same contact methods to ask us to reconsider a decision.
                 </p>
               </PolicySection>
 
@@ -167,7 +167,7 @@ export default function PrivacyPolicyPage() {
 
               <PolicySection id="contact" title="13. Contact Us" last>
                 <p>
-                  Questions or privacy requests can be sent to <a href="mailto:hello@mercurius.com">hello@mercurius.com</a> or through our <Link href="/contact">Contact page</Link>.
+                  Questions or privacy requests can be sent to <a href="mailto:hello@mercuriusmarketplace.com">hello@mercuriusmarketplace.com</a> or through our <Link href="/contact">Contact page</Link>.
                 </p>
                 <Link href="/contact" className="mt-2 inline-flex items-center gap-1.5 font-semibold text-accent hover:text-accent/80">
                   Contact Mercurius <ArrowRight className="h-4 w-4" />

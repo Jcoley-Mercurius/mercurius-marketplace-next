@@ -51,8 +51,6 @@ type Contractor = {
   badges: string[] | null;
   services: string[] | null;
   years_experience: number | null;
-  is_active: boolean | null;
-  marketing_enabled: boolean | null;
   special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
@@ -83,9 +81,6 @@ const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   Trash2,
 };
 
-const contractorSafeSelect =
-  "id, name, logo_url, bio, location, badges, services, years_experience, is_active, marketing_enabled, special_offer, our_promise, verified_specialty";
-
 function formatServiceName(slug: string) {
   return slug.replace(/-/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
@@ -108,7 +103,8 @@ export default function ProvidersPage() {
         const [categoriesResult, servicesResult, contractorsResult] = await Promise.all([
           supabase.from("service_categories").select("id, name, description, icon").eq("is_active", true).order("sort_order"),
           supabase.from("services_catalog").select("id, name, category_id").eq("is_active", true),
-          supabase.from("contractors").select(contractorSafeSelect).eq("is_active", true).order("name"),
+          // TRACE-104: only approved, eligible providers with real content (server-decided).
+          supabase.rpc("r0_public_providers"),
         ]);
 
         if (categoriesResult.error) throw categoriesResult.error;

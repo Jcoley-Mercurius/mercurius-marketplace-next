@@ -181,11 +181,13 @@ export default function AdminApplicationsPage() {
         if (error) throw error;
         const rows = (data ?? []) as unknown as Application[];
         setApplications(rows);
+        // TRACE-104: /admin/recruiting links here with ?application=<id>.
+        const linked = new URLSearchParams(window.location.search).get("application");
         setSelected((current) =>
           current
             ? rows.find((application) => application.id === current.id) ??
               current
-            : current,
+            : rows.find((application) => application.id === linked) ?? null,
         );
         setMode("live");
       } catch (error) {
