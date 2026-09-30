@@ -411,7 +411,7 @@ export default function VendorOverviewPage() {
 
       <VendorRecruitingNotice />
 
-      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-accent-border bg-accent-subtle [&_.text-muted-foreground]:text-foreground/75 px-4 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <DollarSign className="mt-0.5 h-5 w-5 shrink-0 text-sage-dark" />
           <div>
@@ -423,7 +423,7 @@ export default function VendorOverviewPage() {
       </div>
 
       <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">
-        <CardHeader className="border-b border-accent-border bg-accent-subtle">
+        <CardHeader className="border-b border-accent-border bg-accent-subtle [&_.text-muted-foreground]:text-foreground/75">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg"><Gauge className="h-5 w-5 text-accent" />Launch readiness</CardTitle>
@@ -473,7 +473,7 @@ export default function VendorOverviewPage() {
       </div>
 
       <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">
-        <CardHeader className="border-b border-accent-border bg-accent-subtle">
+        <CardHeader className="border-b border-accent-border bg-accent-subtle [&_.text-muted-foreground]:text-foreground/75">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div><CardTitle className="flex items-center gap-2 text-base"><DollarSign className="h-4 w-4 text-accent" />Released earnings</CardTitle><CardDescription className="mt-1">Net vendor payouts from invoices that Mercurius has moved to released status.</CardDescription></div>
             <Badge variant="outline" className={cn("w-fit bg-background", earningsPartial && "border-amber-300 text-amber-700 dark:text-amber-300")}>{!overview.earningsAvailable ? "Unavailable" : earningsPartial ? "Partial history" : "Released invoices only"}</Badge>
@@ -506,7 +506,7 @@ export default function VendorOverviewPage() {
               <Link href="/vendor/profile" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 w-full shrink-0 sm:w-auto")}>Edit profile<ArrowRight /></Link>
             </div>
           ) : overview.servicesNeedingPricing.length === 0 ? (
-            <div className="flex items-start gap-3 bg-accent-subtle p-5"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 className="h-5 w-5" /></span><div><p className="text-sm font-medium">Every listed service is covered</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Each profile service currently has an eligible live fixed price or public quote option. Keep rates and availability current as your services change.</p></div><Link href="/vendor/packages" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto hidden shrink-0 sm:inline-flex")}>Review pricing</Link></div>
+            <div className="flex items-start gap-3 bg-accent-subtle [&_.text-muted-foreground]:text-foreground/75 p-5"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 className="h-5 w-5" /></span><div><p className="text-sm font-medium">Every listed service is covered</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Each profile service currently has an eligible live fixed price or public quote option. Keep rates and availability current as your services change.</p></div><Link href="/vendor/packages" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto hidden shrink-0 sm:inline-flex")}>Review pricing</Link></div>
           ) : (
             <div className="divide-y">
               {overview.servicesNeedingPricing.map((service) => (
@@ -542,7 +542,7 @@ export default function VendorOverviewPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {recommendations.map((recommendation, index) => (
-              <Link key={recommendation.title} href={recommendation.href} className={cn("group flex items-start gap-3 rounded-xl border p-3.5 transition-colors hover:bg-surface-hover", index === 0 ? "border-accent-border bg-accent-subtle" : "border-border bg-background")}>
+              <Link key={recommendation.title} href={recommendation.href} className={cn("group flex items-start gap-3 rounded-xl border p-3.5 transition-colors hover:bg-surface-hover", index === 0 ? "border-accent-border bg-accent-subtle [&_.text-muted-foreground]:text-foreground/75" : "border-border bg-background")}>
                 <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", index === 0 ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><recommendation.icon className="h-4 w-4" /></span>
                 <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-foreground">{recommendation.title}</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{recommendation.description}</span></span>
                 <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
@@ -667,7 +667,7 @@ function buildRecommendations(contractor: Contractor, overview: OverviewData) {
 
 function MetricCard({ icon: Icon, label, value, note, href, emphasize = false }: { icon: ComponentType<{ className?: string }>; label: string; value: string; note: string; href?: string; emphasize?: boolean }) {
   const content = (
-    <Card className={cn("h-full transition-colors", emphasize && "border-accent-border bg-accent-subtle", href && "group-hover:border-accent-border group-hover:bg-surface-hover")}>
+    <Card className={cn("h-full transition-colors", emphasize && "border-accent-border bg-accent-subtle [&_.text-muted-foreground]:text-foreground/75", href && "group-hover:border-accent-border group-hover:bg-surface-hover")}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground"><span className="flex items-center gap-2"><Icon className="h-4 w-4 text-accent" />{label}</span>{href && <ArrowRight className="h-3.5 w-3.5 opacity-50" />}</div>
         <p className="mt-3 text-2xl font-semibold tabular-nums text-foreground">{value}</p>

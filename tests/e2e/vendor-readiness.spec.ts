@@ -92,7 +92,10 @@ test("an unknown email asks the operator to check the inbox and a failed resend 
   // The synthetic backend refuses every write; nothing is claimed as sent.
   await expect(page.getByText("Notification was not resent")).toBeVisible();
   await expect(page.getByText("Resend recorded")).toHaveCount(0);
-  await expect(page.getByText("Synthetic Uncertain Services")).toBeVisible();
+  // The confirmation stays open with its error; the application stays listed behind it.
+  await expect(confirm.getByRole("alert")).toContainText("could not be confirmed");
+  await page.keyboard.press("Escape");
+  await expect(uncertain).toBeVisible();
 });
 
 test("acknowledging and hiding require a reason", async ({ page }) => {

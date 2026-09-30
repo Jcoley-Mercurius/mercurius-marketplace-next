@@ -58,6 +58,9 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/r0_my_trial_access") return send({ homeowner: user.testRole === "homeowner", cells: [] });
   if (url.pathname === "/rest/v1/rpc/r0_my_interest") return send({ verified: true, interests: [], marketing_opted_in: false });
   // TRACE-104 (R0.4) readbacks. Operator reads refuse non-admin sessions like the database.
+  if (url.pathname === "/rest/v1/rpc/get_contractor_contact") return send([{ email: "vendor@example.invalid", phone: "synthetic" }]);
+  // Count-only reads (the vendor gallery) arrive as HEAD with the total in Content-Range.
+  if (request.method === "HEAD") { response.setHeader("Content-Range", "*/0"); response.statusCode = 200; return response.end(); }
   if (url.pathname === "/rest/v1/rpc/r0_public_providers") return send([]);
   if (url.pathname === "/rest/v1/rpc/r0_my_provider_listing") return send(user.testRole !== "vendor" ? { linked: false } : {
     linked: true, contractor_id: contractor, listed: false, active: true, accepting_work: true, approved: true, held: false,

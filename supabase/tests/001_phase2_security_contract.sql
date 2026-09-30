@@ -117,7 +117,10 @@ select is(
        'pricing_server_now',
        'resolve_package_tier_price',
        -- TRACE-098: read-only intake preview of public inventory; no writes, no identities.
-       'preview_service_request_selections'
+       'preview_service_request_selections',
+       -- TRACE-104: read-only public listing rule and projection; no contact or operator data.
+       'r0_provider_listable',
+       'r0_public_providers'
      )),
   0::bigint,
   'anonymous can execute only the approved public RPC surface'
