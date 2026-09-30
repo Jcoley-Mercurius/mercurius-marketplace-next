@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { LEE_COUNTY_SERVICE_AREAS } from "@/lib/vendorServiceAreas";
 import {
   MAX_VENDOR_DOCUMENT_COUNT,
   VENDOR_DOCUMENT_ACCEPT,
@@ -40,10 +41,6 @@ const primaryCategories = [
   "Painting", "Flooring", "Garage Door", "Appliance Repair", "Pest Control",
   "Junk Removal", "Gutter Cleaning & Repair", "Screen & Lanai Repair",
   "Dryer Vent Cleaning", "Specialty / Other",
-];
-const serviceAreas = [
-  "Cape Coral", "Fort Myers", "Fort Myers Beach", "North Fort Myers", "Estero",
-  "Lehigh Acres", "Bonita Springs", "Sanibel / Captiva", "Naples", "Punta Gorda",
 ];
 const suggestedServices: Record<string, string[]> = {
   "Lawn Care & Mowing": ["Mowing", "Edging & trimming", "Hedge trimming", "Fertilization", "Seasonal cleanups"],
@@ -383,7 +380,7 @@ export default function VendorApplyPage() {
           <div className="container-narrow">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Provider Application</p>
             <h1 className="mb-4 text-3xl font-semibold md:text-4xl">Join The Mercurius Network</h1>
-            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">Serving Cape Coral, Fort Myers and the rest of SWFL. Free to join, no setup fee — Mercurius earns a 15% commission on completed jobs.</p>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">Serving Cape Coral, Fort Myers and the rest of Lee County. Free to join, no setup fee — Mercurius earns a 15% commission on completed jobs.</p>
           </div>
         </section>
 
@@ -431,7 +428,7 @@ function ContactStep({ form, setField }: StepProps) {
 
 type ServiceAreaStepProps = StepProps & { areas: string[]; services: string[]; suggestions: string[]; toggleArea: (value: string) => void; toggleService: (value: string) => void };
 function ServiceAreaStep({ form, setField, areas, services, suggestions, toggleArea, toggleService }: ServiceAreaStepProps) {
-  return <div className="space-y-8"><StepHeading title="Service Area" description="Where you work and what you offer across Southwest Florida." /><ChipGroup label="Areas you serve" options={serviceAreas} selected={areas} onToggle={toggleArea} />{suggestions.length > 0 && <ChipGroup label={`Common ${form.primaryCategory.toLowerCase()} services`} description="Select any that apply." options={suggestions} selected={services} onToggle={toggleService} compact />}<Field label="Services you offer *" id="servicesText"><textarea id="servicesText" rows={3} className={fieldClass} value={form.servicesText} onChange={(event) => setField("servicesText", event.target.value)} placeholder="List additional services separated by commas" /><p className="text-xs text-muted-foreground">Suggested selections and your own wording are combined for review.</p></Field><Field label="Anything else we should know?" id="additionalNotes"><textarea id="additionalNotes" rows={4} className={fieldClass} value={form.additionalNotes} onChange={(event) => setField("additionalNotes", event.target.value)} placeholder="Availability, seasonal capacity, specialty equipment, HOA experience…" /></Field></div>;
+  return <div className="space-y-8"><StepHeading title="Service Area" description="Where you work in Lee County and what you offer." /><ChipGroup label="Areas you serve" options={LEE_COUNTY_SERVICE_AREAS} selected={areas} onToggle={toggleArea} />{suggestions.length > 0 && <ChipGroup label={`Common ${form.primaryCategory.toLowerCase()} services`} description="Select any that apply." options={suggestions} selected={services} onToggle={toggleService} compact />}<Field label="Services you offer *" id="servicesText"><textarea id="servicesText" rows={3} className={fieldClass} value={form.servicesText} onChange={(event) => setField("servicesText", event.target.value)} placeholder="List additional services separated by commas" /><p className="text-xs text-muted-foreground">Suggested selections and your own wording are combined for review.</p></Field><Field label="Anything else we should know?" id="additionalNotes"><textarea id="additionalNotes" rows={4} className={fieldClass} value={form.additionalNotes} onChange={(event) => setField("additionalNotes", event.target.value)} placeholder="Availability, seasonal capacity, specialty equipment, HOA experience…" /></Field></div>;
 }
 
 type CredentialsStepProps = StepProps & { credentials: string[]; documents: SelectedDocument[]; toggleCredential: (value: string) => void; addDocuments: (files: FileList | null, kind: SelectedDocument["kind"]) => void; removeDocument: (index: number) => void };
@@ -744,7 +741,7 @@ function ApplicationSuccess({
           <p className="mb-6 text-lg text-muted-foreground">
             Thanks, {firstName || "there"}—we have your application for{" "}
             <strong className="text-foreground">{businessName}</strong>. Our
-            team reviews every Southwest Florida provider by hand.
+            team reviews every Lee County provider by hand.
           </p>
           {attachedDocumentCount > 0 && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left text-emerald-900">
@@ -804,6 +801,6 @@ function SelectField({ label, id, value, placeholder, options, onChange }: { lab
   return <Field label={label} id={id}><select id={id} value={value} onChange={(event) => onChange(event.target.value)} className={cn(fieldClass, "h-12 py-0")}><option value="">{placeholder}</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field>;
 }
 
-function ChipGroup({ label, description, options, selected, onToggle, compact = false }: { label: string; description?: string; options: string[]; selected: string[]; onToggle: (value: string) => void; compact?: boolean }) {
+function ChipGroup({ label, description, options, selected, onToggle, compact = false }: { label: string; description?: string; options: readonly string[]; selected: string[]; onToggle: (value: string) => void; compact?: boolean }) {
   return <div className="space-y-3"><div><Label>{label}</Label>{description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}</div><div className="flex flex-wrap gap-2">{options.map((option) => <button key={option} type="button" onClick={() => onToggle(option)} className={cn("rounded-full border text-sm transition-all", compact ? "px-3 py-1.5" : "border-2 px-4 py-2", selected.includes(option) ? "border-primary bg-primary/10 text-foreground" : "border-border bg-card text-muted-foreground hover:border-primary/50")}>{option}</button>)}</div></div>;
 }

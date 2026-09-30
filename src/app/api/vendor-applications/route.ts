@@ -13,6 +13,10 @@ import { signVendorDocumentUploadGrant } from "@/lib/vendorApplicationUploadToke
 import { deliverApplicationNotification } from "@/lib/applicationNotifications";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
 import {
+  normalizeServiceAreas,
+  UnsupportedServiceAreaError,
+} from "@/lib/vendorServiceAreas";
+import {
   INTAKE_REFUSAL_MESSAGE,
   intakeClientIp,
   intakeGuardRefusal,
@@ -79,6 +83,17 @@ function nullableText(value: unknown, label: string, max = 2_000) {
   return text(value, label, { max }) || null;
 }
 
+function serviceAreas(value: unknown) {
+  try {
+    return normalizeServiceAreas(nullableText(value, "Service areas", 1_000));
+  } catch (error) {
+    if (error instanceof UnsupportedServiceAreaError) {
+      throw new RequestValidationError(error.message);
+    }
+    throw error;
+  }
+}
+
 function stringList(
   value: unknown,
   label: string,
@@ -142,7 +157,7 @@ function parseApplication(value: unknown): ApplicationInput {
       required: true,
       maxItems: 50,
     }),
-    service_areas: nullableText(input.service_areas, "Service areas", 1_000),
+    service_areas: serviceAreas(input.service_areas),
     availability: nullableText(input.availability, "Availability", 1_000),
     primary_category: text(input.primary_category, "Primary category", {
       required: true,
