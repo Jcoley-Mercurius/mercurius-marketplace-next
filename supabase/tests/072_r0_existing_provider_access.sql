@@ -80,6 +80,13 @@ select ok(has_function_privilege('service_role',f,'EXECUTE') and not has_functio
   and not has_function_privilege('anon',f,'EXECUTE'),'service key only: '||f)
  from unnest(array['public.r0_finish_provider_access(uuid,uuid,uuid)','public.r0_refuse_provider_access(uuid,text,uuid,uuid)']) f;
 
+-- The contractor update-scope trigger must test the PostgREST role, not current_user
+-- (always the owner inside SECURITY DEFINER), or it never enforces (R0.5 rehearsal finding).
+select ok((select prosrc ~ 'current_setting\(''role'', true\) <> ''authenticated''' and prosrc !~* 'current_user'
+  from pg_proc where proname='enforce_contractor_update_scope'), 'contractor update-scope trigger tests the request role');
+select ok(exists(select 1 from pg_trigger where tgname='trg_enforce_contractor_update_scope' and tgrelid='public.contractors'::regclass and tgenabled='O'),
+ 'contractor update-scope trigger is attached and enabled');
+
 -- Owner-confirmed contact ---------------------------------------------------------------
 select ok(pg_temp.eligible('e7210000-0000-4000-8000-00000000000a'),'before a contact, legacy is_active still admits provider A (TRACE-060 compatibility)');
 select throws_ok($$select pg_temp.user(3,'select public.r0_record_provider_contact(''e7210000-0000-4000-8000-00000000000a'',''a@example.test'',''c'',''r'',''k'')')$$,
