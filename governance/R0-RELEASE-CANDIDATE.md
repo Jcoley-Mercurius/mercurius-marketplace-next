@@ -1,7 +1,8 @@
 # R0.5 release candidate — existing-provider access, cleanup and hosted readiness (TRACE-105)
 
 **Branch:** `codex/r0-release-candidate` from `main` `a88da4f` (R0.4 PR #72 merged 2026-09-30).
-**Status (2026-09-30, verified read-only):** production **schema and operator data are rolled out** (migration history repair + push, 11 exclusions, 8 contacts, two `@mercurius.com` accounts removed). **Edge `vendor-invite`, Auth, SMTP, Vercel deployment and domain are unchanged.** No real invitation has been sent. The light-only release (DEC-2026-026) is on branch `codex/r0-light-only-release`. See [Production state verified 2026-09-30](#production-state-verified-2026-09-30) and the [running release checklist](#running-release-checklist).
+**Status (2026-09-30, verified read-only):** production **schema and operator data are rolled out** (migration history repair + push, 11 exclusions, 8 contacts, two `@mercurius.com` accounts removed). **Edge `vendor-invite`, Auth, SMTP, Vercel deployment and domain are unchanged.** No real invitation has been sent. The light-only release (DEC-2026-026) merged as `7591134` (PR #75).
+**Update 2026-09-30 22:50–22:55 UTC (step 2):** R1 upload configuration **set** (hosted upload not yet verified) and R3 legacy checkout closure **verified**; see [Step 2 results](#step-2-results-2026-09-30-upload-configuration-and-checkout-closure). See [Production state verified 2026-09-30](#production-state-verified-2026-09-30) and the [running release checklist](#running-release-checklist).
 **Governing sources:** DEC-2026-022/024/025; [layered-launch decision](LAYERED-LAUNCH-DECISION.md) R0 vendor and operator contract; [R0.4 report](R0-VENDOR-READINESS.md) R0.5 checklist; Phase 5 invitation, binding, linking, activation-role and cutover contracts (TRACE-063/065/067/068/070/061).
 
 ## Production state verified 2026-09-30
@@ -50,13 +51,44 @@ Branch `codex/r0-light-only-release` from `main` `5df97a2`.
 - The existing specs' "dark" variants now exercise a saved `dark` preference rendered light. `@visual` dark baselines (`mds`, `request`) will differ until TRACE-106 and were not run. Not run: human screen reader/zoom; anything hosted.
 - Homepage light-contrast fixes found by the new check (MDS §§80/82), existing tokens only: provider CTA fill `bg-coral` → `bg-coral-dark` (white on `#d76742` was 3.55:1); Spotlight subtitle and "View all" `text-muted-foreground` → `text-slate-dark` on the slate band (4.06:1).
 
+## Step 2 results (2026-09-30): upload configuration and checkout closure
+
+Owner authorized exactly: R1's two upload variables, R3's two function deployments, and controlled verification without payments or Stripe sessions. Source: clean detached worktree at `7591134`. No Vercel deployment, promotion, domain, DNS, invitation or activation change was made. The R1 re-entry of the other Vercel variables was **not** authorized and not done.
+
+### R1 upload configuration: PASS (configuration only)
+
+| Check | Result |
+|---|---|
+| Target | Vercel project `mercurius-marketplace-next` (`prj_gTWVAVyYp1FoeLUZdeCp2A4DhtAM`), team `team_zluDhTEetiYkyTDXePcbq3Tj` |
+| Before | Neither variable existed (names listed via API) |
+| Added 22:50:18 UTC | `VENDOR_UPLOAD_HMAC_SECRET`: 64 characters from Python `secrets.token_urlsafe(48)` (code requires ≥32), type `sensitive`, target `production` only. `VENDOR_UPLOAD_HMAC_VERSION` = `v1` (matches `^[a-zA-Z0-9_-]{1,20}$`), `sensitive`, `production` only |
+| Readback | Both names present with target `["production"]`, no Git-branch scope; no `NEXT_PUBLIC_` variant exists. Value never printed or committed; a copy is held outside the repository in the session scratchpad (mode 0600) and is not needed for rotation (rotate by replacing the variable) |
+| Not yet proven | Hosted vendor document upload. The running deployment `735df91` predates the variables and does not read them until R2 builds; proof is test T1 after R2. **B1 stays open until T1 passes** |
+
+### R3 legacy checkout closure: PASS
+
+| Check | Result |
+|---|---|
+| Target | Supabase `vugqqyemuptlvcieihww` = project "mercurius-marketplace" (us-east-2), the repository's linked project |
+| `MERCURIUS_MONEY_MODE` | **Absent** before and after (secret names only). The handler activates only when it equals `test` and then still requires an `sk_test_` key. Observation: a pre-existing secret name ` STRIPE_WEBHOOK_SECRET` has a leading space (not changed) |
+| Deploy 22:51:35 UTC | `supabase functions deploy create-checkout checkout-request --project-ref vugqqyemuptlvcieihww --use-api` (CLI 2.111), `verify_jwt = true` from `supabase/config.toml` |
+| Versions | `create-checkout` v11 → **v12** (ezbr `5cdd67dd…482b9f`); `checkout-request` v16 → **v17** (ezbr `5bcc2491…9eb6d6`); both ACTIVE, `verify_jwt=true` |
+| Source identity | Each function downloaded separately after deploy: `index.ts`, `deno.json`, `_shared/moneyCheckoutHandler.ts`, `_shared/money.ts`, `_shared/env.ts` **byte-identical** to `7591134` |
+| Authenticated test 22:53 UTC | Temporary synthetic user (`jcoley+r0checkout-20260930@…`, created confirmed via the Admin API so no email was sent; homeowner by default, not admitted) signed in with a password; the token resolved to that user with role `authenticated`. POST to each function with three bodies — legacy `invoice_id`, legacy `request_id`, and `snapshot_id` (the only path that reaches Stripe), all random UUIDs — **6/6 HTTP 503 `MONEY_NOT_ACTIVATED`**, no `url` or `review_url` in any response. Contrast: no Authorization header → 401 at the gateway |
+| No checkout/payment created | Read-only counts before (22:51) and after (22:54): `money_checkout_attempts` 0 → 0 (0 with a Stripe session); invoices 1 → 1, last update still 2026-08-09 (its session id is from the August legacy function); service requests 11 → 11. The gate returns before the Stripe client is constructed or the database is read. Stripe's own session list was not queried (no Stripe key is held locally) |
+| Cleanup | Synthetic user deleted (Auth users 4 before and after; profile, role and sessions cascaded). Its `loyalty_accounts` row has no cascade and survived; that single default row (0 points, created 22:53:25 by the test, no references) was deleted by id. Residue check: 0. Note: 5 other orphaned `loyalty_accounts` rows pre-date this step (origin not investigated); not changed |
+| Browser effect | The stale `735df91` app sends an `Origin` header; if it differs from the unreadable `SITE_URL` secret, the functions now answer 403 `ORIGIN_NOT_ALLOWED` before the money gate. Either way no checkout starts |
+| Rollback | Not used and not recommended (the old v11/v16 source bypasses admission). If a defect appears: forward fix from a reviewed commit, or keep the endpoints disabled |
+
+**B2 is closed.** R2 promotion may proceed once separately authorized; the R3 precondition ("`MONEY_NOT_ACTIVATED` with no Stripe session") is met.
+
 ## Remaining hosted rollout package
 
-Nothing below has been executed. Each numbered action needs Josh's explicit authorization for that action; this session had authorization for read-only checks only. Keys are never printed: pass them from git-ignored files or the provider dashboards.
+R1 and R3 were executed on 2026-09-30 (see [Step 2 results](#step-2-results-2026-09-30-upload-configuration-and-checkout-closure)); nothing else below has been executed. Each numbered action needs Josh's explicit authorization for that action; this session had authorization for read-only checks only. Keys are never printed: pass them from git-ignored files or the provider dashboards.
 
 **Hostnames.** Controlled hosted URL for pre-cutover tests: `https://mercurius-marketplace-next.vercel.app` (the app's production alias; public, not SSO-protected, not advertised). Final canonical origin: `https://www.mercuriusmarketplace.com` (what the domain already serves; apex redirects to it).
 
-**Release SHA.** Deploy the reviewed merge of `codex/r0-light-only-release` into `main`; record that exact SHA here before step R1. The branch commit is listed in the handoff.
+**Release SHA.** `759113496fd37ebfefb5e1da42ba640580ab7bdb` (merge of PR #75 into `main`; final-head CI run 36782043110 passed). R1 and R3 used it from a clean detached worktree; R2 must deploy the same SHA.
 
 | # | Action | Target | Exact change | Verify | Rollback |
 |---|---|---|---|---|---|
@@ -122,18 +154,20 @@ Status as of 2026-09-30 (UTC). PASS = verified evidence exists; PENDING = not ye
 |---|---|---|---|
 | 1 | Production migration/cleanup reconciliation | **PASS** (end state) | 178/178, 0 pending; 11 exclusions; 8 contacts; test admins removed; scope repair live. Caveats: push/dry-run logs reported, not re-read; one cascade-deleted request (G3) |
 | 2 | Light-only release | **PASS locally** | `cfdcf49`: light-only 34/34; suite 458/460 with 2 intermittent finance cases not reproduced (57 reruns); hosted check pending (T7) |
-| 3 | Final SHA and CI | **PENDING** | PR CI on the branch (handoff); final SHA = reviewed merge commit, recorded before R1 |
-| 4 | Edge/Auth/email configuration | **PENDING** | R1–R8 prepared, none executed; B1 (upload secret) and B2 (legacy checkout) must be included |
-| 5 | Hosted recruiting and booking-denial tests | **PENDING** | T1–T7 not run; B2 open until R3 |
+| 3 | Final SHA and CI | **PASS** | `7591134` (PR #75 merge); final-head CI run 36782043110 passed |
+| 4a | Upload configuration (R1) | **PASS (configuration)** | 2026-09-30: both variables in Production, names/target read back; hosted upload unproven until T1 after R2 |
+| 4b | Legacy checkout closure (R3) | **PASS** | 2026-09-30: `create-checkout` v12 / `checkout-request` v17 from `7591134`; signed-in user 6/6 `MONEY_NOT_ACTIVATED`; no checkout attempt or payment created |
+| 4 | Remaining Edge/Auth/email configuration | **PENDING** | R2, R4–R8 not executed |
+| 5 | Hosted recruiting and booking-denial tests | **PENDING** | T1–T7 not run (T3's function part is covered by R3 evidence; repeat after R2 through the app) |
 | 6 | Public vendor eligibility | **PASS (as designed)** | 0 listable; no test/excluded record public; 8 real vendors not yet eligible (above) |
 | 7 | Sole-admin exception and support/privacy contacts | **PENDING owner restatement** | DEC-2026-025 confirmed by Josh 2026-09-30; restate in go/no-go; contacts per R0.4 (hello@ / phone) |
 | 8 | GoDaddy DNS / Vercel cutover readiness | **PASS (DNS ready)** | No DNS change; reassignment D1 awaits pre-cutover tests and authorization |
 | 9 | Final-domain verification plan | **PASS (prepared)** | D3 above |
 | 10 | Rehearsal-project retirement | **PENDING owner decision** | Rehearsal evidence is recorded here; the project has no remaining migration role. Before deletion decide G2 (it holds the only copy of the cascade-deleted request once backups rotate) |
 
-**Blockers:** B1 Vercel lacks `VENDOR_UPLOAD_HMAC_*` (vendor document upload fails hosted) → R1. B2 legacy `create-checkout`/`checkout-request` bypass R0 admission → R3 before any public exposure. B3 the stale `735df91` app is publicly reachable on the `vercel.app` alias against the migrated DB → R2 (or temporarily enable protection for the production alias). B4 hosted tests T1–T7 not yet run.
+**Blockers:** B1 upload configuration set 2026-09-30; open until hosted upload passes T1 after R2. B2 **closed** 2026-09-30 (R3 verified). B3 the stale `735df91` app is publicly reachable on the `vercel.app` alias against the migrated DB → R2 (or temporarily enable protection for the production alias). B4 hosted tests T1–T7 not yet run.
 
-**Owner decisions (go/no-go package):** G1 authorize R1–R3 (non-email) now; G2 retention of the 10:17 UTC pre-push state: the daily backup rotates out around 2026-10-08, and the rehearsal copy contains the cascade-deleted request; choose keep-rehearsal-until-then, an owner-held encrypted dump, or accept loss; then authorize deleting `mercurius-r0-rehearsal` (`bykrrbasvjpuljnrkwdo`); G3 confirm the cascade-deleted request belonged to test data; G4 authorize R4–R8 after R1–R3 pass; G5 approve default Supabase confirmation/recovery wording or request branded templates; G6 after T1–T7 pass, authorize D1–D3 with DEC-2026-025 restated; G7 Codex review of the light-only diff and the two homepage contrast changes.
+**Owner decisions (go/no-go package):** G1 R1 and R3 authorized and done 2026-09-30; R2 (deploy, then promote) still needs authorization; G2 retention of the 10:17 UTC pre-push state: the daily backup rotates out around 2026-10-08, and the rehearsal copy contains the cascade-deleted request; choose keep-rehearsal-until-then, an owner-held encrypted dump, or accept loss; then authorize deleting `mercurius-r0-rehearsal` (`bykrrbasvjpuljnrkwdo`); G3 confirm the cascade-deleted request belonged to test data; G4 authorize R4–R8 after R1–R3 pass; G5 approve default Supabase confirmation/recovery wording or request branded templates; G6 after T1–T7 pass, authorize D1–D3 with DEC-2026-025 restated; G7 Codex review of the light-only diff and the two homepage contrast changes.
 
 ## Pre-rollout baseline (read-only, 2026-09-30, before the production push)
 

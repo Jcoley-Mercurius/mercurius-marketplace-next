@@ -1,5 +1,13 @@
 # Agent handoff — 2026-09-30
 
+## R0.5 step 2: upload configuration and legacy checkout closure (TRACE-105), 2026-09-30
+
+- Release `759113496fd37ebfefb5e1da42ba640580ab7bdb` (PR #75; CI 36782043110), used from a clean detached worktree. Docs branch `codex/r0-rollout-step2`. [Results](../../governance/R0-RELEASE-CANDIDATE.md#step-2-results-2026-09-30-upload-configuration-and-checkout-closure).
+- R1 upload configuration **PASS (config only)**: `VENDOR_UPLOAD_HMAC_SECRET` (64 chars, sensitive) and `VENDOR_UPLOAD_HMAC_VERSION=v1` added to Vercel `mercurius-marketplace-next` Production only. Other Vercel values not re-entered. Hosted upload unproven until T1 after R2 (B1 open until then).
+- R3 checkout closure **PASS**: `create-checkout` v12, `checkout-request` v17, source byte-identical to the release; `MERCURIUS_MONEY_MODE` absent; temporary signed-in synthetic user → 6/6 `MONEY_NOT_ACTIVATED`; 0 checkout attempts, invoice/request counts unchanged; test user and its loyalty row removed. B2 closed.
+- Unchanged: Vercel deployment `735df91` (not deployed/promoted), domains, DNS, Auth, SMTP, `vendor-invite`, invitations (0 sent), transactions disabled.
+- Next: owner authorizes R2 (deploy `7591134` with `--prod --skip-domain`, verify, then promote), which also resolves B3; then T1 upload proof.
+
 ## R0.5 recruiting release: production verified, light-only built, hosted rollout prepared (TRACE-105)
 
 - Base `main` `5df97a2`; branch `codex/r0-light-only-release`; code commit `cfdcf49` (light-only, DEC-2026-026; two homepage light-contrast fixes). Final release SHA = the reviewed merge into `main`; record it before R1. [Report](../../governance/R0-RELEASE-CANDIDATE.md): verified state, rollout package R1–R9, tests T1–T7, DNS/cutover D1–D3, running checklist, go/no-go G1–G7.
