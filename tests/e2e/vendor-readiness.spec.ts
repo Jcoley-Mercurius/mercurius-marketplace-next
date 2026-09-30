@@ -119,3 +119,14 @@ test("non-admin sessions cannot open recruiting readiness", async ({ page }) => 
   await open(page, "vendor", "/admin/recruiting");
   await expect(page.getByRole("heading", { name: "Recruiting readiness" })).toHaveCount(0);
 });
+
+// TRACE-105: existing providers reaching their profile through a confirmed contact.
+test("operator sees existing-provider access without delivery or approval claims", async ({ page }) => {
+  await open(page, "admin", "/admin/recruiting");
+  const card = page.locator('[data-slot="card"]').filter({ has: page.getByText("Existing provider access", { exact: true }) });
+  await expect(page.getByText("Existing provider access", { exact: true })).toBeVisible();
+  await expect(page.getByText("Synthetic Legacy Services")).toBeVisible();
+  await expect(page.getByText("Accepted — review and bind")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open profile" })).toHaveAttribute("href", "/admin/vendors/00000000-0000-4000-8000-000000000071");
+  await expect(card.getByRole("listitem").filter({ hasText: /delivered|approved/i })).toHaveCount(0);
+});

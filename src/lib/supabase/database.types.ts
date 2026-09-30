@@ -7095,18 +7095,38 @@ export type Database = {
         Returns: Json
       }
       pricing_server_now: { Args: never; Returns: string }
+      r0_accept_provider_access: { Args: { p_attempt: string }; Returns: Json }
       r0_acknowledge_application_notification: {
         Args: { p_application: string; p_reason: string }
         Returns: Json
       }
       r0_application_notification_overview: { Args: never; Returns: Json }
+      r0_bind_provider_access: {
+        Args: {
+          p_attempt: string
+          p_contractor: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       r0_claim_application_notification: {
         Args: { p_application: string; p_mode: string }
+        Returns: Json
+      }
+      r0_claim_provider_access: { Args: { p_attempt: string }; Returns: Json }
+      r0_close_provider_access: {
+        Args: { p_attempt: string; p_reason: string; p_status: string }
         Returns: Json
       }
       r0_email_allowed: {
         Args: { p_class: string; p_email: string }
         Returns: boolean
+      }
+      r0_excluded_provider_ids: { Args: never; Returns: string[] }
+      r0_finish_provider_access: {
+        Args: { p_actor?: string; p_attempt: string; p_auth_user?: string }
+        Returns: undefined
       }
       r0_interest_retention_status: { Args: never; Returns: Json }
       r0_invitation_attention: { Args: never; Returns: Json }
@@ -7128,6 +7148,21 @@ export type Database = {
       r0_my_interest: { Args: never; Returns: Json }
       r0_my_provider_listing: { Args: never; Returns: Json }
       r0_my_trial_access: { Args: never; Returns: Json }
+      r0_prepare_provider_access: {
+        Args: {
+          p_contractor: string
+          p_existing_account?: string
+          p_expires: string
+          p_key: string
+        }
+        Returns: Json
+      }
+      r0_provider_access_overview: {
+        Args: { p_contractor: string }
+        Returns: Json
+      }
+      r0_provider_access_queue: { Args: never; Returns: Json }
+      r0_provider_access_status: { Args: { p_attempt: string }; Returns: Json }
       r0_provider_listable: { Args: { p_contractor: string }; Returns: boolean }
       r0_public_listing_inventory: { Args: never; Returns: Json }
       r0_public_providers: {
@@ -7163,8 +7198,31 @@ export type Database = {
         Args: { p_email: string; p_reason: string; p_scope: string }
         Returns: undefined
       }
+      r0_record_provider_contact: {
+        Args: {
+          p_confirmation: string
+          p_contractor: string
+          p_email: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       r0_record_r2_opening: {
         Args: { p_occurred_at: string; p_reason: string }
+        Returns: Json
+      }
+      r0_refuse_provider_access: {
+        Args: {
+          p_actor: string
+          p_attempt: string
+          p_code: string
+          p_existing_account?: string
+        }
+        Returns: undefined
+      }
+      r0_release_provider_access: {
+        Args: { p_contractor: string; p_key: string; p_reason: string }
         Returns: Json
       }
       r0_request_application_notification_resend: {

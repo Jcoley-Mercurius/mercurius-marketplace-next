@@ -57,6 +57,13 @@ export function VendorListingStatus({ listing, unavailable }: { listing: MyProvi
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        {listing.setup_access && (
+          <p role="status" className="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-6 text-foreground">
+            Your account is connected to your existing business profile so you can set it up. Mercurius will contact
+            you about compliance review; profile setup does not approve your business, list it publicly or make it
+            eligible for work.
+          </p>
+        )}
         {listing.held && (
           <p role="status" className="rounded-lg border border-status-warning bg-status-warning-bg p-3 text-sm text-status-warning">
             Mercurius is reviewing this listing. Contact us if you have questions.

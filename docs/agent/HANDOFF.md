@@ -1,5 +1,12 @@
 # Agent handoff — 2026-09-30
 
+## R0.5 release candidate: existing-provider access implemented (TRACE-105); for Codex review
+
+- Base: `main` `a88da4f` (R0.4 #72 merged). Branch `codex/r0-release-candidate`. Migration `20260930001000` (owner-confirmed contacts, access invitations with TRACE-063 protections, reviewed binding with vendor role per DEC-2026-024, legacy eligibility closed for access-managed providers). [Report](../../governance/R0-RELEASE-CANDIDATE.md).
+- Evidence: SQL 072 128/128; full SQL 3710 + 071 update; local e2e 31/31 (`scripts/r0-existing-provider-access.mjs`); Edge 20/20; unit 352/352; browser specs 40/40; build.
+- Hosted: nothing changed. Prepared: rehearsal by restoring today's backup to a new project (owner approval for the charge), then the rollout steps in the report. Resend DNS correct; Resend domain status and live send need a locally supplied key.
+- Owner: Aristotle disposition, `@mercurius.com` admins, DEC-2026-025 exception at go/no-go. Real invitations sent: 0.
+
 ## R0.4 vendor/operator readiness implemented (TRACE-104); for Codex review
 
 - Base: `main` `80a9aa6` (R0.1 #69, R0.2 #70 merged) merged into R0.3 head `3b2c7f6` (#71 open) as `ac8a502`; branch `codex/r0-vendor-readiness`. PR to `main` shows R0.3's diff until #71 merges.

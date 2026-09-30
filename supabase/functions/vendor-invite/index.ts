@@ -25,6 +25,30 @@ Deno.serve(async (request) => {
     return json({ error: "Invalid request" }, 400);
   }
   const url = Deno.env.get("SUPABASE_URL") ?? "";
+  // TRACE-105: an existing provider with no application reaches its profile through an
+  // owner-confirmed contact. Same transport and protections, separate evidence tables.
+  if (body.source !== undefined && body.source !== "existing_provider")
+    return json({ error: "Invalid request" }, 400);
+  const existing = body.source === "existing_provider";
+  const rpc = existing
+    ? {
+        prepare: "r0_prepare_provider_access",
+        claim: "r0_claim_provider_access",
+        finish: "r0_finish_provider_access",
+        refuse: "r0_refuse_provider_access",
+        accept: "r0_accept_provider_access",
+        close: "r0_close_provider_access",
+        status: "r0_provider_access_status",
+      }
+    : {
+        prepare: "vendor_prepare_invitation",
+        claim: "vendor_claim_invitation",
+        finish: "vendor_finish_invitation",
+        refuse: "vendor_refuse_invitation",
+        accept: "vendor_accept_invitation",
+        close: "vendor_close_dispatched_invitation",
+        status: "vendor_invitation_status",
+      };
   // Dispatch is off unless an explicit, pinned delivery mode matches this environment.
   const site = invitationDeliverySite((name) => Deno.env.get(name));
   if (body.action === "send" && !site)
@@ -46,7 +70,7 @@ Deno.serve(async (request) => {
     if (body.action === "accept") {
       if (!uuid(body.attempt_id))
         return json({ error: "attempt_id required" }, 400);
-      const result = await client.rpc("vendor_accept_invitation", {
+      const result = await client.rpc(rpc.accept, {
         p_attempt: body.attempt_id,
       });
       return result.error
@@ -67,7 +91,25 @@ Deno.serve(async (request) => {
         !Number.isFinite(Date.parse(body.expires_at))
       )
         return json({ error: "Preparation fields required" }, 400);
-      const result = await client.rpc("vendor_prepare_invitation", {
+      if (existing) {
+        // An existing confirmed account is named by exact ID, never looked up by address.
+        if (body.existing_account_id !== undefined && !uuid(body.existing_account_id))
+          return json({ error: "Preparation fields required" }, 400);
+        const result = await client.rpc(rpc.prepare, {
+          p_contractor: body.contractor_id,
+          p_key: body.business_key,
+          p_expires: body.expires_at,
+          p_existing_account: body.existing_account_id ?? null,
+        });
+        if (result.error) return json({ error: "INVITATION_NOT_READY" }, 409);
+        return json({
+          attempt_id: result.data?.attempt_id,
+          mode: result.data?.mode,
+          status: result.data?.status,
+          emailed: false,
+        });
+      }
+      const result = await client.rpc(rpc.prepare, {
         p_contractor: body.contractor_id,
         p_key: body.business_key,
         p_expires: body.expires_at,
@@ -102,7 +144,7 @@ Deno.serve(async (request) => {
         !body.reason.trim()
       )
         return json({ error: "Closure status and reason required" }, 400);
-      const result = await client.rpc("vendor_close_dispatched_invitation", {
+      const result = await client.rpc(rpc.close, {
         p_attempt: attempt,
         p_status: body.status,
         p_reason: body.reason,
@@ -112,7 +154,7 @@ Deno.serve(async (request) => {
         : json({ status: body.status });
     }
     if (body.action === "status") {
-      const result = await client.rpc("vendor_invitation_status", {
+      const result = await client.rpc(rpc.status, {
         p_attempt: attempt,
       });
       return result.error
@@ -125,7 +167,7 @@ Deno.serve(async (request) => {
       const readback = await admin.auth.admin.getUserById(body.auth_user_id);
       if (readback.error || !readback.data.user)
         return json({ error: "AUTH_READBACK_REQUIRED" }, 409);
-      const result = await admin.rpc("vendor_finish_invitation", {
+      const result = await admin.rpc(rpc.finish, {
         p_attempt: attempt,
         p_auth_user: readback.data.user.id,
         p_actor: identity.data.user.id,
@@ -142,7 +184,7 @@ Deno.serve(async (request) => {
       const readback = await admin.auth.admin.getUserById(body.auth_user_id);
       if (readback.error || !readback.data.user)
         return json({ error: "AUTH_READBACK_REQUIRED" }, 409);
-      const result = await admin.rpc("vendor_refuse_invitation", {
+      const result = await admin.rpc(rpc.refuse, {
         p_attempt: attempt,
         p_code: "email_exists",
         p_actor: identity.data.user.id,
@@ -154,7 +196,7 @@ Deno.serve(async (request) => {
     }
     if (!site)
       return json({ error: "INVITATION_DELIVERY_DISABLED", emailed: false }, 503);
-    const claim = await client.rpc("vendor_claim_invitation", {
+    const claim = await client.rpc(rpc.claim, {
       p_attempt: attempt,
     });
     if (claim.error) return json({ error: "INVITATION_NOT_READY" }, 409);
@@ -172,7 +214,7 @@ Deno.serve(async (request) => {
     // retry this call, even after a timeout or a failed receipt write.
     const markUnknown = async () => {
       try {
-        await admin.rpc("vendor_finish_invitation", {
+        await admin.rpc(rpc.finish, {
           p_attempt: attempt,
           p_auth_user: null,
           p_actor: identity.data.user.id,
@@ -191,7 +233,15 @@ Deno.serve(async (request) => {
         claim.data.recipient_email,
         {
           redirectTo: redirect.toString(),
-          data: { invitation_attempt: attempt },
+          // The reviewed template chooses its wording by kind; the business name
+          // tells the owner which existing profile the access is for.
+          data: existing
+            ? {
+                invitation_attempt: attempt,
+                invitation_kind: "existing_provider",
+                business_name: String(claim.data.business_name ?? ""),
+              }
+            : { invitation_attempt: attempt },
         },
       );
       // Auth's structured refusal of an address that already holds a confirmed
@@ -201,7 +251,7 @@ Deno.serve(async (request) => {
         invited.error?.status === 422 &&
         invited.error.code === "email_exists"
       ) {
-        const refusal = await admin.rpc("vendor_refuse_invitation", {
+        const refusal = await admin.rpc(rpc.refuse, {
           p_attempt: attempt,
           p_code: "email_exists",
           p_actor: identity.data.user.id,
@@ -229,7 +279,7 @@ Deno.serve(async (request) => {
           409,
         );
       }
-      const receipt = await admin.rpc("vendor_finish_invitation", {
+      const receipt = await admin.rpc(rpc.finish, {
         p_attempt: attempt,
         p_auth_user: invited.data.user.id,
         p_actor: identity.data.user.id,

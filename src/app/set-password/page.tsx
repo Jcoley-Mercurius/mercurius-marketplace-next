@@ -220,9 +220,14 @@ export default function SetPasswordPage() {
         console.warn("Password updated, but roles could not be loaded", error);
       }
 
-      const invitation = new URLSearchParams(window.location.search).get("invitation");
+      const params = new URLSearchParams(window.location.search);
+      const invitation = params.get("invitation");
       if (invitation && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(invitation)) {
-        destination = `/invitation?attempt=${invitation}`;
+        // TRACE-105: existing-provider access is accepted through its own receipt.
+        destination =
+          params.get("kind") === "existing_provider"
+            ? `/invitation?attempt=${invitation}&kind=existing_provider`
+            : `/invitation?attempt=${invitation}`;
       }
 
       setPageState("success");

@@ -551,4 +551,70 @@ if (name === "vendor-invite") {
     response=await request({action:"refuse",attempt_id:attempt,auth_user_id:recipient},{Authorization:"Bearer synthetic-user-token"});
     equal(response.status,409);equal(await response.json(),{error:"INVITATION_REFUSAL_NOT_PROVEN"});
   });
+  // TRACE-105: existing-provider access uses the same transport with its own evidence functions.
+  Deno.test("existing-provider access: hosted send claims, invites with the reviewed kind and records the receipt", async () => {
+    await withDelivery(hosted,async()=>{
+      calls=[]; unexpected=[]; const order:string[]=[];
+      route=(url,init)=>{
+        const auth=operatorRoute(url); if(auth)return auth;
+        if(url.pathname==="/rest/v1/rpc/r0_claim_provider_access"){order.push("claim");return json({claimed:true,recipient_email:"owner@example.invalid",business_name:"Synthetic Legacy Co"});}
+        if(url.pathname==="/auth/v1/invite"){
+          order.push("invite"); const sent=JSON.parse(String(init?.body));
+          equal(sent.email,"owner@example.invalid");
+          equal(sent.data,{invitation_attempt:attempt,invitation_kind:"existing_provider",business_name:"Synthetic Legacy Co"});
+          equal(url.searchParams.get("redirect_to"),`https://app.example.test/set-password?invitation=${attempt}`);
+          return json({user:{id:recipient}});
+        }
+        if(url.pathname==="/rest/v1/rpc/r0_finish_provider_access"){order.push("receipt");equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_auth_user:recipient,p_actor:operator});return json(null);}
+      };
+      const response=await request({action:"send",source:"existing_provider",attempt_id:attempt,email:"attacker@example.invalid"},{Authorization:"Bearer synthetic-user-token"});
+      equal(response.status,200); equal(await response.json(),{attempt_id:attempt,status:"provider_accepted",delivered:false,activated:false});
+      equal(order,["claim","invite","receipt"]);
+      equal(calls.some(call=>call.includes("/rpc/vendor_")),false);
+    });
+  });
+  Deno.test("existing-provider access: an address that already holds an account is recorded as refused", async () => {
+    await withDelivery(hosted,async()=>{
+      calls=[]; unexpected=[]; const order:string[]=[];
+      route=(url,init)=>{
+        const auth=operatorRoute(url); if(auth)return auth;
+        if(url.pathname==="/rest/v1/rpc/r0_claim_provider_access")return json({claimed:true,recipient_email:"owner@example.invalid",business_name:"Synthetic Legacy Co"});
+        if(url.pathname==="/auth/v1/invite")return json({code:422,error_code:"email_exists",msg:"synthetic"},422);
+        if(url.pathname==="/rest/v1/rpc/r0_refuse_provider_access"){order.push("refuse");equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_code:"email_exists",p_actor:operator});return json(null);}
+        if(url.pathname==="/rest/v1/rpc/r0_finish_provider_access"){order.push("finish");return json(null);}
+      };
+      const response=await request({action:"send",source:"existing_provider",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+      equal(response.status,409); equal(await response.json(),{error:"INVITATION_RECIPIENT_HAS_ACCOUNT",status:"failed",dispatched:false});
+      equal(order,["refuse"]);
+    });
+  });
+  Deno.test("existing-provider access: preparation names an existing account only by exact ID", async () => {
+    calls=[]; unexpected=[]; const prepared:unknown[]=[];
+    route=(url,init)=>{
+      const auth=operatorRoute(url); if(auth)return auth;
+      if(url.pathname==="/rest/v1/rpc/r0_prepare_provider_access"){prepared.push(JSON.parse(String(init?.body)));return json({attempt_id:attempt,mode:"existing_account",status:"prepared",created:true});}
+    };
+    const expires=new Date(Date.now()+86400000).toISOString();
+    let response=await request({action:"prepare",source:"existing_provider",contractor_id:attempt,business_key:"k1",expires_at:expires,existing_account_id:"owner@example.invalid"},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,400); await response.body?.cancel();
+    response=await request({action:"prepare",source:"existing_provider",contractor_id:attempt,business_key:"k1",expires_at:expires,existing_account_id:recipient},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,200); equal(await response.json(),{attempt_id:attempt,mode:"existing_account",status:"prepared",emailed:false});
+    equal(prepared,[{p_contractor:attempt,p_key:"k1",p_expires:expires,p_existing_account:recipient}]);
+    equal(calls.some(call=>call.includes("/auth/v1/invite")),false);
+  });
+  Deno.test("existing-provider access: the recipient's acceptance routes to the access receipt", async () => {
+    calls=[]; unexpected=[]; let accepted=false;
+    route=(url)=>{
+      if(url.pathname==="/auth/v1/user")return json({id:recipient});
+      if(url.pathname==="/rest/v1/rpc/r0_accept_provider_access"){accepted=true;return json({status:"accepted",recorded:true});}
+    };
+    const response=await request({action:"accept",source:"existing_provider",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,200); equal(await response.json(),{status:"accepted",activated:false}); equal(accepted,true);
+    equal(calls.some(call=>call.includes("/rpc/vendor_accept_invitation")||call.includes("/rpc/has_role")),false);
+  });
+  Deno.test("existing-provider access: an unknown source is refused before any call", async () => {
+    calls=[]; unexpected=[]; route=undefined;
+    const response=await request({action:"send",source:"legacy",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,400); await response.body?.cancel(); equal(calls,[]);
+  });
 }
