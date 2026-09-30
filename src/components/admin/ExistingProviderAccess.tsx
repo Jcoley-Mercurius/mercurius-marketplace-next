@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -108,8 +108,12 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
   const [days, setDays] = useState("7");
   const [existingAccount, setExistingAccount] = useState("");
   const [reconcileAccount, setReconcileAccount] = useState("");
-  // One nonce per opened provider so a retried command replays instead of repeating.
+  // Binding is unique to an attempt. Repeatable commands retain their own keys
+  // until readback confirms success, including the exact prepare expiry.
   const [nonce] = useState(() => crypto.randomUUID());
+  const contactKey = useRef<string | null>(null);
+  const releaseKey = useRef<string | null>(null);
+  const preparation = useRef<{ key: string; expires: string } | null>(null);
 
   const read = useCallback(async () => {
     const { data, error } = await createClient().rpc("r0_provider_access_overview", { p_contractor: contractorId });
@@ -232,11 +236,11 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
                       p_email: trimmedEmail,
                       p_confirmation: confirmation.trim(),
                       p_reason: reason,
-                      p_key: `provider-contact:${nonce}:${trimmedEmail.toLowerCase()}`,
+                      p_key: (contactKey.current ??= `provider-contact:${crypto.randomUUID()}`),
                     }),
                     (next) => next.contact?.email === trimmedEmail.toLowerCase(),
                     "Contact recorded",
-                  )
+                  ).then(() => { contactKey.current = null; })
                 }
               />
             </div>
@@ -258,6 +262,18 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
               {when(attempt.expires_at)}
               {attempt.expired && attempt.live ? " (expired)" : ""}
             </p>
+            {attempt.mode === "existing_account" && attempt.status === "prepared" && attempt.live && !attempt.expired && (
+              <FormField id={`access-url-${contractorId}`} label="Acceptance URL" help="Share this link with the owner to sign in and accept.">
+                {(control) => (
+                  <Input
+                    {...control}
+                    readOnly
+                    value={`${window.location.origin}/invitation?attempt=${encodeURIComponent(attempt.attempt_id)}&kind=existing_provider`}
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                )}
+              </FormField>
+            )}
           </div>
         )}
 
@@ -274,18 +290,21 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
                 variant="outline"
                 disabled={busy || !expiryValid || (!!existingId && !uuidPattern.test(existingId))}
                 onClick={() => {
-                  const expires = new Date(Date.now() + expiryDays * 86_400_000).toISOString();
+                  const operation = preparation.current ??= {
+                    key: `provider-access:${crypto.randomUUID()}`,
+                    expires: new Date(Date.now() + expiryDays * 86_400_000).toISOString(),
+                  };
                   void run(
                     edge({
                       action: "prepare",
                       contractor_id: contractorId,
-                      business_key: `provider-access:${nonce}:${existingId || "new"}`,
-                      expires_at: expires,
+                      business_key: operation.key,
+                      expires_at: operation.expires,
                       ...(existingId ? { existing_account_id: existingId } : {}),
                     }),
                     (next) => next.attempt?.live === true,
                     "Access prepared. Nothing has been sent.",
-                  ).catch(() => undefined);
+                  ).then(() => { preparation.current = null; }).catch(() => undefined);
                 }}
               >
                 Prepare access
@@ -376,10 +395,10 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
             disabled={busy}
             onConfirm={(reason) =>
               run(
-                rpc("r0_release_provider_access", { p_contractor: contractorId, p_reason: reason, p_key: `provider-access-release:${nonce}:${overview.linked_user_id}` }),
+                rpc("r0_release_provider_access", { p_contractor: contractorId, p_reason: reason, p_key: (releaseKey.current ??= `provider-access-release:${crypto.randomUUID()}`) }),
                 (next) => !next.account_linked,
                 "Binding released.",
-              )
+              ).then(() => { releaseKey.current = null; })
             }
           />
         )}

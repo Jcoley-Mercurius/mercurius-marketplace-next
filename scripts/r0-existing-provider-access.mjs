@@ -109,8 +109,8 @@ const queue = await rpc("r0_provider_access_queue", {}, vendor);
 check("the vendor cannot read other providers' access records", queue.status >= 400);
 const listed = await http(`/rest/v1/rpc/r0_public_providers`, { body: { p_contractor: contractor } });
 check("the provider is not in the public directory", Array.isArray(listed.data) && listed.data.length === 0);
-const checkout = await rpc("money_prepare_checkout", { p_request: crypto.randomUUID(), p_key: `e2e-${run}` }, vendor);
-check("checkout stays refused for this account", checkout.status >= 400);
+const checkout = await rpc("money_prepare_checkout", { p_snapshot: crypto.randomUUID(), p_mode: "full" }, vendor);
+check("checkout stays refused for this account", checkout.status === 403 && checkout.data?.code === "42501" && checkout.data?.message === "Homeowner authorization required");
 
 // Existing-account handling: a new-account invitation to a registered address.
 await http("/auth/v1/admin/users", { key: SERVICE, body: { email: otherEmail, password: `Other-${run}-pass!`, email_confirm: true } });

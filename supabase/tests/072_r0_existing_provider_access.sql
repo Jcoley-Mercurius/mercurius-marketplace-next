@@ -219,8 +219,8 @@ select throws_ok($$select pg_temp.user(2,'select to_jsonb(public.vendor_accept_j
  'P0001','No open offer is available to accept','the vendor has no job to accept');
 select throws_ok($$select pg_temp.user(2,'select public.r0_provider_access_queue()')$$,'42501','Onboarding operator required',
  'the vendor cannot read other providers'' access records');
-select throws_ok($$select pg_temp.user(2,'select to_jsonb(public.money_operator_request_ach(gen_random_uuid(),''k'',''r''))')$$,
- null,null,'the vendor cannot request an ACH payout');
+select throws_ok($$select pg_temp.user(2,'select to_jsonb(public.money_operator_request_ach(current_date,array[gen_random_uuid()],''synthetic-bank-ref'',''Authorization test'',''k''))')$$,
+ '42501','Restricted finance authority required','the vendor cannot request an ACH payout');
 
 -- Refusal and recovery (provider R: a confirmed account already exists at the contact) ----
 select is(pg_temp.contact('e7210000-0000-4000-8000-00000000000f','owner-r@example.test','c-r')->>'recorded','true','provider R contact recorded');
