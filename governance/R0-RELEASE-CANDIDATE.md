@@ -123,6 +123,7 @@ The owner's `@mercuriusmarketplace.com` account is confirmed and linked to Arist
 5. Expiry bound of 30 days; the Auth link itself is 3 hours.
 6. Profile business email follows the confirmed contact.
 7. Excluded providers hidden from normal admin lists and featured/smart-pick choices; history lookups keep names.
+8. Existing-account attempts show a plain acceptance link (no token; acceptance still requires signing in as the named account), added by the CodeRabbit review commit `578b36c`. It is not used for the eight real vendors, who have no accounts and receive Auth invitations; confirm whether operators may share it.
 
 ## Open follow-ups
 
