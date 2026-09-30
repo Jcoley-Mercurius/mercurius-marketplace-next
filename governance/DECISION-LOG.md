@@ -47,6 +47,24 @@ Compensating arrangements (not a substitute): MFA and stored recovery codes for 
 
 Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and must be restated there. It does not carry to R1. Two production admin accounts on `@mercurius.com` (domain ownership unconfirmed) are not trusted coverage and stay unchanged until their identities and dependencies are resolved.
 
+**Update 2026-09-30:** Josh confirmed sole-admin coverage under this exception for R0.5. Verified read-only the same day: both `@mercurius.com` accounts have been removed from production (see [R0 release report](R0-RELEASE-CANDIDATE.md#production-state-verified-2026-09-30)); the two remaining admin accounts are Josh's.
+
+### DEC-2026-026 — Light-only R0 recruiting launch; dark-mode repair deferred
+
+**Status:** APPROVED owner instruction; temporary exception to the MDS dark-mode requirement. **Date:** 2026-09-30 (America/New_York).
+
+**Decision:** The R0 recruiting release renders light mode only on every public, homeowner, vendor and admin route. The theme control is removed; saved `dark`/`system` preferences and the OS dark preference are ignored (the saved value is not erased); the pre-hydration theme script forces `light`, so no dark first paint; `<meta name="color-scheme" content="light">` and `color-scheme: light` keep native controls light. The `.dark` tokens and `dark:` styles stay in the codebase unchanged. One constant, `LIGHT_ONLY_LAUNCH` in `src/components/theme/themeMode.ts`, holds the decision.
+
+**Context:** Josh directed a light-only recruiting launch with dark mode repaired later. Existing browser evidence records dark-theme contrast failures (for example the invitation queue's fixed light palette). The MDS blueprint and roadmap (Phase 2 gate, R0.3) require light/dark support, so this is a recorded, time-bound deviation, not a change to the MDS.
+
+**Alternatives considered:** Fix dark mode first (delays recruiting); default to light but keep the toggle (exposes the known dark defects); remove dark styles (loses work the repair needs).
+
+**MPS impact:** None. **MDS impact:** Temporary exception to theme support; light-mode contrast remains a hard gate (two homeowner-page light-contrast failures found by the new check were fixed with existing tokens). **MTS impact:** None beyond the client theme provider. **Data/payment/security impact:** None.
+
+**Required evidence:** `tests/e2e/light-only.spec.ts` (fresh, saved dark, saved system with OS dark; 320/1440 px; public, homeowner, vendor, admin; navigation/reload; mobile menu; form errors) and the hosted light-only check in TRACE-105.
+
+**Follow-up (TRACE-106):** Dark-mode repair release — fix dark contrast defects, re-run light/dark axe, `@visual` and manual checks, then set `LIGHT_ONLY_LAUNCH` to `false`. Required before any release that shows a theme choice, and before the R1 gate unless Josh records otherwise.
+
 ### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.
