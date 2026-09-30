@@ -14,7 +14,8 @@ async function catalog(page: Page, theme = "light", width = 1440) {
   await page.addInitScript(value => { if (!localStorage.getItem("theme")) localStorage.setItem("theme", value); }, theme);
   await page.goto("/mds");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Component foundation");
-  await expect(page.locator("main").getByRole("button", { name: /Use .* mode/ })).toBeEnabled();
+  // Light-only launch (DEC-2026-026): no theme control; a saved dark preference renders light.
+  await expect(page.locator("main").getByRole("button", { name: /Use .* mode/ })).toHaveCount(0);
   await page.evaluate(() => document.fonts.ready);
 }
 
@@ -134,7 +135,7 @@ test("confirmation failure stays open, announces failure and permits cancel", as
   await expect(dialog).toBeHidden();
 });
 
-test("tabs use arrow navigation; theme persists across reload", async ({ page }) => {
+test("tabs use arrow navigation; light-only theme holds across reload", async ({ page }) => {
   await catalog(page);
   await page.getByRole("tab", { name: "Overview" }).focus();
   await page.keyboard.press("ArrowRight");
@@ -144,11 +145,11 @@ test("tabs use arrow navigation; theme persists across reload", async ({ page })
   const listBox = await page.getByRole("tablist").boundingBox();
   const panelBox = await page.getByRole("tabpanel", { name: "Details" }).boundingBox();
   expect(panelBox!.y).toBeGreaterThanOrEqual(listBox!.y + listBox!.height);
-  await page.locator("main").getByRole("button", { name: "Use dark mode" }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-  // goto instead of catalog(): do not overwrite the chosen localStorage value.
+  await page.evaluate(() => localStorage.setItem("theme", "dark"));
+  // goto instead of catalog(): do not overwrite the saved localStorage value.
   await page.goto("/mds");
-  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator("html")).toHaveClass(/light/);
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
 });
 
 test("200% content zoom preserves controls and visible keyboard focus", async ({ page }) => {

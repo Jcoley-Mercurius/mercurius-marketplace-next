@@ -77,7 +77,7 @@ export function FinalCTASection() {
               href="/vendors/apply"
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "h-11 w-full gap-2 rounded-md bg-coral px-8 text-coral-foreground shadow-lg shadow-coral/20 hover:bg-coral-hover active:bg-coral-dark sm:w-auto",
+                "h-11 w-full gap-2 rounded-md bg-coral-dark px-8 text-coral-foreground shadow-lg shadow-coral/20 hover:bg-coral-dark/90 active:bg-coral-dark sm:w-auto",
               )}
             >
               Apply as Provider <ArrowRight className="ml-2 h-5 w-5" />

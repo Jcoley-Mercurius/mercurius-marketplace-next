@@ -92,9 +92,9 @@ export function SpotlightProviders() {
         <div className="mb-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-coral/15"><Award className="h-5 w-5 text-coral" /></div>
-            <div><h2 className="text-2xl font-bold leading-tight">Spotlight Providers</h2><p className="mt-0.5 text-sm text-muted-foreground">Approved providers selected by Mercurius</p></div>
+            <div><h2 className="text-2xl font-bold leading-tight">Spotlight Providers</h2><p className="mt-0.5 text-sm text-slate-dark">Approved providers selected by Mercurius</p></div>
           </div>
-          <Link href="/providers" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 text-muted-foreground hover:text-foreground")}>View all<ArrowRight /></Link>
+          <Link href="/providers" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 text-slate-dark hover:text-foreground")}>View all<ArrowRight /></Link>
         </div>
 
         {mode === "loading" && <div className="grid gap-6 md:grid-cols-2">{Array.from({ length: 2 }, (_, index) => <div key={index} className="h-72 animate-pulse rounded-2xl border border-border bg-muted/50" />)}</div>}
