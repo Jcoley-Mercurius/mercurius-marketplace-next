@@ -1,5 +1,11 @@
 # Agent handoff — 2026-09-29
 
+## R0.2 main integration — 2026-09-29
+
+- Branch `codex/r0-interest-main` = `codex/r0-admission-main` + merge of #67 head `2c2e697` (R0.2 incl. review fix `219e85b`) + evidence docs. No R0.2 source change; migration `20260929001000` applies after 6.3 and R0.1.
+- Throwaway stack 5652x after blank reset: full SQL 3491/3491 (60 files), 069 164/164; security advisor no issues; interest concurrency PASS (first local run); 6.3 matching 11/11; request 32/32; Phase 5 concurrency PASS; unit 320/320; typecheck/lint/secrets; build per [report](../../governance/R0-INTEREST.md#main-integration--2026-09-29-trace-102).
+- Merge order: experience docs PR → R0.1 PR → R0.2 PR, each to `main` with merge commits. Next: Codex review. Open: CI, route/Edge/browser integration, email, double opt-in, expansion retention, hosted. R0.3 not started.
+
 ## R0.1 main integration — 2026-09-29
 
 - PRs #66/#67 merged into already-merged stack branches, so R0.1/R0.2 never reached `main`. Branch `codex/r0-admission-main` = `main` `9cc4295` + experience docs `8fcf303` + merge of #66 head `7e582e6` + integration fix. R0.1 checkout migration renamed `20260929000500` (collided with 6.3's `20260929000000`); request script fixture admits the provider-homeowner and `tree-trimming`.
@@ -10,6 +16,12 @@
 
 - On branch `codex/r0-experience` from `9cc4295`, Josh's approved 2026-09-28 [homeowner experience](../../governance/HOMEOWNER-EARLY-ACCESS-EXPERIENCE.md) is in governance with [route/state reconciliation](../../governance/HOMEOWNER-EARLY-ACCESS-RECONCILIATION.md), TRACE-100/103 links, and MDS/roadmap references. Documentation only; Phase 6 branch and code remain untouched.
 - Next bounded implementation remains R0.1 / TRACE-101 default-closed request and checkout authorization, before R0.2 interest storage and R0.3 public route work. External activation remains gated.
+
+## R0.2 local checkpoint — 2026-09-28
+
+- Branch `codex/r0-interest` stacked on R0.1 `5e31d55` (which fixes an `e7ccb07` regression that refused inactive/waitlist cells as uninvited; SQL 063 65/65, 068 27/27, full 3270/3270). R0.1 CI failures were public.ecr.aws image-pull rate limits, not code.
+- R0.2/TRACE-102: private interest/consent/suppression/retention records and service-key, verified-account and operator commands; three public routes. Evidence and open decisions: [R0-INTEREST.md](../../governance/R0-INTEREST.md). Host memory was exhausted, so tests ran in rolled-back transactions on the existing R0 stack (5642x), which is unchanged.
+- Open: companion early-access experience artifact (requested from owner), blank-reset replay, advisors, CI, concurrency/route integration, email delivery, double opt-in and expansion-retention decisions. No external action.
 
 ## R0.1 local checkpoint — 2026-09-28
 
