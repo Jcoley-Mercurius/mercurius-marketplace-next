@@ -8,7 +8,7 @@
 
 | Area | Found | Consequence |
 |---|---|---|
-| Hosted migrations | History ends `20260731172714`; 95 local migrations pending (`20260808120000` … `20260930001000`) | Whole rebuilt schema absent in production; rehearsal required |
+| Hosted migrations | History ends `20260731172714`; 95 local migrations pending (`20260808120000` … `20260930002000`, including this slice's two) | Rehearsed below: 14 already present outside the history; 81 apply cleanly |
 | Hosted functions | `vendor-invite` v11 (original deploy); no `MERCURIUS_INVITATION_*` secrets | Current function and pins must be deployed |
 | Hosted Auth | Site URL `http://localhost:3000`; empty redirect allow-list; no custom SMTP (built-in sender, 2 emails/hour); link lifetime 3600 s; default invite subject | All R0 Auth settings still to apply |
 | Backups | Pro plan, Micro compute; daily physical backups, 8 retained, latest 2026-09-30 10:17 UTC; PITR off | Restore point exists; rehearsal can restore it to a new project |
@@ -61,12 +61,34 @@ Production admin accounts: the owner's `@mercuriusmarketplace.com` account (also
 
 DNS for Resend on `mercuriusmarketplace.com` is correct (above). Not yet proven: Resend shows the domain verified, the Vercel `RESEND_*` values work, and mail reaches the inbox. The stored Vercel values are sensitive and cannot be read back. Required: a Resend API key supplied locally (git-ignored `.env.resend`) for a read-only domain check and one test send to the owner's mailbox; the same key (or a dedicated one) is the Supabase SMTP password.
 
-## Rehearsal recommendation
+## Rehearsal (performed 2026-09-30 on project `mercurius-r0-rehearsal`, restored from the 2026-09-30 10:17 UTC backup)
+
+Owner approved the restored copy. The repo's own Supabase link stayed on production; every rehearsal command ran from an isolated working copy linked only to the rehearsal ref, and was checked before each write.
+
+1. **Parity:** the copy matched production row counts (19 contractors, 6 Auth users, 12 requests, 1 invoice, 3 applications, 4 packages, 4 featured) and migration history (83 entries).
+2. **Dry run:** exactly the pending files from `20260808120000` through this slice.
+3. **First push failed on migration 1** (`package_promotions` policy already exists); nothing applied (per-migration transaction).
+4. **Drift inventory:** every table, policy, index and column created by the 14 migrations `20260808120000`–`20260815140000` already exists in production (applied outside the recorded history). Later pending migrations overlap only by `create or replace` functions.
+5. **Repair on the copy:** those 14 recorded as applied (`supabase migration repair --status applied`), then `db push` applied the remaining 80; history then 177/177, nothing pending or remote-only.
+6. **Schema diff** (`supabase db diff --linked`, public/private/storage, migra): no table, column, policy or index difference. 15 function bodies differed; 14 are identical after whitespace normalization (production copies carry CRLF line endings). **One real difference:** `enforce_contractor_update_scope`.
+7. **Security finding (present in production today):** production's live `enforce_contractor_update_scope` tests `current_user <> 'authenticated'`, which is never true inside a SECURITY DEFINER trigger, so it never enforces. Red check on the copy (synthetic vendor, rolled back): a signed-in vendor set its own `is_active` and `payouts_paused`. Forward fix `20260930002000_contractor_update_scope_repair.sql` re-applies the reviewed body from `20260729233955`; after pushing it the same attempt is refused (`Vendors are not allowed to modify`). SQL 072 pins the body and trigger.
+8. **Full SQL suite on the migrated copy** (each file in a transaction forced to abort, so nothing persists): **63 files, 3713 assertions, 1 environment-dependent failure** — 003 #16 expects 2 escalation notifications and saw 6 because escalation notifies every admin and the copy holds production's admins; behavior is correct, the fixture assumes one admin.
+9. **Data after migration:** all counts unchanged; 0 providers listable (all `marketing_enabled=false`); all 19 legacy providers matching-eligible until exclusions and contacts are recorded — record them in the same window (admission is closed, so no request can be matched meanwhile). 3 legacy applications have no version rows and read as untracked (R0.4 D1).
+
+**Production migration action (for owner approval):**
+```
+supabase migration repair --status applied --linked 20260808120000 20260809120000 20260809180000 20260809200000 20260810120000 20260810140000 20260810160000 20260810180000 20260810200000 20260810220000 20260810230000 20260811120000 20260815120000 20260815140000
+supabase db push --linked --dry-run   # expect exactly the 81 files 20260903160000 … 20260930002000
+supabase db push --linked
+```
+The repair writes only the migration history table. Rollback: forward fixes; the restore point is the daily backup taken before the window.
+
+## Rehearsal option comparison
 
 | Option | Production data | Storage objects | Incremental cost |
 |---|---|---|---|
 | Supabase branch | Only with **Include data**, which requires the PITR add-on | Not copied | Branch compute from $0.01344/h (not covered by compute credits) plus the PITR add-on |
-| **Restore backup to a new project (recommended)** | Yes: database, schema, Auth users with hashed passwords, Vault keys, from today's physical backup | Not copied (10 vendor-media files; recreate synthetically) | Micro compute $0.01344/h (≈ $0.32/day; the org's compute credit is already used), disk within the included 8 GB; Supabase shows the estimate before confirming. Delete after the rehearsal: expected under $2 |
+| **Restore backup to a new project (chosen)** | Yes: database, schema, Auth users with hashed passwords, Vault keys, from today's physical backup | Not copied (10 vendor-media files; recreate synthetically) | Micro compute $0.01344/h (≈ $0.32/day; the org's compute credit is already used), disk within the included 8 GB; Supabase shows the estimate before confirming. Delete after the rehearsal: expected under $2 |
 
 Restoring enables all extensions; production has `pg_cron`/`pg_net` but **no cron jobs**, so nothing runs against external services. Auth settings, Edge functions, secrets and Storage are not copied, which keeps the rehearsal from sending mail. Treat the restored copy as production data (no export, no screenshots of customer rows).
 
@@ -76,13 +98,17 @@ Restoring enables all extensions; production has `pg_cron`/`pg_net` but **no cro
 
 1. Rehearsal above; record results here.
 2. Production backup point: the daily physical backup taken before the window (or an on-demand backup), recorded.
-3. `supabase db push --linked --dry-run` → exactly the 95 expected files; then push in a low-traffic window.
+3. Migration history repair for the 14 already-present migrations, then `supabase db push --linked --dry-run` → exactly the 81 files, then push in a low-traffic window (see Rehearsal).
 4. Deploy `vendor-invite` from the release commit; set `MERCURIUS_INVITATION_PROJECT_REF=vugqqyemuptlvcieihww`, `MERCURIUS_INVITATION_SITE_ORIGIN` and `SITE_URL` = final origin, then `MERCURIUS_INVITATION_MODE=hosted` last.
 5. Auth: Site URL = final origin; redirect allow-list `https://<origin>/set-password?invitation=*` (and `/**` for sign-up/recovery); invite subject and template from `supabase/templates/provider-invitation.html`; email link lifetime 10800 s; custom SMTP `smtp.resend.com:465`, user `resend`, password = Resend key, sender `no-reply@mercuriusmarketplace.com` (or the verified sender in use); raise the email rate limit from 2/hour.
 6. Vercel: production deployment of the release commit (not promoted until migrations succeed); domain reassignment from `mercurius-landing-page` to the app (no GoDaddy change).
-7. Operator data: exclusions for the 11 records; owner-confirmed contacts for the eight real vendors (normalizes their email casing).
+7. Operator data, in the same window as step 3: exclusions for the 11 records (Aristotle approved for archive 2026-09-30); owner-confirmed contacts for the eight real vendors (normalizes their email casing). Owner removes the two `@mercurius.com` test accounts (confirmed test accounts, 2026-09-30).
 8. Hosted tests A–C from the R0.4 checklist, plus access test with the owner mailbox (below), then final-domain repeat.
 9. Owner go/no-go including the DEC-2026-025 exception.
+
+## Email
+
+Resend: the domain was not verified in the Resend account (send refused 403); the owner verified it on 2026-09-30 and a test send from `notifications@mercuriusmarketplace.com` to the owner mailbox was accepted by Resend (HTTP 200). Inbox arrival is confirmed only by the owner. The key is kept in the git-ignored `.env.resend`.
 
 ## Owner-mailbox test plan
 
