@@ -1,8 +1,8 @@
 # R0.2 interest, consent, linkage and retention — TRACE-102
 
-**Branch:** `codex/r0-interest`, stacked on R0.1 `codex/r0-admission` (`5e31d55`).
+**Branch:** `codex/r0-interest-main`, main integration based on R0.1 `codex/r0-admission-main`.
 **Status:** implementation checkpoint for independent review. No hosted schema, email, deployment, domain, scheduler or admission change.
-**Governing contract:** [layered launch decision](LAYERED-LAUNCH-DECISION.md) §R0 homeowner contract; CFG-014; MPS/MTS/MDS R0 addenda. The founder's companion early-access experience artifact is still not in this checkout; exact copy and state designs remain a TRACE-103 gate. Server messages here are provisional.
+**Governing contract:** [layered launch decision](LAYERED-LAUNCH-DECISION.md) §R0 homeowner contract; CFG-014; MPS/MTS/MDS R0 addenda; approved [homeowner early-access experience](HOMEOWNER-EARLY-ACCESS-EXPERIENCE.md) and its [reconciliation](HOMEOWNER-EARLY-ACCESS-RECONCILIATION.md). Exact copy and state implementation acceptance remain a R0.3 / TRACE-103 gate. Server messages here are provisional.
 
 ## Characterized baseline
 
@@ -30,6 +30,8 @@ Migration `20260929001000_r0_interest_consent.sql` adds seven private tables (no
 - **Audit:** `r0_interest_events` records joins, links, merges, updates, withdrawals, holds, consent changes and de-identification without any email.
 
 ## Verification — isolated R0 stack, 2026-09-28
+
+**Superseded by the [main-integration evidence](#main-integration--2026-09-29-trace-102) below.** These results and outstanding checks describe the earlier branch checkpoint, not the current integration.
 
 Host memory and swap were exhausted, so no new stack was started. The existing isolated R0 stack (ports 5642x, R0.1 migrations applied) was used without committing anything: each run applied the R0.2 migration and one test file inside a single transaction and rolled it back.
 
