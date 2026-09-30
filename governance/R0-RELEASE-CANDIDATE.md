@@ -82,6 +82,13 @@ Owner authorized exactly: R1's two upload variables, R3's two function deploymen
 
 **B2 is closed.** R2 promotion may proceed once separately authorized; the R3 precondition ("`MONEY_NOT_ACTIVATED` with no Stripe session") is met.
 
+### R2 deployment (2026-09-30): built, not promoted, superseded
+
+- Deployed `7591134` from a clean detached worktree with `vercel deploy --prod --skip-domain` → `dpl_B2ykDprcTQm75GZUFAvCu2jN3AUR` (`mercurius-marketplace-next-d7e5y6mjr-mercurius-projects.vercel.app`, behind Vercel Authentication), READY. Build: Next.js 16.3.8, 73 pages, no errors. Uploaded source = 921 files, all SHA-1-identical to `7591134` (only `.gitignore` excluded by the CLI).
+- The public alias `mercurius-marketplace-next.vercel.app` and the project production target stayed on `dpl_Cxvd6K5gc9r1Ls6FHxunJNrkJgYK` (`735df91`). The team alias `mercurius-marketplace-next-mercurius-projects.vercel.app` (protected) was attached to the new build.
+- Pre-promotion runtime checks were not run: `vercel curl` would need a protection-bypass secret, which the project does not have (creating one was not authorized). The owner reviewed the build in the browser.
+- **Not promoted.** The owner found that the vendor application offered Naples and Punta Gorda (outside Lee County). Fix: PR #77. `dpl_B2yk…` must not be promoted; R2 redeploys from the merge SHA that includes #77, then promotes and runs the live checks.
+
 ## Remaining hosted rollout package
 
 R1 and R3 were executed on 2026-09-30 (see [Step 2 results](#step-2-results-2026-09-30-upload-configuration-and-checkout-closure)); nothing else below has been executed. Each numbered action needs Josh's explicit authorization for that action; this session had authorization for read-only checks only. Keys are never printed: pass them from git-ignored files or the provider dashboards.
@@ -157,7 +164,8 @@ Status as of 2026-09-30 (UTC). PASS = verified evidence exists; PENDING = not ye
 | 3 | Final SHA and CI | **PASS** | `7591134` (PR #75 merge); final-head CI run 36782043110 passed |
 | 4a | Upload configuration (R1) | **PASS (configuration)** | 2026-09-30: both variables in Production, names/target read back; hosted upload unproven until T1 after R2 |
 | 4b | Legacy checkout closure (R3) | **PASS** | 2026-09-30: `create-checkout` v12 / `checkout-request` v17 from `7591134`; signed-in user 6/6 `MONEY_NOT_ACTIVATED`; no checkout attempt or payment created |
-| 4 | Remaining Edge/Auth/email configuration | **PENDING** | R2, R4–R8 not executed |
+| 4c | App deployment (R2) | **PENDING** | 2026-09-30 build `dpl_B2yk…` from `7591134` not promoted; superseded by PR #77 (Lee County service areas); redeploy from its merge |
+| 4 | Remaining Edge/Auth/email configuration | **PENDING** | R4–R8 not executed |
 | 5 | Hosted recruiting and booking-denial tests | **PENDING** | T1–T7 not run (T3's function part is covered by R3 evidence; repeat after R2 through the app) |
 | 6 | Public vendor eligibility | **PASS (as designed)** | 0 listable; no test/excluded record public; 8 real vendors not yet eligible (above) |
 | 7 | Sole-admin exception and support/privacy contacts | **PENDING owner restatement** | DEC-2026-025 confirmed by Josh 2026-09-30; restate in go/no-go; contacts per R0.4 (hello@ / phone) |

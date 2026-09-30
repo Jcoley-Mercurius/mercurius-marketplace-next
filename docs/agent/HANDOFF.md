@@ -6,7 +6,8 @@
 - R1 upload configuration **PASS (config only)**: `VENDOR_UPLOAD_HMAC_SECRET` (64 chars, sensitive) and `VENDOR_UPLOAD_HMAC_VERSION=v1` added to Vercel `mercurius-marketplace-next` Production only. Other Vercel values not re-entered. Hosted upload unproven until T1 after R2 (B1 open until then).
 - R3 checkout closure **PASS**: `create-checkout` v12, `checkout-request` v17, source byte-identical to the release; `MERCURIUS_MONEY_MODE` absent; temporary signed-in synthetic user → 6/6 `MONEY_NOT_ACTIVATED`; 0 checkout attempts, invoice/request counts unchanged; test user and its loyalty row removed. B2 closed.
 - Unchanged: Vercel deployment `735df91` (not deployed/promoted), domains, DNS, Auth, SMTP, `vendor-invite`, invitations (0 sent), transactions disabled.
-- Next: owner authorizes R2 (deploy `7591134` with `--prod --skip-domain`, verify, then promote), which also resolves B3; then T1 upload proof.
+- R2: `dpl_B2ykDprcTQm75GZUFAvCu2jN3AUR` built from `7591134` (source identical), **not promoted**; public alias still `735df91`. Owner found non-Lee service areas (Naples, Punta Gorda) in `/vendors/apply` → PR #77 (`codex/r0-lee-county-service-areas`).
+- Next: Codex reviews #76 and #77; merge #77; redeploy R2 from the new merge SHA, owner promotes, live checks on the alias (resolves B3); then T1 upload proof.
 
 ## R0.5 recruiting release: production verified, light-only built, hosted rollout prepared (TRACE-105)
 
