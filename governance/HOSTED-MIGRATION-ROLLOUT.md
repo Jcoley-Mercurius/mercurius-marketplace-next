@@ -13,7 +13,7 @@ authorization for that action (AGENTS.md, "Required working behavior").
 - Latest Production deployment recorded on GitHub: `735df91` (2026-09-04, PR #5 merge),
   105 commits behind `origin/main`. That commit already contains 32 of the 77 pending
   migrations, so that deployment is probably running ahead of its database. Every
-  deployment of this app sits behind Vercel's login, so the public cannot reach it.
+  deployment of this app sits behind Vercel's login, so the public cannot reach it. *(Corrected 2026-09-30: the production alias `mercurius-marketplace-next.vercel.app` is exempt from Standard Protection and publicly reachable; see [R0-RELEASE-CANDIDATE.md](R0-RELEASE-CANDIDATE.md#production-state-verified-2026-09-30).)*
 - `mercuriusmarketplace.com` (GoDaddy DNS pointing at Vercel) serves a separate static page
   ("Mercurius Solutions – AI-Powered Marketplace for SWFL"), not this app. The public site
   is therefore unaffected by the migration backlog. Moving the domain onto this app is a

@@ -5,6 +5,7 @@ import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { LIGHT_ONLY_LAUNCH } from "@/components/theme/themeMode";
 
 type ThemeToggleProps = {
   className?: string;
@@ -17,7 +18,12 @@ function useMounted() {
   return useSyncExternalStore(subscribe, () => true, () => false);
 }
 
-export function ThemeToggle({ className, showLabel = false }: ThemeToggleProps) {
+export function ThemeToggle(props: ThemeToggleProps) {
+  // No theme choice during the light-only launch (DEC-2026-026).
+  return LIGHT_ONLY_LAUNCH ? null : <ThemeToggleButton {...props} />;
+}
+
+function ThemeToggleButton({ className, showLabel = false }: ThemeToggleProps) {
   const mounted = useMounted();
   const { resolvedTheme, setTheme } = useTheme();
 

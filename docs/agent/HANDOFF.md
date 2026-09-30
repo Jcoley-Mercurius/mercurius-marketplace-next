@@ -1,5 +1,14 @@
 # Agent handoff — 2026-09-30
 
+## R0.5 recruiting release: production verified, light-only built, hosted rollout prepared (TRACE-105)
+
+- Base `main` `5df97a2`; branch `codex/r0-light-only-release`; code commit `cfdcf49` (light-only, DEC-2026-026; two homepage light-contrast fixes). Final release SHA = the reviewed merge into `main`; record it before R1. [Report](../../governance/R0-RELEASE-CANDIDATE.md): verified state, rollout package R1–R9, tests T1–T7, DNS/cutover D1–D3, running checklist, go/no-go G1–G7.
+- Production, verified read-only 2026-09-30 (supersedes "nothing changed" below): 178/178 migrations, 0 pending (14 repaired + 81 pushed after `20260731172714`); restore point = daily backup 2026-09-30 10:17 UTC; 11 exclusions + 8 contacts at 18:22 UTC; `@mercurius.com` admins removed (their deletion cascaded 1 older service request); 0 listable/matchable providers; 0 access attempts. Push/dry-run logs were reported, not re-read. Unchanged: `vendor-invite` v11, Auth, SMTP, Vercel `735df91`, domain on `mercurius-landing-page`.
+- Blockers: B1 Vercel lacks `VENDOR_UPLOAD_HMAC_*`; B2 legacy `create-checkout`/`checkout-request` (August builds) create Stripe sessions without the R0 admission gate → redeploy from release (money mode unset); B3 stale `735df91` publicly reachable on `mercurius-marketplace-next.vercel.app`; B4 hosted tests not run.
+- DNS: GoDaddy authoritative; apex/www already match Vercel's recommended values → cutover is a Vercel project reassignment only (canonical `www`, apex 308).
+- No external write was made in this session (only read-only checks were authorized). Real invitations sent: 0. Rehearsal project still running; deletion waits on G2 (pre-push state retention; backup rotates ~2026-10-08).
+- Next: Codex reviews the branch; Josh authorizes G1 (R1–R3), then R4–R8, T1–T7, then cutover.
+
 ## R0.5 release candidate: existing-provider access implemented (TRACE-105); for Codex review
 
 - Base: `main` `a88da4f` (R0.4 #72 merged). Branch `codex/r0-release-candidate`. Migration `20260930001000` (owner-confirmed contacts, access invitations with TRACE-063 protections, reviewed binding with vendor role per DEC-2026-024, legacy eligibility closed for access-managed providers). [Report](../../governance/R0-RELEASE-CANDIDATE.md).
