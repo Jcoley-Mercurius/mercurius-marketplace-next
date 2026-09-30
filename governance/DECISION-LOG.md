@@ -518,3 +518,9 @@ The founder approved R0 public recruiting in the rebuilt app, R1 invited transac
 **MTS impact:** Admission must be enforced by authoritative request and checkout boundaries with audited service/area grants and safe revocation. Recruiting records, consent, suppression, retention, hosted delivery, monitoring and rollback are R0 release concerns. R0 cannot inherit the full transactional production gate as though all Phase 6–10 functionality were active, and cannot waive it for R1.
 
 **Implementation:** R0 slices and acceptance are TRACE-100–105. Production schema, email, deployment, domain and transaction activation remain separate owner decisions. The [homeowner early-access design](HOMEOWNER-EARLY-ACCESS-EXPERIENCE.md) was supplied with Josh's 2026-09-28 approval and its [route/state reconciliation](HOMEOWNER-EARLY-ACCESS-RECONCILIATION.md) is recorded under TRACE-100/103. Credits and Founding Vendor authority artifacts remain absent and must be reconciled before accepting those detailed implementations.
+
+### DEC-2026-023 — Revocation blocks all new checkout
+
+**Status:** APPROVED owner clarification. **Date:** 2026-09-28 (America/New_York).
+
+For R0/R1 cohort access, revoking a homeowner's trial admission blocks every new checkout, including checkout for a request created before revocation. Historical request, payment and support records remain available. TRACE-101 enforces this at `money_prepare_checkout` as well as new request submission. An already-issued external Stripe session cannot be expired by a database check alone; session expiration and hosted verification remain an R1 activation gate.

@@ -42,6 +42,13 @@ insert into public.package_qualifying_questions(package_id,question_key,question
  ('c4000000-0000-4000-8000-000000000003','sqft','Synthetic hedge length','number',true,0);
 update public.services_catalog set is_active=false where id='irrigation-maintenance';
 
+insert into private.r0_lee_zips values ('00020'),('00023');
+insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
+select u.id,c.zip_code,s.id,u.id
+from auth.users u cross join public.coverage_areas c cross join public.services_catalog s
+where u.id in ('c1000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000002')
+  and c.zip_code in ('00020','00023') and s.is_active = true;
+
 create function pg_temp.submit(p_actor uuid, p_key text, p_payload jsonb) returns jsonb language plpgsql as $$
 declare r jsonb; begin
   perform set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',p_actor)::text,true);

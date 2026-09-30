@@ -28,6 +28,12 @@ insert into public.vendor_packages(id,contractor_id,service_id,name,pricing_mode
 insert into public.package_tiers(package_id,frequency,price,name) values
  ('c6500000-0000-4000-8000-000000000011','one-time',100,'Synthetic basic');
 
+insert into private.r0_lee_zips values ('00065');
+insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
+select id,'00065','lawn-mowing',id from auth.users
+where id in ('c6500000-0000-4000-8000-000000000001','c6500000-0000-4000-8000-000000000002',
+ 'c6500000-0000-4000-8000-000000000003','c6500000-0000-4000-8000-000000000007');
+
 create function pg_temp.submit(p_actor uuid, p_key text, p_payload jsonb) returns jsonb language plpgsql as $$
 declare r jsonb; begin
   perform set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',p_actor)::text,true);

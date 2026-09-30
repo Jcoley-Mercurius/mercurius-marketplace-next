@@ -44,6 +44,13 @@ insert into public.package_tiers(id,package_id,frequency,price,name,includes,rul
 insert into public.package_qualifying_questions(package_id,question_key,question_label,input_type,is_required,sort_order) values
  ('d6640000-0000-4000-8000-000000000003','sqft','Synthetic hedge length','number',true,0);
 
+insert into private.r0_lee_zips values ('00060'),('00063');
+insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
+select 'd6600000-0000-4000-8000-000000000001',c.zip_code,s.id,
+ 'd6600000-0000-4000-8000-000000000001'
+from public.coverage_areas c cross join public.services_catalog s
+where c.zip_code in ('00060','00063','33917') and c.is_active and s.is_active;
+
 create function pg_temp.plan(p_zip text, p_selections jsonb, p_stage text default 'final') returns jsonb language sql as $$
   select jsonb_build_object('stage',p_stage,'location',jsonb_build_object('address','1 Synthetic Way','city','Synthetic','state','FL','zip_code',p_zip),
     'preferred_time','Preferred window: synthetic','selections',p_selections) $$;
