@@ -57,6 +57,38 @@ const server = createServer(async (request, response) => {
   // TRACE-103 R0 readbacks: closed by default (no admission, no interest); specs override per case.
   if (url.pathname === "/rest/v1/rpc/r0_my_trial_access") return send({ homeowner: user.testRole === "homeowner", cells: [] });
   if (url.pathname === "/rest/v1/rpc/r0_my_interest") return send({ verified: true, interests: [], marketing_opted_in: false });
+  // TRACE-104 (R0.4) readbacks. Operator reads refuse non-admin sessions like the database.
+  if (url.pathname === "/rest/v1/rpc/r0_public_providers") return send([]);
+  if (url.pathname === "/rest/v1/rpc/r0_my_provider_listing") return send(user.testRole !== "vendor" ? { linked: false } : {
+    linked: true, contractor_id: contractor, listed: false, active: true, accepting_work: true, approved: true, held: false,
+    has_name: true, has_description: false, has_catalog_service: true, service_zips: ["33904"] });
+  if (/\/rpc\/r0_(application_notification_overview|invitation_attention|public_listing_inventory)$/.test(url.pathname) && user.testRole !== "admin") {
+    return send({ code: "42501", message: "Onboarding operator required" }, 403);
+  }
+  if (url.pathname === "/rest/v1/rpc/r0_application_notification_overview") return send({ checked_at: now.toISOString(), stale_after_minutes: 10, items: [
+    { application_id: "00000000-0000-4000-8000-000000000050", business_name: "Synthetic Applicant Services", application_status: "pending",
+      submitted_at: now.toISOString(), state: "failed", attempts: 1, last_error: "Resend returned 422: invalid from address.", sent_at: null,
+      requested_at: null, acknowledged_at: null, acknowledged_reason: null, updated_at: now.toISOString(), needs_attention: true },
+    { application_id: "00000000-0000-4000-8000-000000000051", business_name: "Synthetic Uncertain Services", application_status: "pending",
+      submitted_at: now.toISOString(), state: "unknown", attempts: 1, last_error: null, sent_at: null,
+      requested_at: null, acknowledged_at: null, acknowledged_reason: null, updated_at: now.toISOString(), needs_attention: true },
+    { application_id: "00000000-0000-4000-8000-000000000052", business_name: "Synthetic Delivered Services", application_status: "pending",
+      submitted_at: now.toISOString(), state: "sent", attempts: 1, last_error: null, sent_at: now.toISOString(),
+      requested_at: null, acknowledged_at: null, acknowledged_reason: null, updated_at: now.toISOString(), needs_attention: false },
+  ] });
+  if (url.pathname === "/rest/v1/rpc/r0_invitation_attention") return send({ checked_at: now.toISOString(), items: [
+    { attempt_id: "00000000-0000-4000-8000-000000000060", contractor_id: contractor, application_id: "00000000-0000-4000-8000-000000000050",
+      business_name: "Synthetic Vendor", attempt_status: "unknown", dispatch_state: "unknown", onboarding_status: "review",
+      created_at: now.toISOString(), expires_at: new Date(now.getTime() + 86400000).toISOString(), reason: "uncertain" },
+  ] });
+  if (url.pathname === "/rest/v1/rpc/r0_public_listing_inventory") return send({ checked_at: now.toISOString(), items: [
+    { contractor_id: contractor, name: "Synthetic Vendor", is_active: true, marketing_enabled: true, account_linked: true,
+      onboarding_status: "active", eligible: true, has_content: true, listable: true, excluded: false, exclusion_reason: null,
+      excluded_at: null, test_signal: false, featured: false, request_count: 2, invoice_count: 1, review_count: 0 },
+    { contractor_id: "00000000-0000-4000-8000-000000000070", name: "Test Vendor Demo", is_active: true, marketing_enabled: true,
+      account_linked: false, onboarding_status: null, eligible: true, has_content: false, listable: false, excluded: false,
+      exclusion_reason: null, excluded_at: null, test_signal: true, featured: false, request_count: 0, invoice_count: 0, review_count: 0 },
+  ] });
   if (url.pathname === "/rest/v1/rpc/vendor_compliance_operations") return send({
     evaluated_at: new Date().toISOString(),
     control: { enforced: false, finalized_at: null, reason: null },
@@ -147,6 +179,7 @@ const server = createServer(async (request, response) => {
     if (table === "user_roles") return send([{ role: user.testRole }]);
     if (table === "invoices") return send([{ id: "00000000-0000-4000-8000-000000000020", invoice_number: "MDS-INV-001", amount: 125, status: "pending", created_at: now.toISOString(), paid_at: null }]);
     if (table === "reviews") return send([]);
+    if (["vendor_packages", "services_catalog", "contractor_gallery"].includes(table)) return send([]);
     if (table === "completion_evidence_rules") return send(url.searchParams.get("service_id") === "eq.synthetic-pool-service" ? [{ minimum_photos: 2 }] : []);
     if (table === "vendor_applications") return send([{
       id: "00000000-0000-4000-8000-000000000050", first_name: "Synthetic", last_name: "Applicant",

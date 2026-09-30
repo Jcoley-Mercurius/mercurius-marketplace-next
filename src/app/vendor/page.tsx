@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { VendorPasswordNudge } from "@/components/vendor/VendorPasswordNudge";
+import { VendorListingStatus, VendorRecruitingNotice } from "@/components/vendor/VendorRecruitingStatus";
+import type { MyProviderListing } from "@/lib/recruitingReadiness";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -147,6 +149,8 @@ export default function VendorOverviewPage() {
   const [loadedAt, setLoadedAt] = useState(0);
   const [mode, setMode] = useState<Mode>("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const [listing, setListing] = useState<MyProviderListing | null>(null);
+  const [listingUnavailable, setListingUnavailable] = useState(false);
 
   const loadOverview = useCallback(async () => {
     if (!user) return;
@@ -172,6 +176,11 @@ export default function VendorOverviewPage() {
       }
 
       const contractorData = contractorResult.data as Contractor;
+      // TRACE-104: the server decides public listing; a failed read hides the storefront
+      // link rather than guessing.
+      const listingResult = await supabase.rpc("r0_my_provider_listing");
+      setListing(listingResult.error ? null : (listingResult.data as MyProviderListing));
+      setListingUnavailable(Boolean(listingResult.error));
       const [requestsResult, operationalResult, earningsResult, packagesResult, catalogResult, contactResult, galleryResult] = await Promise.all([
         supabase
           .from("service_requests")
@@ -287,7 +296,7 @@ export default function VendorOverviewPage() {
     const livePackageCount = packages.filter(isPubliclyEligibleFixedPackage).length;
     const hasLivePrice = livePackageCount > 0;
     const isActive = contractor.is_active !== false;
-    const isPublic = isActive && contractor.marketing_enabled !== false;
+    const isPublic = listing?.linked === true && listing.listed;
     const readyForJobs = isActive && profileComplete && hasLivePrice;
     const profileStrength = strength.score;
     const thirtyDaysAgo = loadedAt - 30 * 24 * 60 * 60 * 1000;
@@ -327,7 +336,7 @@ export default function VendorOverviewPage() {
         .filter((service) => !service.isCovered)
         .map(({ key, label }) => ({ key, label })),
     };
-  }, [catalogServices, contact, contractor, earningsMetrics, galleryCount, loadedAt, operationalMetrics, packages, requests]);
+  }, [catalogServices, contact, contractor, earningsMetrics, galleryCount, listing, loadedAt, operationalMetrics, packages, requests]);
 
   if (mode === "loading") return <PageLoading />;
   if (mode === "unlinked") return <UnlinkedState />;
@@ -400,6 +409,8 @@ export default function VendorOverviewPage() {
 
       <VendorPasswordNudge />
 
+      <VendorRecruitingNotice />
+
       <div className="mb-6 flex flex-col gap-3 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <DollarSign className="mt-0.5 h-5 w-5 shrink-0 text-sage-dark" />
@@ -447,6 +458,8 @@ export default function VendorOverviewPage() {
           ))}
         </CardContent>
       </Card>
+
+      <VendorListingStatus listing={listing} unavailable={listingUnavailable} />
 
       <SectionHeading title="Operational scorecard" description="Live records from your Mercurius vendor account and assigned work." />
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

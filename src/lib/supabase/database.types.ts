@@ -7095,6 +7095,132 @@ export type Database = {
         Returns: Json
       }
       pricing_server_now: { Args: never; Returns: string }
+      r0_acknowledge_application_notification: {
+        Args: { p_application: string; p_reason: string }
+        Returns: Json
+      }
+      r0_application_notification_overview: { Args: never; Returns: Json }
+      r0_claim_application_notification: {
+        Args: { p_application: string; p_mode: string }
+        Returns: Json
+      }
+      r0_email_allowed: {
+        Args: { p_class: string; p_email: string }
+        Returns: boolean
+      }
+      r0_interest_retention_status: { Args: never; Returns: Json }
+      r0_invitation_attention: { Args: never; Returns: Json }
+      r0_issue_link_token: {
+        Args: { p_email: string; p_kind?: string; p_purpose: string }
+        Returns: string
+      }
+      r0_manage_interest: {
+        Args: {
+          p_action: string
+          p_first_name?: string
+          p_service_ids?: string[]
+          p_still_exploring?: boolean
+          p_token: string
+          p_zip?: string
+        }
+        Returns: Json
+      }
+      r0_my_interest: { Args: never; Returns: Json }
+      r0_my_provider_listing: { Args: never; Returns: Json }
+      r0_my_trial_access: { Args: never; Returns: Json }
+      r0_provider_listable: { Args: { p_contractor: string }; Returns: boolean }
+      r0_public_listing_inventory: { Args: never; Returns: Json }
+      r0_public_providers: {
+        Args: { p_contractor?: string }
+        Returns: {
+          badges: string[]
+          bio: string
+          id: string
+          location: string
+          logo_url: string
+          name: string
+          our_promise: string
+          services: string[]
+          special_offer: string
+          tagline: string
+          verified_specialty: string
+          video_url: string
+          website: string
+          years_experience: number
+        }[]
+      }
+      r0_record_application_notification: {
+        Args: {
+          p_application: string
+          p_claim: string
+          p_error?: string
+          p_outcome: string
+          p_provider_id?: string
+        }
+        Returns: Json
+      }
+      r0_record_email_suppression: {
+        Args: { p_email: string; p_reason: string; p_scope: string }
+        Returns: undefined
+      }
+      r0_record_r2_opening: {
+        Args: { p_occurred_at: string; p_reason: string }
+        Returns: Json
+      }
+      r0_request_application_notification_resend: {
+        Args: { p_application: string; p_confirm_unknown?: boolean }
+        Returns: Json
+      }
+      r0_run_interest_retention: { Args: { p_limit?: number }; Returns: Json }
+      r0_save_my_interest: {
+        Args: {
+          p_first_name: string
+          p_kind: string
+          p_service_ids: string[]
+          p_still_exploring: boolean
+          p_zip: string
+        }
+        Returns: Json
+      }
+      r0_set_interest_hold: {
+        Args: {
+          p_email: string
+          p_hold: boolean
+          p_kind: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      r0_set_my_marketing: { Args: { p_opted_in: boolean }; Returns: Json }
+      r0_set_public_listing_exclusion: {
+        Args: { p_contractor: string; p_excluded: boolean; p_reason: string }
+        Returns: Json
+      }
+      r0_set_trial_admission: {
+        Args: {
+          p_allowed: boolean
+          p_homeowner: string
+          p_reason: string
+          p_service: string
+          p_zip: string
+        }
+        Returns: undefined
+      }
+      r0_submit_interest: {
+        Args: {
+          p_email: string
+          p_first_name: string
+          p_kind: string
+          p_marketing: boolean
+          p_service_ids: string[]
+          p_still_exploring: boolean
+          p_zip: string
+        }
+        Returns: Json
+      }
+      r0_unsubscribe_marketing: { Args: { p_token: string }; Returns: Json }
+      r0_withdraw_my_interest: { Args: { p_kind: string }; Returns: Json }
+      r0_zip_in_lee: { Args: { p_zip: string }; Returns: boolean }
       record_job_operation: {
         Args: {
           _job_id: string

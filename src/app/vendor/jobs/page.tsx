@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatEastern, isOpenVendorOffer, isQuoteWork, offerTimeLeft, vendorOfferOutcome } from "@/lib/offerStatus";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { VendorRecruitingNotice } from "@/components/vendor/VendorRecruitingStatus";
 
 type Job = {
   id: string;
@@ -265,6 +266,8 @@ export default function VendorJobsPage() {
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Respond to new homeowner requests and manage every job from scheduling through completion.</p>
       </header>
 
+      <VendorRecruitingNotice />
+
       {mode === "unlinked" ? (
         <Empty icon={Briefcase} title="No contractor profile linked" copy="Your jobs will appear here once Mercurius links your approved vendor profile." />
       ) : mode === "error" ? (
@@ -289,7 +292,7 @@ export default function VendorJobsPage() {
               <RequestCard key={job.id} job={job} now={now} action={action} error={cardErrors[job.id]} recheck={() => void load()} view={() => setSelected(job)}
                 accept={async () => { if (!await respond(job, "accept")) throw new Error("Accept not recorded"); }}
                 decline={async () => { if (!await respond(job, "decline")) throw new Error("Decline not recorded"); }} />
-            ))}</div> : <Empty icon={Inbox} title="No open offers" copy="When Mercurius offers you a request, it appears here with its response deadline." />}
+            ))}</div> : <Empty icon={Inbox} title="No open offers" copy="No homeowner jobs yet. While booking is by invitation, offers are rare; when Mercurius offers you a request, it appears here with its response deadline." />}
           </TabsContent>
           <TabsContent value="active">
             <Heading title="Active Jobs" copy="Upcoming and in-progress work, including jobs awaiting homeowner confirmation." />

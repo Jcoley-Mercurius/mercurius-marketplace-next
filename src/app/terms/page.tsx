@@ -210,7 +210,7 @@ export default function TermsPage() {
 
               <PolicySection id="contact" title="19. Contact Us" last>
                 <p>
-                  Questions about these Terms can be sent to <a href="mailto:hello@mercurius.com">hello@mercurius.com</a> or through our <Link href="/contact">Contact page</Link>.
+                  Questions about these Terms can be sent to <a href="mailto:hello@mercuriusmarketplace.com">hello@mercuriusmarketplace.com</a> or through our <Link href="/contact">Contact page</Link>.
                 </p>
                 <Link href="/contact" className="mt-2 inline-flex items-center gap-1.5 font-semibold text-accent hover:text-accent/80">
                   Contact Mercurius <ArrowRight className="h-4 w-4" />

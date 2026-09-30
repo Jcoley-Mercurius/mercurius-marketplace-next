@@ -38,8 +38,6 @@ type Spotlight = Contractor & {
 
 type Mode = "loading" | "ready" | "error";
 
-const contractorSafeSelect = "id, name, logo_url, bio, location, years_experience, services, badges";
-
 export function SpotlightProviders() {
   const [providers, setProviders] = useState<Spotlight[]>([]);
   const [mode, setMode] = useState<Mode>("loading");
@@ -61,11 +59,9 @@ export function SpotlightProviders() {
           if (active) { setProviders([]); setMode("ready"); }
           return;
         }
-        const contractorResult = await supabase
-          .from("contractors")
-          .select(contractorSafeSelect)
-          .in("id", featured.map((item) => item.contractor_id))
-          .eq("is_active", true);
+        // TRACE-104: a placement shows only while its provider is publicly listed.
+        const featuredIds = new Set(featured.map((item) => item.contractor_id));
+        const contractorResult = await supabase.rpc("r0_public_providers");
         if (contractorResult.error) throw contractorResult.error;
         let completedJobs = new Map<string, number>();
         try {
@@ -73,7 +69,7 @@ export function SpotlightProviders() {
         } catch (reason) {
           console.warn("Spotlight completed-job counts are unavailable", reason);
         }
-        const byId = Object.fromEntries(((contractorResult.data ?? []) as Contractor[]).map((item) => [item.id, item]));
+        const byId = Object.fromEntries(((contractorResult.data ?? []) as Contractor[]).filter((item) => featuredIds.has(item.id)).map((item) => [item.id, item]));
         const live = featured.flatMap((item) => {
           const contractor = byId[item.contractor_id];
           return contractor ? [{ ...contractor, featureId: item.id, tier: item.tier, headline: item.headline, completed_jobs: completedJobs.get(contractor.id) ?? null }] : [];
@@ -96,7 +92,7 @@ export function SpotlightProviders() {
         <div className="mb-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-coral/15"><Award className="h-5 w-5 text-coral" /></div>
-            <div><h2 className="text-2xl font-bold leading-tight">Spotlight Providers</h2><p className="mt-0.5 text-sm text-muted-foreground">Live Mercurius partners recognized for strong service</p></div>
+            <div><h2 className="text-2xl font-bold leading-tight">Spotlight Providers</h2><p className="mt-0.5 text-sm text-muted-foreground">Approved providers selected by Mercurius</p></div>
           </div>
           <Link href="/providers" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 text-muted-foreground hover:text-foreground")}>View all<ArrowRight /></Link>
         </div>

@@ -1,10 +1,17 @@
-# Agent handoff — 2026-09-29
+# Agent handoff — 2026-09-30
 
-## R0.3 early-access experience implemented (TRACE-103); awaiting Codex review
+## R0.4 vendor/operator readiness implemented (TRACE-104); for Codex review
+
+- Base: `main` `80a9aa6` (R0.1 #69, R0.2 #70 merged) merged into R0.3 head `3b2c7f6` (#71 open) as `ac8a502`; branch `codex/r0-vendor-readiness`. PR to `main` shows R0.3's diff until #71 merges.
+- Migration `20260929003000`: owner-notification delivery ledger (trigger-created with the application; claim/record/resend/acknowledge), invitation attention, listing rule + operator exclusions (also leave matching), public projection, cleanup inventory, vendor listing readback. `/admin/recruiting`, vendor recruiting notice/listing card, owner-confirmed contacts. [Report](../../governance/R0-VENDOR-READINESS.md).
+- Evidence and R0.5 checklist are in the report. Owner: name a backup admin or record an exception (conflict with the R0 gate). Not built: trial-admission operator UI (D9).
+- Next: Codex reviews D1–D10; R0.5 hosted rehearsal. No hosted action taken.
+
+## R0.3 early-access experience implemented (TRACE-103); PR #71 open
 
 - Branch `codex/r0-early-access-ui` from PR #70 head `1965383` merged with PR #69 head `6c20314` (`791e1c9`). Public CTAs lead to `/early-access`; waiting/invited/closed account states; `/request` and checkout closed for unadmitted accounts; new read-only `r0_my_trial_access()` (migration `20260929002000`). [Report](../../governance/R0-EXPERIENCE.md).
 - Evidence: SQL 070 17/17 (rolled back on the integration stack); unit 331/331; typecheck, lint, secret scan, synthetic build; browser non-visual 401/401. Not run: `@visual`, CI, full SQL/reset, human screen reader and real zoom.
-- Working tree also has an unrelated `undici` addition in `package.json`/lockfile that this slice did not make; it is not committed here.
+- The transitive `undici`/`ip-address` refresh was later committed as `3b2c7f6`. First CI run failed in database start (runner infrastructure), not a test.
 - Next: Codex reviews D1–D11; human accessibility pass; regenerate `@visual` baselines. No deployment or activation.
 
 ## R0.2 main integration — 2026-09-29

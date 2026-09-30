@@ -54,7 +54,9 @@ export function Footer() {
             <div className="space-y-3">
               <div className="flex items-center space-x-3 text-sm text-slate">
                 <Mail className="h-4 w-4 text-sage-dark" />
-                <span>hello@mercurius.com</span>
+                <a href="mailto:hello@mercuriusmarketplace.com" className="transition-colors hover:text-accent">
+                  hello@mercuriusmarketplace.com
+                </a>
               </div>
               <div className="flex items-center space-x-3 text-sm text-slate">
                 <MapPin className="h-4 w-4 text-sage-dark" />
