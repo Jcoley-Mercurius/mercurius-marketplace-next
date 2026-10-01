@@ -79,7 +79,9 @@ test("onboarding start success follows server readback", async ({ page }) => {
   await confirm.getByLabel("Reason (required)", { exact: true }).fill("Synthetic intake reviewed");
   await confirm.getByRole("button", { name: "Start review", exact: true }).click();
   await expect(confirm).not.toBeVisible();
-  await expect(dialog.getByText("In review", { exact: true })).toBeVisible();
+  // TRACE-105: the header follows onboarding while the legacy status column still says pending.
+  await expect(dialog.locator('[data-slot="dialog-header"]').getByText("In review", { exact: true })).toBeVisible();
+  await expect(dialog.locator('[data-slot="dialog-header"]').getByText("pending", { exact: false })).toHaveCount(0);
   await expect(dialog.getByText("Revision 1.", { exact: false })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Start onboarding review" })).toHaveCount(0);
 });

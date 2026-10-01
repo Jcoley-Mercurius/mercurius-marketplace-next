@@ -210,7 +210,8 @@ test("an operator rejects an application with a reason, confirmed by rereading",
   expect(requests[0].p_key).toMatch(new RegExp(`^application-close:[0-9a-f-]+:${applicationId}:rejected$`));
   await expect(dialog.getByText("Recorded on this application: Synthetic: licensing not met.")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Reject", exact: true })).toHaveCount(0);
-  await expect(dialog.getByText("rejected", { exact: true })).toBeVisible();
+  // TRACE-105: the header badge shows the queue state, not the raw status column.
+  await expect(dialog.locator('[data-slot="dialog-header"]').getByText("Rejected", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Closed applications cannot start onboarding review.")).toBeVisible();
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(tags).analyze()).violations).toEqual([]);
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);

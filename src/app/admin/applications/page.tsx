@@ -41,6 +41,12 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { type ApplicationRetentionOverview } from "@/lib/applicationRetention";
+import {
+  applicationQueueFilters,
+  applicationQueueLabel,
+  applicationQueueState,
+  type ApplicationQueueState,
+} from "@/lib/applicationQueueState";
 import { retentionStateLabel } from "@/lib/renewalRetention";
 import {
   vendorDocumentDisplayName,
@@ -133,12 +139,21 @@ const applicationSelect = [
   "document_urls",
 ].join(", ");
 
-const statusStyle: Record<string, string> = {
-  pending: "border-amber-200 bg-amber-50 text-amber-700",
-  approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+const statusStyle: Record<ApplicationQueueState, string> = {
+  awaiting_review: "border-amber-200 bg-amber-50 text-amber-700",
+  in_review: "border-blue-200 bg-blue-50 text-blue-700",
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  suspended: "border-amber-200 bg-amber-50 text-amber-700",
   rejected: "border-red-200 bg-red-50 text-red-700",
   abandoned: "border-border bg-muted text-muted-foreground",
+  legacy_approved: "border-border bg-muted text-muted-foreground",
+  checking: "border-border bg-muted text-muted-foreground",
+  unavailable: "border-red-200 bg-red-50 text-red-700",
 };
+
+// Per-application onboarding readback for the queue (TRACE-105). Undefined while
+// loading; "failed" when the operator-only RPC refused or errored.
+type QueueReadback = IntakeStatus | "failed";
 
 const pipelineLabel: Record<string, string> = {
   not_invited: "Not invited",
@@ -165,6 +180,16 @@ export default function AdminApplicationsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
   const [retention, setRetention] = useState<ApplicationRetentionOverview | null>(null);
+  const [onboarding, setOnboarding] = useState<Record<string, QueueReadback>>({});
+
+  const readOnboarding = useCallback(async (applicationId: string) => {
+    const { data, error } = await createClient().rpc(
+      "vendor_onboarding_intake_status",
+      { p_application: applicationId },
+    );
+    const result: QueueReadback = error ? "failed" : (data as unknown as IntakeStatus);
+    setOnboarding((current) => ({ ...current, [applicationId]: result }));
+  }, []);
 
   const loadApplications = useCallback(
     async (showLoading = false) => {
@@ -181,6 +206,9 @@ export default function AdminApplicationsPage() {
         if (error) throw error;
         const rows = (data ?? []) as unknown as Application[];
         setApplications(rows);
+        setOnboarding({});
+        // The application status column is legacy; the queue shows onboarding state.
+        rows.forEach((row) => void readOnboarding(row.id));
         // TRACE-104: /admin/recruiting links here with ?application=<id>.
         const linked = new URLSearchParams(window.location.search).get("application");
         setSelected((current) =>
@@ -201,7 +229,7 @@ export default function AdminApplicationsPage() {
         setMode("error");
       }
     },
-    [],
+    [readOnboarding],
   );
 
   useEffect(() => {
@@ -255,11 +283,23 @@ export default function AdminApplicationsPage() {
     }
   };
 
+  const queueState = useCallback(
+    (application: Application) => {
+      const readback = onboarding[application.id];
+      return applicationQueueState(
+        application.status,
+        readback === "failed" ? null : readback,
+        readback === "failed",
+      );
+    },
+    [onboarding],
+  );
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return applications.filter((application) => {
       const matchesStatus =
-        statusFilter === "all" || application.status === statusFilter;
+        statusFilter === "all" || queueState(application) === statusFilter;
       const matchesSearch =
         !query ||
         application.business_name.toLowerCase().includes(query) ||
@@ -270,16 +310,13 @@ export default function AdminApplicationsPage() {
         (application.primary_category ?? "").toLowerCase().includes(query);
       return matchesStatus && matchesSearch;
     });
-  }, [applications, search, statusFilter]);
+  }, [applications, search, statusFilter, queueState]);
 
-  const counts = useMemo(
-    () => ({
-      pending: applications.filter((item) => item.status === "pending").length,
-      approved: applications.filter((item) => item.status === "approved").length,
-      rejected: applications.filter((item) => item.status === "rejected").length,
-    }),
-    [applications],
-  );
+  const counts = useMemo(() => {
+    const states = applications.map(queueState);
+    const count = (state: ApplicationQueueState) => states.filter((item) => item === state).length;
+    return { awaiting: count("awaiting_review"), review: count("in_review"), active: count("active") };
+  }, [applications, queueState]);
 
   if (mode === "loading") {
     return (
@@ -329,7 +366,7 @@ export default function AdminApplicationsPage() {
               Vendor Applications
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {applications.length} total · {counts.pending} pending review
+              {applications.length} total · {counts.awaiting} awaiting review
             </p>
           </div>
           <Button
@@ -344,36 +381,36 @@ export default function AdminApplicationsPage() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <SummaryCard
-          label="Pending"
-          value={counts.pending}
+          label="Awaiting review"
+          value={counts.awaiting}
           className="border-amber-200 bg-amber-50"
         />
         <SummaryCard
-          label="Approved"
-          value={counts.approved}
-          className="border-emerald-200 bg-emerald-50"
+          label="In review"
+          value={counts.review}
+          className="border-blue-200 bg-blue-50"
         />
         <SummaryCard
-          label="Rejected"
-          value={counts.rejected}
-          className="border-border bg-muted/40"
+          label="Active"
+          value={counts.active}
+          className="border-emerald-200 bg-emerald-50"
         />
       </div>
 
-      {counts.pending > 0 && (
+      {counts.awaiting > 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center">
           <Clock className="h-5 w-5 shrink-0" />
           <p className="text-sm font-medium">
-            {counts.pending} application{counts.pending === 1 ? "" : "s"}{" "}
+            {counts.awaiting} application{counts.awaiting === 1 ? "" : "s"}{" "}
             awaiting review
           </p>
           <Button
             size="sm"
             variant="outline"
             className="sm:ml-auto"
-            onClick={() => setStatusFilter("pending")}
+            onClick={() => setStatusFilter("awaiting_review")}
           >
-            Show pending
+            Show new applications
           </Button>
         </div>
       )}
@@ -395,10 +432,11 @@ export default function AdminApplicationsPage() {
           className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-48"
         >
           <option value="all">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="abandoned">Abandoned</option>
+          {applicationQueueFilters.map((state) => (
+            <option key={state} value={state}>
+              {applicationQueueLabel[state]}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -451,7 +489,7 @@ export default function AdminApplicationsPage() {
                       {formatDate(application.created_at)}
                     </td>
                     <td className="p-4">
-                      <ApplicationStatus status={application.status} />
+                      <ApplicationStatus state={queueState(application)} />
                     </td>
                     <td className="p-4">
                       {application.status === "approved" ? (
@@ -496,11 +534,17 @@ export default function AdminApplicationsPage() {
 
       <ApplicationDialog
         application={selected}
+        state={selected ? queueState(selected) : "checking"}
         openingDocument={openingDocument}
-        onClose={() => setSelected(null)}
-        onReviewStarted={(application, contractorId) =>
-          patchApplication(application.id, { contractor_id: contractorId })
-        }
+        onClose={() => {
+          // Activation, suspension and rejection happen inside the dialog.
+          if (selected) void readOnboarding(selected.id);
+          setSelected(null);
+        }}
+        onReviewStarted={(application, contractorId) => {
+          patchApplication(application.id, { contractor_id: contractorId });
+          void readOnboarding(application.id);
+        }}
         retention={retention?.application_id === selected?.id ? retention : null}
         onRetention={receiveRetention}
         onOpenDocument={(path) => void openDocument(path)}
@@ -511,6 +555,7 @@ export default function AdminApplicationsPage() {
 
 function ApplicationDialog({
   application,
+  state,
   openingDocument,
   onClose,
   onReviewStarted,
@@ -519,6 +564,7 @@ function ApplicationDialog({
   onOpenDocument,
 }: {
   application: Application | null;
+  state: ApplicationQueueState;
   openingDocument: string | null;
   onClose: () => void;
   onReviewStarted: (application: Application, contractorId: string) => void;
@@ -535,7 +581,7 @@ function ApplicationDialog({
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <DialogTitle>{application.business_name}</DialogTitle>
-            <ApplicationStatus status={application.status} />
+            <ApplicationStatus state={state} />
           </div>
           <DialogDescription>
             Applied {formatDate(application.created_at)} · Application{" "}
@@ -1028,15 +1074,10 @@ function TableHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ApplicationStatus({ status }: { status: string }) {
+function ApplicationStatus({ state }: { state: ApplicationQueueState }) {
   return (
-    <Badge
-      className={cn(
-        "border capitalize",
-        statusStyle[status] ?? "border-border bg-muted text-muted-foreground",
-      )}
-    >
-      {status}
+    <Badge className={cn("border", statusStyle[state])}>
+      {applicationQueueLabel[state]}
     </Badge>
   );
 }
