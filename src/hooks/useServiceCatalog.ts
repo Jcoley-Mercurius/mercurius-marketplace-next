@@ -13,6 +13,7 @@ import {
 import {
   isPubliclyEligibleFixedPackage,
   isPubliclyEligibleQuotePackage,
+  packagesFromListedProviders,
   pricingFrequencies,
   promotionForPackage,
   publiclyEligibleFixedFrequencies,
@@ -55,12 +56,20 @@ export function useServiceCatalog() {
       supabase.rpc("pricing_server_now"),
     ]).then(async ([categoryResult, serviceResult, packageResult, tierResult, promotionResult, clockResult]) => {
       if (!active) return;
-      const failed = Boolean(categoryResult.error || serviceResult.error || packageResult.error || tierResult.error || promotionResult.error || clockResult.error);
+      const activePackageRows = (packageResult.data ?? []) as unknown as PackageRow[];
+      const listingResult = activePackageRows.length
+        ? await supabase.rpc("r0_public_providers")
+        : { data: [] as { id: string }[], error: null };
+      if (!active) return;
+      const failed = Boolean(categoryResult.error || serviceResult.error || packageResult.error || tierResult.error || promotionResult.error || clockResult.error || listingResult.error);
       // Public pages keep their existing fallback; the intake treats this as an error.
       setError(failed);
       const categoryRows = (categoryResult.data ?? []) as CategoryRow[];
       const serviceRows = (serviceResult.data ?? []) as ServiceRow[];
-      const packageRows = (packageResult.data ?? []) as unknown as PackageRow[];
+      const packageRows = packagesFromListedProviders(
+        activePackageRows,
+        listingResult.error ? null : new Set((listingResult.data ?? []).map((provider: { id: string }) => provider.id)),
+      );
       const tierRows = (tierResult.data ?? []) as TierRow[];
       const promotions = !promotionResult.error && !clockResult.error && typeof clockResult.data === "string"
         ? (promotionResult.data ?? []) as PackagePromotion[]

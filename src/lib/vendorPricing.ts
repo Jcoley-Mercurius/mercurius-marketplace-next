@@ -234,6 +234,16 @@ export function isPubliclyEligibleQuotePackage(
       || (item.pricing_mode === "deposit_quote" && isPositiveTierPrice(item.deposit_amount)));
 }
 
+// R0 listing rule (TRACE-104): catalog prices come only from providers the public
+// listing projection returns, for every viewer. Signed-in table reads still see active
+// providers for history, so the rule is applied here. Without the list, nothing shows.
+export function packagesFromListedProviders<TRow extends { contractor_id: string }>(
+  rows: TRow[],
+  listedProviderIds: ReadonlySet<string> | null,
+): TRow[] {
+  return listedProviderIds ? rows.filter((row) => listedProviderIds.has(row.contractor_id)) : [];
+}
+
 export function isPromotionType(value: unknown): value is PromotionType {
   return value === "percent_off" || value === "fixed_price";
 }
