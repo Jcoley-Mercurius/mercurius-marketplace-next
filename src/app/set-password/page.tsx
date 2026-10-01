@@ -36,6 +36,7 @@ export default function SetPasswordPage() {
   const router = useRouter();
   const [pageState, setPageState] = useState<PageState>("checking");
   const [linkError, setLinkError] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -53,10 +54,24 @@ export default function SetPasswordPage() {
       url.searchParams.get("error") ??
       hashParams.get("error");
 
+    const code = url.searchParams.get("code");
+    const tokenHash = url.searchParams.get("token_hash");
+    const type = url.searchParams.get("type");
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    // TRACE-105: a link credential decides the account. A session already in this
+    // browser (another signed-in account) must not stand in for it.
+    const hasLinkCredential = Boolean(
+      code ||
+        (tokenHash && (type === "recovery" || type === "invite")) ||
+        (accessToken && refreshToken),
+    );
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active || !session || authError) return;
+      if (!active || !session || authError || hasLinkCredential) return;
+      setAccountEmail(session.user.email ?? "");
       setLinkError("");
       setPageState("ready");
     });
@@ -73,22 +88,16 @@ export default function SetPasswordPage() {
           return;
         }
 
-        // The Supabase browser client may already have consumed the URL and
-        // persisted the recovery session during its own initialization.
         const { data: existing, error: sessionError } =
           await supabase.auth.getSession();
-        if (existing.session) {
+        // Without a link credential, a signed-in account changes its own password.
+        if (existing.session && !hasLinkCredential) {
           if (!active) return;
-          clearRecoveryCredentials();
+          setAccountEmail(existing.session.user.email ?? "");
           setPageState("ready");
           return;
         }
-
-        const code = url.searchParams.get("code");
-        const tokenHash = url.searchParams.get("token_hash");
-        const type = url.searchParams.get("type");
-        const accessToken = hashParams.get("access_token");
-        const refreshToken = hashParams.get("refresh_token");
+        const priorUserId = existing.session?.user.id ?? null;
 
         let exchange: Promise<RecoveryResult> | null = null;
 
@@ -130,15 +139,16 @@ export default function SetPasswordPage() {
           clearRecoveryCredentials();
           if (!active) return;
 
-          if (result.sessionReady) {
-            setPageState("ready");
-            return;
-          }
-
-          // Another Supabase client instance may have completed the exchange.
-          const { data: fallback } = await supabase.auth.getSession();
+          // Another Supabase client instance may have completed the exchange; either
+          // way the session must now belong to a new sign-in, not the prior account.
+          const { data: current } = await supabase.auth.getSession();
           if (!active) return;
-          if (fallback.session) {
+          const linked = current.session;
+          if (
+            linked &&
+            (result.sessionReady || linked.user.id !== priorUserId)
+          ) {
+            setAccountEmail(linked.user.email ?? "");
             setPageState("ready");
             return;
           }
@@ -326,6 +336,12 @@ export default function SetPasswordPage() {
             </h1>
             <p className="mb-8 text-muted-foreground">
               Choose a new password to finish securing your account.
+              {accountEmail && (
+                <>
+                  {" "}This sets the password for{" "}
+                  <span className="font-medium text-foreground">{accountEmail}</span>.
+                </>
+              )}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">

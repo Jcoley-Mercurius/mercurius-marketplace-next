@@ -172,3 +172,61 @@ test("existing-provider access keeps its kind through sign-in and password setup
   await expect(page.getByRole("heading", { name: "Confirm access to your business profile" })).toBeVisible();
   expect(acceptances).toBe(0);
 });
+
+// TRACE-105: an emailed link decides the account even when another account is signed in.
+function linkSession(sub: string, email: string) {
+  const expires = Math.floor(Date.now() / 1000) + 3600;
+  const encoded = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const token = `${encoded({ alg: "HS256", typ: "JWT" })}.${encoded({ sub, aud: "authenticated", role: "authenticated", exp: expires, fixture: "mds-only", testRole: "homeowner" })}.synthetic-signature`;
+  return { access_token: token, refresh_token: "link-fixture-only", token_type: "bearer", expires_at: expires, expires_in: 3600, user: { id: sub, aud: "authenticated", role: "authenticated", email, app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() } };
+}
+const invitedId = "d4000000-0000-4000-8000-0000000000aa";
+const invitedEmail = "invited.provider@example.invalid";
+const linkPath = `/set-password?invitation=${attempt}&kind=existing_provider&token_hash=synthetic-hash&type=invite`;
+
+test("invitation link verifies its own account while an admin is signed in", async ({ page }) => {
+  await syntheticSession(page.context(), "admin");
+  const verified: unknown[] = [];
+  const updatedBy: string[] = [];
+  await page.route("**/auth/v1/verify**", async (route) => {
+    verified.push(route.request().postDataJSON());
+    await route.fulfill({ json: linkSession(invitedId, invitedEmail) });
+  });
+  await page.route("**/auth/v1/user**", async (route) => {
+    if (route.request().method() !== "PUT") return route.fallback();
+    const token = (route.request().headers().authorization ?? "").replace(/^Bearer /, "");
+    updatedBy.push(JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).sub);
+    await route.fulfill({ json: linkSession(invitedId, invitedEmail).user });
+  });
+  let acceptances = 0;
+  await page.route("**/functions/v1/vendor-invite", async (route) => {
+    acceptances++;
+    await route.fulfill({ json: { status: "accepted", activated: false } });
+  });
+  await page.goto(linkPath);
+  await expect.poll(() => verified).toEqual([expect.objectContaining({ token_hash: "synthetic-hash", type: "invite" })]);
+  await expect(page.getByText(`This sets the password for ${invitedEmail}`, { exact: false })).toBeVisible();
+  await expect(page).not.toHaveURL(/token_hash/);
+  await page.getByLabel("New password", { exact: true }).fill("Synthetic-only-Password-42");
+  await page.getByLabel("Confirm password", { exact: true }).fill("Synthetic-only-Password-42");
+  await page.getByRole("button", { name: "Set password & continue" }).click();
+  await expect(page).toHaveURL(`/invitation?attempt=${attempt}&kind=existing_provider`, { timeout: 15000 });
+  expect(updatedBy).toEqual([invitedId]);
+  expect(acceptances).toBe(0);
+});
+
+test("a failed invitation link never falls back to the signed-in account", async ({ page }) => {
+  await syntheticSession(page.context(), "admin");
+  let updates = 0;
+  await page.route("**/auth/v1/verify**", (route) =>
+    route.fulfill({ status: 403, json: { code: 403, error_code: "otp_expired", msg: "Email link is invalid or has expired" } }));
+  await page.route("**/auth/v1/user**", async (route) => {
+    if (route.request().method() === "PUT") updates++;
+    await route.fallback();
+  });
+  await page.goto(linkPath);
+  await expect(page.getByText("invalid or has expired", { exact: false }).first()).toBeVisible();
+  await expect(page.getByLabel("New password", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("admin@example.invalid")).toHaveCount(0);
+  expect(updates).toBe(0);
+});
