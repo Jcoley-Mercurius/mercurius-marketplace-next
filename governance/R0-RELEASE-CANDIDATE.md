@@ -2,6 +2,7 @@
 
 **Branch:** `codex/r0-release-candidate` from `main` `a88da4f` (R0.4 PR #72 merged 2026-09-30).
 **Status (2026-09-30, verified read-only):** production **schema and operator data are rolled out** (migration history repair + push, 11 exclusions, 8 contacts, two `@mercurius.com` accounts removed). **Edge `vendor-invite`, Auth, SMTP, Vercel deployment and domain are unchanged.** No real invitation has been sent. The light-only release (DEC-2026-026) merged as `7591134` (PR #75).
+**Update 2026-10-01 (public cutover):** release `fa633f7` (`dpl_EiFw54cToP3hHqo1H4EfxEq5eQhP`) promoted 11:59:17 UTC; `mercuriusmarketplace.com` and `www` moved to `mercurius-marketplace-next` at **12:33:50–12:33:52 UTC**; Auth and `vendor-invite` re-pinned to `https://www.mercuriusmarketplace.com` at 12:34:47–12:34:58 UTC. **R0 is publicly live by owner go-ahead**, with one final-domain check outstanding (invitation on `www`) and T5 waived. See [Public cutover](#public-cutover-2026-10-01).
 **Update 2026-09-30 22:50–22:55 UTC (step 2):** R1 upload configuration **set** (hosted upload not yet verified) and R3 legacy checkout closure **verified**; see [Step 2 results](#step-2-results-2026-09-30-upload-configuration-and-checkout-closure). See [Production state verified 2026-09-30](#production-state-verified-2026-09-30) and the [running release checklist](#running-release-checklist).
 **Governing sources:** DEC-2026-022/024/025; [layered-launch decision](LAYERED-LAUNCH-DECISION.md) R0 vendor and operator contract; [R0.4 report](R0-VENDOR-READINESS.md) R0.5 checklist; Phase 5 invitation, binding, linking, activation-role and cutover contracts (TRACE-063/065/067/068/070/061).
 
@@ -89,6 +90,75 @@ Owner authorized exactly: R1's two upload variables, R3's two function deploymen
 - Pre-promotion runtime checks were not run: `vercel curl` would need a protection-bypass secret, which the project does not have (creating one was not authorized). The owner reviewed the build in the browser.
 - **Not promoted.** The owner found that the vendor application offered Naples and Punta Gorda (outside Lee County). Fix: PR #77. `dpl_B2yk…` must not be promoted; R2 redeploys from the merge SHA that includes #77, then promotes and runs the live checks.
 
+## Public cutover (2026-10-01)
+
+Owner authorization (2026-10-01): R0 public-domain cutover, provided the pre-cutover hosted tests pass on the exact deployed release; redeploy from current `main`; sole-admin coverage reaffirmed under DEC-2026-025; payments and homeowner transactions stay disabled; no real vendor invitations. All test identities are plus addresses on the owner's mailbox; no customer data was used.
+
+### Starting state found (not previously recorded)
+
+| Item | Found 2026-10-01 ~11:25 UTC |
+|---|---|
+| Vercel | Three CLI production builds of `469112e` (PR #77 merge) on 2026-10-01 01:34–02:11 UTC; `dpl_38asfuPewUGqMDdCZQvM63h1bzfe` was the production target (source identical to `469112e`, 924/924 tracked files). `main` had advanced to `fa633f7` (#78 signed-in catalog listing rule, #79 set-password link verification) |
+| Supabase | R4–R8 already applied: `vendor-invite` v14 (2026-10-01 02:00 UTC); secrets `MERCURIUS_INVITATION_MODE`, `_PROJECT_REF`, `_SITE_ORIGIN`, `SITE_URL` present; Auth Site URL and allow-list on the `vercel.app` origin; Resend SMTP (`smtp.resend.com:465`, sender `no-reply@`), invite subject and reviewed template, `mailer_otp_exp=10800`, leaked-password protection on, `rate_limit_email_sent=30`. Checkout functions redeployed as `create-checkout` v14 / `checkout-request` v19 (same bundle hashes as the verified v12/v17) |
+| Earlier tests | Partial overnight runs against `469112e` (T2 02:08, T1b 02:20, T4 invitation 02:55 UTC); not recorded and not counted for this release |
+
+### Release
+
+| Check | Result |
+|---|---|
+| Release SHA | `fa633f7a3014a108d5ecc28492a66c9c1a3e1d1a` (merge of PR #79) |
+| CI | Run 36854980590: attempt 1 failed one axe colour-contrast case (`request.spec.ts` confirmation light 320px; 464 passed); the previous head `81771e6` failed a different one (`homeowner.spec.ts` light 320px). Both measured a `transition-all` button mid-fade from `disabled:opacity-50` (blended colours `#7d8288`, `#8a8d92`), so test timing, not a product defect. Attempt 2: **success** (backend, lifecycle, application) |
+| Build | Clean detached worktree; `vercel deploy --prod --skip-domain` 11:31:20–11:32:14 UTC → `dpl_EiFw54cToP3hHqo1H4EfxEq5eQhP`, READY; uploaded source **927/927 files identical** to `fa633f7` (only `.gitignore` skipped) |
+| Promotion | `vercel promote` **11:59:17 UTC**; `mercurius-marketplace-next.vercel.app` → `dpl_EiFw…` (B3 closed) |
+| Edge functions | Downloaded `vendor-invite`, `vendor-application-notify`, `create-checkout`, `checkout-request` (+ `_shared`): **11/11 files byte-identical** to `fa633f7` |
+| Database | No `supabase/` change between `7591134` (verified push, 178/178) and `fa633f7` |
+
+### Pre-cutover tests on `dpl_EiFw…` (`https://mercurius-marketplace-next.vercel.app`)
+
+| Test | Result | Evidence |
+|---|---|---|
+| T1 Vendor application | **PASS** | `R0 T1c Synthetic Release Test (do not contact)` 12:06:25 UTC: `/api/vendor-applications` 201, signed upload to private `vendor-documents` 200, document record 200; owner notification in inbox 12:06:25; owner opened the PDF from admin (screenshot). Service areas offered: Lee County only |
+| T2 Early access / account | **PASS** | List-only 201; account signup 200; confirmation email in inbox within 1 s, DKIM (`resend`, `mercuriusmarketplace.com`), SPF and DMARC pass; link confirmed the account; sign-in → "Early access · Waiting for an invitation", no request/payment action |
+| T3 Booking denial | **PASS** | `/request` shows "Booking is opening by invitation", no submit/pay control. As the signed-in non-admitted homeowner: `service_requests` insert 403/42501; `money_prepare_checkout` 403 "Homeowner authorization required"; `create-checkout` and `checkout-request` × {`invoice_id`,`request_id`,`snapshot_id`} **6/6 `MONEY_NOT_ACTIVATED`**. Counts after: `money_checkout_attempts` 0, `service_requests` 11, invoices 1 (last update 2026-08-09) |
+| T4 Synthetic invitation | **PASS** | Owner released the overnight binding, recorded contact `+r0access2`, prepared and sent (new account, 1 day). Email in inbox 12:23:32 with the reviewed subject and wording; link host `mercurius-marketplace-next.vercel.app/set-password?…&kind=existing_provider&…&type=invite`; set-password page named the invited address; explicit acceptance 12:25:26; owner bound the account; vendor sign-in → `/vendor` setup checklist (0 of 3), booking-not-open notice, not listed or approved |
+| T5 Wrong / existing account | **WAIVED by owner** | Not run on the hosted release. Local evidence only (end-to-end 31/31, SQL 072) |
+| T6 Discovery | **PASS** | Anonymous `r0_public_providers` `[]`, anonymous `vendor_packages` `[]`; `/vendors`, `/providers`, `/services`, `/` show no prices, profile links or test/excluded names; direct `/providers/<id>` for all 21 contractors (11 excluded, 2 synthetic) → "Provider not found" |
+| T7 Light-only | **PASS** | 24/24: desktop and phone × fresh, OS-dark, saved-dark + OS-dark × `/`, `/early-access`, `/vendors/apply`, `/login`: `color-scheme: light`, no toggle, no horizontal scroll |
+
+The owner accidentally pressed an approval on the T1c record while preparing T5; readback showed no effect (application still `pending`, no invitation, contractor inactive, not marketing-enabled, public roster `[]`).
+
+### Cutover (D1–D2)
+
+| Step | UTC | Change | Readback |
+|---|---|---|---|
+| D1 | 12:33:50–12:33:52 | Removed `mercuriusmarketplace.com` (redirect to `www`, default 307) and `www.mercuriusmarketplace.com` from `mercurius-landing-page`; added `www.mercuriusmarketplace.com` to `mercurius-marketplace-next`, then `mercuriusmarketplace.com` with redirect to `www`, **308** | Both verified on `mercurius-marketplace-next`; `mercurius-landing-page` keeps only its `vercel.app` name. The landing project's previous domain list is saved outside the repository for rollback |
+| DNS | — | **No change.** GoDaddy authoritative (`ns73/ns74.domaincontrol.com`); apex A `216.198.79.1`, `www` CNAME `5b7a83afadbb75bc.vercel-dns-017.com.`; Google Workspace MX intact; no CAA | Rechecked 2026-10-01 |
+| D2 (R9) | 12:34:47 | Auth Site URL `https://www.mercuriusmarketplace.com`; allow-list exactly `https://www.mercuriusmarketplace.com`, `…/set-password`, `…/set-password?invitation=*` | Management API readback |
+| D2 (R9) | 12:34:58 | Secrets `MERCURIUS_INVITATION_SITE_ORIGIN` and `SITE_URL` = `https://www.mercuriusmarketplace.com` | Names listed; values proven by behavior (below) |
+
+Domain mapping now: `www.mercuriusmarketplace.com` → `mercurius-marketplace-next` production (canonical); `mercuriusmarketplace.com` → 308 → `www`; `mercurius-marketplace-next.vercel.app` → same deployment (still public; see follow-ups).
+
+### Final-domain acceptance (D3) on `https://www.mercuriusmarketplace.com`
+
+| Check | Result | Evidence |
+|---|---|---|
+| HTTPS / redirects | **PASS** | `https://` apex → 308 `https://www…/` (path and query kept); `http://www` → 308 `https://www`; `http://` apex → 308 `https://` apex → 308 `www` (two hops; Vercel's HTTPS redirect runs first); Let's Encrypt certificates for `www` (to 2026-12-27) and apex (to 2026-12-26); HSTS present; `/set-password`, `/early-access`, `/vendors/apply`, `/request` 200; `/admin` → 307 login |
+| Light-only | **PASS** | 24/24 (same matrix as T7) |
+| Homeowner early access / signup | **PASS** | `+r0t2d`: early access 201, signup 200 at 12:36:39; confirmation `redirect_to=https://www.mercuriusmarketplace.com`; verify landed on `www`; sign-in → waiting dashboard |
+| Vendor application / private upload / admin notification | **PASS** | `R0 T1d Synthetic Final-Domain Test (do not contact)` 12:37:35: 201 / signed upload 200 / document 200; owner notification in inbox 12:37:36; anonymous reads of the object via `public`, plain and `authenticated` paths 400 and signed-URL request `NoSuchKey` |
+| Direct booking / checkout denial | **PASS** | As `+r0t2d`: `/request` closed, no controls; insert 403/42501; `money_prepare_checkout` 403; both functions × three bodies 6/6 `MONEY_NOT_ACTIVATED` with Origin `www`; Origin `vercel.app` → 403 `ORIGIN_NOT_ALLOWED` (proves `SITE_URL` re-pin) |
+| Discovery | **PASS** | Same anonymous checks as T6 on `www`: rosters `[]`, no prices or names |
+| Recovery email | **Partial** | Sent 12:38:21, `redirect_to=https://www.mercuriusmarketplace.com/set-password`. Not completed: PKCE recovery must be opened in the requesting browser; the repeat request was rate-limited (429) and not retried further |
+| Synthetic invitation / password setup / login on `www` | **OUTSTANDING** | Not run: requires the owner to send one invitation (`+r0access3`) from admin. The pre-cutover T4 proved the flow on the same deployment; the only change since is the Site URL that builds the link |
+
+**Activation:** the owner directed the announcement on 2026-10-01 after these results. R0 is recorded as **publicly live by owner go-ahead, with the `www` invitation check outstanding and T5 waived**. Payments and homeowner transactions remain disabled; real invitations sent: 0.
+
+**Rollback (not used):** move both domains back to `mercurius-landing-page` (apex redirect to `www`) and revert R9 to the `vercel.app` values. DNS is unchanged, so rollback needs only those Vercel and Supabase changes plus certificate issuance. Checkout closure and application/account data are unaffected either way.
+
+### Test data created (cleanup pending)
+
+Auth users `jcoley+r0t2`, `+r0t2c`, `+r0t2d` (homeowner) and `+r0access`, `+r0access2` (provider; `+r0access2` bound to `R0 Access Test Provider`); interests `+r0t2list`, `+r0t2c`, `+r0t2d` with 5 interest events; 3 `loyalty_accounts` rows; applications `+r0t1`, `+r0t1b`, `+r0t1c`, `+r0t1d` with their storage objects; contractors `R0 Access Test Provider` (`65cce2d9…`) and `R0 T1c Synthetic Release Test` (`ae0e0da7…`), **not on the exclusion list** (hidden only because inactive and not onboarded). Deletion was attempted under the owner's instruction and refused by the session's permission policy; nothing was deleted. The interest `jacoley08@…` (2026-09-30) is not a test address and was left alone pending owner confirmation.
+
 ## Remaining hosted rollout package
 
 R1 and R3 were executed on 2026-09-30 (see [Step 2 results](#step-2-results-2026-09-30-upload-configuration-and-checkout-closure)); nothing else below has been executed. Each numbered action needs Josh's explicit authorization for that action; this session had authorization for read-only checks only. Keys are never printed: pass them from git-ignored files or the provider dashboards.
@@ -155,27 +225,28 @@ Verified 2026-09-30:
 
 ## Running release checklist
 
-Status as of 2026-09-30 (UTC). PASS = verified evidence exists; PENDING = not yet done or needs authorization; FAIL = verified defect.
+Status as of 2026-10-01 12:40 UTC. PASS = verified evidence exists; PENDING = not yet done or needs authorization; FAIL = verified defect.
 
 | # | Item | Status | Evidence / what remains |
 |---|---|---|---|
-| 1 | Production migration/cleanup reconciliation | **PASS** (end state) | 178/178, 0 pending; 11 exclusions; 8 contacts; test admins removed; scope repair live. Caveats: push/dry-run logs reported, not re-read; one cascade-deleted request (G3) |
-| 2 | Light-only release | **PASS locally** | `cfdcf49`: light-only 34/34; suite 458/460 with 2 intermittent finance cases not reproduced (57 reruns); hosted check pending (T7) |
-| 3 | Final SHA and CI | **PASS** | `7591134` (PR #75 merge); final-head CI run 36782043110 passed |
-| 4a | Upload configuration (R1) | **PASS (configuration)** | 2026-09-30: both variables in Production, names/target read back; hosted upload unproven until T1 after R2 |
-| 4b | Legacy checkout closure (R3) | **PASS** | 2026-09-30: `create-checkout` v12 / `checkout-request` v17 from `7591134`; signed-in user 6/6 `MONEY_NOT_ACTIVATED`; no checkout attempt or payment created |
-| 4c | App deployment (R2) | **PENDING** | 2026-09-30 build `dpl_B2yk…` from `7591134` not promoted; superseded by PR #77 (Lee County service areas); redeploy from its merge |
-| 4 | Remaining Edge/Auth/email configuration | **PENDING** | R4–R8 not executed |
-| 5 | Hosted recruiting and booking-denial tests | **PENDING** | T1–T7 not run (T3's function part is covered by R3 evidence; repeat after R2 through the app) |
-| 6 | Public vendor eligibility | **PASS (as designed)** | 0 listable; no test/excluded record public; 8 real vendors not yet eligible (above) |
-| 7 | Sole-admin exception and support/privacy contacts | **PENDING owner restatement** | DEC-2026-025 confirmed by Josh 2026-09-30; restate in go/no-go; contacts per R0.4 (hello@ / phone) |
-| 8 | GoDaddy DNS / Vercel cutover readiness | **PASS (DNS ready)** | No DNS change; reassignment D1 awaits pre-cutover tests and authorization |
-| 9 | Final-domain verification plan | **PASS (prepared)** | D3 above |
-| 10 | Rehearsal-project retirement | **PENDING owner decision** | Rehearsal evidence is recorded here; the project has no remaining migration role. Before deletion decide G2 (it holds the only copy of the cascade-deleted request once backups rotate) |
+| 1 | Production migration/cleanup reconciliation | **PASS** (end state) | 178/178, 0 pending; 11 exclusions; 8 contacts; test admins removed; scope repair live; no migration since. Caveats: push/dry-run logs reported, not re-read; one cascade-deleted request (G2/G3) |
+| 2 | Light-only release | **PASS (hosted)** | T7 24/24 on `dpl_EiFw…`; repeated 24/24 on `www` |
+| 3 | Final SHA and CI | **PASS** | `fa633f7` (PR #79 merge); CI run 36854980590 passed on attempt 2 (attempt 1: one transition-timing axe case) |
+| 4a | Upload configuration (R1) | **PASS** | Hosted upload proven by T1 and the final-domain application (B1 closed) |
+| 4b | Legacy checkout closure (R3) | **PASS** | Function source identical to `fa633f7`; 6/6 `MONEY_NOT_ACTIVATED` on the release and again on `www`; 0 checkout attempts |
+| 4c | App deployment (R2) | **PASS** | `dpl_EiFw54cToP3hHqo1H4EfxEq5eQhP` from `fa633f7`, source 927/927 identical, promoted 11:59:17 UTC |
+| 4 | Edge/Auth/email configuration (R4–R8) | **PASS (applied before this session; read back 2026-10-01)** | Values in [Public cutover](#public-cutover-2026-10-01); execution itself was not recorded at the time |
+| 5 | Hosted recruiting and booking-denial tests | **PASS except T5 (waived by owner)** | T1–T4, T6, T7 on `dpl_EiFw…` |
+| 6 | Public vendor eligibility | **PASS (as designed)** | Public roster `[]`; 21/21 profile URLs unavailable. The 2 synthetic contractors still need exclusion (cleanup) |
+| 7 | Sole-admin exception and support/privacy contacts | **PASS** | DEC-2026-025 reaffirmed by Josh 2026-10-01 for R0 recruiting (not R1 coverage); contacts per R0.4 |
+| 8 | Domain cutover (D1–D2) | **DONE** | 12:33:50–12:33:52 UTC domains; 12:34:47–12:34:58 UTC Auth and secrets; DNS unchanged |
+| 9 | Final-domain acceptance (D3) | **PASS except one** | All critical checks pass; synthetic invitation on `www` **outstanding**; recovery email link verified but reset not completed |
+| 10 | Rehearsal-project retirement | **DECIDED; delete about 2026-10-08** | G2: keep `mercurius-r0-rehearsal` (`bykrrbasvjpuljnrkwdo`) until the 2026-09-30 backup rotates out (~2026-10-08), then delete it |
+| 11 | R0 public activation | **LIVE by owner go-ahead (2026-10-01)** | Announcement directed by the owner with item 9's invitation check outstanding and T5 waived |
 
-**Blockers:** B1 upload configuration set 2026-09-30; open until hosted upload passes T1 after R2. B2 **closed** 2026-09-30 (R3 verified). B3 the stale `735df91` app is publicly reachable on the `vercel.app` alias against the migrated DB → R2 (or temporarily enable protection for the production alias). B4 hosted tests T1–T7 not yet run.
+**Blockers:** B1 **closed** (T1). B2 **closed**. B3 **closed** (stale `735df91` replaced at 11:59:17 UTC). B4 **closed** except T5 (waived) and the outstanding `www` invitation check.
 
-**Owner decisions (go/no-go package):** G1 R1 and R3 authorized and done 2026-09-30; R2 (deploy, then promote) still needs authorization; G2 retention of the 10:17 UTC pre-push state: the daily backup rotates out around 2026-10-08, and the rehearsal copy contains the cascade-deleted request; choose keep-rehearsal-until-then, an owner-held encrypted dump, or accept loss; then authorize deleting `mercurius-r0-rehearsal` (`bykrrbasvjpuljnrkwdo`); G3 confirm the cascade-deleted request belonged to test data; G4 authorize R4–R8 after R1–R3 pass; G5 approve default Supabase confirmation/recovery wording or request branded templates; G6 after T1–T7 pass, authorize D1–D3 with DEC-2026-025 restated; G7 Codex review of the light-only diff and the two homepage contrast changes.
+**Owner decisions (go/no-go package):** G1 R1–R3 done; R2 redeploy and promotion authorized and done 2026-10-01. G2 **decided 2026-10-01**: keep the rehearsal project until about 2026-10-08, then delete it. G3 not separately confirmed; G2's choice keeps the copy until then. G4 R4–R8 applied (found in place). G5 **approved 2026-10-01**: the live confirmation ("Confirm your email address") and recovery ("Reset your password") emails. G6 cutover authorized and done 2026-10-01 with DEC-2026-025 reaffirmed. G7 Codex review still open.
 
 ## Pre-rollout baseline (read-only, 2026-09-30, before the production push)
 
@@ -308,3 +379,5 @@ The owner's `@mercuriusmarketplace.com` account is confirmed and linked to Arist
 ## Open follow-ups
 
 Dark-mode repair (TRACE-106); legacy Edge functions beyond checkout (`stripe-webhook` v13, `refund-invoice` v1, `customer-portal`, `list-payment-methods`, `beta-access`, `loyalty-recommend`, `job-lifecycle-worker`, `vendor-application-notify` all August builds) reviewed for redeploy; compliance path for access-managed providers (real application or cutover evidence); backup administrator (exception recorded); Aristotle disposition (archive recommended; see handoff); contact-form and renewal owner-email ledger (R0.4 D10).
+
+Added 2026-10-01 (public cutover): (1) synthetic invitation → password setup → login on `www` (one owner send to `+r0access3`); (2) hosted T5 (wrong-account acceptance, cross-provider binding, existing-account refusal), waived for launch; (3) test-data cleanup listed under [Public cutover](#test-data-created-cleanup-pending), including excluding the two synthetic contractors (needs owner-authorized production deletes); (4) delete `mercurius-r0-rehearsal` about 2026-10-08; (5) `mercurius-marketplace-next.vercel.app` still serves the app publicly: redirect to `www` or protect it; (6) axe tests should wait for button transitions (`transition-all` + `disabled:opacity-50` race); (7) a signup link opened in a different browser lands on `/` with no confirmation message (PKCE exchange fails silently; the account is confirmed); (8) `/providers/<id>` for unavailable providers returns 200, not 404; (9) `http://` apex redirects in two hops; (10) owner to confirm whether the `jacoley08@…` interest is theirs.

@@ -1,4 +1,15 @@
-# Agent handoff — 2026-09-30
+# Agent handoff — 2026-10-01
+
+## R0 public cutover: mercuriusmarketplace.com live (TRACE-105), 2026-10-01
+
+- Release `fa633f7` (PR #79 merge; CI 36854980590 attempt 2) → `dpl_EiFw54cToP3hHqo1H4EfxEq5eQhP`, source 927/927 identical, promoted 11:59:17 UTC. Edge functions byte-identical to the release; no migration since `7591134`. [Results](../../governance/R0-RELEASE-CANDIDATE.md#public-cutover-2026-10-01).
+- Found unrecorded: three `469112e` builds (01:34–02:11 UTC) and R4–R8 already applied (values read back in the report).
+- Pre-cutover on the release: T1, T2, T3, T4, T6, T7 PASS; T5 waived by owner.
+- Cutover 12:33:50–12:33:52 UTC: both domains moved from `mercurius-landing-page`; `www` canonical, apex 308. DNS unchanged (GoDaddy). R9 at 12:34:47–58 UTC: Auth Site URL/allow-list and `SITE_URL`/`MERCURIUS_INVITATION_SITE_ORIGIN` → `https://www.mercuriusmarketplace.com`.
+- Final domain: HTTPS/redirects, light-only, homeowner signup, vendor application/private upload/notification, booking/checkout denial, discovery PASS. **Outstanding:** synthetic invitation/password setup/login on `www` (owner sends to `+r0access3`).
+- **R0 publicly live by owner go-ahead**; DEC-2026-025 reaffirmed; G2 (keep rehearsal until ~2026-10-08, then delete) and G5 (current emails) approved. Payments/transactions disabled; real invitations sent: 0.
+- Next: the `www` invitation check; test-data cleanup (deletes refused by session policy; needs owner authorization); delete rehearsal project ~2026-10-08; decide on the public `vercel.app` alias; Codex review of this record.
+
 
 ## R0.5 step 2: upload configuration and legacy checkout closure (TRACE-105), 2026-09-30
 
