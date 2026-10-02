@@ -89,7 +89,7 @@ test("invitation needs a valid link and authenticated recipient", async ({
     page.getByRole("link", { name: "Sign in to continue" }),
   ).toHaveAttribute(
     "href",
-    `/login?redirect=${encodeURIComponent(`/invitation?attempt=${attempt}`)}`,
+    `/login/vendor?redirect=${encodeURIComponent(`/invitation?attempt=${attempt}`)}`,
   );
 });
 
@@ -156,7 +156,7 @@ test("existing-provider access keeps its kind through sign-in and password setup
   await page.goto(`/invitation?attempt=${attempt}&kind=existing_provider`);
   await expect(page.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute(
     "href",
-    `/login?redirect=${encodeURIComponent(`/invitation?attempt=${attempt}&kind=existing_provider`)}`,
+    `/login/vendor?redirect=${encodeURIComponent(`/invitation?attempt=${attempt}&kind=existing_provider`)}`,
   );
   await syntheticSession(page.context(), "homeowner");
   let acceptances = 0;
@@ -229,4 +229,24 @@ test("a failed invitation link never falls back to the signed-in account", async
   await expect(page.getByLabel("New password", { exact: true })).toHaveCount(0);
   await expect(page.getByText("admin@example.invalid")).toHaveCount(0);
   expect(updates).toBe(0);
+});
+
+test("an expired provider link sends the recipient to the vendor password reset", async ({ page }) => {
+  await page.route("**/auth/v1/verify**", (route) =>
+    route.fulfill({ status: 403, json: { code: 403, error_code: "otp_expired", msg: "Email link is invalid or has expired" } }));
+  await page.goto(linkPath);
+  const reset = page.getByRole("link", { name: "Send me a new link" });
+  await expect(reset).toHaveAttribute("href", "/forgot-password?for=vendor");
+  await reset.click();
+  await expect(page.getByText("Vendor", { exact: true })).toBeVisible();
+  await expect(page.getByText("Homeowner", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login/vendor");
+});
+
+test("the vendor sign-in reset link keeps the vendor portal", async ({ page }) => {
+  await page.goto("/login/vendor");
+  await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/forgot-password?for=vendor");
+  await page.goto("/forgot-password");
+  await expect(page.getByText("Homeowner", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
 });
