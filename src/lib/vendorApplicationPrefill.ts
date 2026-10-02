@@ -2,6 +2,7 @@
 // admin vendor profile offers the linked application's answers for any field still empty.
 // Nothing is saved until the operator publishes. Applicant credentials are not turned into
 // badges: a self-reported credential is not a verified trust claim (MDS R0 recruiting rule).
+import { readApplicationServices } from "@/lib/vendorApplicationServices";
 import { serviceAreaCommunities } from "@/lib/vendorServiceAreas";
 
 export type PrefillApplication = {
@@ -26,7 +27,7 @@ export type PrefillProfile = {
 export type ApplicationPrefill = {
   profile: Partial<PrefillProfile>;
   zipCodes: string[];
-  /** Application services with no catalog service of the same name. */
+  /** "Other" descriptions and legacy names with no catalog service. */
   unmatchedServices: string[];
 };
 
@@ -41,10 +42,7 @@ export function applicationPrefill(
   catalog: { id: string; name: string }[],
   areas: { zip_code: string; city: string }[],
 ): ApplicationPrefill {
-  const catalogByName = new Map(catalog.map((service) => [key(service.name), service.id]));
-  const applied = (application.services ?? []).map((name) => name.trim()).filter(Boolean);
-  const serviceIds = [...new Set(applied.map((name) => catalogByName.get(key(name))).filter((id): id is string => Boolean(id)))];
-  const unmatchedServices = applied.filter((name) => !catalogByName.has(key(name)));
+  const { catalogIds: serviceIds, unmatched: unmatchedServices } = readApplicationServices(application.services, catalog);
 
   const cities = new Set(
     (application.service_areas ?? "")

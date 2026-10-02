@@ -8,7 +8,7 @@ const application: PrefillApplication = {
   years_experience: 14,
   email: "owner@example.test",
   phone: "239-555-0100",
-  services: ["Mowing", "lawn mowing", "Gutter polishing"],
+  services: ["lawn-mowing", "Other: Gutter polishing", "Mowing"],
   service_areas: "Cape Coral, Pine Island",
 };
 
@@ -33,7 +33,7 @@ describe("vendor application prefill", () => {
       services: ["lawn-mowing"],
     });
     expect(fill.zipCodes).toEqual(["33904", "33922", "33956"]);
-    expect(fill.unmatchedServices).toEqual(["Mowing", "Gutter polishing"]);
+    expect(fill.unmatchedServices).toEqual(["Gutter polishing", "Mowing"]);
   });
 
   it("never overwrites values already on the profile", () => {

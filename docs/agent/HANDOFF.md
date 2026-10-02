@@ -1,5 +1,12 @@
 # Agent handoff — 2026-10-01
 
+## Vendor application services from the catalog (TRACE-105), 2026-10-02
+
+- Branch `claude/vendor-application-prefill` from `main` `46ae6ae` (independent of the password-reset branch). Owner decision 2026-10-02: applicants choose services from the live catalog (at least one required), plus an optional "Other" with a description, reviewed later for catalog additions.
+- `/vendors/apply`: primary category = active `service_categories` (replaces 24 hard-coded categories); services = active `services_catalog` grouped by category, primary first; "Other" opens a required description (150 chars). `vendor_applications.services` stores catalog ids plus one `Other: …` entry; no migration. The route refuses choices outside the active catalog (400). The admin queue shows catalog names; the vendor-page prefill matches by id, then name (legacy rows).
+- Evidence: typecheck, lint, unit 375/375, synthetic build, browser `vendor-service-areas` + `vendor-readiness` + `existing-provider-access` + `application-retention` 39/39 (earlier 22/22 for the prefill ran on a stale build; rerun here on the new build). Not run: hosted submission, `@visual`.
+- Open: "Other" descriptions have no review report yet (read from the admin queue); applications submitted before this keep free-text names.
+
 ## Vendor profile prefill from the application (TRACE-105), 2026-10-02
 
 - Owner report: after "Start onboarding review", `/admin/vendors/[id]` showed only the business name. Cause: `vendor_start_onboarding_review` (migration `20260911001000`) inserts the contractor with `name` only.
