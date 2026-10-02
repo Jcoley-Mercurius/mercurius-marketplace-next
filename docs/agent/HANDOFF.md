@@ -1,5 +1,12 @@
 # Agent handoff — 2026-10-01
 
+## Vendor profile prefill from the application (TRACE-105), 2026-10-02
+
+- Owner report: after "Start onboarding review", `/admin/vendors/[id]` showed only the business name. Cause: `vendor_start_onboarding_review` (migration `20260911001000`) inserts the contractor with `name` only.
+- Fix (client only, no migration or hosted write): the vendor page reads the linked application and fills empty bio, website, years, email, phone, catalog services (exact name match) and ZIPs (service-area communities → `coverage_areas.city`). Values already on the profile are not changed. Nothing is saved until Publish. Credentials are not turned into badges. A notice lists filled fields and services with no catalog match. `serviceAreaCommunities` moved from the test into `src/lib/vendorServiceAreas.ts`.
+- Evidence: typecheck, lint, unit 368/368 (new `vendor-application-prefill` 3/3), browser `vendor-readiness` + `existing-provider-access` 22/22. Not run: manual check on a real application.
+- Open for Codex: whether the review-start function should also copy these fields server-side; free-text application services that don't match a catalog name still need selecting by hand.
+
 ## R0 public cutover: mercuriusmarketplace.com live (TRACE-105), 2026-10-01
 
 - Release `fa633f7` (PR #79 merge; CI 36854980590 attempt 2) → `dpl_EiFw54cToP3hHqo1H4EfxEq5eQhP`, source 927/927 identical, promoted 11:59:17 UTC. Edge functions byte-identical to the release; no migration since `7591134`. [Results](../../governance/R0-RELEASE-CANDIDATE.md#public-cutover-2026-10-01).

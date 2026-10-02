@@ -17,6 +17,17 @@ export const LEE_COUNTY_SERVICE_AREAS = [
 
 const allowed = new Set<string>(LEE_COUNTY_SERVICE_AREAS);
 
+// Allowlist communities that a combined label stands for; other labels name one community.
+const communities: Record<string, string[]> = {
+  "Sanibel / Captiva": ["Sanibel", "Captiva"],
+  "Pine Island": ["Bokeelia", "Pineland", "Saint James City"],
+};
+
+/** Allowlist communities (coverage_areas.city) named by a service-area label. */
+export function serviceAreaCommunities(label: string): string[] {
+  return communities[label] ?? [label];
+}
+
 /**
  * Normalizes a comma-separated service-area value to known Lee County labels.
  * Returns null when empty; throws with the unsupported entries otherwise.
