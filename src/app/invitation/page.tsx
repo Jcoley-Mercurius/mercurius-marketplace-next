@@ -112,7 +112,7 @@ export default function InvitationPage() {
           <div className="space-y-4">
             <p>Sign in with the email address that received this invitation.</p>
             <Link
-              href={`/login?redirect=${encodeURIComponent(`/invitation?attempt=${attempt}${existing ? "&kind=existing_provider" : ""}`)}`}
+              href={`/login/vendor?redirect=${encodeURIComponent(`/invitation?attempt=${attempt}${existing ? "&kind=existing_provider" : ""}`)}`}
               className={buttonVariants({ variant: "commitment" })}
             >
               Sign in to continue
