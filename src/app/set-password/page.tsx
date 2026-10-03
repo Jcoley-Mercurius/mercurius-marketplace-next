@@ -42,11 +42,14 @@ export default function SetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState("");
+  const [resetHref, setResetHref] = useState("/forgot-password");
 
   useEffect(() => {
     let active = true;
     const supabase = createClient();
     const url = new URL(window.location.href);
+    // A provider invitation link sends an expired recipient to the vendor reset page.
+    const providerLink = url.searchParams.has("invitation");
     const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
     const authError =
       url.searchParams.get("error_description") ??
@@ -80,6 +83,7 @@ export default function SetPasswordPage() {
       try {
         // Keep state changes asynchronous relative to effect setup.
         await Promise.resolve();
+        if (active && providerLink) setResetHref("/forgot-password?for=vendor");
         if (authError) {
           if (!active) return;
           setLinkError(authError);
@@ -307,7 +311,7 @@ export default function SetPasswordPage() {
               </p>
             )}
             <Link
-              href="/forgot-password"
+              href={resetHref}
               className="inline-block font-medium text-accent hover:underline"
             >
               Send me a new link

@@ -118,7 +118,7 @@ export default function VendorLoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-4">
                   <Label htmlFor="vendor-password">Password</Label>
-                  <Link href="/forgot-password" className="inline-flex min-h-11 items-center text-sm text-accent hover:underline">Forgot password?</Link>
+                  <Link href="/forgot-password?for=vendor" className="inline-flex min-h-11 items-center text-sm text-accent hover:underline">Forgot password?</Link>
                 </div>
                 <div className="relative">
                   <Input id="vendor-password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={isLoading} className="h-12 bg-background pr-12" />

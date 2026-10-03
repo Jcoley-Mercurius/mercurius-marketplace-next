@@ -14,6 +14,13 @@
 - Evidence: typecheck, lint, unit 368/368 (new `vendor-application-prefill` 3/3), browser `vendor-readiness` + `existing-provider-access` 22/22. Not run: manual check on a real application.
 - Open for Codex: whether the review-start function should also copy these fields server-side; free-text application services that don't match a catalog name still need selecting by hand.
 
+## Vendor password reset and access routing (TRACE-105), 2026-10-01
+
+- Branch `claude/vendor-password-reset` from `main` `46ae6ae`. Cause: two provider invites (TDJ Construction, All Surface) clicked after the 3-hour link lifetime; the fallback reset email used `{{ .ConfirmationURL }}` (PKCE, same-browser only, spent by any GET), so it confirmed the accounts but showed "expired", and later invites were refused `email_exists`.
+- Hosted change (owner-approved): Auth recovery template now links to `/set-password?token_hash=…&type=recovery`; read back identical. Source in `supabase/templates/password-recovery.html`. Owner-approved recovery emails sent to both accounts; both then bound via existing-account access.
+- Code: `/forgot-password?for=vendor` (vendor badge, back to `/login/vendor`); vendor sign-in, expired provider links and `/invitation` sign-in route to the vendor pages. Evidence: lint, typecheck, synthetic build, `invitations` + `existing-provider-access` specs 18/18.
+- Open: the 3-hour invite lifetime (owner decision 2026-09-13); `/set-password` still verifies on page load (JS-running scanners can spend a link); the admin panel does not show the account ID after an `email_exists` refusal.
+
 ## R0 public cutover: mercuriusmarketplace.com live (TRACE-105), 2026-10-01
 
 - Release `fa633f7` (PR #79 merge; CI 36854980590 attempt 2) → `dpl_EiFw54cToP3hHqo1H4EfxEq5eQhP`, source 927/927 identical, promoted 11:59:17 UTC. Edge functions byte-identical to the release; no migration since `7591134`. [Results](../../governance/R0-RELEASE-CANDIDATE.md#public-cutover-2026-10-01).
