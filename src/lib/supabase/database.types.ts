@@ -7264,6 +7264,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      r0_start_existing_provider_review: {
+        Args: {
+          p_application: string
+          p_contractor: string
+          p_expected_version: string
+          p_key: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       r0_submit_interest: {
         Args: {
           p_email: string

@@ -79,7 +79,7 @@ async function invocationError(error: unknown, data: unknown) {
 
 const when = (value: string | null | undefined) => (value ? new Date(value).toLocaleString() : "Not recorded");
 
-export function attemptLabel(attempt: Attempt): string {
+export function attemptLabel(attempt: Attempt, boundUserId: string | null = null): string {
   if (attempt.status === "prepared")
     return attempt.mode === "existing_account"
       ? "Prepared for an existing account — waiting for the owner to sign in and accept"
@@ -93,7 +93,10 @@ export function attemptLabel(attempt: Attempt): string {
     return attempt.refusal_code === "email_exists"
       ? "Refused: the address already holds an account — nothing sent"
       : "Failed — nothing sent";
-  if (attempt.status === "accepted") return "Accepted by the recipient — awaiting reviewed binding";
+  if (attempt.status === "accepted")
+    return boundUserId && attempt.accepted_by === boundUserId
+      ? "Accepted by the recipient — account bound"
+      : "Accepted by the recipient — awaiting reviewed binding";
   if (attempt.status === "expired") return "Expired without acceptance";
   if (attempt.status === "revoked") return "Revoked";
   return attempt.status;
@@ -256,7 +259,7 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
         </div>
         {attempt && (
           <div className="rounded-lg border border-border p-3" role="status">
-            <p className="font-medium">{attemptLabel(attempt)}</p>
+            <p className="font-medium">{attemptLabel(attempt, overview.bound_by_access ? overview.linked_user_id : null)}</p>
             <p className="mt-1 text-muted-foreground">
               {attempt.mode === "existing_account" ? `Existing account ${attempt.existing_account_id}` : "New account"} · expires{" "}
               {when(attempt.expires_at)}

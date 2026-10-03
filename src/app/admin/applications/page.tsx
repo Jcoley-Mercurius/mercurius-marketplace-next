@@ -96,6 +96,15 @@ type IntakeStatus = {
   onboarding_status: string | null;
   onboarding_revision: number | null;
   review_started: boolean;
+  // The access-managed provider whose confirmed contact sent this application.
+  existing_provider: {
+    contractor_id: string;
+    name: string | null;
+    bound: boolean;
+    onboarding: boolean;
+    excluded: boolean;
+    live_attempt: boolean;
+  } | null;
 };
 
 type ReviewStart = {
@@ -908,16 +917,21 @@ function OnboardingReview({
 
   const start = async (reason: string) => {
     if (!intake?.latest_version_id) return;
+    const existing = intake.existing_provider;
     try {
-      const { data, error } = await createClient().rpc(
-        "vendor_start_onboarding_review",
-        {
-          p_application: application.id,
-          p_expected_version: intake.latest_version_id,
-          p_reason: reason,
-          p_key: key,
-        },
-      );
+      const args = {
+        p_application: application.id,
+        p_expected_version: intake.latest_version_id,
+        p_reason: reason,
+        p_key: key,
+      };
+      // An existing provider's application opens review on that provider's record.
+      const { data, error } = existing
+        ? await createClient().rpc("r0_start_existing_provider_review", {
+            ...args,
+            p_contractor: existing.contractor_id,
+          })
+        : await createClient().rpc("vendor_start_onboarding_review", args);
       if (error) throw error;
       const result = data as unknown as ReviewStart;
       const readback = await readIntake();
@@ -933,7 +947,9 @@ function OnboardingReview({
       setIntake(readback);
       onStarted(result.contractor_id);
       toast.success("Onboarding review started", {
-        description: "No account, invitation or public listing was created.",
+        description: existing
+          ? "Linked to the existing provider. No approval, role change or public listing followed."
+          : "No account, invitation or public listing was created.",
       });
     } catch (error) {
       toast.error("Onboarding review could not be started", {
@@ -948,8 +964,26 @@ function OnboardingReview({
   const closed =
     intake?.application_status === "rejected" ||
     intake?.application_status === "abandoned";
+  const existing = intake?.existing_provider ?? null;
+  const existingBlocked = !existing
+    ? ""
+    : existing.excluded
+      ? "is archived, so it cannot start onboarding."
+      : existing.onboarding
+        ? "already has an onboarding record."
+        : existing.live_attempt
+          ? "has a live access invitation. Close it before starting review."
+          : !existing.bound
+            ? "has no reviewed account binding yet. Bind the account in Existing Provider Access first."
+            : "";
+  const existingLinked = Boolean(
+    existing && intake?.contractor_id === existing.contractor_id,
+  );
   const canStart =
-    Boolean(intake?.latest_version_id) && !intake?.contractor_id && !closed;
+    Boolean(intake?.latest_version_id) &&
+    (!intake?.contractor_id || existingLinked) &&
+    !closed &&
+    !existingBlocked;
 
   return (
     <>
@@ -981,7 +1015,7 @@ function OnboardingReview({
             compliance.
           </span>
         </div>
-      ) : intake.contractor_id ? (
+      ) : intake.contractor_id && !existingLinked ? (
         <p className="text-sm leading-6 text-muted-foreground">
           Linked to an existing provider record. Its review follows the
           provider compliance cutover path.
@@ -995,6 +1029,33 @@ function OnboardingReview({
           This application has no recorded intake version, so onboarding
           review cannot start here yet.
         </p>
+      ) : existing ? (
+        <div className="space-y-3">
+          <p className="text-sm leading-6 text-muted-foreground">
+            Sent from the confirmed contact of the existing provider{" "}
+            <Link
+              href={`/admin/vendors/${existing.contractor_id}`}
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              {existing.name ?? "record"}
+            </Link>
+            .{" "}
+            {existingBlocked
+              ? `That provider ${existingBlocked}`
+              : "Review opens on that provider's record, not a new one."}
+          </p>
+          <ConfirmAction
+            disabled={disabled || !canStart}
+            requireReason
+            confirmationTone="commitment"
+            triggerLabel="Start review for existing provider"
+            title="Start onboarding review for the existing provider?"
+            entity={existing.name ?? application.business_name}
+            consequence="Links this application to the existing provider record and opens review at revision 1. The bound account and its setup access stay as they are. No email, approval, role change or public listing results."
+            confirmLabel="Start review"
+            onConfirm={start}
+          />
+        </div>
       ) : (
         <div className="space-y-3">
           <p className="text-xs leading-5 text-muted-foreground">
@@ -1020,6 +1081,9 @@ function OnboardingReview({
         has one bound; the panels report which path is open. */}
     {intake?.contractor_id && intake.review_started && (
       <>
+        {/* An existing provider's account came through its reviewed access binding. */}
+        {!existingLinked && (
+        <>
         <DetailSection title="Provider account">
           <VendorAccountLinking
             contractorId={intake.contractor_id}
@@ -1034,6 +1098,8 @@ function OnboardingReview({
             disabled={disabled}
           />
         </DetailSection>
+        </>
+        )}
         <DetailSection title="Activation checklist">
           <VendorOnboardingChecklist
             contractorId={intake.contractor_id}
