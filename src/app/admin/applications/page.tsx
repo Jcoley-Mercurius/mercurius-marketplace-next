@@ -49,6 +49,10 @@ import {
 } from "@/lib/applicationQueueState";
 import { retentionStateLabel } from "@/lib/renewalRetention";
 import {
+  applicationServiceLabels,
+  type CatalogService,
+} from "@/lib/vendorApplicationServices";
+import {
   vendorDocumentDisplayName,
   vendorDocumentKindFromPath,
 } from "@/lib/vendorApplicationDocuments";
@@ -190,6 +194,7 @@ export default function AdminApplicationsPage() {
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
   const [retention, setRetention] = useState<ApplicationRetentionOverview | null>(null);
   const [onboarding, setOnboarding] = useState<Record<string, QueueReadback>>({});
+  const [catalog, setCatalog] = useState<CatalogService[]>([]);
 
   const readOnboarding = useCallback(async (applicationId: string) => {
     const { data, error } = await createClient().rpc(
@@ -207,12 +212,17 @@ export default function AdminApplicationsPage() {
       const supabase = createClient();
 
       try {
-        const { data, error } = await supabase
-          .from("vendor_applications")
-          .select(applicationSelect)
-          .order("created_at", { ascending: false });
+        const [{ data, error }, services] = await Promise.all([
+          supabase
+            .from("vendor_applications")
+            .select(applicationSelect)
+            .order("created_at", { ascending: false }),
+          // TRACE-105: applications store catalog ids; show their names.
+          supabase.from("services_catalog").select("id, name"),
+        ]);
 
         if (error) throw error;
+        setCatalog((services.data ?? []) as CatalogService[]);
         const rows = (data ?? []) as unknown as Application[];
         setApplications(rows);
         setOnboarding({});
@@ -491,7 +501,7 @@ export default function AdminApplicationsPage() {
                       </p>
                     </td>
                     <td className="p-4 text-xs text-muted-foreground">
-                      {summarizeServices(application.services)}
+                      {summarizeServices(applicationServiceLabels(application.services, catalog))}
                     </td>
                     <td className="p-4">{application.years_experience}y</td>
                     <td className="p-4 text-muted-foreground">
@@ -543,6 +553,7 @@ export default function AdminApplicationsPage() {
 
       <ApplicationDialog
         application={selected}
+        catalog={catalog}
         state={selected ? queueState(selected) : "checking"}
         openingDocument={openingDocument}
         onClose={() => {
@@ -564,6 +575,7 @@ export default function AdminApplicationsPage() {
 
 function ApplicationDialog({
   application,
+  catalog,
   state,
   openingDocument,
   onClose,
@@ -573,6 +585,7 @@ function ApplicationDialog({
   onOpenDocument,
 }: {
   application: Application | null;
+  catalog: CatalogService[];
   state: ApplicationQueueState;
   openingDocument: string | null;
   onClose: () => void;
@@ -642,7 +655,7 @@ function ApplicationDialog({
                 {application.primary_category}
               </Badge>
             )}
-            {application.services.map((service) => (
+            {applicationServiceLabels(application.services, catalog).map((service) => (
               <Badge key={service} variant="secondary">
                 {service}
               </Badge>

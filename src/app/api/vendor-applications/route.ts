@@ -12,6 +12,7 @@ import {
 import { signVendorDocumentUploadGrant } from "@/lib/vendorApplicationUploadToken";
 import { deliverApplicationNotification } from "@/lib/applicationNotifications";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
+import { validateApplicationServices } from "@/lib/vendorApplicationServices";
 import {
   normalizeServiceAreas,
   UnsupportedServiceAreaError,
@@ -55,6 +56,27 @@ function serviceClient() {
   return createClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+// TRACE-105: services and the primary category come from the active Mercurius catalog.
+async function checkCatalogChoices(
+  supabase: ReturnType<typeof serviceClient>,
+  application: ApplicationInput,
+) {
+  const [services, categories] = await Promise.all([
+    supabase.from("services_catalog").select("id").eq("is_active", true),
+    supabase.from("service_categories").select("name").eq("is_active", true),
+  ]);
+  if (services.error) throw services.error;
+  if (categories.error) throw categories.error;
+  const serviceError = validateApplicationServices(
+    application.services,
+    new Set((services.data ?? []).map((row) => row.id as string)),
+  );
+  if (serviceError) throw new RequestValidationError(serviceError);
+  if (!(categories.data ?? []).some((row) => row.name === application.primary_category)) {
+    throw new RequestValidationError("Choose a primary category from the list.");
+  }
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -264,6 +286,7 @@ export async function POST(request: Request) {
     const documents = parseDocuments(body.documents);
     const applicationId = randomUUID();
     const supabase = serviceClient();
+    await checkCatalogChoices(supabase, application);
     const limit = await recordIntakeSubmission(
       supabase,
       "vendor_application",

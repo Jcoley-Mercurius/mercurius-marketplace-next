@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { applicationPrefill, type PrefillApplication } from "@/lib/vendorApplicationPrefill";
 
 type VendorForm = {
   id: string;
@@ -62,10 +63,12 @@ type GalleryItem = { id: string; image_url: string; caption: string | null; sort
 type Service = { id: string; name: string };
 type CoverageArea = { zip_code: string; city: string; state: string };
 type Mode = "loading" | "ready" | "error" | "missing";
+type Prefilled = { fields: number; zips: number; unmatchedServices: string[] };
 
 const AVAILABLE_BADGES = ["Licensed", "Insured", "Background Checked", "24/7 Available", "Emergency Services", "Eco-Friendly", "Satisfaction Guaranteed", "Top Rated"];
 const SAFE_SELECT = "id, name, tagline, bio, location, website, video_url, logo_url, services, badges, years_experience, jobs_completed, rating, special_offer, our_promise, verified_specialty, is_active, marketing_enabled";
 const MEDIA_BUCKET = "vendor-media";
+const APPLICATION_SELECT = "business_description, website, years_experience, email, phone, services, service_areas";
 
 export default function AdminVendorDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -78,6 +81,7 @@ export default function AdminVendorDetailPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [prefilled, setPrefilled] = useState<Prefilled | null>(null);
   const logoInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
 
@@ -87,15 +91,16 @@ export default function AdminVendorDetailPage() {
     setError("");
     const supabase = createClient();
     try {
-      const [vendorResult, galleryResult, zipResult, serviceResult, areaResult, contactResult] = await Promise.all([
+      const [vendorResult, galleryResult, zipResult, serviceResult, areaResult, contactResult, applicationResult] = await Promise.all([
         supabase.from("contractors").select(SAFE_SELECT).eq("id", id).maybeSingle(),
         supabase.from("contractor_gallery").select("id, image_url, caption, sort_order").eq("contractor_id", id).order("sort_order"),
         supabase.from("contractor_service_zips").select("zip_code").eq("contractor_id", id),
         supabase.from("services_catalog").select("id, name").eq("is_active", true).order("name"),
         supabase.from("coverage_areas").select("zip_code, city, state").eq("is_active", true).order("city").order("zip_code"),
         supabase.rpc("get_contractor_contact", { _contractor_id: id }),
+        supabase.from("vendor_applications").select(APPLICATION_SELECT).eq("contractor_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
-      const firstError = vendorResult.error ?? galleryResult.error ?? zipResult.error ?? serviceResult.error ?? areaResult.error ?? contactResult.error;
+      const firstError = vendorResult.error ?? galleryResult.error ?? zipResult.error ?? serviceResult.error ?? areaResult.error ?? contactResult.error ?? applicationResult.error;
       if (firstError) throw firstError;
       if (!vendorResult.data) {
         setForm(null);
@@ -105,11 +110,19 @@ export default function AdminVendorDetailPage() {
       const contactRows = (contactResult.data ?? []) as { email: string | null; phone: string | null }[];
       const contact = Array.isArray(contactResult.data) ? contactRows[0] : contactResult.data as { email: string | null; phone: string | null } | null;
       const vendor = vendorResult.data as Omit<VendorForm, "email" | "phone">;
-      setForm({ ...vendor, email: contact?.email ?? null, phone: contact?.phone ?? null, services: vendor.services ?? [], badges: vendor.badges ?? [], is_active: Boolean(vendor.is_active), marketing_enabled: Boolean(vendor.marketing_enabled) });
+      const loaded: VendorForm = { ...vendor, email: contact?.email ?? null, phone: contact?.phone ?? null, services: vendor.services ?? [], badges: vendor.badges ?? [], is_active: Boolean(vendor.is_active), marketing_enabled: Boolean(vendor.marketing_enabled) };
+      const zips = ((zipResult.data ?? []) as { zip_code: string }[]).map((row) => row.zip_code);
+      const catalog = (serviceResult.data ?? []) as Service[];
+      const coverage = (areaResult.data ?? []) as CoverageArea[];
+      // Fields still empty take the linked application's answers; publishing saves them.
+      const fill = applicationResult.data ? applicationPrefill(applicationResult.data as PrefillApplication, { ...loaded, zipCodes: zips }, catalog, coverage) : null;
+      const fields = fill ? Object.keys(fill.profile).length : 0;
+      setForm(fill ? { ...loaded, ...fill.profile } : loaded);
+      setPrefilled(fill && (fields || fill.zipCodes.length || fill.unmatchedServices.length) ? { fields, zips: fill.zipCodes.length, unmatchedServices: fill.unmatchedServices } : null);
       setGallery((galleryResult.data ?? []) as GalleryItem[]);
-      setServiceZips(new Set(((zipResult.data ?? []) as { zip_code: string }[]).map((row) => row.zip_code)));
-      setServices((serviceResult.data ?? []) as Service[]);
-      setAreas((areaResult.data ?? []) as CoverageArea[]);
+      setServiceZips(new Set(fill?.zipCodes.length ? fill.zipCodes : zips));
+      setServices(catalog);
+      setAreas(coverage);
       setMode("ready");
     } catch (reason) {
       console.error("Unable to load vendor profile", reason);
@@ -214,6 +227,8 @@ export default function AdminVendorDetailPage() {
 
       <section className="border-b bg-gradient-to-br from-primary/8 via-background to-accent/8"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-start sm:px-6 md:px-8"><div className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="flex h-full w-full items-center justify-center">{form.logo_url ? <img src={form.logo_url} alt={`${form.name} logo`} className="h-full w-full object-contain" /> : <span className="text-3xl font-bold text-muted-foreground">{form.name.charAt(0)}</span>}</div><button type="button" disabled={uploading} onClick={() => logoInput.current?.click()} className="absolute inset-0 flex items-center justify-center bg-black/65 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"><Upload className="mr-1 h-4 w-4" />Change</button><input ref={logoInput} hidden type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeLogo(file); event.target.value = ""; }} /></div><div className="w-full flex-1 space-y-3"><Input value={form.name} onChange={(event) => update({ name: event.target.value })} className="h-12 bg-card text-2xl font-semibold" placeholder="Business name" /><Input value={form.tagline ?? ""} onChange={(event) => update({ tagline: event.target.value })} className="bg-card" placeholder="Short vendor tagline" /><div className="grid gap-3 sm:grid-cols-3"><IconField icon={MapPin}><Input value={form.location ?? ""} onChange={(event) => update({ location: event.target.value })} placeholder="Location" /></IconField><IconField icon={Star}><Input type="number" min="0" max="5" step="0.1" value={form.rating ?? ""} onChange={(event) => update({ rating: optionalNumber(event.target.value) })} placeholder="Rating" /></IconField><IconField icon={Briefcase}><Input type="number" min="0" value={form.jobs_completed ?? ""} onChange={(event) => update({ jobs_completed: optionalInteger(event.target.value) })} placeholder="Jobs" /></IconField></div></div></div></section>
 
+      {prefilled && <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 md:px-8"><ApplicationPrefillNotice prefilled={prefilled} /></div>}
+
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 md:grid-cols-3 md:px-8"><div className="space-y-6 md:col-span-2"><Card><CardHeader><CardTitle>About</CardTitle><CardDescription>Business details visible to homeowners and used by operations.</CardDescription></CardHeader><CardContent className="space-y-4"><Field label="Business description"><textarea rows={5} value={form.bio ?? ""} onChange={(event) => update({ bio: event.target.value })} placeholder="Tell homeowners about this vendor..." className={textareaClass} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Years of experience"><Input type="number" min="0" value={form.years_experience ?? ""} onChange={(event) => update({ years_experience: optionalInteger(event.target.value) })} /></Field><Field label="Website"><Input type="url" value={form.website ?? ""} onChange={(event) => update({ website: event.target.value })} placeholder="https://..." /></Field><Field label="Email"><Input type="email" value={form.email ?? ""} onChange={(event) => update({ email: event.target.value })} /></Field><Field label="Phone"><Input value={form.phone ?? ""} onChange={(event) => update({ phone: event.target.value })} /></Field></div></CardContent></Card>
 
         <Card><CardHeader><CardTitle>Services Offered</CardTitle><CardDescription>Select catalog services this vendor can perform.</CardDescription></CardHeader><CardContent><div className="flex flex-wrap gap-2">{services.length ? services.map((service) => { const checked = form.services.includes(service.id); return <button key={service.id} type="button" onClick={() => update({ services: checked ? form.services.filter((id) => id !== service.id) : [...form.services, service.id] })} className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", checked ? "border-accent bg-accent text-accent-foreground" : "border-border bg-muted text-muted-foreground hover:border-accent/50")}>{service.name}</button>; }) : <p className="text-sm text-muted-foreground">No active catalog services are available.</p>}</div></CardContent></Card>
@@ -249,6 +264,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) { re
 function IconField({ icon: Icon, children }: { icon: typeof MapPin; children: ReactNode }) { return <div className="flex items-center gap-2"><Icon className="h-4 w-4 shrink-0 text-muted-foreground" />{children}</div>; }
 function Setting({ label, description, children }: { label: string; description: string; children: ReactNode }) { return <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium">{label}</p><p className="mt-1 text-xs text-muted-foreground">{description}</p></div>{children}</div>; }
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label?: string }) { return <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground"><button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className={cn("relative h-6 w-11 rounded-full transition-colors", checked ? "bg-accent" : "bg-muted-foreground/30")}><span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", checked ? "left-5" : "left-0.5")} /></button>{label}</label>; }
+function ApplicationPrefillNotice({ prefilled }: { prefilled: Prefilled }) { const filled = prefilled.fields > 0 || prefilled.zips > 0; return <div role="status" className="flex gap-3 rounded-xl border border-accent/40 bg-accent/10 p-4 text-sm"><ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" /><div className="space-y-1">{filled && <p><strong>Filled from the vendor application:</strong> {[prefilled.fields ? `${prefilled.fields} profile field${prefilled.fields === 1 ? "" : "s"}` : null, prefilled.zips ? `${prefilled.zips} service ZIP code${prefilled.zips === 1 ? "" : "s"}` : null].filter(Boolean).join(" and ")}. Review, then publish to save.</p>}{prefilled.unmatchedServices.length > 0 && <p className="text-muted-foreground">Services on the application with no matching catalog service, to select by hand: {prefilled.unmatchedServices.join(", ")}.</p>}<p className="text-muted-foreground">Credentials are not copied to the profile; confirm them in the Activation Checklist.</p></div></div>; }
 function Loading() { return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" /><span className="text-muted-foreground">Loading vendor profile...</span></div>; }
 function Failure({ message, retry }: { message: string; retry: () => void }) { return <div className="flex min-h-[60vh] items-center justify-center p-6"><Card className="max-w-lg"><CardContent className="py-10 text-center"><AlertCircle className="mx-auto mb-3 h-10 w-10 text-destructive" /><h1 className="font-heading text-xl font-semibold">Vendor profile could not be loaded</h1><p className="mt-2 text-sm text-muted-foreground">{message}</p><Button className="mt-5" onClick={retry}><RefreshCw />Try Again</Button></CardContent></Card></div>; }
 function Missing() { return <div className="flex min-h-[60vh] items-center justify-center p-6"><Card className="max-w-lg"><CardContent className="py-10 text-center"><AlertCircle className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h1 className="font-heading text-xl font-semibold">Vendor not found</h1><p className="mt-2 text-sm text-muted-foreground">This contractor record does not exist or is no longer available.</p><Link href="/admin/vendors" className={cn(buttonVariants(), "mt-5")}>Return to Vendors</Link></CardContent></Card></div>; }
