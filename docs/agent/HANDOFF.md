@@ -1,5 +1,13 @@
 # Agent handoff — 2026-10-01
 
+## Onboarding review for access-bound existing providers (TRACE-105), 2026-10-03
+
+- Branch `claude/existing-provider-onboarding` from `main` `9a05b66`. Owner report: P & P Cleaning Solutions was bound through Existing Provider Access and set up its profile, but no screen could approve it. Access-managed providers lost legacy `is_active` eligibility (R0.5), and TRACE-065 refuses review for an existing provider, so no onboarding row, checklist or activation was reachable (the R0.5 open follow-up "compliance path for access-managed providers").
+- Owner decision 2026-10-03: close it with a **real application**. Migration `20261003001000`: `r0_start_existing_provider_review` (operator; application email = current confirmed contact = bound, confirmed account; reviewed access binding; no live attempt, onboarding or exclusion; latest version) links the application to the existing record and opens review revision 1. A trigger stops TRACE-065 from creating a second provider for such an application. `vendor_onboarding_intake_status` adds `existing_provider`. Checklist, evidence, activation (records `inherited_link`; the binding's vendor role stays) and listing are unchanged.
+- UI: `/admin/applications` shows "Start review for existing provider" with the blocking reason; account-linking and invitation panels are hidden for it. The access panel now says "account bound" on an accepted attempt that was bound.
+- Evidence: SQL 073 46/46 (migration + test, one rolled-back transaction); related suites 032/036/037/039/040/051/072 pass; full suite 3758 ok, 1 failure in 003 (escalation count 8 vs 2) that also fails without this migration (local admin data). Typecheck, lint, unit 365/365, synthetic build, browser onboarding-intake + existing-provider-access + onboarding-checklist 29/29. Not run: hosted migration (needs owner authorization), `@visual`.
+- Next: Codex review; owner authorizes the hosted migration; P & P submits `/vendors/apply` from the confirmed contact address with license/insurance documents; operator starts review, records the nine items, activates; confirm `marketing_enabled` and content for the listing.
+
 ## Vendor application services from the catalog (TRACE-105), 2026-10-02
 
 - Branch `claude/vendor-application-prefill` from `main` `46ae6ae` (independent of the password-reset branch). Owner decision 2026-10-02: applicants choose services from the live catalog (at least one required), plus an optional "Other" with a description, reviewed later for catalog additions.
