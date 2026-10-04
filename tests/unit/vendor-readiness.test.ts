@@ -194,14 +194,18 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
     const rpcCalls: RpcCall[] = [];
     vi.doMock("@supabase/supabase-js", () => ({
       createClient: () => ({
-        from: () => ({ insert: async (row: unknown) => { inserted.push(row); return { error: null }; } }),
+        from: (table: string) => ({
+          insert: async (row: unknown) => { inserted.push(row); return { error: null }; },
+          // TRACE-105: the active catalog the route checks choices against.
+          select: () => ({ eq: async () => ({ data: table === "services_catalog" ? [{ id: "lawn-mowing" }] : [{ name: "Lawn & Landscape" }], error: null }) }),
+        }),
         rpc: async (name: string, args: Record<string, unknown>) => { rpcCalls.push({ name, args }); return rpc(name, args); },
       }),
     }));
     return rpcCalls;
   }
 
-  function submit() {
+  function submit(overrides: Record<string, unknown> = {}) {
     return new Request("http://localhost/api/vendor-applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,7 +213,8 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
         intake: {},
         application: {
           business_name: "Synthetic Lawn Co", first_name: "Ann", email: "Applicant@Example.test", phone: "synthetic",
-          years_experience: 3, services: ["lawn-mowing"], primary_category: "Lawn", team_size: "1",
+          years_experience: 3, services: ["lawn-mowing", "Other: lanai rescreening"], primary_category: "Lawn & Landscape", team_size: "1",
+          ...overrides,
         },
       }),
     });
@@ -223,7 +228,7 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
     const response = await POST(submit());
     expect(response.status).toBe(201);
     expect(inserted).toHaveLength(1);
-    expect(inserted[0]).toMatchObject({ status: "pending", email: "applicant@example.test", document_urls: [] });
+    expect(inserted[0]).toMatchObject({ status: "pending", email: "applicant@example.test", document_urls: [], services: ["lawn-mowing", "Other: lanai rescreening"] });
     // The email runs after the response and cannot change it.
     await Promise.all(afterCallbacks.map((callback) => callback()));
     expect(rpcCalls.map((call) => call.name)).toEqual(["r0_claim_application_notification", "r0_record_application_notification"]);
@@ -237,6 +242,19 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
     expect(response.status).toBe(201);
     await expect(Promise.all(afterCallbacks.map((callback) => callback()))).resolves.toBeDefined();
     expect(inserted).toHaveLength(1);
+  });
+
+  it.each([
+    [{ services: ["Other: lanai rescreening"] }, "Choose at least one service from the list."],
+    [{ services: ["lawn-mowing", "Mowing"] }, "A selected service is no longer offered. Refresh the page and choose again."],
+    [{ primary_category: "Lawn Care & Mowing" }, "Choose a primary category from the list."],
+  ])("refuses choices outside the active catalog (%o)", async (overrides, message) => {
+    mockSupabase(() => ({ data: null, error: null }));
+    const { POST } = await import("../../src/app/api/vendor-applications/route");
+    const response = await POST(submit(overrides));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: message });
+    expect(inserted).toHaveLength(0);
   });
 });
 

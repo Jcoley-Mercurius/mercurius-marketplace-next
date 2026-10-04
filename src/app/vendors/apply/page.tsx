@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -23,6 +23,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  MAX_OTHER_SERVICE_LENGTH,
+  otherServiceEntry,
+} from "@/lib/vendorApplicationServices";
 import { LEE_COUNTY_SERVICE_AREAS } from "@/lib/vendorServiceAreas";
 import {
   MAX_VENDOR_DOCUMENT_COUNT,
@@ -34,26 +38,10 @@ import {
 
 const steps = ["Business", "Contact", "Service Area", "Credentials", "Review"];
 const teamSizes = ["Just me", "2–5", "6–10", "11–25", "25+"];
-const primaryCategories = [
-  "Lawn Care & Mowing", "Landscaping", "Irrigation & Sprinklers", "Tree Service",
-  "Pool Service", "House Cleaning", "Window Cleaning", "Pressure Washing",
-  "Trash Can Cleaning", "Handyman", "HVAC", "Electrical", "Plumbing", "Roofing",
-  "Painting", "Flooring", "Garage Door", "Appliance Repair", "Pest Control",
-  "Junk Removal", "Gutter Cleaning & Repair", "Screen & Lanai Repair",
-  "Dryer Vent Cleaning", "Specialty / Other",
-];
-const suggestedServices: Record<string, string[]> = {
-  "Lawn Care & Mowing": ["Mowing", "Edging & trimming", "Hedge trimming", "Fertilization", "Seasonal cleanups"],
-  Landscaping: ["Landscape design", "Planting", "Mulching", "Sod install", "Landscape lighting"],
-  "Pool Service": ["Weekly pool cleaning", "Chemical balancing", "Filter cleaning", "Equipment repair"],
-  "House Cleaning": ["Standard cleaning", "Deep cleaning", "Move in / move out", "Vacation rental turnover"],
-  "Pressure Washing": ["Driveway & walkway", "House soft wash", "Roof cleaning", "Pool deck & lanai"],
-  Handyman: ["Small repairs", "Furniture assembly", "Drywall patching", "TV & shelf mounting"],
-  HVAC: ["AC repair", "AC replacement", "Maintenance tune-ups", "Duct cleaning", "Thermostat install"],
-  Electrical: ["Outlet & switch repair", "Lighting install", "Ceiling fans", "Panel upgrades"],
-  Plumbing: ["Leak repair", "Drain cleaning", "Water heater service", "Fixture install"],
-  "Pest Control": ["General pest", "Termite treatment", "Rodent control", "Mosquito treatment"],
-};
+// TRACE-105: categories and services come from the live Mercurius catalog.
+type CatalogCategory = { id: string; name: string };
+type CatalogService = { id: string; name: string; category_id: string };
+type Catalog = { categories: CatalogCategory[]; services: CatalogService[] };
 const credentialOptions = [
   { id: "licensed", label: "Licensed" },
   { id: "insured", label: "Fully insured" },
@@ -75,7 +63,7 @@ type FormState = {
   phone: string;
   website: string;
   preferredContact: string;
-  servicesText: string;
+  otherServices: string;
   additionalNotes: string;
   otherCertification: string;
   licenseNumber: string;
@@ -101,7 +89,7 @@ type ApplicationCreationResponse = {
 const initialForm: FormState = {
   businessName: "", primaryCategory: "", teamSize: "", yearsExperience: "",
   businessDescription: "", firstName: "", lastName: "", email: "", phone: "",
-  website: "", preferredContact: "either", servicesText: "", additionalNotes: "",
+  website: "", preferredContact: "either", otherServices: "", additionalNotes: "",
   otherCertification: "", licenseNumber: "", insurancePolicyNumber: "",
 };
 
@@ -112,6 +100,9 @@ export default function VendorApplyPage() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [areas, setAreas] = useState<string[]>([]);
   const [services, setServices] = useState<string[]>([]);
+  const [otherSelected, setOtherSelected] = useState(false);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [catalogFailed, setCatalogFailed] = useState(false);
   const [credentials, setCredentials] = useState<string[]>([]);
   const [documents, setDocuments] = useState<SelectedDocument[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -126,11 +117,37 @@ export default function VendorApplyPage() {
   const [submissionWarning, setSubmissionWarning] = useState<string | null>(null);
   const [attachedDocumentCount, setAttachedDocumentCount] = useState(0);
 
-  const suggestions = suggestedServices[form.primaryCategory] ?? [];
-  const allServices = useMemo(() => {
-    const typed = form.servicesText.split(/[,\n]/).map((value) => value.trim()).filter(Boolean);
-    return Array.from(new Set([...services, ...typed]));
-  }, [form.servicesText, services]);
+  const loadCatalog = useCallback(async () => {
+    setCatalogFailed(false);
+    const supabase = createClient();
+    const [categories, catalogServices] = await Promise.all([
+      supabase.from("service_categories").select("id, name").eq("is_active", true).order("sort_order"),
+      supabase.from("services_catalog").select("id, name, category_id").eq("is_active", true).order("sort_order"),
+    ]);
+    if (categories.error || catalogServices.error || !categories.data?.length) {
+      setCatalogFailed(true);
+      return;
+    }
+    setCatalog({ categories: categories.data, services: catalogServices.data ?? [] });
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadCatalog(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCatalog]);
+
+  const otherDescription = form.otherServices.trim();
+  const servicePayload = useMemo(
+    () => [...services, ...(otherSelected && otherDescription ? [otherServiceEntry(otherDescription)] : [])],
+    [otherDescription, otherSelected, services],
+  );
+  const serviceLabels = useMemo(() => {
+    const names = new Map(catalog?.services.map((service) => [service.id, service.name]));
+    return [
+      ...services.map((id) => names.get(id) ?? id),
+      ...(otherSelected && otherDescription ? [`Other: ${otherDescription}`] : []),
+    ];
+  }, [catalog, otherDescription, otherSelected, services]);
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -143,13 +160,17 @@ export default function VendorApplyPage() {
   function stepIsValid(value: number) {
     if (value === 1) return !!(form.businessName.trim() && form.primaryCategory && form.teamSize && form.yearsExperience !== "");
     if (value === 2) return !!(form.firstName.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && form.phone.trim());
-    if (value === 3) return allServices.length > 0;
+    if (value === 3) return services.length > 0 && (!otherSelected || otherDescription.length > 0);
     return true;
   }
 
   function nextStep() {
     if (!stepIsValid(step)) {
-      toast.error("A few fields are missing", { description: "Please complete the required fields to continue." });
+      toast.error("A few fields are missing", {
+        description: step === 3
+          ? "Choose at least one service from our list, and describe any Other services."
+          : "Please complete the required fields to continue.",
+      });
       return;
     }
     setStep((current) => Math.min(5, current + 1));
@@ -219,7 +240,7 @@ export default function VendorApplyPage() {
       phone: form.phone.trim(),
       address: "",
       years_experience: Number.parseInt(form.yearsExperience || "0", 10) || 0,
-      services: allServices,
+      services: servicePayload,
       service_areas: areas.join(", ") || null,
       availability: null,
       primary_category: form.primaryCategory,
@@ -398,11 +419,11 @@ export default function VendorApplyPage() {
 
         <section className="py-12 md:py-16">
           <div className="container-narrow max-w-3xl">
-            {step === 1 && <BusinessStep form={form} setField={setField} />}
+            {step === 1 && <BusinessStep form={form} setField={setField} catalog={catalog} catalogFailed={catalogFailed} retryCatalog={() => void loadCatalog()} />}
             {step === 2 && <ContactStep form={form} setField={setField} />}
-            {step === 3 && <ServiceAreaStep form={form} setField={setField} areas={areas} services={services} suggestions={suggestions} toggleArea={(value) => toggle(value, areas, setAreas)} toggleService={(value) => toggle(value, services, setServices)} />}
+            {step === 3 && <ServiceAreaStep form={form} setField={setField} areas={areas} services={services} catalog={catalog} catalogFailed={catalogFailed} retryCatalog={() => void loadCatalog()} otherSelected={otherSelected} toggleOther={() => setOtherSelected((current) => !current)} toggleArea={(value) => toggle(value, areas, setAreas)} toggleService={(value) => toggle(value, services, setServices)} />}
             {step === 4 && <CredentialsStep form={form} setField={setField} credentials={credentials} documents={documents} toggleCredential={(value) => toggle(value, credentials, setCredentials)} addDocuments={addDocuments} removeDocument={(index) => setDocuments((current) => current.filter((_, itemIndex) => itemIndex !== index))} />}
-            {step === 5 && <ReviewStep form={form} areas={areas} services={allServices} credentials={credentials} documents={documents} isSubmitting={isSubmitting} submissionStage={submissionStage} uploadProgress={uploadProgress} documentUploadStates={documentUploadStates} onSubmit={submitApplication} />}
+            {step === 5 && <ReviewStep form={form} areas={areas} services={serviceLabels} credentials={credentials} documents={documents} isSubmitting={isSubmitting} submissionStage={submissionStage} uploadProgress={uploadProgress} documentUploadStates={documentUploadStates} onSubmit={submitApplication} />}
 
             <div className="mt-10 flex justify-between gap-3">
               <Button type="button" variant="outline" size="lg" onClick={previousStep} disabled={step === 1}><ArrowLeft className="h-4 w-4" /> Back</Button>
@@ -418,17 +439,37 @@ export default function VendorApplyPage() {
 
 type StepProps = { form: FormState; setField: <K extends keyof FormState>(key: K, value: FormState[K]) => void };
 
-function BusinessStep({ form, setField }: StepProps) {
-  return <div className="space-y-6"><StepHeading title="Business Basics" description="Tell us who you are and what you do." /><Field label="Business name *" id="businessName"><Input id="businessName" className="h-12" value={form.businessName} onChange={(event) => setField("businessName", event.target.value)} placeholder="Aristotle Home Services LLC" /></Field><div className="grid gap-4 sm:grid-cols-2"><SelectField label="Primary service category *" id="primaryCategory" value={form.primaryCategory} placeholder="Select a category" options={primaryCategories} onChange={(value) => setField("primaryCategory", value)} /><SelectField label="Team size *" id="teamSize" value={form.teamSize} placeholder="How many on your crew?" options={teamSizes} onChange={(value) => setField("teamSize", value)} /></div><Field label="Years in business *" id="years"><Input id="years" type="number" min={0} className="h-12" value={form.yearsExperience} onChange={(event) => setField("yearsExperience", event.target.value)} placeholder="5" /></Field><Field label="Brief business description" id="businessDescription"><textarea id="businessDescription" rows={4} className={fieldClass} value={form.businessDescription} onChange={(event) => setField("businessDescription", event.target.value)} placeholder="What you specialize in, who you serve, and what makes your work stand out." /></Field></div>;
+type CatalogProps = { catalog: Catalog | null; catalogFailed: boolean; retryCatalog: () => void };
+
+function BusinessStep({ form, setField, catalog, catalogFailed, retryCatalog }: StepProps & CatalogProps) {
+  return <div className="space-y-6"><StepHeading title="Business Basics" description="Tell us who you are and what you do." />{catalogFailed && <CatalogFailure retry={retryCatalog} />}<Field label="Business name *" id="businessName"><Input id="businessName" className="h-12" value={form.businessName} onChange={(event) => setField("businessName", event.target.value)} placeholder="Aristotle Home Services LLC" /></Field><div className="grid gap-4 sm:grid-cols-2"><SelectField label="Primary service category *" id="primaryCategory" value={form.primaryCategory} placeholder={catalog ? "Select a category" : "Loading categories…"} options={catalog?.categories.map((category) => category.name) ?? []} onChange={(value) => setField("primaryCategory", value)} /><SelectField label="Team size *" id="teamSize" value={form.teamSize} placeholder="How many on your crew?" options={teamSizes} onChange={(value) => setField("teamSize", value)} /></div><Field label="Years in business *" id="years"><Input id="years" type="number" min={0} className="h-12" value={form.yearsExperience} onChange={(event) => setField("yearsExperience", event.target.value)} placeholder="5" /></Field><Field label="Brief business description" id="businessDescription"><textarea id="businessDescription" rows={4} className={fieldClass} value={form.businessDescription} onChange={(event) => setField("businessDescription", event.target.value)} placeholder="What you specialize in, who you serve, and what makes your work stand out." /></Field></div>;
 }
 
 function ContactStep({ form, setField }: StepProps) {
   return <div className="space-y-6"><StepHeading title="Contact Info" description="We’ll send your vendor login invite here once you’re approved." /><div className="grid gap-4 sm:grid-cols-2"><Field label="First name *" id="firstName"><Input id="firstName" autoComplete="given-name" className="h-12" value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} /></Field><Field label="Last name" id="lastName"><Input id="lastName" autoComplete="family-name" className="h-12" value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} /></Field></div><Field label="Email *" id="email"><Input id="email" type="email" autoComplete="email" className="h-12" value={form.email} onChange={(event) => setField("email", event.target.value)} placeholder="you@yourbusiness.com" /><p className="text-xs text-muted-foreground">Used for your vendor portal invitation.</p></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Phone *" id="phone"><Input id="phone" type="tel" autoComplete="tel" className="h-12" value={form.phone} onChange={(event) => setField("phone", event.target.value)} placeholder="(239) 555-0123" /></Field><Field label="Business website" id="website"><Input id="website" inputMode="url" className="h-12" value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="yourbusiness.com" /></Field></div><div className="space-y-2"><Label>Preferred contact method</Label><div className="grid grid-cols-3 gap-3">{["email", "phone", "either"].map((value) => <button key={value} type="button" onClick={() => setField("preferredContact", value)} className={cn("h-12 rounded-xl border-2 text-sm font-medium capitalize transition-all", form.preferredContact === value ? "border-primary bg-primary/10" : "border-border bg-card text-muted-foreground hover:border-primary/50")}>{value}</button>)}</div></div></div>;
 }
 
-type ServiceAreaStepProps = StepProps & { areas: string[]; services: string[]; suggestions: string[]; toggleArea: (value: string) => void; toggleService: (value: string) => void };
-function ServiceAreaStep({ form, setField, areas, services, suggestions, toggleArea, toggleService }: ServiceAreaStepProps) {
-  return <div className="space-y-8"><StepHeading title="Service Area" description="Where you work in Lee County and what you offer." /><ChipGroup label="Areas you serve" options={LEE_COUNTY_SERVICE_AREAS} selected={areas} onToggle={toggleArea} />{suggestions.length > 0 && <ChipGroup label={`Common ${form.primaryCategory.toLowerCase()} services`} description="Select any that apply." options={suggestions} selected={services} onToggle={toggleService} compact />}<Field label="Services you offer *" id="servicesText"><textarea id="servicesText" rows={3} className={fieldClass} value={form.servicesText} onChange={(event) => setField("servicesText", event.target.value)} placeholder="List additional services separated by commas" /><p className="text-xs text-muted-foreground">Suggested selections and your own wording are combined for review.</p></Field><Field label="Anything else we should know?" id="additionalNotes"><textarea id="additionalNotes" rows={4} className={fieldClass} value={form.additionalNotes} onChange={(event) => setField("additionalNotes", event.target.value)} placeholder="Availability, seasonal capacity, specialty equipment, HOA experience…" /></Field></div>;
+type ServiceAreaStepProps = StepProps & CatalogProps & { areas: string[]; services: string[]; otherSelected: boolean; toggleOther: () => void; toggleArea: (value: string) => void; toggleService: (value: string) => void };
+function ServiceAreaStep({ form, setField, areas, services, catalog, catalogFailed, retryCatalog, otherSelected, toggleOther, toggleArea, toggleService }: ServiceAreaStepProps) {
+  // The applicant's primary category is listed first.
+  const groups = (catalog?.categories ?? [])
+    .map((category) => ({ category, services: catalog?.services.filter((service) => service.category_id === category.id) ?? [] }))
+    .filter((group) => group.services.length > 0)
+    .sort((a, b) => Number(b.category.name === form.primaryCategory) - Number(a.category.name === form.primaryCategory));
+  return <div className="space-y-8"><StepHeading title="Service Area" description="Where you work in Lee County and what you offer." /><ChipGroup label="Areas you serve" options={LEE_COUNTY_SERVICE_AREAS} selected={areas} onToggle={toggleArea} />
+    <div className="space-y-5"><div><Label>Services you offer *</Label><p className="mt-1 text-sm text-muted-foreground">Choose at least one service from our list. Use Other for anything we don’t list yet.</p></div>
+      {catalogFailed ? <CatalogFailure retry={retryCatalog} /> : !catalog ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading services…</p> : groups.map(({ category, services: options }) => <div key={category.id} role="group" aria-label={category.name} className="space-y-2"><p className="text-sm font-medium">{category.name}</p><div className="flex flex-wrap gap-2">{options.map((service) => <ToggleChip key={service.id} label={service.name} selected={services.includes(service.id)} onToggle={() => toggleService(service.id)} />)}</div></div>)}
+      {catalog && <div className="space-y-3"><div className="flex flex-wrap gap-2"><ToggleChip label="Other" selected={otherSelected} onToggle={toggleOther} /></div>{otherSelected && <Field label="Describe the other services you offer *" id="otherServices"><textarea id="otherServices" rows={3} maxLength={MAX_OTHER_SERVICE_LENGTH} className={fieldClass} value={form.otherServices} onChange={(event) => setField("otherServices", event.target.value)} placeholder="For example: lanai rescreening, hurricane shutter install" /><p className="text-xs text-muted-foreground">We review these to decide which services to add next.</p></Field>}</div>}
+    </div>
+    <Field label="Anything else we should know?" id="additionalNotes"><textarea id="additionalNotes" rows={4} className={fieldClass} value={form.additionalNotes} onChange={(event) => setField("additionalNotes", event.target.value)} placeholder="Availability, seasonal capacity, specialty equipment, HOA experience…" /></Field></div>;
+}
+
+function CatalogFailure({ retry }: { retry: () => void }) {
+  return <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm"><span className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-destructive" />Our service list could not be loaded.</span><Button type="button" variant="outline" size="sm" onClick={retry}>Try again</Button></div>;
+}
+
+function ToggleChip({ label, selected, onToggle }: { label: string; selected: boolean; onToggle: () => void }) {
+  return <button type="button" aria-pressed={selected} onClick={onToggle} className={cn("rounded-full border px-3 py-1.5 text-sm transition-all", selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-card text-muted-foreground hover:border-primary/50")}>{label}</button>;
 }
 
 type CredentialsStepProps = StepProps & { credentials: string[]; documents: SelectedDocument[]; toggleCredential: (value: string) => void; addDocuments: (files: FileList | null, kind: SelectedDocument["kind"]) => void; removeDocument: (index: number) => void };

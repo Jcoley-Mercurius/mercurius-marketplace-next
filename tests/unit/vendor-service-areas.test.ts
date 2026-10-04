@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   LEE_COUNTY_SERVICE_AREAS,
   normalizeServiceAreas,
+  serviceAreaCommunities,
   UnsupportedServiceAreaError,
 } from "@/lib/vendorServiceAreas";
 
@@ -12,23 +13,17 @@ const allowlistCities = new Set(
     .matchAll(/\('\d{5}', '([^']+)', 'FL'/g)].map((match) => match[1]),
 );
 
-// Communities each descriptive label stands for, all present in the approved allowlist.
-const communities: Record<string, string[]> = {
-  "Sanibel / Captiva": ["Sanibel", "Captiva"],
-  "Pine Island": ["Bokeelia", "Pineland", "Saint James City"],
-};
-
 describe("Lee County vendor service areas", () => {
   it("offers only communities from the approved Lee County ZIP allowlist", () => {
     for (const label of LEE_COUNTY_SERVICE_AREAS) {
-      for (const city of communities[label] ?? [label]) {
+      for (const city of serviceAreaCommunities(label)) {
         expect(allowlistCities, `${label} → ${city}`).toContain(city);
       }
     }
   });
 
   it("covers every community in the allowlist", () => {
-    const offered = new Set(LEE_COUNTY_SERVICE_AREAS.flatMap((label) => communities[label] ?? [label]));
+    const offered = new Set(LEE_COUNTY_SERVICE_AREAS.flatMap((label) => serviceAreaCommunities(label)));
     expect([...allowlistCities].filter((city) => !offered.has(city))).toEqual([]);
   });
 

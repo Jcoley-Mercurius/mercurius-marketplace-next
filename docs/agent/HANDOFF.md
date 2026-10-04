@@ -1,5 +1,19 @@
 # Agent handoff — 2026-10-01
 
+## Vendor application services from the catalog (TRACE-105), 2026-10-02
+
+- Branch `claude/vendor-application-prefill` from `main` `46ae6ae` (independent of the password-reset branch). Owner decision 2026-10-02: applicants choose services from the live catalog (at least one required), plus an optional "Other" with a description, reviewed later for catalog additions.
+- `/vendors/apply`: primary category = active `service_categories` (replaces 24 hard-coded categories); services = active `services_catalog` grouped by category, primary first; "Other" opens a required description (150 chars). `vendor_applications.services` stores catalog ids plus one `Other: …` entry; no migration. The route refuses choices outside the active catalog (400). The admin queue shows catalog names; the vendor-page prefill matches by id, then name (legacy rows).
+- Evidence: typecheck, lint, unit 375/375, synthetic build, browser `vendor-service-areas` + `vendor-readiness` + `existing-provider-access` + `application-retention` 39/39 (earlier 22/22 for the prefill ran on a stale build; rerun here on the new build). Not run: hosted submission, `@visual`.
+- Open: "Other" descriptions have no review report yet (read from the admin queue); applications submitted before this keep free-text names.
+
+## Vendor profile prefill from the application (TRACE-105), 2026-10-02
+
+- Owner report: after "Start onboarding review", `/admin/vendors/[id]` showed only the business name. Cause: `vendor_start_onboarding_review` (migration `20260911001000`) inserts the contractor with `name` only.
+- Fix (client only, no migration or hosted write): the vendor page reads the linked application and fills empty bio, website, years, email, phone, catalog services (exact name match) and ZIPs (service-area communities → `coverage_areas.city`). Values already on the profile are not changed. Nothing is saved until Publish. Credentials are not turned into badges. A notice lists filled fields and services with no catalog match. `serviceAreaCommunities` moved from the test into `src/lib/vendorServiceAreas.ts`.
+- Evidence: typecheck, lint, unit 368/368 (new `vendor-application-prefill` 3/3), browser `vendor-readiness` + `existing-provider-access` 22/22. Not run: manual check on a real application.
+- Open for Codex: whether the review-start function should also copy these fields server-side; free-text application services that don't match a catalog name still need selecting by hand.
+
 ## Vendor password reset and access routing (TRACE-105), 2026-10-01
 
 - Branch `claude/vendor-password-reset` from `main` `46ae6ae`. Cause: two provider invites (TDJ Construction, All Surface) clicked after the 3-hour link lifetime; the fallback reset email used `{{ .ConfirmationURL }}` (PKCE, same-browser only, spent by any GET), so it confirmed the accounts but showed "expired", and later invites were refused `email_exists`.
