@@ -1,5 +1,14 @@
 # Agent handoff — 2026-10-01
 
+## Legacy provider review without an application (TRACE-105, DEC-2026-027), 2026-10-04
+
+- Branch `claude/legacy-provider-review` from `main` `33679c0`. Owner decision DEC-2026-027: the eight listed legacy providers (full list confirmed) start review without `/vendors/apply`; everyone else applies.
+- Migration `20261004001000`: closed list recorded once by exact name (access-managed, no onboarding; a NOTICE reports the count); `r0_start_legacy_provider_review` writes a marked operator application record from the profile and confirmed contact and opens review revision 1 (no new-application notice or owner-notification record); `r0_legacy_review_status`; the existing operator document upload also works while a legacy review is open, since license/insurance evidence must be an application or uploaded document. Checklist, activation and listing unchanged.
+- UI: vendor page "Start legacy review" panel (reason required) where the checklist said "not under onboarding review"; the document panel follows the server's `operator_upload`.
+- Evidence: SQL 074 60/60, 073 46/46, full SQL 3818 ok + the known 003 local-data failure; typecheck, lint, unit 377/377, synthetic build, browser legacy-provider-review + onboarding-checklist + existing-provider-access + onboarding-intake 33/33. Found, not fixed: vendor-page Visibility switches have no accessible name (axe `button-name`).
+- Production, 2026-10-05 00:42 UTC: `main` `33679c0` (PRs #80–#84) deployed from a clean `git archive` (source 938/939 identical; `.gitignore` excluded) as `dpl_H4gRC39NAuaBbZ9Zc2vtXgd2Rjby` and promoted; `www` serves it. Rollback: promote `dpl_EiFw54cToP3hHqo1H4EfxEq5eQhP`. Hosted migrations `20261003001000` and `20261004001000` pending the owner's `supabase db push --linked`.
+- Next: Codex review; merge; deploy; owner pushes both migrations and confirms "8 of 8"; per provider: Start legacy review → upload license and insurance → record nine items → Activate → Active on platform, Marketing enabled, Publish.
+
 ## Onboarding review for access-bound existing providers (TRACE-105), 2026-10-03
 
 - Branch `claude/existing-provider-onboarding` from `main` `9a05b66`. Owner report: P & P Cleaning Solutions was bound through Existing Provider Access and set up its profile, but no screen could approve it. Access-managed providers lost legacy `is_active` eligibility (R0.5), and TRACE-065 refuses review for an existing provider, so no onboarding row, checklist or activation was reachable (the R0.5 open follow-up "compliance path for access-managed providers").

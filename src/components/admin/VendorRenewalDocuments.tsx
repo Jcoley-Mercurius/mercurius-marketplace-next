@@ -49,6 +49,8 @@ export type RenewalDocument = {
 export type RenewalOverview = {
   contractor_id: string;
   onboarding_status: "review" | "active" | "suspended" | "rejected" | null;
+  // DEC-2026-027: also true while a listed legacy provider's review is open.
+  operator_upload?: boolean;
   open_limit: number;
   retention_hold?: { reason: string; placed_at: string } | null;
   documents: RenewalDocument[];
@@ -93,7 +95,9 @@ export function VendorRenewalDocuments({
   const [holdGeneration, setHoldGeneration] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const accepting = overview?.onboarding_status === "active" || overview?.onboarding_status === "suspended";
+  const accepting =
+    overview?.operator_upload ??
+    (overview?.onboarding_status === "active" || overview?.onboarding_status === "suspended");
   const busy = disabled || uploading;
 
   const open = async (document: RenewalDocument) => {
