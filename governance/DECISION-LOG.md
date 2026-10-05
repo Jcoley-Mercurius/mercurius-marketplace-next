@@ -79,6 +79,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 074; browser `legacy-provider-review`; after the hosted push, the migration notice reports 8 of 8 providers recorded.
 
+### DEC-2026-028 — Bind a provider's account while it is suspended
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-05 (America/New_York).
+
+**Decision:** An operator can bind a provider's account (accepted invitation or stated account ID) while the provider is in onboarding review **or suspended**. A provider activated with no bound account is repaired by Suspend → bind → Activate: activation from suspension re-checks the MPS §8 checklist and grants the vendor role through the unchanged TRACE-068 path. An account is never bound to an active provider (the command says to suspend first, as release already does), and a rejected provider is still refused.
+
+**Context:** TRACE-068 lets activation proceed with no bound account (recorded `no_account`, no role), and no transition returns an active provider to review, so such a provider could never receive portal access. A live invitation-onboarded provider was activated before its accepted account was bound; Josh expects the same mistake as more operators onboard providers.
+
+**Alternatives considered:** Bind and grant the role on an active provider in place (rejected: the role would no longer follow only from a reviewed activation); a transition from active back to review (rejected: larger state-machine change, re-opens vetting).
+
+**MPS impact:** None to the §8 checklist or role semantics. **MDS impact:** The provider account panel explains the repair on an active provider and offers binding on a suspended one. **MTS impact:** Migration `20261005001000` (`vendor_link_existing_account` and `vendor_bind_invited_account` status guard only). **Data/payment/security impact:** Operator-only commands; no role is granted by binding.
+
+**Required evidence:** SQL 075 and updated 034/037; browser `invitation-binding`; hosted migration push by the owner.
+
 ### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.

@@ -210,3 +210,24 @@ test("the invitation panel refuses to re-invite a recipient who holds an account
   await expect(dialog.getByText("a new invitation cannot be sent to it", { exact: false })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Prepare invitation" })).toHaveCount(0);
 });
+
+// DEC-2026-028: a provider activated with no bound account is repaired by suspend,
+// bind, activate. The live provider is told to suspend; the suspended one is offered
+// the binding.
+test("an active provider with no account is told to suspend before binding", async ({ page }) => {
+  await overview(page, { accepted_invitation: receipt, onboarding_status: "active", onboarding_revision: 2 });
+  const dialog = await openAccount(page);
+  await expect(dialog.getByText("suspend it, bind the account here, then activate it again", { exact: false })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Bind accepted account" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Link existing account" })).toHaveCount(0);
+});
+
+test("a suspended provider offers the accepted-account binding", async ({ page }) => {
+  await overview(page, { accepted_invitation: receipt, onboarding_status: "suspended", onboarding_revision: 3 });
+  const dialog = await openAccount(page);
+  await expect(dialog.getByText("then activate it again from the checklist", { exact: false })).toBeVisible();
+  const confirm = await confirmBinding(page, dialog);
+  const sent = page.waitForRequest("**/rpc/vendor_bind_invited_account");
+  await confirm.getByRole("button", { name: "Bind account", exact: true }).click();
+  expect((await sent).postDataJSON()).toMatchObject({ p_contractor: contractor, p_expected_revision: 3, p_attempt: attempt });
+});

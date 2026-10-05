@@ -16,6 +16,8 @@ import { createClient } from "@/lib/supabase/client";
 // evidence and activates no provider. TRACE-068: activation grants the vendor role
 // to a reviewed binding, and releasing that binding withdraws it. TRACE-070: the
 // account that accepted this provider's invitation can be bound from its receipt.
+// TRACE-105 (DEC-2026-028): a suspended provider can also be bound, so one activated
+// with no account is repaired by suspend, bind, activate.
 
 type Decision = {
   action: string;
@@ -290,11 +292,14 @@ export function VendorAccountLinking({
       ? "The reviewed application snapshot has no usable recipient address, so no identity can be verified against it."
       : !overview.version_current
         ? "A newer application revision exists. Rebind onboarding to the current version before linking an account."
-        : overview.onboarding_status !== "review"
-          ? "Account linking is part of vetting. Onboarding is " +
-            overview.onboarding_status +
-            "."
-          : overview.invitation_live
+        : overview.onboarding_status === "active"
+          ? "This provider is active with no bound account, so it holds no vendor role. An account is never bound to a live provider: suspend it, bind the account here, then activate it again. Activation re-checks the checklist and grants the vendor role."
+          : overview.onboarding_status !== "review" &&
+              overview.onboarding_status !== "suspended"
+            ? "Account linking is part of vetting. Onboarding is " +
+              overview.onboarding_status +
+              "."
+            : overview.invitation_live
             ? "An invitation is live for this provider. Close it before linking an existing account; the two paths are mutually exclusive."
             : "";
   // The receipt facts the server will check again; an unbindable receipt is
@@ -406,6 +411,12 @@ export function VendorAccountLinking({
         <p className="text-sm leading-6 text-muted-foreground">{linkBlocked}</p>
       ) : (
         <>
+          {overview.onboarding_status === "suspended" && (
+            <p className="text-sm leading-6 text-muted-foreground">
+              This provider is suspended. Bind its account here, then activate
+              it again from the checklist to grant the vendor role.
+            </p>
+          )}
           {receipt && (
             <div className="space-y-3 rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">

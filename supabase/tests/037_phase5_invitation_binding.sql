@@ -202,10 +202,15 @@ select throws_ok($$select public.vendor_bind_invited_account('f2000000-0000-4000
  'P0001','Account linking idempotency conflict','A release key is not a replay of a binding');
 select ok(pg_temp.overview('f2000000-0000-4000-8000-000000000001')->'link_source'='null'::jsonb,
  'A released provider reports no link source');
--- Rebinding is attempted in review; the provider is suspended, so it is refused.
-select throws_ok($$select public.vendor_bind_invited_account('f2000000-0000-4000-8000-000000000001',5,
- (select id from bind_fixture where key='first'),'Rebinding after release','bind-2')$$,
- 'P0001','Account binding requires onboarding review','A suspended provider cannot be bound');
+-- DEC-2026-028: the suspended provider can be bound again, and reactivation grants
+-- the role through the same path.
+select is(public.vendor_bind_invited_account('f2000000-0000-4000-8000-000000000001',5,
+ (select id from bind_fixture where key='first'),'Rebinding after release','bind-2')->>'recorded','true',
+ 'A suspended provider can be bound');
+select is(pg_temp.roles('f1000000-0000-4000-8000-000000000002'),'homeowner','Binding while suspended grants no role');
+select is(public.vendor_decide_onboarding('f2000000-0000-4000-8000-000000000001',6,'activate','Synthetic reactivation','bind-activate-2'),7,
+ 'The rebound provider reactivates');
+select is(pg_temp.roles('f1000000-0000-4000-8000-000000000002'),'homeowner,vendor','Reactivation grants the vendor role again');
 
 -- The account belongs to one provider.
 update auth.users set email='bind-second-moved@example.invalid' where id='f1000000-0000-4000-8000-000000000003';

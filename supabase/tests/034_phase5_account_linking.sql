@@ -153,9 +153,17 @@ select throws_ok($$select public.vendor_link_existing_account('a2000000-0000-400
 select throws_ok($$select public.vendor_release_linked_account('a2000000-0000-4000-8000-000000000003',1,'Synthetic','inherited-release')$$,
  'P0001','Existing account link requires the compliance cutover path',
  'An inherited link is not released by this command');
+-- DEC-2026-028: a live provider is never bound in place; a suspended one can be,
+-- so one activated with no account is repaired by suspend, link, activate.
+update public.vendor_onboarding set status='active' where contractor_id='a2000000-0000-4000-8000-000000000007';
+select throws_ok($$select public.vendor_link_existing_account('a2000000-0000-4000-8000-000000000007',1,'a1000000-0000-4000-8000-000000000007','Synthetic','active')$$,
+ 'P0001','Suspend the provider before binding an account','An active provider cannot link an account');
 update public.vendor_onboarding set status='suspended' where contractor_id='a2000000-0000-4000-8000-000000000007';
-select throws_ok($$select public.vendor_link_existing_account('a2000000-0000-4000-8000-000000000007',1,'a1000000-0000-4000-8000-000000000007','Synthetic','suspended')$$,
- 'P0001','Account linking requires onboarding review','A suspended provider cannot link an account');
+select is(public.vendor_link_existing_account('a2000000-0000-4000-8000-000000000007',1,'a1000000-0000-4000-8000-000000000007','Synthetic','suspended')->>'recorded',
+ 'true','A suspended provider can link an account');
+update public.vendor_onboarding set status='rejected' where contractor_id='a2000000-0000-4000-8000-000000000007';
+select throws_ok($$select public.vendor_link_existing_account('a2000000-0000-4000-8000-000000000007',2,'a1000000-0000-4000-8000-000000000007','Synthetic','rejected')$$,
+ 'P0001','Account linking requires onboarding review','A rejected provider cannot link an account');
 -- A newer application revision is reported and refused, never silently adopted.
 update public.vendor_applications set business_name='Synthetic stale-version provider v2'
  where id='a3000000-0000-4000-8000-000000000005';
