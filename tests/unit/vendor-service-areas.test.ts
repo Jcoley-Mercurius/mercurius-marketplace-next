@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   LEE_COUNTY_SERVICE_AREAS,
   normalizeServiceAreas,
+  publicServiceAreas,
   serviceAreaCommunities,
   UnsupportedServiceAreaError,
 } from "@/lib/vendorServiceAreas";
@@ -48,5 +49,25 @@ describe("Lee County vendor service areas", () => {
       expect((error as UnsupportedServiceAreaError).entries).toEqual(["Naples", "Punta Gorda"]);
       expect((error as Error).message).toMatch(/Lee County only/);
     }
+  });
+});
+
+describe("publicServiceAreas", () => {
+  const areas = [
+    { zip_code: "33904", city: "Cape Coral" },
+    { zip_code: "33909", city: "Cape Coral" },
+    { zip_code: "33901", city: "Fort Myers" },
+  ];
+
+  it("groups active ZIPs by community, sorted", () => {
+    expect(publicServiceAreas(["33909", "33901", "33904", "33909"], areas)).toEqual([
+      { city: "Cape Coral", zips: ["33904", "33909"] },
+      { city: "Fort Myers", zips: ["33901"] },
+    ]);
+  });
+
+  it("drops ZIPs outside the active allowlist", () => {
+    expect(publicServiceAreas(["34102"], areas)).toEqual([]);
+    expect(publicServiceAreas([], areas)).toEqual([]);
   });
 });
