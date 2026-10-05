@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { renewalDocumentKindLabel } from "@/lib/renewalDocuments";
 import { VendorRenewalDocuments, type RenewalOverview } from "@/components/admin/VendorRenewalDocuments";
+import { LegacyProviderReview } from "@/components/admin/LegacyProviderReview";
 
 // TRACE-069 operator surface for the MPS §8 activation checklist and onboarding
 // decisions. Every decision is the server's: evidence is recorded through
@@ -385,6 +386,9 @@ export function VendorOnboardingChecklist({
             ? "This provider is not under onboarding review, so there is no activation checklist. Existing provider records follow the compliance cutover path."
             : loadError}
         </p>
+        {unreviewed && (
+          <LegacyProviderReview contractorId={contractorId} businessName={businessName} onStarted={refresh} />
+        )}
         {!unreviewed && (
           <Button size="sm" variant="outline" onClick={() => void refresh()}>
             <RefreshCw />

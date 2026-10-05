@@ -65,6 +65,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Follow-up (TRACE-106):** Dark-mode repair release — fix dark contrast defects, re-run light/dark axe, `@visual` and manual checks, then set `LIGHT_ONLY_LAUNCH` to `false`. Required before any release that shows a theme choice, and before the R1 gate unless Josh records otherwise.
 
+### DEC-2026-027 — Legacy providers start onboarding review without an application
+
+**Status:** APPROVED owner instruction; a closed exception to application intake. **Date:** 2026-10-04 (America/New_York).
+
+**Decision:** The eight providers listed before the rebuilt onboarding, and only these eight, start onboarding review without submitting `/vendors/apply`: All Surface Pressure Cleaning & Sealing; Flash Handyman Service; Garden of Eden Lawn Service; Maritzas Cleaning Services; P & P Cleaning Solutions; Sparkling Squeegees Window Cleaning; Spiffy Clean Canz; TDJ Construction. Josh confirmed this is the full list; every other provider applies. An operator starts review from the provider's vendor page; the system writes an operator application record from the existing profile and confirmed contact (marked as not submitted by the provider) and opens review at revision 1. The MPS §8 activation checklist, evidence, activation and listing rules are unchanged: Josh holds each provider's identity, agreement, license, insurance and ACH authorization outside the platform, uploads the license and insurance documents through the existing operator upload, records every checklist item and activates.
+
+**Context:** Supersedes, for these eight only, the 2026-10-03 choice to close the access-managed compliance path with a real application (`20261003001000`, which stays in place). The providers already set up their profiles through Existing Provider Access (DEC-2026-024) and their documents were collected manually before the checklist existed in the platform.
+
+**Alternatives considered:** Require the application (rejected by Josh: the providers are already onboarded in substance); mark them listable without a checklist (rejected: no license/insurance expiry, renewal or suspension control).
+
+**MPS impact:** None to the §8 checklist; intake exception for eight named legacy providers. **MDS impact:** One operator panel on the vendor page. **MTS impact:** Migration `20261004001000` (closed list recorded once by exact name for access-managed providers without onboarding; `r0_start_legacy_provider_review`; `r0_legacy_review_status`; operator document upload while a legacy review is open; no new-application notice for the operator record). **Data/payment/security impact:** Operator-only commands; no email, role, listing or payment change at the start.
+
+**Required evidence:** SQL 074; browser `legacy-provider-review`; after the hosted push, the migration notice reports 8 of 8 providers recorded.
+
 ### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.

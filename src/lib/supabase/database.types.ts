@@ -7134,6 +7134,7 @@ export type Database = {
         Args: { p_email: string; p_kind?: string; p_purpose: string }
         Returns: string
       }
+      r0_legacy_review_status: { Args: { p_contractor: string }; Returns: Json }
       r0_manage_interest: {
         Args: {
           p_action: string
@@ -7272,6 +7273,10 @@ export type Database = {
           p_key: string
           p_reason: string
         }
+        Returns: Json
+      }
+      r0_start_legacy_provider_review: {
+        Args: { p_contractor: string; p_key: string; p_reason: string }
         Returns: Json
       }
       r0_submit_interest: {
