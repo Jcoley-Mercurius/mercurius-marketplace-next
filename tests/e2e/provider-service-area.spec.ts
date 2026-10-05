@@ -45,9 +45,22 @@ for (const width of [320, 1440]) {
 test("a provider with no service ZIPs says so", async ({ page }) => {
   await open(page, []);
   await expect(page.getByText("Service area not listed yet")).toBeVisible();
+  await expect(page.getByText("This provider has not listed its service ZIP codes.")).toBeVisible();
 });
+
+for (const width of [320, 1440]) {
+  test(`a provider whose service ZIPs are all outside current coverage says so at ${width}px`, async ({ page }) => {
+    await open(page, ["34102"], width);
+    await expect(page.getByText("No service ZIP codes in current coverage")).toBeVisible();
+    await expect(page.getByText("This provider's listed ZIP codes are outside Mercurius's current service area.")).toBeVisible();
+    await expect(page.getByText("Service area not listed yet")).toHaveCount(0);
+    await expect(page.getByText("34102")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  });
+}
 
 test("a failed service-area read does not invent coverage", async ({ page }) => {
   await open(page, "error");
   await expect(page.getByText("Service area unavailable")).toBeVisible();
+  await expect(page.getByText("Please refresh to try again.")).toBeVisible();
 });

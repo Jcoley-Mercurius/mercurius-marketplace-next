@@ -126,6 +126,8 @@ type GalleryItem = {
 
 type PageMode = "loading" | "ready" | "missing" | "error";
 
+type ServiceAreaState = { areas: PublicServiceArea[]; hasListedZips: boolean };
+
 
 const serviceFallbacks: Record<string, string> = {
   "lawn-care": "Lawn Care",
@@ -167,7 +169,7 @@ export default function ProviderStorefrontPage() {
   const [completedJobCount, setCompletedJobCount] = useState<number | null>(null);
   const [serverNow, setServerNow] = useState<string | null>(null);
   // null: the service area could not be read.
-  const [serviceAreas, setServiceAreas] = useState<PublicServiceArea[] | null>([]);
+  const [serviceAreas, setServiceAreas] = useState<ServiceAreaState | null>(null);
   const [mode, setMode] = useState<PageMode>("loading");
   const [error, setError] = useState("");
 
@@ -273,7 +275,10 @@ export default function ProviderStorefrontPage() {
       if (zipsResult.error || areasResult.error) console.warn("Public service area is unavailable", zipsResult.error ?? areasResult.error);
       setServiceAreas(zipsResult.error || areasResult.error
         ? null
-        : publicServiceAreas((zipsResult.data ?? []).map((row) => row.zip_code), areasResult.data ?? []));
+        : {
+          areas: publicServiceAreas((zipsResult.data ?? []).map((row) => row.zip_code), areasResult.data ?? []),
+          hasListedZips: (zipsResult.data ?? []).length > 0,
+        });
 
       setContractor(contractorResult.data as unknown as Contractor);
       setReviews((reviewsResult.data ?? []) as Review[]);
@@ -635,9 +640,18 @@ function formatDate(value: string) {
 }
 
 // The provider's service ZIPs from coverage_areas, grouped by community.
-function ServiceAreaList({ areas }: { areas: PublicServiceArea[] | null }) {
+function ServiceAreaList({ areas: serviceArea }: { areas: ServiceAreaState | null }) {
+  const areas = serviceArea?.areas;
   if (!areas || areas.length === 0) {
-    return <div className="flex min-h-32 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">{areas ? "Service area not listed yet" : "Service area unavailable"}</p><p className="mt-1 text-xs">{areas ? "This provider has not listed its service ZIP codes." : "Please refresh to try again."}</p></div></div>;
+    const title = !serviceArea
+      ? "Service area unavailable"
+      : serviceArea.hasListedZips ? "No service ZIP codes in current coverage" : "Service area not listed yet";
+    const copy = !serviceArea
+      ? "Please refresh to try again."
+      : serviceArea.hasListedZips
+        ? "This provider's listed ZIP codes are outside Mercurius's current service area."
+        : "This provider has not listed its service ZIP codes.";
+    return <div className="flex min-h-32 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">{title}</p><p className="mt-1 text-xs">{copy}</p></div></div>;
   }
   const count = areas.reduce((total, area) => total + area.zips.length, 0);
   return <div className="space-y-3"><ul className="space-y-3">{areas.map((area) => <li key={area.city} className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" /><div className="min-w-0"><p className="text-sm font-medium text-foreground">{area.city}</p><p className="break-words text-xs text-muted-foreground">{area.zips.join(", ")}</p></div></li>)}</ul><p className="text-xs text-muted-foreground">{count} ZIP code{count === 1 ? "" : "s"} in Lee County, FL</p></div>;
