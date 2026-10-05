@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { ServiceAreaMap } from "@/components/provider-profile/ServiceAreaMap";
 import { PublicReviewAuthor } from "@/components/reviews/PublicReviewAuthor";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -639,7 +640,7 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 
-// The provider's service ZIPs from coverage_areas, grouped by community.
+// The provider's service ZIPs from coverage_areas: a drawn map, then the list by community.
 function ServiceAreaList({ areas: serviceArea }: { areas: ServiceAreaState | null }) {
   const areas = serviceArea?.areas;
   if (!areas || areas.length === 0) {
@@ -654,5 +655,5 @@ function ServiceAreaList({ areas: serviceArea }: { areas: ServiceAreaState | nul
     return <div className="flex min-h-32 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">{title}</p><p className="mt-1 text-xs">{copy}</p></div></div>;
   }
   const count = areas.reduce((total, area) => total + area.zips.length, 0);
-  return <div className="space-y-3"><ul className="space-y-3">{areas.map((area) => <li key={area.city} className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" /><div className="min-w-0"><p className="text-sm font-medium text-foreground">{area.city}</p><p className="break-words text-xs text-muted-foreground">{area.zips.join(", ")}</p></div></li>)}</ul><p className="text-xs text-muted-foreground">{count} ZIP code{count === 1 ? "" : "s"} in Lee County, FL</p></div>;
+  return <div className="space-y-3"><ServiceAreaMap areas={areas} /><p className="text-center text-sm text-foreground">{count} ZIP code{count === 1 ? "" : "s"} in Lee County, FL</p><details className="rounded-lg border border-border px-3 py-2"><summary className="cursor-pointer text-sm font-medium text-foreground">See ZIP codes by community</summary><ul className="mt-3 space-y-3">{areas.map((area) => <li key={area.city} className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" /><div className="min-w-0"><p className="text-sm font-medium text-foreground">{area.city}</p><p className="break-words text-xs text-muted-foreground">{area.zips.join(", ")}</p></div></li>)}</ul></details></div>;
 }
