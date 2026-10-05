@@ -1,5 +1,11 @@
 # Agent handoff — 2026-10-01
 
+## Public provider service area (TRACE-105), 2026-10-05
+
+- Branch `claude/provider-service-area` from `main` `d6e1db5`. Owner report: the public profile's Service Area card showed fixed text ("Southwest Florida", "Coverage is confirmed for your service address") for every provider. It now lists the provider's `contractor_service_zips` grouped by community from active `coverage_areas` (ZIPs outside the allowlist are dropped), "Service area not listed yet" when none, and "Service area unavailable" on a failed read. Client only; both tables were already publicly readable.
+- Evidence: typecheck, lint, unit 379/379 (`publicServiceAreas`), synthetic build, browser `provider-service-area` 4/4 (320/1440 px, axe on main).
+- Recorded: PR #85 deployed 2026-10-05 02:50 UTC as `dpl_8A1Ckm6ojDBN99QQ8d8wNuLfn9kT` (main `d6e1db5`, clean `git archive`, source 944/945 identical); owner pushed `20261003001000` and `20261004001000` (hosted history verified); P & P activated by the owner through the legacy review.
+
 ## Legacy provider review without an application (TRACE-105, DEC-2026-027), 2026-10-04
 
 - Branch `claude/legacy-provider-review` from `main` `33679c0`. Owner decision DEC-2026-027: the eight listed legacy providers (full list confirmed) start review without `/vendors/apply`; everyone else applies.

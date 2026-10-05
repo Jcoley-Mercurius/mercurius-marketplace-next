@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { publicServiceAreas, type PublicServiceArea } from "@/lib/vendorServiceAreas";
 import {
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
@@ -125,6 +126,8 @@ type GalleryItem = {
 
 type PageMode = "loading" | "ready" | "missing" | "error";
 
+type ServiceAreaState = { areas: PublicServiceArea[]; hasListedZips: boolean };
+
 
 const serviceFallbacks: Record<string, string> = {
   "lawn-care": "Lawn Care",
@@ -165,6 +168,8 @@ export default function ProviderStorefrontPage() {
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [completedJobCount, setCompletedJobCount] = useState<number | null>(null);
   const [serverNow, setServerNow] = useState<string | null>(null);
+  // null: the service area could not be read.
+  const [serviceAreas, setServiceAreas] = useState<ServiceAreaState | null>(null);
   const [mode, setMode] = useState<PageMode>("loading");
   const [error, setError] = useState("");
 
@@ -224,7 +229,7 @@ export default function ProviderStorefrontPage() {
 
       const packageRows = (packagesResult.data ?? []) as PackageRow[];
       const packageIds = packageRows.map((item) => item.id);
-      const [tiersResult, addonsResult, promotionsResult, clockResult] = await Promise.all([
+      const [tiersResult, addonsResult, promotionsResult, clockResult, zipsResult, areasResult] = await Promise.all([
         packageIds.length ? supabase
             .from("package_tiers")
             .select("id, package_id, name, price, frequency, rule_question_key, rule_min, rule_max, includes, sort_order")
@@ -246,6 +251,8 @@ export default function ProviderStorefrontPage() {
           .eq("is_enabled", true)
           : Promise.resolve({ data: [] as PackagePromotion[], error: null }),
         supabase.rpc("pricing_server_now"),
+        supabase.from("contractor_service_zips").select("zip_code").eq("contractor_id", contractorId),
+        supabase.from("coverage_areas").select("zip_code, city").eq("is_active", true),
       ]);
       if (tiersResult.error) throw tiersResult.error;
       if (addonsResult.error) console.warn("Public custom package add-ons are unavailable", addonsResult.error);
@@ -265,6 +272,13 @@ export default function ProviderStorefrontPage() {
       const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
       const addons = addonsResult.error ? [] : (addonsResult.data ?? []) as PackageAddon[];
       setServerNow(promotionReady ? clockResult.data as string : null);
+      if (zipsResult.error || areasResult.error) console.warn("Public service area is unavailable", zipsResult.error ?? areasResult.error);
+      setServiceAreas(zipsResult.error || areasResult.error
+        ? null
+        : {
+          areas: publicServiceAreas((zipsResult.data ?? []).map((row) => row.zip_code), areasResult.data ?? []),
+          hasListedZips: (zipsResult.data ?? []).length > 0,
+        });
 
       setContractor(contractorResult.data as unknown as Contractor);
       setReviews((reviewsResult.data ?? []) as Review[]);
@@ -515,7 +529,7 @@ export default function ProviderStorefrontPage() {
                   <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest(primaryPackage)}>{!invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
                 </CardContent></Card>
 
-                <Card><CardHeader><CardTitle className="text-lg">Service Area</CardTitle></CardHeader><CardContent><div className="flex min-h-40 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">Southwest Florida</p><p className="mt-1 text-xs">Coverage is confirmed for your service address.</p></div></div>{contractor.location && <p className="mt-3 text-center text-sm text-muted-foreground">Based in {contractor.location}</p>}</CardContent></Card>
+                <Card><CardHeader><CardTitle className="text-lg">Service Area</CardTitle></CardHeader><CardContent><ServiceAreaList areas={serviceAreas} />{contractor.location && <p className="mt-3 text-center text-sm text-muted-foreground">Based in {contractor.location}</p>}</CardContent></Card>
 
                 {hasQuickStats && <Card><CardHeader><CardTitle className="text-lg">Quick Stats</CardTitle></CardHeader><CardContent className="space-y-3">{averageRating !== null && <QuickStat label="Public review rating" value={Number(averageRating).toFixed(1)} />}{completedJobCount !== null && <QuickStat label="Completed through Mercurius" value={String(completedJobCount)} />}{contractor.years_experience !== null && <QuickStat label="Experience" value={`${contractor.years_experience} years`} />}{contractor.verified_specialty && <div className="border-t pt-3"><p className="text-xs text-muted-foreground">Verified Specialty</p><p className="mt-1 text-sm font-semibold">{contractor.verified_specialty}</p></div>}</CardContent></Card>}
               </aside>
@@ -623,4 +637,22 @@ function money(value: number) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
+// The provider's service ZIPs from coverage_areas, grouped by community.
+function ServiceAreaList({ areas: serviceArea }: { areas: ServiceAreaState | null }) {
+  const areas = serviceArea?.areas;
+  if (!areas || areas.length === 0) {
+    const title = !serviceArea
+      ? "Service area unavailable"
+      : serviceArea.hasListedZips ? "No service ZIP codes in current coverage" : "Service area not listed yet";
+    const copy = !serviceArea
+      ? "Please refresh to try again."
+      : serviceArea.hasListedZips
+        ? "This provider's listed ZIP codes are outside Mercurius's current service area."
+        : "This provider has not listed its service ZIP codes.";
+    return <div className="flex min-h-32 items-center justify-center rounded-xl bg-muted/60"><div className="px-5 text-center text-muted-foreground"><MapPin className="mx-auto mb-2 h-8 w-8" /><p className="text-sm font-medium text-foreground">{title}</p><p className="mt-1 text-xs">{copy}</p></div></div>;
+  }
+  const count = areas.reduce((total, area) => total + area.zips.length, 0);
+  return <div className="space-y-3"><ul className="space-y-3">{areas.map((area) => <li key={area.city} className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" /><div className="min-w-0"><p className="text-sm font-medium text-foreground">{area.city}</p><p className="break-words text-xs text-muted-foreground">{area.zips.join(", ")}</p></div></li>)}</ul><p className="text-xs text-muted-foreground">{count} ZIP code{count === 1 ? "" : "s"} in Lee County, FL</p></div>;
 }

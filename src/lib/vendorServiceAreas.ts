@@ -47,3 +47,25 @@ export class UnsupportedServiceAreaError extends Error {
     super("Mercurius currently serves Lee County only. Remove service areas outside Lee County.");
   }
 }
+
+export type PublicServiceArea = { city: string; zips: string[] };
+
+/**
+ * A provider's service ZIPs grouped by community for its public profile. Only ZIPs in
+ * the active coverage allowlist are shown; communities and ZIPs are sorted.
+ */
+export function publicServiceAreas(
+  zips: readonly string[],
+  areas: readonly { zip_code: string; city: string }[],
+): PublicServiceArea[] {
+  const cityByZip = new Map(areas.map((area) => [area.zip_code, area.city]));
+  const grouped = new Map<string, Set<string>>();
+  for (const zip of zips) {
+    const city = cityByZip.get(zip);
+    if (!city) continue;
+    grouped.set(city, (grouped.get(city) ?? new Set()).add(zip));
+  }
+  return [...grouped]
+    .map(([city, set]) => ({ city, zips: [...set].sort() }))
+    .sort((a, b) => a.city.localeCompare(b.city));
+}
