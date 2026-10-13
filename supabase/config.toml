@@ -22,11 +22,12 @@ port = 55424
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["http://localhost:3000/set-password?invitation=*"]
 
-# Owner decision 2026-09-13: provider onboarding needs longer than the 1-hour default
-# to set a password. 3 hours. This is the email link lifetime, not the operator-entered
-# invitation expiry.
+# DEC-2026-029 (owner, 2026-10-13; supersedes the 3-hour decision of 2026-09-13): the
+# email link lasts 24 hours, the most hosted Auth allows (86400 s). Invitations default to
+# 7 days. Keep in step with AUTH_INVITATION_LINK_HOURS and
+# private.provider_invitation_link_lifetime().
 [auth.email]
-otp_expiry = 10800
+otp_expiry = 86400
 
 [auth.email.template.invite]
 subject = "Set up your Mercurius provider account"

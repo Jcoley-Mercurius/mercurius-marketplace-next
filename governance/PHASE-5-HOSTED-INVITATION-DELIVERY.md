@@ -113,9 +113,10 @@ evidence without credentials, tokens, real addresses or invitation links.
    and paste the body from `supabase/templates/provider-invitation.html` at the merged
    commit. Do not run `supabase config push` for this: it pushes every Auth setting in the
    local file, including local-only URLs.
-4. **Email link lifetime.** Set the email OTP/link expiry to 3 hours (10800 s), the owner
-   decision of 2026-09-13, matching `supabase/config.toml`. It is independent of the
-   operator-entered invitation expiry, which should be at least as long.
+4. **Email link lifetime.** Set the email OTP/link expiry to 24 hours (86400 s, the most
+   hosted Auth allows), DEC-2026-029 (superseding the 3-hour decision of 2026-09-13),
+   matching `supabase/config.toml`. The setting is the Email provider's "Email OTP
+   expiration" (Authentication → Sign In / Providers → Email). Invitations default to 7 days.
 5. **Edge secrets.** Set `SITE_URL` to the site origin, `MERCURIUS_INVITATION_PROJECT_REF`
    to the project ref, `MERCURIUS_INVITATION_SITE_ORIGIN` to the site origin, then
    `MERCURIUS_INVITATION_MODE=hosted` last. Removing the mode disarms dispatch.
@@ -130,8 +131,9 @@ evidence without credentials, tokens, real addresses or invitation links.
 
 ## Open questions and follow-ups
 
-- **Settled 2026-09-13 — email link lifetime.** 3 hours, set locally and in the runbook.
-  An operator-entered invitation expiry longer than 3 hours still outlives the email link;
+- **Settled 2026-09-13, changed 2026-10-13 — email link lifetime.** 3 hours, then 24 hours
+  (DEC-2026-029; hosted Auth refuses more). A 7-day invitation still outlives the email link
+  until the Mercurius-owned invitation link ships;
   the same attempt cannot resend (the reservation forbids it, and `expired` closure waits
   for the invitation expiry), so the reissue path remains revoking the attempt with a
   reason and preparing a new one, after which Auth re-invites the same unconfirmed account

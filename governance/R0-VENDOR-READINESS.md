@@ -36,7 +36,7 @@
 
 ### Invitation attention
 
-`r0_invitation_attention()` (admin) lists the newest attempt per non-rejected provider that is uncertain, refused (`email_exists`), expired without acceptance, or provider-accepted more than 3 hours ago without acceptance (link lapsed). Recovery stays in the existing Provider invitation panel (reconcile by exact account ID, bind, revoke/expire, prepare new). No invitation logic changed.
+`r0_invitation_attention()` (admin) lists the newest attempt per non-rejected provider that is uncertain, refused (`email_exists`), expired without acceptance, or provider-accepted more than 24 hours ago without acceptance (link lapsed; 3 hours until DEC-2026-029). Recovery stays in the existing Provider invitation panel (reconcile by exact account ID, bind, revoke/expire, prepare new). No invitation logic changed.
 
 ### Truthful public listing
 
@@ -65,7 +65,7 @@ Support/privacy email `hello@mercuriusmarketplace.com` in footer (now a mailto l
 |---|---|---|---|
 | Vendor application → owner | Next route → Resend API | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (verified domain, SPF/DKIM), `OWNER_NOTIFICATION_EMAIL` (optional override), `SUPABASE_SERVICE_ROLE_KEY` | Required; tracked by the ledger above |
 | Contact form and renewal documents → owner | Same helper | Same | Unchanged; not tracked by the ledger (follow-up) |
-| Approved vendor → account invitation | `vendor-invite` Edge → Supabase Auth invite via custom SMTP | Edge: `SITE_URL`, `MERCURIUS_INVITATION_PROJECT_REF`, `MERCURIUS_INVITATION_SITE_ORIGIN`, `MERCURIUS_INVITATION_MODE=hosted` (last). Auth: Site URL = production origin; redirect `https://<site-host>/set-password?invitation=*`; invite subject/template from `supabase/templates/provider-invitation.html`; email link expiry 10800 s; custom SMTP (Resend) with verified sender | Required |
+| Approved vendor → account invitation | `vendor-invite` Edge → Supabase Auth invite via custom SMTP | Edge: `SITE_URL`, `MERCURIUS_INVITATION_PROJECT_REF`, `MERCURIUS_INVITATION_SITE_ORIGIN`, `MERCURIUS_INVITATION_MODE=hosted` (last). Auth: Site URL = production origin; redirect `https://<site-host>/set-password?invitation=*`; invite subject/template from `supabase/templates/provider-invitation.html`; email link expiry 86400 s (DEC-2026-029); custom SMTP (Resend) with verified sender | Required |
 | Homeowner account verification and recovery | Supabase Auth via the same SMTP | Auth Site URL and redirect allow-list for the site origin (sign-up keeps `emailRedirectTo` = site origin, R0.3 D9) | Required for the optional account |
 | Early-access confirmation/status, marketing | None sent in R0 | — | Not in the approved R0 flow ("We'll email you if selected" is later manual trial communication) |
 
@@ -118,7 +118,7 @@ Each step needs its specific owner authorization; record evidence without secret
 2. Recalculate the [hosted migration plan](HOSTED-MIGRATION-ROLLOUT.md) for that head (hosted history ended `20260731172714`); rehearse on a restored copy of production-shaped data; verify backup and restore (CFG-011).
 3. Run `r0_public_listing_inventory()` on the rehearsal copy; owner reviews every `test_signal`, not-listed-but-active and featured record; apply exclusions with reasons. Delete nothing.
 4. Configure Resend: verified sending domain (SPF/DKIM), `RESEND_FROM_EMAIL`, `RESEND_API_KEY`, `OWNER_NOTIFICATION_EMAIL` in Vercel server env; Supabase custom SMTP through Resend.
-5. Configure Auth: Site URL, redirect allow-list (site origin and `/set-password?invitation=*`), invite subject/template, 10800 s link expiry; Edge secrets and `vendor-invite` deploy per the [hosted invitation runbook](PHASE-5-HOSTED-INVITATION-DELIVERY.md).
+5. Configure Auth: Site URL, redirect allow-list (site origin and `/set-password?invitation=*`), invite subject/template, 86400 s link expiry (DEC-2026-029); Edge secrets and `vendor-invite` deploy per the [hosted invitation runbook](PHASE-5-HOSTED-INVITATION-DELIVERY.md).
 6. **Hosted test A:** synthetic vendor application with a private PDF → admin queue shows it and the document opens by signed link → owner email arrives from the verified sender → `/admin/recruiting` shows `sent`. Then force a failure (e.g. temporarily invalid sender on a preview) and prove the application stays visible, the failure appears, and resend/acknowledge work once.
 7. **Hosted test B:** approve the synthetic applicant → Auth invitation arrives with the reviewed template → link survives a scanner GET → password setup → acceptance → identity binding → vendor login sees the recruiting notice and not-listed state → a second invite to a confirmed address records the refusal. Close or clean up synthetic records.
 8. **Hosted test C:** homeowner early-access join → optional account → verification email arrives → sign in → waiting home. No other homeowner email is expected in R0.

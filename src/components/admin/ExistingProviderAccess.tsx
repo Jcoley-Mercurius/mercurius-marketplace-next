@@ -9,6 +9,7 @@ import { ConfirmAction } from "@/components/ui/confirm-action";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { AUTH_INVITATION_LINK_HOURS, INVITATION_DEFAULT_EXPIRY_DAYS } from "@/lib/invitationLinkLifetime";
 
 // TRACE-105 operator surface for an existing provider with no application: record the
 // owner-confirmed contact, prepare and send access, reconcile, close, then bind the
@@ -108,7 +109,7 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
   const [pending, setPending] = useState(false);
   const [email, setEmail] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [days, setDays] = useState("7");
+  const [days, setDays] = useState(String(INVITATION_DEFAULT_EXPIRY_DAYS));
   const [existingAccount, setExistingAccount] = useState("");
   const [reconcileAccount, setReconcileAccount] = useState("");
   // Binding is unique to an attempt. Repeatable commands retain their own keys
@@ -282,7 +283,7 @@ export function ExistingProviderAccess({ contractorId }: { contractorId: string 
 
         {canPrepare && (
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField id={`access-days-${contractorId}`} label="Invitation expiry (days)" help="1 to 30. The emailed link itself lasts 3 hours.">
+            <FormField id={`access-days-${contractorId}`} label="Invitation expiry (days)" help={`1 to 30. The emailed link itself lasts ${AUTH_INVITATION_LINK_HOURS} hours.`}>
               {(control) => <Input {...control} inputMode="numeric" value={days} onChange={(event) => setDays(event.target.value)} />}
             </FormField>
             <FormField id={`access-account-${contractorId}`} label="Existing account ID (optional)" help="Only when the owner already has a confirmed account at this address.">

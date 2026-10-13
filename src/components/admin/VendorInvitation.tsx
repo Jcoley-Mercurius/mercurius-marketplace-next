@@ -9,6 +9,7 @@ import { ConfirmAction } from "@/components/ui/confirm-action";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { AUTH_INVITATION_LINK_HOURS, INVITATION_DEFAULT_EXPIRY_DAYS, defaultInvitationExpiryLocal } from "@/lib/invitationLinkLifetime";
 
 // TRACE-066 operator surface over the TRACE-053/063 invitation commands. Every
 // decision is the server's: this panel reads state back and reports it. Preparing,
@@ -114,9 +115,8 @@ export function VendorInvitation({
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loadError, setLoadError] = useState("");
   const [pending, setPending] = useState<Action | null>(null);
-  // Operator-entered expiry. There is no default: an invitation lifetime is an
-  // operational decision, not something this panel may invent.
-  const [expiry, setExpiry] = useState("");
+  // Operator-entered expiry, defaulting to 7 days (DEC-2026-029).
+  const [expiry, setExpiry] = useState(() => defaultInvitationExpiryLocal());
   const [authUserId, setAuthUserId] = useState("");
   // One nonce per opened provider, so retrying the same expiry replays the same
   // preparation instead of racing a second attempt.
@@ -485,7 +485,7 @@ export function VendorInvitation({
             <FormField
               label="Invitation expiry"
               required
-              help="Entered by the operator for this invitation. There is no default expiry and none is implied by the Auth provider's own link lifetime."
+              help={`Defaults to ${INVITATION_DEFAULT_EXPIRY_DAYS} days from now. The emailed link itself lasts ${AUTH_INVITATION_LINK_HOURS} hours.`}
               error={expiryError || undefined}
             >
               {(control) => (
