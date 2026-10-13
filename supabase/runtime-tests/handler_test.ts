@@ -334,9 +334,28 @@ if (name === "vendor-invite") {
   const attempt = "d4000000-0000-4000-8000-000000000001";
   const recipient = "d1000000-0000-4000-8000-000000000002";
   const operator = "d1000000-0000-4000-8000-000000000001";
-  const operatorRoute = (url: URL) => {
+  // DEC-2026-029 follow-up: every claimed send records one open-key hash before Auth.
+  let keyHashes: string[] = [];
+  const operatorRoute = (url: URL, init?: RequestInit) => {
     if (url.pathname === "/auth/v1/user") return json({ id: operator });
     if (url.pathname === "/rest/v1/rpc/has_role") return json(true);
+    if (url.pathname === "/rest/v1/rpc/provider_invitation_set_open_key") {
+      const payload = JSON.parse(String(init?.body ?? "{}"));
+      keyHashes.push(payload.p_key_hash);
+      return json(null);
+    }
+  };
+  const sha256 = async (text: string) =>
+    [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  // The invite metadata minus its random key, after checking the key's shape and that
+  // exactly its hash was recorded.
+  const withoutKey = async (data: Record<string, unknown>) => {
+    const { invitation_key, ...rest } = data;
+    if (typeof invitation_key !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(invitation_key))
+      throw new Error("Expected a 43-character base64url open key");
+    equal(keyHashes, [await sha256(invitation_key)]);
+    return rest;
   };
   // TRACE-071. Synthetic project ref and site; neither names a real deployment.
   const hostedRef="syntheticref00000001";
@@ -382,13 +401,14 @@ if (name === "vendor-invite") {
   });
   Deno.test("invitation dispatch: pinned hosted mode redirects to the pinned site and records the receipt", async () => {
     await withDelivery(hosted,async()=>{
-      calls=[]; unexpected=[]; const order:string[]=[];
+      calls=[]; unexpected=[]; keyHashes=[]; const order:string[]=[]; let data:Record<string,unknown>={};
       route=(url,init)=>{
-        const auth=operatorRoute(url); if(auth)return auth;
+        if(url.pathname==="/rest/v1/rpc/provider_invitation_set_open_key")order.push("key");
+        const auth=operatorRoute(url,init); if(auth)return auth;
         if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation"){order.push("claim");return json({claimed:true,recipient_email:"recipient@example.invalid"});}
         if(url.pathname==="/auth/v1/invite"){
           order.push("invite"); const sent=JSON.parse(String(init?.body));
-          equal(sent.email,"recipient@example.invalid"); equal(sent.data,{invitation_attempt:attempt});
+          equal(sent.email,"recipient@example.invalid"); data=sent.data;
           equal(url.searchParams.get("redirect_to"),`https://app.example.test/set-password?invitation=${attempt}`);
           return json({user:{id:recipient}});
         }
@@ -396,7 +416,8 @@ if (name === "vendor-invite") {
       };
       const response=await request({action:"send",attempt_id:attempt,email:"attacker@example.invalid",origin:"https://attacker.invalid",redirect_to:"https://attacker.invalid/set-password"},{Authorization:"Bearer synthetic-user-token"});
       equal(response.status,200); equal(await response.json(),{attempt_id:attempt,status:"provider_accepted",delivered:false,activated:false});
-      equal(order,["claim","invite","receipt"]);
+      equal(order,["claim","key","invite","receipt"]);
+      equal(await withoutKey(data),{invitation_attempt:attempt});
     });
   });
   Deno.test("invitation dispatch: hosted mode keeps the refusal and unknown contracts", async () => {
@@ -407,7 +428,7 @@ if (name === "vendor-invite") {
     for(const [reply,expected,writes] of replies) await withDelivery(hosted,async()=>{
       calls=[]; unexpected=[]; const order:string[]=[];
       route=(url,init)=>{
-        const auth=operatorRoute(url); if(auth)return auth;
+        const auth=operatorRoute(url,init); if(auth)return auth;
         if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
         if(url.pathname==="/auth/v1/invite"){order.push("invite");return reply();}
         if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");return json(null);}
@@ -418,16 +439,16 @@ if (name === "vendor-invite") {
     });
   });
   Deno.test("invitation dispatch: reserves first, uses snapshot recipient, and cannot resend", async () => {
-    calls=[]; unexpected=[]; fixture.MERCURIUS_INVITATION_MODE="local-test";
-    let claimed=false; const order:string[]=[];
+    calls=[]; unexpected=[]; keyHashes=[]; fixture.MERCURIUS_INVITATION_MODE="local-test";
+    let claimed=false; const order:string[]=[]; let data:Record<string,unknown>={};
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation") {order.push("claim"); const first=!claimed; claimed=true; return json({claimed:first,recipient_email:"recipient@example.invalid",status:"submitted"});}
       if(url.pathname==="/auth/v1/invite") {
         order.push("invite"); const sent=JSON.parse(String(init?.body));
         equal(sent.email,"recipient@example.invalid");
-        // The template builds the recipient link from Site URL plus this attempt.
-        equal(sent.data,{invitation_attempt:attempt});
+        // The template builds the recipient link from Site URL, this attempt and its key.
+        data=sent.data;
         equal(url.searchParams.get("redirect_to"),`http://localhost:3000/set-password?invitation=${attempt}`);
         return json({user:{id:recipient}});
       }
@@ -439,12 +460,13 @@ if (name === "vendor-invite") {
     equal(response.status,200); equal(await response.json(),{attempt_id:attempt,status:"provider_accepted",delivered:false,activated:false});
     response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
     equal(response.status,409); await response.body?.cancel(); equal(order,["claim","invite","receipt","claim"]);
+    equal(await withoutKey(data),{invitation_attempt:attempt});
     delete fixture.MERCURIUS_INVITATION_MODE;
   });
   Deno.test("invitation dispatch: uncertain Auth result is recorded without a retry", async () => {
     calls=[]; unexpected=[]; fixture.MERCURIUS_INVITATION_MODE="local-test"; let sends=0; let unknown=false;
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
       if(url.pathname==="/auth/v1/invite") {sends++; throw new Error("Synthetic lost response");}
       if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation") {unknown=JSON.parse(String(init?.body)).p_auth_user===null; return json(null);}
@@ -456,7 +478,7 @@ if (name === "vendor-invite") {
   Deno.test("invitation dispatch: receipt failure cannot report successful delivery", async () => {
     calls=[]; unexpected=[]; fixture.MERCURIUS_INVITATION_MODE="local-test"; const receipts:unknown[]=[];
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
       if(url.pathname==="/auth/v1/invite")return json({user:{id:recipient}});
       if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation") {const payload=JSON.parse(String(init?.body));receipts.push(payload.p_auth_user);return payload.p_auth_user ? json({message:"synthetic receipt failure"},500):json(null);}
@@ -467,20 +489,58 @@ if (name === "vendor-invite") {
   });
   Deno.test("invitation acceptance: verified caller token reaches recipient-owned RPC", async () => {
     calls=[];unexpected=[];
+    let cleared:unknown=null;
     route=(url,init)=>{
       if(url.pathname==="/auth/v1/user")return json({id:recipient});
       if(url.pathname==="/rest/v1/rpc/vendor_accept_invitation") {
         equal(new Headers(init?.headers).get("authorization"),"Bearer synthetic-recipient-token");
         equal(JSON.parse(String(init?.body)),{p_attempt:attempt}); return json(null);
       }
+      // The verified caller's own account, never a body-supplied one.
+      if(url.pathname===`/auth/v1/admin/users/${recipient}`&&init?.method==="PUT"){cleared=JSON.parse(String(init.body));return json({id:recipient});}
     };
     const response=await request({action:"accept",attempt_id:attempt,auth_user_id:operator},{Authorization:"Bearer synthetic-recipient-token"});
-    equal(response.status,200);equal(await response.json(),{status:"accepted",activated:false});equal(calls.length,2);
+    equal(response.status,200);equal(await response.json(),{status:"accepted",activated:false});equal(calls.length,3);
+    equal(cleared,{user_metadata:{invitation_key:null}});
+  });
+  Deno.test("invitation acceptance: a failed key clean-up still reports the recorded acceptance", async () => {
+    calls=[];unexpected=[];
+    route=(url)=>{
+      if(url.pathname==="/auth/v1/user")return json({id:recipient});
+      if(url.pathname==="/rest/v1/rpc/vendor_accept_invitation")return json(null);
+      if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({message:"synthetic"},500);
+    };
+    const response=await request({action:"accept",attempt_id:attempt},{Authorization:"Bearer synthetic-recipient-token"});
+    equal(response.status,200);equal(await response.json(),{status:"accepted",activated:false});
+  });
+  Deno.test("invitation acceptance: a refused acceptance leaves the key in place", async () => {
+    calls=[];unexpected=[];
+    route=(url)=>{
+      if(url.pathname==="/auth/v1/user")return json({id:recipient});
+      if(url.pathname==="/rest/v1/rpc/vendor_accept_invitation")return json({message:"Current invitation and application required"},400);
+    };
+    const response=await request({action:"accept",attempt_id:attempt},{Authorization:"Bearer synthetic-recipient-token"});
+    equal(response.status,409);equal(await response.json(),{error:"INVITATION_NOT_ACCEPTABLE"});
+    equal(calls.some(call=>call.includes("/auth/v1/admin/users")),false);
+  });
+  Deno.test("invitation dispatch: an unrecorded open key stops the send before Auth", async () => {
+    calls=[];unexpected=[];keyHashes=[];fixture.MERCURIUS_INVITATION_MODE="local-test";const order:string[]=[];
+    route=(url,init)=>{
+      if(url.pathname==="/rest/v1/rpc/provider_invitation_set_open_key"){order.push("key");return json({message:"synthetic key failure"},500);}
+      const auth=operatorRoute(url,init); if(auth)return auth;
+      if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation"){order.push("claim");return json({claimed:true,recipient_email:"recipient@example.invalid"});}
+      if(url.pathname==="/auth/v1/invite"){order.push("invite");return json({user:{id:recipient}});}
+      if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation"){order.push("unknown");equal(JSON.parse(String(init?.body)).p_auth_user,null);return json(null);}
+    };
+    const response=await request({action:"send",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
+    equal(response.status,409);equal(await response.json(),{error:"INVITATION_RECONCILIATION_REQUIRED",status:"unknown"});
+    equal(order,["claim","key","unknown"]);
+    delete fixture.MERCURIUS_INVITATION_MODE;
   });
   Deno.test("invitation reconciliation: reads exact Auth user ID and records authenticated operator", async () => {
     calls=[];unexpected=[];
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({user:{id:recipient}});
       if(url.pathname==="/rest/v1/rpc/vendor_finish_invitation") {equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_auth_user:recipient,p_actor:operator});return json(null);}
     };
@@ -492,7 +552,7 @@ if (name === "vendor-invite") {
   Deno.test("invitation dispatch: Auth's existing-account refusal is recorded as failed, once, never unknown", async () => {
     calls=[];unexpected=[];fixture.MERCURIUS_INVITATION_MODE="local-test";const order:string[]=[];
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation"){order.push("claim");return json({claimed:true,recipient_email:"recipient@example.invalid"});}
       if(url.pathname==="/auth/v1/invite"){order.push("invite");return refused();}
       if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_code:"email_exists",p_actor:operator});return json(null);}
@@ -506,7 +566,7 @@ if (name === "vendor-invite") {
   Deno.test("invitation dispatch: an unrecorded refusal falls back to unknown without a retry", async () => {
     calls=[];unexpected=[];fixture.MERCURIUS_INVITATION_MODE="local-test";const order:string[]=[];
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
       if(url.pathname==="/auth/v1/invite"){order.push("invite");return refused();}
       if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");return json({message:"synthetic refusal write failure"},500);}
@@ -519,8 +579,8 @@ if (name === "vendor-invite") {
   Deno.test("invitation dispatch: other Auth errors are not treated as refusals", async () => {
     for(const [status,code] of [[422,"validation_failed"],[500,"email_exists"],[429,"over_email_send_rate_limit"]] as const){
       calls=[];unexpected=[];fixture.MERCURIUS_INVITATION_MODE="local-test";const order:string[]=[];
-      route=(url)=>{
-        const auth=operatorRoute(url); if(auth)return auth;
+      route=(url,init)=>{
+        const auth=operatorRoute(url,init); if(auth)return auth;
         if(url.pathname==="/rest/v1/rpc/vendor_claim_invitation")return json({claimed:true,recipient_email:"recipient@example.invalid"});
         if(url.pathname==="/auth/v1/invite"){order.push("invite");return json({code:status,error_code:code,msg:"synthetic"},status);}
         if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){order.push("refuse");return json(null);}
@@ -534,7 +594,7 @@ if (name === "vendor-invite") {
   Deno.test("invitation refusal reconciliation: reads the exact account ID, never re-invites", async () => {
     calls=[];unexpected=[];
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({user:{id:recipient}});
       if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation"){equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_code:"email_exists",p_actor:operator,p_existing_account:recipient});return json(null);}
     };
@@ -543,8 +603,8 @@ if (name === "vendor-invite") {
     equal(calls.some(call=>call.endsWith("/auth/v1/invite")),false);
     response=await request({action:"refuse",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
     equal(response.status,400);await response.body?.cancel();
-    route=(url)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+    route=(url,init)=>{
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({user:{id:recipient}});
       if(url.pathname==="/rest/v1/rpc/vendor_refuse_invitation")return json({message:"Auth refusal evidence mismatch"},400);
     };
@@ -554,14 +614,15 @@ if (name === "vendor-invite") {
   // TRACE-105: existing-provider access uses the same transport with its own evidence functions.
   Deno.test("existing-provider access: hosted send claims, invites with the reviewed kind and records the receipt", async () => {
     await withDelivery(hosted,async()=>{
-      calls=[]; unexpected=[]; const order:string[]=[];
+      calls=[]; unexpected=[]; keyHashes=[]; const order:string[]=[]; let data:Record<string,unknown>={};
       route=(url,init)=>{
-        const auth=operatorRoute(url); if(auth)return auth;
+        if(url.pathname==="/rest/v1/rpc/provider_invitation_set_open_key")equal(JSON.parse(String(init?.body)).p_source,"existing_provider");
+        const auth=operatorRoute(url,init); if(auth)return auth;
         if(url.pathname==="/rest/v1/rpc/r0_claim_provider_access"){order.push("claim");return json({claimed:true,recipient_email:"owner@example.invalid",business_name:"Synthetic Legacy Co"});}
         if(url.pathname==="/auth/v1/invite"){
           order.push("invite"); const sent=JSON.parse(String(init?.body));
           equal(sent.email,"owner@example.invalid");
-          equal(sent.data,{invitation_attempt:attempt,invitation_kind:"existing_provider",business_name:"Synthetic Legacy Co"});
+          data=sent.data;
           equal(url.searchParams.get("redirect_to"),`https://app.example.test/set-password?invitation=${attempt}`);
           return json({user:{id:recipient}});
         }
@@ -571,13 +632,14 @@ if (name === "vendor-invite") {
       equal(response.status,200); equal(await response.json(),{attempt_id:attempt,status:"provider_accepted",delivered:false,activated:false});
       equal(order,["claim","invite","receipt"]);
       equal(calls.some(call=>call.includes("/rpc/vendor_")),false);
+      equal(await withoutKey(data),{invitation_attempt:attempt,invitation_kind:"existing_provider",business_name:"Synthetic Legacy Co"});
     });
   });
   Deno.test("existing-provider access: an address that already holds an account is recorded as refused", async () => {
     await withDelivery(hosted,async()=>{
       calls=[]; unexpected=[]; const order:string[]=[];
       route=(url,init)=>{
-        const auth=operatorRoute(url); if(auth)return auth;
+        const auth=operatorRoute(url,init); if(auth)return auth;
         if(url.pathname==="/rest/v1/rpc/r0_claim_provider_access")return json({claimed:true,recipient_email:"owner@example.invalid",business_name:"Synthetic Legacy Co"});
         if(url.pathname==="/auth/v1/invite")return json({code:422,error_code:"email_exists",msg:"synthetic"},422);
         if(url.pathname==="/rest/v1/rpc/r0_refuse_provider_access"){order.push("refuse");equal(JSON.parse(String(init?.body)),{p_attempt:attempt,p_code:"email_exists",p_actor:operator});return json(null);}
@@ -591,7 +653,7 @@ if (name === "vendor-invite") {
   Deno.test("existing-provider access: preparation names an existing account only by exact ID", async () => {
     calls=[]; unexpected=[]; const prepared:unknown[]=[];
     route=(url,init)=>{
-      const auth=operatorRoute(url); if(auth)return auth;
+      const auth=operatorRoute(url,init); if(auth)return auth;
       if(url.pathname==="/rest/v1/rpc/r0_prepare_provider_access"){prepared.push(JSON.parse(String(init?.body)));return json({attempt_id:attempt,mode:"existing_account",status:"prepared",created:true});}
     };
     const expires=new Date(Date.now()+86400000).toISOString();
@@ -607,6 +669,7 @@ if (name === "vendor-invite") {
     route=(url)=>{
       if(url.pathname==="/auth/v1/user")return json({id:recipient});
       if(url.pathname==="/rest/v1/rpc/r0_accept_provider_access"){accepted=true;return json({status:"accepted",recorded:true});}
+      if(url.pathname===`/auth/v1/admin/users/${recipient}`)return json({id:recipient});
     };
     const response=await request({action:"accept",source:"existing_provider",attempt_id:attempt},{Authorization:"Bearer synthetic-user-token"});
     equal(response.status,200); equal(await response.json(),{status:"accepted",activated:false}); equal(accepted,true);

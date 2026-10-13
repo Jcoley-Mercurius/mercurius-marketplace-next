@@ -10,18 +10,20 @@
        hosted template is entered from reviewed source. No tracking pixel or remote
        asset.
 
-       The link points at our own site and carries {{ .TokenHash }}, which
-       /set-password verifies with a POST. A mail scanner that pre-opens the link with
-       a GET therefore cannot consume it, unlike the Auth verify URL.
+       DEC-2026-029 follow-up: when vendor-invite passes invitation_key, the link is the
+       site's /invitation/open with the attempt and that key. It stays valid until the
+       invitation expires; opening the page spends nothing, and its Continue button mints
+       a fresh single-use sign-in. Without a key (a dispatch from a vendor-invite that
+       predates the key) the link falls back to /set-password with {{ .TokenHash }},
+       verified with a POST, so a mail scanner's GET cannot consume either link.
 
        It is built from {{ .SiteURL }}, the project's own Auth Site URL, and the
        attempt the handler passed as invite metadata. {{ .RedirectTo }} is not used:
        when a redirect is not allowlisted Auth replaces it with the bare Site URL,
        which would render a malformed link.
 
-       The link is single-use and expires on the Auth email-link lifetime (owner
-       decision 2026-09-13: 3 hours), which is separate from the invitation expiry an
-       operator enters.
+       The fallback link is single-use and expires on the Auth email-link lifetime
+       (DEC-2026-029: 24 hours, the hosted maximum).
 
        TRACE-105: existing-provider access passes invitation_kind and business_name as
        invite metadata; application invitations pass neither, so a truthiness test
@@ -52,6 +54,23 @@
         business. Mercurius completes its review before a provider can be activated.
       </p>
       {{ end }}
+      {{ if .Data.invitation_key }}
+      <p style="margin:0 0 24px;">
+        <a href="{{ .SiteURL }}/invitation/open?invitation={{ .Data.invitation_attempt }}{{ if .Data.invitation_kind }}&amp;kind=existing_provider{{ end }}&amp;key={{ .Data.invitation_key }}" style="display:inline-block;background:#327654;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:6px;">Set your password</a>
+      </p>
+      <p style="margin:0 0 8px;font-size:14px;color:#4c5567;">
+        If the button does not work, copy this address into your browser:
+      </p>
+      <p style="margin:0 0 24px;font-size:14px;word-break:break-all;">
+        <a href="{{ .SiteURL }}/invitation/open?invitation={{ .Data.invitation_attempt }}{{ if .Data.invitation_kind }}&amp;kind=existing_provider{{ end }}&amp;key={{ .Data.invitation_key }}" style="color:#1f242e;">{{ .SiteURL }}/invitation/open?invitation={{ .Data.invitation_attempt }}{{ if .Data.invitation_kind }}&amp;kind=existing_provider{{ end }}&amp;key={{ .Data.invitation_key }}</a>
+      </p>
+      <p style="margin:0;font-size:14px;color:#4c5567;">
+        This link works until your invitation expires. If it has expired, ask
+        Mercurius for a new invitation at hello@mercuriusmarketplace.com or
+        239-339-3895.
+        {{ if .Data.invitation_kind }}If you do not manage this business, you can ignore this email.{{ else }}If you did not apply to Mercurius, you can ignore this email.{{ end }}
+      </p>
+      {{ else }}
       <p style="margin:0 0 24px;">
         <a href="{{ .SiteURL }}/set-password?invitation={{ .Data.invitation_attempt }}{{ if .Data.invitation_kind }}&amp;kind=existing_provider{{ end }}&amp;token_hash={{ .TokenHash }}&amp;type=invite" style="display:inline-block;background:#327654;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:6px;">Set your password</a>
       </p>
@@ -62,11 +81,12 @@
         <a href="{{ .SiteURL }}/set-password?invitation={{ .Data.invitation_attempt }}{{ if .Data.invitation_kind }}&amp;kind=existing_provider{{ end }}&amp;token_hash={{ .TokenHash }}&amp;type=invite" style="color:#1f242e;">{{ .SiteURL }}/set-password?invitation={{ .Data.invitation_attempt }}{{ if .Data.invitation_kind }}&amp;kind=existing_provider{{ end }}&amp;token_hash={{ .TokenHash }}&amp;type=invite</a>
       </p>
       <p style="margin:0;font-size:14px;color:#4c5567;">
-        This link works once and expires 3 hours after it was sent. If it has
+        This link works once and expires 24 hours after it was sent. If it has
         expired, ask Mercurius for a new
         invitation at hello@mercuriusmarketplace.com or 239-339-3895.
         {{ if .Data.invitation_kind }}If you do not manage this business, you can ignore this email.{{ else }}If you did not apply to Mercurius, you can ignore this email.{{ end }}
       </p>
+      {{ end }}
     </main>
   </body>
 </html>

@@ -133,7 +133,8 @@ evidence without credentials, tokens, real addresses or invitation links.
 
 - **Settled 2026-09-13, changed 2026-10-13 — email link lifetime.** 3 hours, then 24 hours
   (DEC-2026-029; hosted Auth refuses more). A 7-day invitation still outlives the email link
-  until the Mercurius-owned invitation link ships;
+  until the Mercurius-owned invitation link (TRACE-107, PHASE-5-INVITATION-OPEN-LINK.md) is
+  deployed;
   the same attempt cannot resend (the reservation forbids it, and `expired` closure waits
   for the invitation expiry), so the reissue path remains revoking the attempt with a
   reason and preparing a new one, after which Auth re-invites the same unconfirmed account

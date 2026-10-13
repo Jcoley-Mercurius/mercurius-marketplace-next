@@ -1,79 +1,124 @@
-# Provider invitation link valid for the whole invitation (DEC-2026-029 follow-up)
+# Provider invitation link valid for the whole invitation (TRACE-107, DEC-2026-029)
 
-**Status:** PROPOSED for Codex architecture review. Nothing is implemented. Owner instruction
-2026-10-13: the link in the provider invitation email must work for the whole invitation
-(7 days by default), using a Mercurius-owned link ("option 1"). Hosted Auth caps its own
-email link at 24 hours (DEC-2026-029), so the Auth link cannot be stretched to match.
+**Status:** IMPLEMENTED on branch `claude/invitation-open-link` (stacked on
+`claude/invitation-link-7-days`). Owner is the reviewer; Codex review optional. Nothing is
+deployed. Owner instruction 2026-10-13: the link in the provider invitation email must work
+for the whole invitation (7 days by default) through a Mercurius-owned link ("option 1").
+Hosted Auth caps its own email link at 24 hours (DEC-2026-029).
 
-## Characterized today (`main` `283cfe5` plus DEC-2026-029)
+## Characterized before change (`main` `283cfe5` plus DEC-2026-029)
 
 - `vendor-invite` claims the attempt, then calls `auth.admin.inviteUserByEmail` with
   metadata `{ invitation_attempt, invitation_kind?, business_name? }`. Auth creates the
   unconfirmed user and sends the reviewed template through Resend SMTP. A 422
   `email_exists` is a definite refusal; any other error leaves the attempt `unknown`
   (never retried). Success records the receipt (`provider_accepted`).
-- The template link is `/set-password?invitation=<attempt>[&kind=existing_provider]&token_hash=<TokenHash>&type=invite`.
-  `/set-password` verifies `token_hash` from the browser after load, so a mail scanner's GET
-  cannot spend it. The token dies with the Auth email link (24 hours).
+- The template link was `/set-password?invitation=…[&kind=existing_provider]&token_hash=…&type=invite`,
+  verified from the browser after load (scanner-safe), dying with the 24-hour Auth link.
 - After the password is set the browser goes to `/invitation?attempt=…`, which re-verifies
-  the attempt server-side and records acceptance. Both paths (application invitations,
-  TRACE-063/066; existing-provider access, TRACE-105) share the template and this flow.
+  the attempt server-side and records acceptance. Both invitation paths (application,
+  TRACE-063/066; existing-provider access, TRACE-105) share the template and flow.
 
-## Proposal
+## Contract
 
-Keep Auth's invite call, its refusal contract and its email. Change only what the email
-link points to, and mint a fresh Auth sign-in when the provider uses it.
+Auth's invite call, refusal contract and email stay. Only the link changes, and each use
+mints a fresh Auth sign-in.
 
-1. **Open key per attempt.** At dispatch, `vendor-invite` generates a 256-bit random key,
-   stores only its SHA-256 on the attempt (new nullable `open_key_hash` on
-   `vendor_invitation_attempts` and `private.r0_provider_access_attempts`, written by the
-   claim RPC so it exists before Auth sends anything), and passes the key to Auth as invite
-   metadata `invitation_key`.
-2. **Template link** becomes
-   `{{ .SiteURL }}/invitation/open?invitation={{ .Data.invitation_attempt }}[&kind=existing_provider]&key={{ .Data.invitation_key }}`.
-   `{{ .TokenHash }}` is no longer used.
-3. **`/invitation/open` page.** A GET renders the business context and one "Continue to set
-   your password" button; nothing is spent on GET (mail-scanner safe, as today).
-4. **`POST /api/invitations/open`** (Next route, service key): a `SECURITY DEFINER`
-   function checks, under the attempt's lock, that the key hash matches, the attempt is
-   `submitted` with a `provider_accepted` dispatch, it is before `expires_at`, and it has
-   no acceptance or closure. It returns the recipient Auth user. The route then calls
-   `auth.admin.generateLink({ type: "magiclink", email })` (sends no email) and answers with
-   `/set-password?invitation=…[&kind=…]&token_hash=<hashed_token>&type=magiclink`.
-   Every refusal returns one generic "This invitation link is no longer valid" plus the
-   existing contact path; the reason is logged, never the key.
-5. **`/set-password`** accepts `type=magiclink` alongside `invite`; the rest of the flow
-   (password, `/invitation` acceptance) is unchanged.
-6. **Clean-up.** On acceptance, remove `invitation_key` from the user's metadata. The
-   lapsed-link attention reason (`link_lapsed`) is retired for attempts with an open key,
-   since the link now lives as long as the invitation; `expired` still applies.
-7. **Limits.** The key makes guessing infeasible; add a per-attempt cap (for example 10
-   opens per hour) so a forwarded email cannot be used to mint sessions in a loop.
+**Migration `20261014001000_invitation_open_link.sql`**
 
-## Decisions for review
+- `private.provider_invitation_open_keys (source, attempt_id, key_hash, created_at)`,
+  primary key `(source, attempt_id)`, `key_hash` 64 lowercase hex; and
+  `private.provider_invitation_opens (source, attempt_id, opened_at)`. Row level security on,
+  no policy, every privilege revoked from `public`, `anon`, `authenticated`, `service_role`.
+- `public.provider_invitation_set_open_key(source, attempt, key_hash)`: only while the
+  attempt's dispatch is `started` (reserved, nothing sent), once per attempt (the primary key
+  refuses a second). Malformed input is 22023.
+- `public.provider_invitation_open(source, attempt, key_hash) returns jsonb`: under the key
+  row's lock, requires the key, a `submitted` attempt with a `provider_accepted` dispatch,
+  `expires_at` in the future, and the recipient's Auth address still equal to the dispatch
+  recipient; at most 10 opens per link per rolling hour (`private.provider_invitation_open_limit()`).
+  Records the open and returns `{ auth_user_id, email }`. Every refusal raises the same
+  P0001 "Invitation link not valid" (the limit adds detail `open_limit` for logs).
+- Both functions execute only as `service_role`.
+- `r0_invitation_attention` and `r0_provider_access_queue` no longer report `link_lapsed` for
+  an attempt that has an open key; otherwise unchanged from `20261013001000`.
 
-- **Key in Auth metadata.** The plaintext key sits in `auth.users.raw_user_meta_data`
-  until acceptance, readable by the recipient and by service-role/database admins. It only
-  opens that one recipient's own invitation. The alternative is Mercurius sending the
-  invitation email itself (`generateLink({ type: "invite" })` plus Resend), which keeps the
-  key out of the database but changes the reviewed dispatch contract (TRACE-063/071).
-- **Magic link for an invited, unconfirmed user.** `generateLink("magiclink")` on a user
-  created by `inviteUserByEmail` must be verified locally before relying on it (expected:
-  verifying confirms the email and signs in).
-- **Opens after the password is set but before acceptance** (for example, the provider
-  closed the tab): allow, so the provider can finish; acceptance stays single-use.
-- **Already-sent invitations** keep their 24-hour Auth links; only new dispatches use the
-  open link.
+**`vendor-invite`**: after a successful claim it generates 32 random bytes (base64url, 43
+characters), stores the SHA-256 with `provider_invitation_set_open_key`, then invites with
+`invitation_key` in the metadata. If the key cannot be stored, the reserved dispatch is
+marked `unknown` and Auth is never called. On a successful acceptance it removes
+`invitation_key` from the recipient's own metadata (best effort; the database stops
+honoring the key at acceptance either way).
 
-## Hosted work (owner-authorized, after review and merge)
+**Template** (`supabase/templates/provider-invitation.html`): with a key, the button and
+copyable link are `{{ .SiteURL }}/invitation/open?invitation=…[&kind=existing_provider]&key=…`
+and the copy says the link works until the invitation expires. Without a key (a dispatch by
+a `vendor-invite` that predates this change) it falls back to the 24-hour Auth link, so the
+deploy order cannot produce a broken email.
 
-Additive migration; deploy `vendor-invite`; paste the updated template into Auth (subject
-unchanged); deploy the site. No new secrets or Auth settings.
+**Site**
 
-## Acceptance evidence to produce
+- `/invitation/open`: reads the link in the browser and shows Continue. Loading the page
+  sends nothing. `referrer: no-referrer`, `noindex`. A 410 shows the generic "no longer
+  valid" text with the contact path; an outage keeps the button for a retry; only a
+  `/set-password?…` redirect is followed.
+- `POST /api/invitations/open` (Node runtime, service key): parses and hashes the key, calls
+  `provider_invitation_open`, then `auth.admin.generateLink({ type: "magiclink", email })`
+  (sends no email) and returns `/set-password?invitation=…[&kind=…]&token_hash=…&type=magiclink`.
+  P0001 is 410 with one message; any other failure is 503. The key is never logged.
+- `/set-password` accepts `type=magiclink` alongside `invite` and `recovery`. Verifying it
+  signs the provider in and confirms the address; the password and `/invitation`
+  acceptance steps are unchanged.
 
-SQL tests for the key hash, check function, lock and limit; Edge runtime cases for key
-creation and metadata; unit and browser tests for `/invitation/open` (GET spends nothing,
-POST redirects, expired/accepted/wrong key refused with one message); a local Auth
-round-trip on day 2 of an invitation (Auth link expired, open link still signs in);
-mutation check on the guards.
+## Decisions taken while building
+
+- **Key in Auth metadata.** The plaintext key sits in `raw_user_meta_data` from dispatch
+  until acceptance, readable by the recipient and by service-role/database administrators.
+  It opens only that recipient's own invitation, the database holds only its hash, and
+  acceptance removes it. Mercurius sending the email itself (keeping the key out of Auth)
+  would change the reviewed TRACE-063/071 dispatch contract and was not chosen.
+- **Magic link for an invited, unconfirmed user** verified against local Auth before
+  relying on it: `generateLink("magiclink")` works for a user created by
+  `inviteUserByEmail`; verifying it signs in and confirms the email; each token is single
+  use and a newer one invalidates older ones; `user_metadata: { invitation_key: null }`
+  removes only that key.
+- **Opens after the password is set but before acceptance** are allowed, so a provider who
+  closed the tab can finish. Acceptance ends the link.
+- **Already-sent invitations** keep their 24-hour Auth links.
+- **Key-store failure** marks the reserved dispatch `unknown` rather than leaving it
+  `started`, matching the existing rule that a reservation is never silently retried.
+  Recovery is to close the attempt and prepare a new one.
+
+## Evidence (local)
+
+- SQL `077_invitation_open_link.sql`: 40 assertions over both invitation paths (privileges,
+  key once and only before Auth, wrong source/key, before Auth acceptance, day 3, expiry,
+  changed address, hourly limit incl. rolling window and unrecorded refusals, acceptance,
+  attention with and without a key).
+- `vendor-invite` runtime: 23 cases (4 new: key recorded between claim and invite with the
+  right source; key failure stops the send; acceptance clears the caller's own key; a
+  refused acceptance clears nothing).
+- Unit `invitation-open-link`: 7 (parsing, redirect path, route success hashes the key and
+  ignores body-supplied addresses, malformed links, generic refusal without minting or
+  logging the key, outages).
+- Browser `invitation-open`: 7 (light 320 / dark 1440 with axe; GET spends nothing; meta
+  referrer and robots; Continue posts the link values and follows only `/set-password`;
+  invalid, outage and incomplete states).
+- Local end-to-end `scripts/r0-existing-provider-access.mjs` with real Auth, the mail sink,
+  served `vendor-invite` and the site: 37/37, including the rendered email, a page load that
+  spends nothing, a day-3 open, single-use sign-in, a wrong key, the link ending at
+  acceptance and the key removed from metadata.
+- Regression: 390 unit, lint, typecheck, all 11 Edge suites, 3889/3890 SQL (the one failure,
+  `003` test 16, is local data: six admin accounts in the local database).
+
+## Hosted work (owner-authorized, in this order)
+
+1. `supabase db push --linked` (applies `20261014001000` only).
+2. Deploy `vendor-invite` from the merged commit (`verify_jwt = true`). Emails still use the
+   old link until step 4; the key is stored but unused.
+3. Deploy the site (adds `/invitation/open` and `/api/invitations/open`).
+4. Paste the updated `supabase/templates/provider-invitation.html` into Auth → Email
+   Templates → Invite (subject unchanged).
+5. Acceptance with an owner-controlled mailbox: the email links to `/invitation/open`;
+   Continue reaches the password step; acceptance works; the link then shows "no longer
+   valid".

@@ -1,5 +1,6 @@
 // TRACE-105 local end-to-end (synthetic data only). Requires the local stack and
-// `supabase functions serve vendor-invite` with MERCURIUS_INVITATION_MODE=local-test, SITE_URL=http://localhost:3000.
+// `supabase functions serve vendor-invite` with MERCURIUS_INVITATION_MODE=local-test, SITE_URL=http://localhost:3000,
+// and (DEC-2026-029 follow-up) the site served against the local stack at SITE (default http://127.0.0.1:3200).
 // Usage: ANON=<local anon key> SERVICE=<local service key> node scripts/r0-existing-provider-access.mjs
 // Local end-to-end: real local Auth + mail sink + served vendor-invite. Synthetic data only.
 // Prints facts, never tokens or links.
@@ -7,6 +8,7 @@ import { execSync } from "node:child_process";
 
 const API = "http://127.0.0.1:55421";
 const MAIL = "http://127.0.0.1:55424";
+const SITE = process.env.SITE ?? "http://127.0.0.1:3200";
 const ANON = process.env.ANON;
 const SERVICE = process.env.SERVICE;
 const DB = "postgresql://postgres:postgres@127.0.0.1:55422/postgres";
@@ -63,20 +65,39 @@ check("subject is the reviewed subject", message?.Subject === "Set up your Mercu
 check("email names the existing business profile", html.includes(`Synthetic Legacy Lawn ${run}`));
 check("email says the recipient chooses their own password", /choose your\s+own password/.test(html));
 check("email separates setup from compliance approval and listing", /separate from Mercurius(&#39;|'|’)s compliance review/.test(html) && /does not approve your business/.test(html));
-check("email states the 3-hour expiry and support contact", /expires 3 hours/.test(html) && html.includes("hello@mercuriusmarketplace.com"));
+check("email states the link lifetime and support contact", /works until your invitation expires/.test(html) && !/24 hours/.test(html) && html.includes("hello@mercuriusmarketplace.com"));
 check("email has no application wording", !/reviewing your application/.test(html));
 check("email promises no jobs, booking, Founding Vendor or Credits", !/(Founding|Credits|jobs are|booking is open|you will be listed)/i.test(html));
-const href = (html.match(/href="([^"]*set-password[^"]*)"/) ?? [])[1]?.replace(/&amp;/g, "&");
+const href = (html.match(/href="([^"]*invitation\/open[^"]*)"/) ?? [])[1]?.replace(/&amp;/g, "&");
 const link = href ? new URL(href) : null;
-check("link targets the site's /set-password with the access kind", !!link && link.origin === "http://localhost:3000" && link.pathname === "/set-password" && link.searchParams.get("kind") === "existing_provider" && link.searchParams.get("invitation") === attempt);
-const tokenHash = link?.searchParams.get("token_hash");
+check("link targets the site's /invitation/open with the access kind and a key", !!link && link.origin === "http://localhost:3000" && link.pathname === "/invitation/open"
+  && link.searchParams.get("kind") === "existing_provider" && link.searchParams.get("invitation") === attempt && /^[A-Za-z0-9_-]{43}$/.test(link.searchParams.get("key") ?? ""));
+check("the email carries no Auth token", !/token_hash/.test(html));
+const opens = () => psql(`select count(*) from private.provider_invitation_opens where attempt_id='${attempt}'`);
+const page = await fetch(`${SITE}${link?.pathname}${link?.search}`);
+check("loading the link's page (as a mail scanner would) spends nothing", page.status === 200 && opens() === "0", `HTTP ${page.status}`);
+const openLink = async () => {
+  const res = await fetch(`${SITE}/api/invitations/open`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ invitation: link?.searchParams.get("invitation"), kind: link?.searchParams.get("kind"), key: link?.searchParams.get("key") }) });
+  let data = null; try { data = await res.json(); } catch { /* empty */ }
+  return { status: res.status, data };
+};
+// Day 3 of the invitation: the 24-hour Auth link would be dead; the Mercurius link is not.
+psql(`update private.r0_provider_access_dispatches set started_at=now()-interval '3 days', resolved_at=now()-interval '3 days' where attempt_id='${attempt}'`);
+const opened = await openLink();
+const minted = opened.data?.redirect ? new URL(opened.data.redirect, SITE) : null;
+check("on day 3 Continue mints a fresh sign-in for the password step", opened.status === 200 && minted?.pathname === "/set-password"
+  && minted.searchParams.get("type") === "magiclink" && minted.searchParams.get("kind") === "existing_provider" && opens() === "1", `HTTP ${opened.status}`);
+const tokenHash = minted?.searchParams.get("token_hash");
 
 // Recipient: verify (POST, scanner-safe), reuse refused, set password, accept.
-const verified = await http("/auth/v1/verify", { body: { type: "invite", token_hash: tokenHash } });
+const verified = await http("/auth/v1/verify", { body: { type: "magiclink", token_hash: tokenHash } });
 const recipientToken = verified.data?.access_token;
-check("the one-time link verifies by POST", verified.status === 200 && !!recipientToken);
-const reused = await http("/auth/v1/verify", { body: { type: "invite", token_hash: tokenHash } });
-check("the same link cannot be reused", reused.status >= 400, `HTTP ${reused.status}`);
+check("the minted sign-in verifies by POST and confirms the address", verified.status === 200 && !!recipientToken && !!verified.data?.user?.email_confirmed_at);
+const reused = await http("/auth/v1/verify", { body: { type: "magiclink", token_hash: tokenHash } });
+check("the same sign-in cannot be reused", reused.status >= 400, `HTTP ${reused.status}`);
+const wrongKey = await (async () => { const real = link?.searchParams.get("key"); link?.searchParams.set("key", "B".repeat(43)); const r = await openLink(); link?.searchParams.set("key", real ?? ""); return r; })();
+check("a wrong key is refused with the generic message", wrongKey.status === 410 && /no longer valid/.test(wrongKey.data?.error ?? ""));
 const password = `Owner-${run}-pass!`;
 const setPw = await http("/auth/v1/user", { method: "PUT", token: recipientToken, body: { password } });
 check("the recipient chooses a password", setPw.status === 200);
@@ -86,6 +107,9 @@ const wrongSource = await edge({ action: "accept", attempt_id: attempt }, recipi
 check("the application accept path does not accept an access attempt", wrongSource.status === 409);
 const accepted = await edge({ source: "existing_provider", action: "accept", attempt_id: attempt }, recipientToken);
 check("the recipient explicitly accepts", accepted.status === 200 && accepted.data?.status === "accepted" && accepted.data?.activated === false);
+const afterAcceptance = await openLink();
+check("the link stops working once the invitation is accepted", afterAcceptance.status === 410);
+check("acceptance removes the key from the account's metadata", psql(`select (raw_user_meta_data ? 'invitation_key')::text from auth.users where lower(email)=lower('${ownerEmail}')`) === "false");
 check("acceptance is recorded once with no link or vendor role", psql(`select count(*) from private.r0_provider_access_acceptances where attempt_id='${attempt}'`) === "1"
   && psql(`select coalesce(user_id::text,'none') from public.contractors where id='${contractor}'`) === "none");
 
