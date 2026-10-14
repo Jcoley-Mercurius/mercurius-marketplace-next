@@ -6,7 +6,8 @@
 - Migration `20261005001000`: `vendor_link_existing_account` and `vendor_bind_invited_account` also accept `suspended`; `active` is refused with "Suspend the provider before binding an account"; otherwise unchanged. Repair path: Suspend → Bind accepted account → Activate (re-checks the checklist, grants the role).
 - UI: the provider account panel explains the repair on an active unbound provider and offers binding while suspended.
 - Evidence: SQL 075 18/18, 034 80/80, 037 72/72; full SQL 3841 ok + the known 003 local-data failure; `npm run check` pass; synthetic build, browser `invitation-binding` + `onboarding-checklist` 29/29, `account-linking` 17/17.
-- Next: Codex review; merge; deploy; owner pushes `20261005001000`; then J & M: Suspend → Bind → Activate, and check the evidence concerns (item 9 "Test", license/insurance file labels) before reactivating.
+- Recorded: PR #88 merged as `283cfe5`; deployed 2026-10-05 from a clean `git archive` of `283cfe5` with `vercel deploy --prod --skip-domain` as `dpl_9wD5Yx2SqxkQvznMi8FTMhbDEjfJ` (READY, 73 pages, no build errors) and promoted 23:17:31 UTC; `www` and apex inspect to it, `www` 200, apex 308 → `www`. Rollback: promote `dpl_5oU5YMQiYbht5uWRo7R4jRuUhHPs`. Owner then pushed `20261005001000` and reports the J & M repair (Suspend → Bind → Activate) worked; not independently verified here.
+- Open: Codex review of PR #88; J & M evidence concerns (item 9 "Test", license/insurance file labels) and profile services/coverage from the application, per Grokbot's review.
 
 ## Provider service-area map (TRACE-105), 2026-10-05
 
