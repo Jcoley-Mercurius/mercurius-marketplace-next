@@ -99,7 +99,7 @@ test.describe("form composition and validation", () => {
     await expect(page.getByLabel("Also send me Mercurius news, offers and product updates (optional)")).not.toBeChecked();
     await expect(page.getByText("Joining does not create a service request or guarantee an invitation.")).toBeVisible();
     // Nothing beyond the approved minimum is collected.
-    await expect(form(page).locator("input:not([type=checkbox]):not([name=company_fax])")).toHaveCount(3);
+    await expect(form(page).locator("input:not([type=checkbox]):not([name=intake_signal])")).toHaveCount(3);
     await expect(page.getByLabel(/phone|address line|street/i)).toHaveCount(0);
   });
 
