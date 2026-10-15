@@ -61,6 +61,7 @@ type FormState = {
   lastName: string;
   email: string;
   phone: string;
+  address: string;
   website: string;
   preferredContact: string;
   otherServices: string;
@@ -89,7 +90,7 @@ type ApplicationCreationResponse = {
 const initialForm: FormState = {
   businessName: "", primaryCategory: "", teamSize: "", yearsExperience: "",
   businessDescription: "", firstName: "", lastName: "", email: "", phone: "",
-  website: "", preferredContact: "either", otherServices: "", additionalNotes: "",
+  address: "", website: "", preferredContact: "either", otherServices: "", additionalNotes: "",
   otherCertification: "", licenseNumber: "", insurancePolicyNumber: "",
 };
 
@@ -159,8 +160,11 @@ export default function VendorApplyPage() {
 
   function stepIsValid(value: number) {
     if (value === 1) return !!(form.businessName.trim() && form.primaryCategory && form.teamSize && form.yearsExperience !== "");
-    if (value === 2) return !!(form.firstName.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && form.phone.trim());
-    if (value === 3) return services.length > 0 && (!otherSelected || otherDescription.length > 0);
+    // TRACE-105 (owner decision 2026-10-14): last name, business address, a service area and
+    // the license/insurance numbers are required; documents stay optional.
+    if (value === 2) return !!(form.firstName.trim() && form.lastName.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && form.phone.trim() && form.address.trim());
+    if (value === 3) return areas.length > 0 && services.length > 0 && (!otherSelected || otherDescription.length > 0);
+    if (value === 4) return !!(form.licenseNumber.trim() && form.insurancePolicyNumber.trim());
     return true;
   }
 
@@ -168,8 +172,10 @@ export default function VendorApplyPage() {
     if (!stepIsValid(step)) {
       toast.error("A few fields are missing", {
         description: step === 3
-          ? "Choose at least one service from our list, and describe any Other services."
-          : "Please complete the required fields to continue.",
+          ? "Choose at least one area and one service from our list, and describe any Other services."
+          : step === 4
+            ? "Enter your license or business tax receipt number and your insurance policy number."
+            : "Please complete the required fields to continue.",
       });
       return;
     }
@@ -220,7 +226,7 @@ export default function VendorApplyPage() {
   }
 
   async function submitApplication() {
-    if (![1, 2, 3].every(stepIsValid)) {
+    if (![1, 2, 3, 4].every(stepIsValid)) {
       toast.error("Please review earlier steps");
       return;
     }
@@ -238,10 +244,10 @@ export default function VendorApplyPage() {
       last_name: form.lastName.trim(),
       email: form.email.trim().toLowerCase(),
       phone: form.phone.trim(),
-      address: "",
+      address: form.address.trim(),
       years_experience: Number.parseInt(form.yearsExperience || "0", 10) || 0,
       services: servicePayload,
-      service_areas: areas.join(", ") || null,
+      service_areas: areas.join(", "),
       availability: null,
       primary_category: form.primaryCategory,
       team_size: form.teamSize,
@@ -251,8 +257,8 @@ export default function VendorApplyPage() {
       credentials,
       other_certification: form.otherCertification.trim() || null,
       additional_notes: form.additionalNotes.trim() || null,
-      license_number: form.licenseNumber.trim() || null,
-      insurance_policy_number: form.insurancePolicyNumber.trim() || null,
+      license_number: form.licenseNumber.trim(),
+      insurance_policy_number: form.insurancePolicyNumber.trim(),
     };
 
     try {
@@ -446,7 +452,7 @@ function BusinessStep({ form, setField, catalog, catalogFailed, retryCatalog }: 
 }
 
 function ContactStep({ form, setField }: StepProps) {
-  return <div className="space-y-6"><StepHeading title="Contact Info" description="We’ll send your vendor login invite here once you’re approved." /><div className="grid gap-4 sm:grid-cols-2"><Field label="First name *" id="firstName"><Input id="firstName" autoComplete="given-name" className="h-12" value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} /></Field><Field label="Last name" id="lastName"><Input id="lastName" autoComplete="family-name" className="h-12" value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} /></Field></div><Field label="Email *" id="email"><Input id="email" type="email" autoComplete="email" className="h-12" value={form.email} onChange={(event) => setField("email", event.target.value)} placeholder="you@yourbusiness.com" /><p className="text-xs text-muted-foreground">Used for your vendor portal invitation.</p></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Phone *" id="phone"><Input id="phone" type="tel" autoComplete="tel" className="h-12" value={form.phone} onChange={(event) => setField("phone", event.target.value)} placeholder="(239) 555-0123" /></Field><Field label="Business website" id="website"><Input id="website" inputMode="url" className="h-12" value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="yourbusiness.com" /></Field></div><div className="space-y-2"><Label>Preferred contact method</Label><div className="grid grid-cols-3 gap-3">{["email", "phone", "either"].map((value) => <button key={value} type="button" onClick={() => setField("preferredContact", value)} className={cn("h-12 rounded-xl border-2 text-sm font-medium capitalize transition-all", form.preferredContact === value ? "border-primary bg-primary/10" : "border-border bg-card text-muted-foreground hover:border-primary/50")}>{value}</button>)}</div></div></div>;
+  return <div className="space-y-6"><StepHeading title="Contact Info" description="We’ll send your vendor login invite here once you’re approved." /><div className="grid gap-4 sm:grid-cols-2"><Field label="First name *" id="firstName"><Input id="firstName" autoComplete="given-name" className="h-12" value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} /></Field><Field label="Last name *" id="lastName"><Input id="lastName" autoComplete="family-name" className="h-12" value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} /></Field></div><Field label="Email *" id="email"><Input id="email" type="email" autoComplete="email" className="h-12" value={form.email} onChange={(event) => setField("email", event.target.value)} placeholder="you@yourbusiness.com" /><p className="text-xs text-muted-foreground">Used for your vendor portal invitation.</p></Field><Field label="Business address *" id="address"><Input id="address" autoComplete="street-address" className="h-12" value={form.address} onChange={(event) => setField("address", event.target.value)} placeholder="1234 Main St, Fort Myers, FL 33901" /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Phone *" id="phone"><Input id="phone" type="tel" autoComplete="tel" className="h-12" value={form.phone} onChange={(event) => setField("phone", event.target.value)} placeholder="(239) 555-0123" /></Field><Field label="Business website" id="website"><Input id="website" inputMode="url" className="h-12" value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="yourbusiness.com" /></Field></div><div className="space-y-2"><Label>Preferred contact method</Label><div className="grid grid-cols-3 gap-3">{["email", "phone", "either"].map((value) => <button key={value} type="button" onClick={() => setField("preferredContact", value)} className={cn("h-12 rounded-xl border-2 text-sm font-medium capitalize transition-all", form.preferredContact === value ? "border-primary bg-primary/10" : "border-border bg-card text-muted-foreground hover:border-primary/50")}>{value}</button>)}</div></div></div>;
 }
 
 type ServiceAreaStepProps = StepProps & CatalogProps & { areas: string[]; services: string[]; otherSelected: boolean; toggleOther: () => void; toggleArea: (value: string) => void; toggleService: (value: string) => void };
@@ -456,7 +462,7 @@ function ServiceAreaStep({ form, setField, areas, services, catalog, catalogFail
     .map((category) => ({ category, services: catalog?.services.filter((service) => service.category_id === category.id) ?? [] }))
     .filter((group) => group.services.length > 0)
     .sort((a, b) => Number(b.category.name === form.primaryCategory) - Number(a.category.name === form.primaryCategory));
-  return <div className="space-y-8"><StepHeading title="Service Area" description="Where you work in Lee County and what you offer." /><ChipGroup label="Areas you serve" options={LEE_COUNTY_SERVICE_AREAS} selected={areas} onToggle={toggleArea} />
+  return <div className="space-y-8"><StepHeading title="Service Area" description="Where you work in Lee County and what you offer." /><ChipGroup label="Areas you serve *" options={LEE_COUNTY_SERVICE_AREAS} selected={areas} onToggle={toggleArea} />
     <div className="space-y-5"><div><Label>Services you offer *</Label><p className="mt-1 text-sm text-muted-foreground">Choose at least one service from our list. Use Other for anything we don’t list yet.</p></div>
       {catalogFailed ? <CatalogFailure retry={retryCatalog} /> : !catalog ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading services…</p> : groups.map(({ category, services: options }) => <div key={category.id} role="group" aria-label={category.name} className="space-y-2"><p className="text-sm font-medium">{category.name}</p><div className="flex flex-wrap gap-2">{options.map((service) => <ToggleChip key={service.id} label={service.name} selected={services.includes(service.id)} onToggle={() => toggleService(service.id)} />)}</div></div>)}
       {catalog && <div className="space-y-3"><div className="flex flex-wrap gap-2"><ToggleChip label="Other" selected={otherSelected} onToggle={toggleOther} /></div>{otherSelected && <Field label="Describe the other services you offer *" id="otherServices"><textarea id="otherServices" rows={3} maxLength={MAX_OTHER_SERVICE_LENGTH} className={fieldClass} value={form.otherServices} onChange={(event) => setField("otherServices", event.target.value)} placeholder="For example: lanai rescreening, hurricane shutter install" /><p className="text-xs text-muted-foreground">We review these to decide which services to add next.</p></Field>}</div>}
@@ -478,7 +484,7 @@ function CredentialsStep({ form, setField, credentials, documents, toggleCredent
     <div className="space-y-6">
       <StepHeading
         title="Credentials"
-        description="Everything here is optional. We’ll verify documentation during onboarding."
+        description="Your license or business tax receipt number and insurance policy number are required. Documents are optional now; we’ll need them before approval."
       />
       <Card>
         <CardContent className="divide-y divide-border p-0">
@@ -512,7 +518,7 @@ function CredentialsStep({ form, setField, credentials, documents, toggleCredent
         </Field>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="License / contractor number" id="licenseNumber">
+        <Field label="License or business tax receipt number *" id="licenseNumber">
           <Input
             id="licenseNumber"
             className="h-12"
@@ -520,7 +526,7 @@ function CredentialsStep({ form, setField, credentials, documents, toggleCredent
             onChange={(event) => setField("licenseNumber", event.target.value)}
           />
         </Field>
-        <Field label="Insurance policy number" id="insuranceNumber">
+        <Field label="Insurance policy number *" id="insuranceNumber">
           <Input
             id="insuranceNumber"
             className="h-12"
@@ -633,6 +639,7 @@ function ReviewStep({
     ["Contact", `${form.firstName} ${form.lastName}`.trim()],
     ["Email", form.email],
     ["Phone", form.phone],
+    ["Business address", form.address],
     ["Website", form.website],
     ["Preferred contact", form.preferredContact],
     ["Service areas", areas.join(", ")],
@@ -645,7 +652,7 @@ function ReviewStep({
         .join(", "),
     ],
     ["Other certification", form.otherCertification],
-    ["License / contractor #", form.licenseNumber],
+    ["License / tax receipt #", form.licenseNumber],
     ["Insurance policy #", form.insurancePolicyNumber],
     ["Notes", form.additionalNotes],
   ].filter(([, value]) => value?.trim());

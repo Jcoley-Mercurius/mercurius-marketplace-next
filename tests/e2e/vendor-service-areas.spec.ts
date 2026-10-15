@@ -29,10 +29,19 @@ async function openServiceAreaStep(page: Page) {
   await page.locator("#years").fill("3");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.locator("#firstName").fill("Synthetic");
+  await page.locator("#lastName").fill("Vendor");
   await page.locator("#email").fill("synthetic.vendor@example.test");
   await page.locator("#phone").fill("239-555-0100");
+  await page.locator("#address").fill("1 Synthetic Way, Fort Myers, FL 33901");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Service Area" })).toBeVisible();
+}
+
+async function completeCredentials(page: Page) {
+  await expect(page.getByRole("heading", { name: "Credentials" })).toBeVisible();
+  await page.locator("#licenseNumber").fill("SYN-BTR-1");
+  await page.locator("#insuranceNumber").fill("SYN-POL-1");
+  await page.getByRole("button", { name: "Continue" }).click();
 }
 
 function areaGroup(page: Page) {
@@ -64,7 +73,7 @@ test("selected Lee County areas reach review and the submission payload", async 
   await areaGroup(page).getByRole("button", { name: "Pine Island", exact: true }).click();
   await page.getByRole("button", { name: "Lawn Care", exact: true }).click();
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await completeCredentials(page);
   await expect(page.getByText("Cape Coral, Pine Island")).toBeVisible();
   await page.getByRole("button", { name: /submit/i }).click();
   await expect.poll(() => submitted?.service_areas).toBe("Cape Coral, Pine Island");
@@ -77,22 +86,72 @@ test("services come from the catalog, primary category first, with a described O
     await route.fulfill({ status: 400, json: { error: "Synthetic stop before persistence." } });
   });
   await openServiceAreaStep(page);
+  await areaGroup(page).getByRole("button", { name: "Cape Coral", exact: true }).click();
   await expect(page.getByRole("group").first()).toHaveAttribute("aria-label", "Lawn & Landscape");
 
   // Other alone does not satisfy the step.
   await page.getByRole("button", { name: "Other", exact: true }).click();
   await page.locator("#otherServices").fill("Lanai rescreening");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByText("Choose at least one service from our list, and describe any Other services.")).toBeVisible();
+  await expect(page.getByText("Choose at least one area and one service from our list, and describe any Other services.")).toBeVisible();
 
   const tree = page.getByRole("button", { name: "Tree Trimming", exact: true });
   await tree.click();
   await expect(tree).toHaveAttribute("aria-pressed", "true");
   expect((await new AxeBuilder({ page }).withTags(wcag).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await completeCredentials(page);
   await expect(page.getByText("Tree Trimming, Other: Lanai rescreening")).toBeVisible();
   await page.getByRole("button", { name: /submit/i }).click();
   await expect.poll(() => submitted?.services).toEqual(["tree-trimming", "Other: Lanai rescreening"]);
   expect(submitted?.primary_category).toBe("Lawn & Landscape");
+});
+
+// TRACE-105 (owner decision 2026-10-14): required fields block each step; documents do not.
+test("required contact, area and credential numbers block the steps; documents stay optional", async ({ page }) => {
+  let submitted: Record<string, unknown> | undefined;
+  let body: Record<string, unknown> | undefined;
+  await page.route("**/api/vendor-applications", async (route) => {
+    body = route.request().postDataJSON();
+    submitted = body?.application as Record<string, unknown>;
+    await route.fulfill({ status: 400, json: { error: "Synthetic stop before persistence." } });
+  });
+  await routeCatalog(page);
+  await page.goto("/vendors/apply");
+  await page.locator("#businessName").fill("Synthetic Lawn Test LLC");
+  await page.locator("#primaryCategory").selectOption("Lawn & Landscape");
+  await page.locator("#teamSize").selectOption("Just me");
+  await page.locator("#years").fill("3");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.locator("#firstName").fill("Synthetic");
+  await page.locator("#email").fill("synthetic.vendor@example.test");
+  await page.locator("#phone").fill("239-555-0100");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Please complete the required fields to continue.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contact Info" })).toBeVisible();
+  await page.locator("#lastName").fill("Vendor");
+  await page.locator("#address").fill("1 Synthetic Way, Fort Myers, FL 33901");
+  expect((await new AxeBuilder({ page }).withTags(wcag).analyze()).violations).toEqual([]);
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "Lawn Care", exact: true }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Choose at least one area and one service from our list, and describe any Other services.")).toBeVisible();
+  await areaGroup(page).getByRole("button", { name: "Fort Myers", exact: true }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.getByRole("heading", { name: "Credentials" })).toBeVisible();
+  await page.locator("#licenseNumber").fill("SYN-BTR-1");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Enter your license or business tax receipt number and your insurance policy number.")).toBeVisible();
+  await page.locator("#insuranceNumber").fill("SYN-POL-1");
+  expect((await new AxeBuilder({ page }).withTags(wcag).analyze()).violations).toEqual([]);
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.getByText("1 Synthetic Way, Fort Myers, FL 33901")).toBeVisible();
+  await page.getByRole("button", { name: /submit/i }).click();
+  await expect.poll(() => submitted?.address).toBe("1 Synthetic Way, Fort Myers, FL 33901");
+  expect(submitted).toMatchObject({ last_name: "Vendor", service_areas: "Fort Myers", license_number: "SYN-BTR-1", insurance_policy_number: "SYN-POL-1" });
+  expect(body?.documents ?? []).toEqual([]);
 });
