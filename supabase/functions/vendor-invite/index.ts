@@ -5,6 +5,16 @@ import { invitationDeliverySite } from "./delivery.ts";
 const uuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+// DEC-2026-029 follow-up: the email link carries a random key that stays valid for the
+// whole invitation; only its SHA-256 is stored. 32 bytes, base64url without padding.
+async function openKey(): Promise<{ key: string; hash: string }> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const key = btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return { key, hash };
+}
 Deno.serve(async (request) => {
   const json = (body: unknown, status = 200) =>
     Response.json(body, { status, headers: corsHeaders });
@@ -73,9 +83,17 @@ Deno.serve(async (request) => {
       const result = await client.rpc(rpc.accept, {
         p_attempt: body.attempt_id,
       });
-      return result.error
-        ? json({ error: "INVITATION_NOT_ACCEPTABLE" }, 409)
-        : json({ status: "accepted", activated: false });
+      if (result.error) return json({ error: "INVITATION_NOT_ACCEPTABLE" }, 409);
+      // The invitation's open key has done its job; drop it from the account's metadata.
+      // Best effort: a failure leaves a key that the database no longer honors.
+      try {
+        await admin.auth.admin.updateUserById(identity.data.user.id, {
+          user_metadata: { invitation_key: null },
+        });
+      } catch {
+        /* acceptance is already recorded */
+      }
+      return json({ status: "accepted", activated: false });
     }
     const role = await admin.rpc("has_role", {
       _user_id: identity.data.user.id,
@@ -225,10 +243,30 @@ Deno.serve(async (request) => {
     };
     const redirect = new URL("/set-password", site);
     redirect.searchParams.set("invitation", attempt);
+    // Only the request holding the claim reaches here, so it alone records the key. A
+    // failure leaves the reserved dispatch unknown: nothing has been sent yet, but the
+    // reservation still forbids a second send without reconciliation.
+    let invitationKey: string;
     try {
-      // `invitation_attempt` is read only while Auth renders the reviewed email
-      // template, which builds the recipient's link from the project's Site URL. It
-      // is not an authorization input: acceptance re-verifies the attempt server-side.
+      const generated = await openKey();
+      const stored = await admin.rpc("provider_invitation_set_open_key", {
+        p_source: existing ? "existing_provider" : "application",
+        p_attempt: attempt,
+        p_key_hash: generated.hash,
+      });
+      if (stored.error) throw stored.error;
+      invitationKey = generated.key;
+    } catch {
+      await markUnknown();
+      return json(
+        { error: "INVITATION_RECONCILIATION_REQUIRED", status: "unknown" },
+        409,
+      );
+    }
+    try {
+      // `invitation_attempt` and `invitation_key` are read while Auth renders the reviewed
+      // email template, which builds the recipient's /invitation/open link from the
+      // project's Site URL. Acceptance still re-verifies the attempt server-side.
       const invited = await admin.auth.admin.inviteUserByEmail(
         claim.data.recipient_email,
         {
@@ -238,10 +276,11 @@ Deno.serve(async (request) => {
           data: existing
             ? {
                 invitation_attempt: attempt,
+                invitation_key: invitationKey,
                 invitation_kind: "existing_provider",
                 business_name: String(claim.data.business_name ?? ""),
               }
-            : { invitation_attempt: attempt },
+            : { invitation_attempt: attempt, invitation_key: invitationKey },
         },
       );
       // Auth's structured refusal of an address that already holds a confirmed

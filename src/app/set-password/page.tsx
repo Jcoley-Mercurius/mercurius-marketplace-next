@@ -28,6 +28,12 @@ type RecoveryResult = {
 
 type PageState = "checking" | "ready" | "invalid" | "success";
 
+// Single-use link credentials this page verifies. `magiclink` is the fresh sign-in that
+// /api/invitations/open mints for a provider invitation (DEC-2026-029 follow-up).
+function linkType(type: string | null): "recovery" | "invite" | "magiclink" | null {
+  return type === "recovery" || type === "invite" || type === "magiclink" ? type : null;
+}
+
 // React Strict Mode may initialize the page twice in development. Sharing an
 // in-flight exchange prevents a one-time PKCE code from being consumed twice.
 let pendingRecoveryExchange: Promise<RecoveryResult> | null = null;
@@ -66,7 +72,7 @@ export default function SetPasswordPage() {
     // browser (another signed-in account) must not stand in for it.
     const hasLinkCredential = Boolean(
       code ||
-        (tokenHash && (type === "recovery" || type === "invite")) ||
+        (tokenHash && linkType(type)) ||
         (accessToken && refreshToken),
     );
 
@@ -114,11 +120,12 @@ export default function SetPasswordPage() {
               errorMessage: error?.message ?? null,
             };
           });
-        } else if (tokenHash && (type === "recovery" || type === "invite")) {
+        } else if (tokenHash && linkType(type)) {
+          const otpType = linkType(type)!;
           exchange = runRecoveryExchange(async () => {
             const { data, error } = await supabase.auth.verifyOtp({
               token_hash: tokenHash,
-              type,
+              type: otpType,
             });
             return {
               sessionReady: Boolean(data.session),
