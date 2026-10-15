@@ -44,6 +44,12 @@ async function completeCredentials(page: Page) {
   await page.getByRole("button", { name: "Continue" }).click();
 }
 
+// Blocked steps raise a fading toast; scan once its transition ends so axe reads final colors.
+async function scanSettled(page: Page) {
+  await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running"));
+  return (await new AxeBuilder({ page }).withTags(wcag).analyze()).violations;
+}
+
 function areaGroup(page: Page) {
   return page.locator("div.space-y-3").filter({ hasText: "Areas you serve" }).first();
 }
@@ -132,7 +138,7 @@ test("required contact, area and license fields block the steps; insurance and d
   await expect(page.getByRole("heading", { name: "Contact Info" })).toBeVisible();
   await page.locator("#lastName").fill("Vendor");
   await page.locator("#address").fill("1 Synthetic Way, Fort Myers, FL 33901");
-  expect((await new AxeBuilder({ page }).withTags(wcag).analyze()).violations).toEqual([]);
+  expect(await scanSettled(page)).toEqual([]);
   await page.getByRole("button", { name: "Continue" }).click();
 
   await page.getByRole("button", { name: "Lawn Care", exact: true }).click();
@@ -145,7 +151,7 @@ test("required contact, area and license fields block the steps; insurance and d
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Enter your license or business tax receipt number.")).toBeVisible();
   await page.locator("#licenseNumber").fill("SYN-BTR-1");
-  expect((await new AxeBuilder({ page }).withTags(wcag).analyze()).violations).toEqual([]);
+  expect(await scanSettled(page)).toEqual([]);
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page.getByText("1 Synthetic Way, Fort Myers, FL 33901")).toBeVisible();

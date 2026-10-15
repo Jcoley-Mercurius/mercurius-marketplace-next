@@ -25,6 +25,8 @@ for (const theme of ["light", "dark"]) {
       await page.addInitScript(theme => localStorage.setItem("theme", theme), theme);
       for (const tab of ["overview", "upcoming", "invoices", "payment-methods"]) {
         await dashboard(page, tab);
+        // Cards fade in; scan once transitions end so axe reads final colors.
+        await page.waitForFunction(() => document.getAnimations().every(animation => animation.playState !== "running"));
         expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
         expect(await page.locator("main").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       }
