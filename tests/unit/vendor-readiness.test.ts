@@ -246,14 +246,13 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
     expect(inserted).toHaveLength(1);
   });
 
-  // TRACE-105 (owner decision 2026-10-14): these fields are required; documents are not.
+  // TRACE-105 (owner decision 2026-10-14): these fields are required; insurance and documents are not.
   it.each([
     [{ last_name: " " }, "Last name is required."],
     [{ address: "" }, "Business address is required."],
     [{ service_areas: null }, "Choose at least one Lee County service area."],
     [{ service_areas: " , " }, "Choose at least one Lee County service area."],
     [{ license_number: undefined }, "License or business tax receipt number is required."],
-    [{ insurance_policy_number: "" }, "Insurance policy number is required."],
   ])("refuses an application missing a required field (%o)", async (overrides, message) => {
     mockSupabase(() => ({ data: null, error: null }));
     const { POST } = await import("../../src/app/api/vendor-applications/route");
@@ -261,6 +260,14 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: message });
     expect(inserted).toHaveLength(0);
+  });
+
+  it("accepts an applicant who has no insurance yet", async () => {
+    mockSupabase(() => ({ data: null, error: null }));
+    const { POST } = await import("../../src/app/api/vendor-applications/route");
+    const response = await POST(submit({ insurance_policy_number: " " }));
+    expect(response.status).toBe(201);
+    expect(inserted[0]).toMatchObject({ insurance_policy_number: null });
   });
 
   it.each([

@@ -161,10 +161,11 @@ export default function VendorApplyPage() {
   function stepIsValid(value: number) {
     if (value === 1) return !!(form.businessName.trim() && form.primaryCategory && form.teamSize && form.yearsExperience !== "");
     // TRACE-105 (owner decision 2026-10-14): last name, business address, a service area and
-    // the license/insurance numbers are required; documents stay optional.
+    // the license or tax receipt number are required. Insurance (number and documents) and
+    // all documents stay optional: applicants may obtain insurance during review.
     if (value === 2) return !!(form.firstName.trim() && form.lastName.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && form.phone.trim() && form.address.trim());
     if (value === 3) return areas.length > 0 && services.length > 0 && (!otherSelected || otherDescription.length > 0);
-    if (value === 4) return !!(form.licenseNumber.trim() && form.insurancePolicyNumber.trim());
+    if (value === 4) return !!form.licenseNumber.trim();
     return true;
   }
 
@@ -174,7 +175,7 @@ export default function VendorApplyPage() {
         description: step === 3
           ? "Choose at least one area and one service from our list, and describe any Other services."
           : step === 4
-            ? "Enter your license or business tax receipt number and your insurance policy number."
+            ? "Enter your license or business tax receipt number."
             : "Please complete the required fields to continue.",
       });
       return;
@@ -258,7 +259,7 @@ export default function VendorApplyPage() {
       other_certification: form.otherCertification.trim() || null,
       additional_notes: form.additionalNotes.trim() || null,
       license_number: form.licenseNumber.trim(),
-      insurance_policy_number: form.insurancePolicyNumber.trim(),
+      insurance_policy_number: form.insurancePolicyNumber.trim() || null,
     };
 
     try {
@@ -484,7 +485,7 @@ function CredentialsStep({ form, setField, credentials, documents, toggleCredent
     <div className="space-y-6">
       <StepHeading
         title="Credentials"
-        description="Your license or business tax receipt number and insurance policy number are required. Documents are optional now; we’ll need them before approval."
+        description="Your license or business tax receipt number is required. If you don’t have insurance yet, you can still apply; we’ll need your insurance and documents before approval."
       />
       <Card>
         <CardContent className="divide-y divide-border p-0">
@@ -526,7 +527,7 @@ function CredentialsStep({ form, setField, credentials, documents, toggleCredent
             onChange={(event) => setField("licenseNumber", event.target.value)}
           />
         </Field>
-        <Field label="Insurance policy number *" id="insuranceNumber">
+        <Field label="Insurance policy number (if insured)" id="insuranceNumber">
           <Input
             id="insuranceNumber"
             className="h-12"

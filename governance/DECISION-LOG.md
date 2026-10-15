@@ -107,15 +107,15 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 076 and updated 040/074; browser `renewal-documents`/`onboarding-checklist`; hosted migration push by the owner.
 
-### DEC-2026-030 — Required vendor application fields; documents stay optional
+### DEC-2026-030 — Required vendor application fields; insurance and documents stay optional
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-14 (America/New_York).
 
-**Decision:** `/vendors/apply` requires, in addition to the existing required fields, the applicant's last name, a business address, at least one Lee County service area, a license or business tax receipt number and an insurance policy number. The form and `/api/vendor-applications` both enforce them. License, insurance and other documents stay optional at submission; Mercurius collects them during review (DEC-2026-029) and activation still requires reviewed, current license and insurance evidence (MPS §8).
+**Decision:** `/vendors/apply` requires, in addition to the existing required fields, the applicant's last name, a business address, at least one Lee County service area and a license or business tax receipt number. The form and `/api/vendor-applications` both enforce them. The insurance policy number and all documents stay optional at submission, so a vendor without insurance yet can apply and obtain it during review; Mercurius collects the documents during review (DEC-2026-029) and activation still requires reviewed, current license and insurance evidence (MPS §8).
 
 **Context:** Applications arrived with skipped fields and no documents. The form had no address field at all and sent an empty address.
 
-**Alternatives considered:** Also require license and insurance documents (owner: applicants may not have them yet and need to obtain them); keep the application lenient.
+**Alternatives considered:** Also require license and insurance documents (owner: applicants may not have them yet and need to obtain them); require the insurance policy number (owner, same day: a vendor without insurance must still be able to apply); keep the application lenient.
 
 **MPS impact:** None to the §8 checklist. **MDS impact:** Required markers and step messages on the application; new business address field. **MTS impact:** Route validation only; no migration (columns unchanged and nullable for earlier and operator-created applications). **Data/payment/security impact:** None.
 

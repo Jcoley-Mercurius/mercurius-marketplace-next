@@ -108,7 +108,7 @@ test("services come from the catalog, primary category first, with a described O
 });
 
 // TRACE-105 (owner decision 2026-10-14): required fields block each step; documents do not.
-test("required contact, area and credential numbers block the steps; documents stay optional", async ({ page }) => {
+test("required contact, area and license fields block the steps; insurance and documents stay optional", async ({ page }) => {
   let submitted: Record<string, unknown> | undefined;
   let body: Record<string, unknown> | undefined;
   await page.route("**/api/vendor-applications", async (route) => {
@@ -142,16 +142,15 @@ test("required contact, area and credential numbers block the steps; documents s
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page.getByRole("heading", { name: "Credentials" })).toBeVisible();
-  await page.locator("#licenseNumber").fill("SYN-BTR-1");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByText("Enter your license or business tax receipt number and your insurance policy number.")).toBeVisible();
-  await page.locator("#insuranceNumber").fill("SYN-POL-1");
+  await expect(page.getByText("Enter your license or business tax receipt number.")).toBeVisible();
+  await page.locator("#licenseNumber").fill("SYN-BTR-1");
   expect((await new AxeBuilder({ page }).withTags(wcag).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page.getByText("1 Synthetic Way, Fort Myers, FL 33901")).toBeVisible();
   await page.getByRole("button", { name: /submit/i }).click();
   await expect.poll(() => submitted?.address).toBe("1 Synthetic Way, Fort Myers, FL 33901");
-  expect(submitted).toMatchObject({ last_name: "Vendor", service_areas: "Fort Myers", license_number: "SYN-BTR-1", insurance_policy_number: "SYN-POL-1" });
+  expect(submitted).toMatchObject({ last_name: "Vendor", service_areas: "Fort Myers", license_number: "SYN-BTR-1", insurance_policy_number: null });
   expect(body?.documents ?? []).toEqual([]);
 });

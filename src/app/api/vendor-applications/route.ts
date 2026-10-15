@@ -46,7 +46,7 @@ type ApplicationInput = {
   other_certification: string | null;
   additional_notes: string | null;
   license_number: string;
-  insurance_policy_number: string;
+  insurance_policy_number: string | null;
 };
 
 class RequestValidationError extends Error {}
@@ -176,7 +176,8 @@ function parseApplication(value: unknown): ApplicationInput {
       max: 100,
     }),
     // TRACE-105 (owner decision 2026-10-14): last name, business address, service
-    // areas and the license/insurance numbers are required; documents stay optional.
+    // areas and the license or tax receipt number are required. The insurance policy
+    // number and documents stay optional: applicants may obtain insurance during review.
     last_name: text(input.last_name, "Last name", { required: true, max: 100 }),
     email,
     phone: text(input.phone, "Phone", { required: true, max: 50 }),
@@ -222,10 +223,11 @@ function parseApplication(value: unknown): ApplicationInput {
       required: true,
       max: 200,
     }),
-    insurance_policy_number: text(input.insurance_policy_number, "Insurance policy number", {
-      required: true,
-      max: 200,
-    }),
+    insurance_policy_number: nullableText(
+      input.insurance_policy_number,
+      "Insurance policy number",
+      200,
+    ),
   };
 }
 
