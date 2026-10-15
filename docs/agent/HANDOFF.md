@@ -1,5 +1,12 @@
 # Agent handoff — 2026-10-01
 
+## Required vendor application fields (TRACE-105, DEC-2026-031), 2026-10-14
+
+- Branch `claude/application-required-fields`, stacked on `claude/review-operator-upload` (PR #94, merged); renumbered 2026-10-15 from DEC-2026-030 to DEC-2026-031 when merging main. Owner decision: require more application fields; insurance (policy number and documents) and all documents stay optional so uninsured vendors can still apply.
+- `/vendors/apply` and `/api/vendor-applications` now require last name, business address (new field; previously sent empty), at least one Lee County service area and a license or business tax receipt number. Insurance policy number optional ("if insured"). No migration.
+- Evidence: secret scan, lint, typecheck, unit 387/387 (five refusal cases, one uninsured acceptance), synthetic build, browser `vendor-service-areas` + `vendor-readiness` + `application-retention` + `existing-provider-access` 40/40 (new step-blocking test with axe).
+- Open: the vendor-page prefill does not copy the new address (the application queue shows it).
+
 ## Operator document upload under review (TRACE-105, DEC-2026-030), 2026-10-14
 
 - Branch `claude/review-operator-upload` from `main` `adca693`. Owner report: applicants can submit `/vendors/apply` with no documents, and the vendor page offered no upload during review (operator upload was limited to active/suspended and the eight legacy reviews), so emailed license, tax receipt and insurance documents could not satisfy checklist items 4/5.

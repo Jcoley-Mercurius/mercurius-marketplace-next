@@ -35,7 +35,7 @@ type ApplicationInput = {
   address: string;
   years_experience: number;
   services: string[];
-  service_areas: string | null;
+  service_areas: string;
   availability: string | null;
   primary_category: string;
   team_size: string;
@@ -45,7 +45,7 @@ type ApplicationInput = {
   credentials: string[];
   other_certification: string | null;
   additional_notes: string | null;
-  license_number: string | null;
+  license_number: string;
   insurance_policy_number: string | null;
 };
 
@@ -105,9 +105,14 @@ function nullableText(value: unknown, label: string, max = 2_000) {
   return text(value, label, { max }) || null;
 }
 
+// TRACE-105 (owner decision 2026-10-14): at least one Lee County service area.
 function serviceAreas(value: unknown) {
   try {
-    return normalizeServiceAreas(nullableText(value, "Service areas", 1_000));
+    const areas = normalizeServiceAreas(nullableText(value, "Service areas", 1_000));
+    if (!areas) {
+      throw new RequestValidationError("Choose at least one Lee County service area.");
+    }
+    return areas;
   } catch (error) {
     if (error instanceof UnsupportedServiceAreaError) {
       throw new RequestValidationError(error.message);
@@ -170,10 +175,13 @@ function parseApplication(value: unknown): ApplicationInput {
       required: true,
       max: 100,
     }),
-    last_name: text(input.last_name, "Last name", { max: 100 }),
+    // TRACE-105 (owner decision 2026-10-14): last name, business address, service
+    // areas and the license or tax receipt number are required. The insurance policy
+    // number and documents stay optional: applicants may obtain insurance during review.
+    last_name: text(input.last_name, "Last name", { required: true, max: 100 }),
     email,
     phone: text(input.phone, "Phone", { required: true, max: 50 }),
-    address: text(input.address, "Address", { max: 300 }),
+    address: text(input.address, "Business address", { required: true, max: 300 }),
     years_experience: experience,
     services: stringList(input.services, "Services", {
       required: true,
@@ -211,7 +219,10 @@ function parseApplication(value: unknown): ApplicationInput {
       "Additional notes",
       4_000,
     ),
-    license_number: nullableText(input.license_number, "License number", 200),
+    license_number: text(input.license_number, "License or business tax receipt number", {
+      required: true,
+      max: 200,
+    }),
     insurance_policy_number: nullableText(
       input.insurance_policy_number,
       "Insurance policy number",
