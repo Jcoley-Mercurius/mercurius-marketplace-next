@@ -93,7 +93,21 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 075 and updated 034/037; browser `invitation-binding`; hosted migration push by the owner.
 
-### DEC-2026-029 — Operator document upload for providers under review
+### DEC-2026-029 — Provider invitations default to 7 days; Auth email link 24 hours
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-13 (America/New_York).
+
+**Decision:** Provider invitations default to **7 days** on both operator forms. The Supabase Auth email link ("Set up your Mercurius provider account") lasts **24 hours** (`otp_expiry = 86400`), up from 3 hours; this supersedes the 3-hour lifetime decided 2026-09-13 (TRACE-071). The operator queues flag a lapsed link after 24 hours. The owner's goal is one lifetime: the email link should stay usable for the whole invitation. Hosted Auth refuses an email link expiry above 86400 seconds ("Must be no more than 86400", observed in the dashboard 2026-10-13), so the owner chose a Mercurius-owned invitation link that stays valid until the invitation expires and creates a fresh Auth session when used. That link is TRACE-107 ([PHASE-5-INVITATION-OPEN-LINK.md](PHASE-5-INVITATION-OPEN-LINK.md)); until it is deployed, an invitation outlives its email link after 24 hours and the existing recovery (revoke, prepare a new attempt) applies.
+
+**Context:** Invitations were prepared with a 7-day expiry, but the emailed link expired after 3 hours, so a provider who opened the email later had a dead link inside a live invitation.
+
+**Alternatives considered:** A 7-day Auth link (refused by hosted Auth); a "send me a new link" page on an expired link (rejected by the owner in favor of the Mercurius-owned link); shortening invitations to 24 hours (rejected: too little time for providers).
+
+**MPS impact:** None. **MDS impact:** The application invitation form now prefills a 7-day expiry; expiry help text names the 24-hour email link; lapsed-link labels name 24 hours. **MTS impact:** Auth email link lifetime 86400 s (local config and hosted Auth settings); migration `20261013001000` adds `private.provider_invitation_link_lifetime()` and points `r0_invitation_attention` and `r0_provider_access_queue` at it. **Data/payment/security impact:** A leaked or forwarded invitation email is usable for 24 hours instead of 3. The link stays single-use, scanner-safe (`token_hash` on `/set-password`) and bound to one attempt.
+
+**Required evidence:** SQL 076; unit `invitation-link-lifetime`; browser `invitation-operations`; owner sets the hosted Auth email link expiry to 86400 and applies the migration (owner-authorized hosted actions).
+
+### DEC-2026-030 — Operator document upload for providers under review
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-14 (America/New_York).
 
@@ -103,15 +117,15 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Alternatives considered:** Require documents on the application (owner: applicants may not have them yet; the application slice that follows makes more fields required but keeps documents optional); a separate tax-receipt document type (larger change; no rule yet for which checklist item it satisfies).
 
-**MPS impact:** None to the §8 checklist. **MDS impact:** The vendor page's document section covers review as well as renewal. **MTS impact:** Migration `20261014001000` (`private.vendor_renewal_submitter` status guard and `vendor_renewal_document_overview.operator_upload`). **Data/payment/security impact:** Operator-only; the same private bucket, path, verification and retention rules.
+**MPS impact:** None to the §8 checklist. **MDS impact:** The vendor page's document section covers review as well as renewal. **MTS impact:** Migration `20261015001000` (`private.vendor_renewal_submitter` status guard and `vendor_renewal_document_overview.operator_upload`). **Data/payment/security impact:** Operator-only; the same private bucket, path, verification and retention rules.
 
-**Required evidence:** SQL 076 and updated 040/074; browser `renewal-documents`/`onboarding-checklist`; hosted migration push by the owner.
+**Required evidence:** SQL 078 and updated 040/074; browser `renewal-documents`/`onboarding-checklist`; hosted migration push by the owner.
 
-### DEC-2026-030 — Required vendor application fields; insurance and documents stay optional
+### DEC-2026-031 — Required vendor application fields; insurance and documents stay optional
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-14 (America/New_York).
 
-**Decision:** `/vendors/apply` requires, in addition to the existing required fields, the applicant's last name, a business address, at least one Lee County service area and a license or business tax receipt number. The form and `/api/vendor-applications` both enforce them. The insurance policy number and all documents stay optional at submission, so a vendor without insurance yet can apply and obtain it during review; Mercurius collects the documents during review (DEC-2026-029) and activation still requires reviewed, current license and insurance evidence (MPS §8).
+**Decision:** `/vendors/apply` requires, in addition to the existing required fields, the applicant's last name, a business address, at least one Lee County service area and a license or business tax receipt number. The form and `/api/vendor-applications` both enforce them. The insurance policy number and all documents stay optional at submission, so a vendor without insurance yet can apply and obtain it during review; Mercurius collects the documents during review (DEC-2026-030) and activation still requires reviewed, current license and insurance evidence (MPS §8).
 
 **Context:** Applications arrived with skipped fields and no documents. The form had no address field at all and sent an empty address.
 

@@ -1,19 +1,20 @@
 # Agent handoff — 2026-10-01
 
-## Required vendor application fields (TRACE-105, DEC-2026-030), 2026-10-14
+## Required vendor application fields (TRACE-105, DEC-2026-031), 2026-10-14
 
-- Branch `claude/application-required-fields`, stacked on `claude/review-operator-upload` (PR #94). Owner decision: require more application fields; insurance (policy number and documents) and all documents stay optional so uninsured vendors can still apply.
+- Branch `claude/application-required-fields`, stacked on `claude/review-operator-upload` (PR #94, merged); renumbered 2026-10-15 from DEC-2026-030 to DEC-2026-031 when merging main. Owner decision: require more application fields; insurance (policy number and documents) and all documents stay optional so uninsured vendors can still apply.
 - `/vendors/apply` and `/api/vendor-applications` now require last name, business address (new field; previously sent empty), at least one Lee County service area and a license or business tax receipt number. Insurance policy number optional ("if insured"). No migration.
 - Evidence: secret scan, lint, typecheck, unit 387/387 (five refusal cases, one uninsured acceptance), synthetic build, browser `vendor-service-areas` + `vendor-readiness` + `application-retention` + `existing-provider-access` 40/40 (new step-blocking test with axe).
 - Open: the vendor-page prefill does not copy the new address (the application queue shows it).
 
-## Operator document upload under review (TRACE-105, DEC-2026-029), 2026-10-14
+## Operator document upload under review (TRACE-105, DEC-2026-030), 2026-10-14
 
 - Branch `claude/review-operator-upload` from `main` `adca693`. Owner report: applicants can submit `/vendors/apply` with no documents, and the vendor page offered no upload during review (operator upload was limited to active/suspended and the eight legacy reviews), so emailed license, tax receipt and insurance documents could not satisfy checklist items 4/5.
-- Migration `20261014001000`: `private.vendor_renewal_submitter` lets an operator upload for a provider in `review`; `vendor_renewal_document_overview.operator_upload` is true in review. The provider still submits only while active/suspended; rejected/unknown refused. The upload awaits review until an operator records item 4 or 5 from it (unchanged command).
+- Migration `20261015001000`: `private.vendor_renewal_submitter` lets an operator upload for a provider in `review`; `vendor_renewal_document_overview.operator_upload` is true in review. The provider still submits only while active/suspended; rejected/unknown refused. The upload awaits review until an operator records item 4 or 5 from it (unchanged command).
 - UI: the vendor page section is "Uploaded documents"; License is labeled "License or business tax receipt" (standard v1 item 4); no new document type.
-- Evidence: SQL 076 19/19, 040 84/84 (operator-in-review assertion flipped), 074 60/60, 073 46/46, 057 49/49, 058 62/62, 039 44/44, each with the migration applied inside the rolled-back test transaction (the local stack holds an unrelated `20261013001000` not on this branch, so `migration up` was refused; history left untouched). The first run caught a NULL guard that let an operator upload without onboarding; fixed with `is not distinct from`. Secret scan, lint, typecheck, unit 381/381, synthetic build, browser renewal-documents + renewal-retention + legacy-provider-review + onboarding-checklist + evidence-renewal 60/60.
-- Next: Codex review; merge; deploy; owner pushes `20261014001000`. Second slice (owner decision 2026-10-14): `/vendors/apply` makes more fields required (last name, address, service areas, license/insurance numbers) and keeps documents optional.
+- Evidence: SQL 078 19/19, 040 84/84 (operator-in-review assertion flipped), 074 60/60, 073 46/46, 057 49/49, 058 62/62, 039 44/44, each with the migration applied inside the rolled-back test transaction (the local stack holds an unrelated `20261013001000` not on this branch, so `migration up` was refused; history left untouched). The first run caught a NULL guard that let an operator upload without onboarding; fixed with `is not distinct from`. Secret scan, lint, typecheck, unit 381/381, synthetic build, browser renewal-documents + renewal-retention + legacy-provider-review + onboarding-checklist + evidence-renewal 60/60.
+- Next: Codex review; merge; deploy; owner pushes `20261015001000`. Second slice (owner decision 2026-10-14): `/vendors/apply` makes more fields required (last name, address, service areas, license/insurance numbers) and keeps documents optional.
+- Renumbered 2026-10-15 when merging main: main took DEC-2026-029, migration `20261014001000` (`invitation_open_link`, already applied on hosted) and SQL 076/077, so this slice is now DEC-2026-030, `20261015001000` and SQL 078. No function overlap with main's migrations.
 
 ## Bind a provider's account while suspended (TRACE-105, DEC-2026-028), 2026-10-05
 
