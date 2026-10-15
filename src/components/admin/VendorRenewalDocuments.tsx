@@ -22,7 +22,7 @@ import { retentionStateLabel, type RetentionState } from "@/lib/renewalRetention
 import { VENDOR_DOCUMENT_ACCEPT, VENDOR_DOCUMENT_BUCKET, validateVendorDocument } from "@/lib/vendorApplicationDocuments";
 
 // TRACE-073 operator surface for renewal submissions, inside the activation checklist.
-// DEC-2026-029: the operator upload also covers documents for a provider under review.
+// DEC-2026-030: the operator upload also covers documents for a provider under review.
 // Accepting happens in the checklist form (it records the evidence); this section opens,
 // declines and uploads on the provider's behalf. Every change is confirmed by rereading.
 // TRACE-074 adds the provider's retention hold and each declined file's retention state;

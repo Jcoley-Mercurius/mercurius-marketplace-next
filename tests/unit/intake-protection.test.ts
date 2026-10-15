@@ -169,3 +169,14 @@ describe("recordIntakeSubmission", () => {
     ).rejects.toBe(failure);
   });
 });
+
+// DEC-2026-029: browser and password-manager autofill filled the former honeypot
+// (company_fax) with saved company names, so real applicants were refused.
+describe("IntakeTrapField name", () => {
+  it("does not resemble a field that autofill recognizes", async () => {
+    const { INTAKE_TRAP_FIELD_NAME } = await import("../../src/components/marketing/IntakeGuard");
+    expect(INTAKE_TRAP_FIELD_NAME).not.toMatch(
+      /company|business|organi[sz]ation|name|mail|phone|tel|fax|mobile|address|street|city|state|zip|postal|country|url|web|site|card|user|login|pass/i,
+    );
+  });
+});

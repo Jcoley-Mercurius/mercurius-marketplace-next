@@ -146,7 +146,7 @@ select throws_ok($$select public.vendor_authorize_renewal_upload('license')$$,
 reset role;
 select pg_temp.as_user('1');
 set local role authenticated;
--- DEC-2026-029 (20261014001000): the operator upload also applies under review.
+-- DEC-2026-030 (20261015001000): the operator upload also applies under review.
 select is(public.vendor_authorize_renewal_upload('license','b7200000-0000-4000-8000-000000000003')->>'submitted_as','operator',
  'An operator may submit for a provider under review');
 select throws_ok($$select public.vendor_authorize_renewal_upload('license','b7200000-0000-4000-8000-000000000009')$$,

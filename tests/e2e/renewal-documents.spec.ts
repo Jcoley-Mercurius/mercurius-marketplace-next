@@ -270,7 +270,7 @@ test("an operator uploads a document on the provider's behalf", async ({ page })
   expect(grants).toEqual([{ kind: "insurance", contractorId: contractor, file: { name: "emailed-coi.pdf", type: "application/pdf", size: 14 } }]);
 });
 
-// DEC-2026-029: the operator upload covers a provider under review; a rejected one gets none.
+// DEC-2026-030: the operator upload covers a provider under review; a rejected one gets none.
 test("a provider under review offers the operator upload", async ({ page }) => {
   const dialog = await openOperatorChecklist(page, () => ({ onboarding_status: "review", operator_upload: true, documents: [] }));
   await expect(dialog.getByText("No documents have been uploaded outside the application.")).toBeVisible();

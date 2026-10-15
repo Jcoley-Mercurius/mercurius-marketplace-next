@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
--- TRACE-105, DEC-2026-029 (20261014001000). Synthetic fixtures only: an operator uploads
+-- TRACE-105, DEC-2026-030 (20261015001000). Synthetic fixtures only: an operator uploads
 -- license and insurance documents for an applicant under review whose application had
 -- no documents, and records checklist items 4 and 5 from them. The provider itself still
 -- cannot submit in review; rejected and unknown providers are still refused.

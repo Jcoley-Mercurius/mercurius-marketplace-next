@@ -95,11 +95,16 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
   });
 }
 
-test("expiry has no default and gates preparation", async ({ page }) => {
+test("expiry defaults to 7 days and gates preparation", async ({ page }) => {
   const dialog = await openInvitation(page);
   const field = dialog.getByLabel("Invitation expiry (required)", { exact: true });
-  await expect(field).toHaveValue("");
-  await expect(dialog.getByText("There is no default expiry", { exact: false })).toBeVisible();
+  // DEC-2026-029: prefilled 7 days out.
+  const days = (Date.parse(await field.inputValue()) - Date.now()) / 86_400_000;
+  expect(days).toBeGreaterThan(6.99);
+  expect(days).toBeLessThanOrEqual(7);
+  await expect(dialog.getByText("The emailed link itself lasts 24 hours.", { exact: false })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Prepare invitation" })).toBeEnabled();
+  await field.fill("");
   await expect(dialog.getByRole("button", { name: "Prepare invitation" })).toBeDisabled();
   await field.fill("2020-01-01T09:00");
   await expect(dialog.getByText("Enter an expiry in the future.")).toBeVisible();
