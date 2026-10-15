@@ -42,7 +42,7 @@ const accessAttentionLabel: Record<NonNullable<AccessItem["attention"]>, string>
   refused: "Refused: address already has an account",
   awaiting_binding: "Accepted — review and bind",
   expired: "Invitation expired",
-  link_lapsed: "3-hour link lapsed without acceptance",
+  link_lapsed: "24-hour link lapsed without acceptance",
 };
 
 function accessStateLabel(item: AccessItem) {

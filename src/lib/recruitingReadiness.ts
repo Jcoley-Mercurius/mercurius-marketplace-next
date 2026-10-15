@@ -106,7 +106,7 @@ export const invitationReasonLabel: Record<InvitationReason, { title: string; he
   },
   link_lapsed: {
     title: "Email link lapsed",
-    help: "Auth accepted the invitation over 3 hours ago and the email link has expired without acceptance. Revoke it and prepare a new one.",
+    help: "Auth accepted the invitation over 24 hours ago and the email link has expired without acceptance. Revoke it and prepare a new one.",
   },
 };
 
