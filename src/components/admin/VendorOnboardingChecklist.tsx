@@ -88,8 +88,8 @@ const referenceHelp: Record<Kind, string> = {
   identity: "Where the verification is recorded, such as a case or ticket reference.",
   agreement: "The accepted agreement record. Put the agreement version in the requirement version.",
   coverage: "The review record for the approved services and ZIP codes.",
-  license: "Select the reviewed application document or a renewal document awaiting review.",
-  insurance: "Select the reviewed application document or a renewal document awaiting review.",
+  license: "Select the reviewed application document or an uploaded document awaiting review.",
+  insurance: "Select the reviewed application document or an uploaded document awaiting review.",
   bank_authorization:
     "A reference to where the authorization is held. Never enter account or routing numbers.",
   profile_pricing: "The review record for the profile and pricing claims.",
@@ -340,7 +340,7 @@ export function VendorOnboardingChecklist({
         return accepted?.state === "accepted" && accepted.evidence_id === item?.evidence_id;
       },
       {
-        title: renewalId ? "Renewal document accepted" : "Checklist evidence recorded",
+        title: renewalId ? "Document accepted" : "Checklist evidence recorded",
         description: `${itemLabel[kind]}. No decision, role or listing followed.`,
       },
     );
@@ -542,7 +542,7 @@ export function VendorOnboardingChecklist({
                         </optgroup>
                       )}
                       {pendingRenewals.length > 0 && (
-                        <optgroup label="Renewal documents awaiting review">
+                        <optgroup label="Uploaded documents awaiting review">
                           {pendingRenewals.map((document) => (
                             <option key={document.id} value={document.storage_path}>
                               {document.file_name} ({new Date(document.created_at).toLocaleDateString()})
@@ -608,7 +608,7 @@ export function VendorOnboardingChecklist({
                     ? "Supersedes the current evidence for this item, which stays in history. "
                     : "") +
                   (selectedRenewal
-                    ? `Accepts the ${renewalDocumentKindLabel[selectedRenewal.kind].toLowerCase()} renewal document ${selectedRenewal.file_name}, which the provider will see as accepted. `
+                    ? `Accepts the ${renewalDocumentKindLabel[selectedRenewal.kind].toLowerCase()} document ${selectedRenewal.file_name}, which the provider will see as accepted. `
                     : "") +
                   "Records the evidence against the reviewed application revision. It activates nothing, grants no role and publishes no listing."
                 }

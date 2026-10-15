@@ -89,11 +89,11 @@ test("a vendor upload asks for a grant, uploads to storage and is confirmed by r
   await page.getByLabel("File (required)", { exact: true }).setInputFiles({ name: "Renewed License.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 synthetic") });
   await expect(submit).toBeEnabled();
   await submit.click();
-  await expect(page.getByRole("status").getByText("License submitted. Mercurius will review it and record the new expiry.")).toBeVisible();
+  await expect(page.getByRole("status").getByText("License or business tax receipt submitted. Mercurius will review it and record the new expiry.")).toBeVisible();
   expect(grants).toEqual([{ kind: "license", file: { name: "Renewed License.pdf", type: "application/pdf", size: 18 } }]);
   expect(uploads).toEqual([`PUT /storage/v1/object/upload/sign/vendor-documents/${grantPath}`]);
   expect(submits).toEqual([{ path: grantPath }]);
-  await expect(page.getByRole("list", { name: "Your submissions" }).getByText("License · Renewed-License.pdf")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Your submissions" }).getByText("License or business tax receipt · Renewed-License.pdf")).toBeVisible();
   await expect(submit).toBeDisabled();
 });
 
@@ -194,20 +194,20 @@ async function openOperatorChecklist(page: Page, overview: () => Record<string, 
   await page.goto("/admin/applications");
   await page.getByRole("button", { name: "Review" }).click();
   const dialog = page.getByRole("dialog", { name: "Synthetic Applicant Services" });
-  await expect(dialog.getByRole("heading", { name: "Renewal documents" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Uploaded documents" })).toBeVisible();
   return dialog;
 }
 
 for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
   test(`operator renewal documents ${theme} ${width}px`, async ({ page }) => {
     const dialog = await openOperatorChecklist(page, () => ({}), theme, width);
-    const list = dialog.getByRole("list", { name: "Renewal documents" });
-    await expect(list.getByText("License · synthetic-license.pdf")).toBeVisible();
+    const list = dialog.getByRole("list", { name: "Uploaded documents" });
+    await expect(list.getByText("License or business tax receipt · synthetic-license.pdf")).toBeVisible();
     await expect(list.getByText("Awaiting review")).toBeVisible();
     await expect(list.getByText("Note to provider: Synthetic: wrong insured name.")).toBeVisible();
     await expect(list.getByRole("button", { name: "Decline" })).toHaveCount(1);
     await expect(dialog.getByRole("button", { name: "Upload for review" })).toBeDisabled();
-    await list.getByText("License · synthetic-license.pdf").scrollIntoViewIfNeeded();
+    await list.getByText("License or business tax receipt · synthetic-license.pdf").scrollIntoViewIfNeeded();
     expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(tags).analyze()).violations).toEqual([]);
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: `test-results/renewal-documents-operator-${theme}-${width}.png` });
@@ -216,8 +216,8 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
 
 test("an operator declines with a note the provider sees", async ({ page }) => {
   const dialog = await openOperatorChecklist(page, () => ({}));
-  await dialog.getByRole("list", { name: "Renewal documents" }).getByRole("button", { name: "Decline" }).click();
-  const confirm = page.getByRole("alertdialog", { name: "Decline this renewal document?" });
+  await dialog.getByRole("list", { name: "Uploaded documents" }).getByRole("button", { name: "Decline" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Decline this document?" });
   await expect(confirm.getByText("which the provider sees", { exact: false })).toBeVisible();
   const decline = confirm.getByRole("button", { name: "Decline", exact: true });
   await expect(decline).toBeDisabled();
@@ -236,9 +236,9 @@ test("an operator accepts a renewal document by recording it as license evidence
   await dialog.getByLabel("Checklist item (required)", { exact: true }).selectOption("license");
   const document = dialog.getByLabel("Document (required)", { exact: true });
   await expect(document.locator("optgroup")).toHaveCount(2);
-  await expect(document.locator('optgroup[label="Renewal documents awaiting review"] option')).toHaveCount(1);
+  await expect(document.locator('optgroup[label="Uploaded documents awaiting review"] option')).toHaveCount(1);
   await dialog.getByLabel("Checklist item (required)", { exact: true }).selectOption("insurance");
-  await expect(document.locator('optgroup[label="Renewal documents awaiting review"]')).toHaveCount(0);
+  await expect(document.locator('optgroup[label="Uploaded documents awaiting review"]')).toHaveCount(0);
   await dialog.getByLabel("Checklist item (required)", { exact: true }).selectOption("license");
   await dialog.getByLabel("Requirement version (required)", { exact: true }).fill("state-license-v2");
   await document.selectOption(operatorDocuments[0].storage_path);
@@ -246,7 +246,7 @@ test("an operator accepts a renewal document by recording it as license evidence
   await dialog.getByLabel("Expires (required)", { exact: true }).fill("2099-01-01T09:00");
   await dialog.getByRole("button", { name: "Replace evidence" }).click();
   const confirm = page.getByRole("alertdialog", { name: "Record this checklist evidence?" });
-  await expect(confirm.getByText("Accepts the license renewal document synthetic-license.pdf, which the provider will see as accepted.", { exact: false })).toBeVisible();
+  await expect(confirm.getByText("Accepts the license or business tax receipt document synthetic-license.pdf, which the provider will see as accepted.", { exact: false })).toBeVisible();
   const request = page.waitForRequest("**/rpc/vendor_record_checklist_evidence");
   await confirm.getByRole("button", { name: "Record", exact: true }).click();
   expect((await request).postDataJSON()).toMatchObject({
@@ -270,9 +270,17 @@ test("an operator uploads a document on the provider's behalf", async ({ page })
   expect(grants).toEqual([{ kind: "insurance", contractorId: contractor, file: { name: "emailed-coi.pdf", type: "application/pdf", size: 14 } }]);
 });
 
-test("a provider under review offers no renewal upload", async ({ page }) => {
-  const dialog = await openOperatorChecklist(page, () => ({ onboarding_status: "review", documents: [] }));
-  await expect(dialog.getByText("No renewal documents have been submitted.")).toBeVisible();
+// DEC-2026-029: the operator upload covers a provider under review; a rejected one gets none.
+test("a provider under review offers the operator upload", async ({ page }) => {
+  const dialog = await openOperatorChecklist(page, () => ({ onboarding_status: "review", operator_upload: true, documents: [] }));
+  await expect(dialog.getByText("No documents have been uploaded outside the application.")).toBeVisible();
+  await expect(dialog.getByRole("option", { name: "License or business tax receipt" })).toBeAttached();
+  await expect(dialog.getByRole("button", { name: "Upload for review" })).toBeDisabled();
+});
+
+test("a rejected provider offers no operator upload", async ({ page }) => {
+  const dialog = await openOperatorChecklist(page, () => ({ onboarding_status: "rejected", operator_upload: false, documents: [] }));
+  await expect(dialog.getByText("No documents have been uploaded outside the application.")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Upload for review" })).toHaveCount(0);
 });
 
@@ -292,7 +300,7 @@ test("the compliance expiry page lists renewal documents awaiting review", async
       ? page.getByRole("list", { name: "Renewal documents awaiting review" })
       : page.getByRole("table", { name: "Renewal documents awaiting review" });
     await expect(list.getByRole("link", { name: "Synthetic Renewal Services" })).toHaveAttribute("href", `/admin/vendors/${contractor}`);
-    await expect(list.getByText("License · synthetic-license.pdf")).toBeVisible();
+    await expect(list.getByText("License or business tax receipt · synthetic-license.pdf")).toBeVisible();
     await expect(list.getByText("By the provider")).toBeVisible();
     await expect(page.getByRole("heading", { name: "No evidence needs renewal" })).toBeVisible();
     expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
