@@ -22,6 +22,7 @@ import { retentionStateLabel, type RetentionState } from "@/lib/renewalRetention
 import { VENDOR_DOCUMENT_ACCEPT, VENDOR_DOCUMENT_BUCKET, validateVendorDocument } from "@/lib/vendorApplicationDocuments";
 
 // TRACE-073 operator surface for renewal submissions, inside the activation checklist.
+// DEC-2026-030: the operator upload also covers documents for a provider under review.
 // Accepting happens in the checklist form (it records the evidence); this section opens,
 // declines and uploads on the provider's behalf. Every change is confirmed by rereading.
 // TRACE-074 adds the provider's retention hold and each declined file's retention state;
@@ -97,7 +98,9 @@ export function VendorRenewalDocuments({
 
   const accepting =
     overview?.operator_upload ??
-    (overview?.onboarding_status === "active" || overview?.onboarding_status === "suspended");
+    (overview?.onboarding_status === "review" ||
+      overview?.onboarding_status === "active" ||
+      overview?.onboarding_status === "suspended");
   const busy = disabled || uploading;
 
   const open = async (document: RenewalDocument) => {
@@ -124,7 +127,7 @@ export function VendorRenewalDocuments({
       if (!next?.documents.some((document) => document.id === result.documentId)) {
         throw new Error("The server did not confirm this submission. Review the list before retrying.");
       }
-      toast.success("Renewal document uploaded", {
+      toast.success("Document uploaded", {
         description: `${renewalDocumentKindLabel[kind]} for ${businessName}. It awaits review; nothing else changed.`,
       });
       setKind("");
@@ -173,7 +176,7 @@ export function VendorRenewalDocuments({
       if (next?.documents.find((candidate) => candidate.id === document.id)?.state !== "declined") {
         throw new Error("The server did not confirm this decline. Review the list before retrying.");
       }
-      toast.success("Renewal document declined", { description: "The provider sees your note." });
+      toast.success("Document declined", { description: "The provider sees your note." });
     } catch (error) {
       toast.error("Document could not be declined", {
         description: error instanceof Error ? error.message : "Please try again.",
@@ -185,20 +188,20 @@ export function VendorRenewalDocuments({
   return (
     <section aria-labelledby={`renewal-documents-${contractorId}`} className="space-y-3 border-t border-border pt-4">
       <div className="space-y-1">
-        <h4 id={`renewal-documents-${contractorId}`} className="text-sm font-medium">Renewal documents</h4>
+        <h4 id={`renewal-documents-${contractorId}`} className="text-sm font-medium">Uploaded documents</h4>
         <p className="text-xs leading-5 text-muted-foreground">
-          Renewed license and insurance documents submitted outside the application. Accept one by selecting it as the document for Licensing or Insurance above. Neither uploading nor declining changes the provider&apos;s status, eligibility or application.
+          License, business tax receipt and insurance documents submitted outside the application: uploaded by an operator for a provider under review, or renewals. Accept one by selecting it as the document for Licensing or Insurance above. Neither uploading nor declining changes the provider&apos;s status, eligibility or application.
         </p>
       </div>
 
       {loadError ? (
         <p role="alert" className="text-sm text-destructive">{loadError}</p>
       ) : !overview ? (
-        <p role="status" className="text-sm text-muted-foreground">Loading renewal documents...</p>
+        <p role="status" className="text-sm text-muted-foreground">Loading uploaded documents...</p>
       ) : overview.documents.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No renewal documents have been submitted.</p>
+        <p className="text-sm text-muted-foreground">No documents have been uploaded outside the application.</p>
       ) : (
-        <ul aria-label="Renewal documents" className="divide-y divide-border rounded-lg border border-border">
+        <ul aria-label="Uploaded documents" className="divide-y divide-border rounded-lg border border-border">
           {overview.documents.map((document) => (
             <li key={document.id} className="space-y-2 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -249,7 +252,7 @@ export function VendorRenewalDocuments({
                     reasonLabel="Note to the provider"
                     reasonHelp="The provider sees this note. Explain what is wrong and what to send instead."
                     triggerLabel="Decline"
-                    title="Decline this renewal document?"
+                    title="Decline this document?"
                     entity={`${businessName} · ${renewalDocumentKindLabel[document.kind]} · ${document.file_name}`}
                     consequence="Records the decline with your note, which the provider sees. The current evidence, status and eligibility do not change."
                     confirmLabel="Decline"

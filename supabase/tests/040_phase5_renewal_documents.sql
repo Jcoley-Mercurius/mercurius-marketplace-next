@@ -146,8 +146,9 @@ select throws_ok($$select public.vendor_authorize_renewal_upload('license')$$,
 reset role;
 select pg_temp.as_user('1');
 set local role authenticated;
-select throws_ok($$select public.vendor_authorize_renewal_upload('license','b7200000-0000-4000-8000-000000000003')$$,
- 'P0001','Renewal documents are accepted only for active or suspended providers','An operator cannot submit for a provider under review');
+-- DEC-2026-030 (20261015001000): the operator upload also applies under review.
+select is(public.vendor_authorize_renewal_upload('license','b7200000-0000-4000-8000-000000000003')->>'submitted_as','operator',
+ 'An operator may submit for a provider under review');
 select throws_ok($$select public.vendor_authorize_renewal_upload('license','b7200000-0000-4000-8000-000000000009')$$,
  'P0001','Renewal documents are accepted only for active or suspended providers','An operator cannot submit for an unknown provider');
 select is(public.vendor_authorize_renewal_upload('license','b7200000-0000-4000-8000-000000000001')->>'submitted_as','operator',

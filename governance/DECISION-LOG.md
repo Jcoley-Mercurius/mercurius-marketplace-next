@@ -107,6 +107,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 076; unit `invitation-link-lifetime`; browser `invitation-operations`; owner sets the hosted Auth email link expiry to 86400 and applies the migration (owner-authorized hosted actions).
 
+### DEC-2026-030 — Operator document upload for providers under review
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-14 (America/New_York).
+
+**Decision:** An operator can upload a license or insurance document on the provider's behalf while the provider is in onboarding review, as already allowed for active and suspended providers and the eight legacy reviews (DEC-2026-027). The upload awaits review. Checklist item 4 or 5 is satisfied only when an operator selects the document, with an expiry, through the unchanged checklist command. The provider itself still submits only while active or suspended. The License document type is labeled "License or business tax receipt", matching R0 onboarding standard v1 item 4 (a local business tax receipt is the licensing evidence for trades without a state license). No new document type is added.
+
+**Context:** `/vendors/apply` accepts an application with no documents, and applicants reach the vendor portal only at activation. Documents a vendor sends Mercurius directly during review had no path into the checklist.
+
+**Alternatives considered:** Require documents on the application (owner: applicants may not have them yet; the application slice that follows makes more fields required but keeps documents optional); a separate tax-receipt document type (larger change; no rule yet for which checklist item it satisfies).
+
+**MPS impact:** None to the §8 checklist. **MDS impact:** The vendor page's document section covers review as well as renewal. **MTS impact:** Migration `20261015001000` (`private.vendor_renewal_submitter` status guard and `vendor_renewal_document_overview.operator_upload`). **Data/payment/security impact:** Operator-only; the same private bucket, path, verification and retention rules.
+
+**Required evidence:** SQL 078 and updated 040/074; browser `renewal-documents`/`onboarding-checklist`; hosted migration push by the owner.
+
 ### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.

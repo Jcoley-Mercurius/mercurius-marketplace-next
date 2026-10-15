@@ -13,7 +13,9 @@ export function isRenewalDocumentKind(value: unknown): value is RenewalDocumentK
 }
 
 export const renewalDocumentKindLabel: Record<RenewalDocumentKind, string> = {
-  license: "License",
+  // DEC-2026-030: a local business tax receipt is the licensing evidence for trades
+  // without a state license (R0 onboarding standard v1, item 4).
+  license: "License or business tax receipt",
   insurance: "Insurance",
 };
 

@@ -198,13 +198,13 @@ async function openChecklist(page: Page, overview: () => Record<string, unknown>
   await page.goto("/admin/applications");
   await page.getByRole("button", { name: "Review" }).click();
   const dialog = page.getByRole("dialog", { name: "Synthetic Applicant Services" });
-  await expect(dialog.getByRole("heading", { name: "Renewal documents" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Uploaded documents" })).toBeVisible();
   return dialog;
 }
 
 test("the checklist shows retention state and offers Open only for retained files", async ({ page }) => {
   const dialog = await openChecklist(page, () => ({}));
-  const documents = dialog.getByRole("list", { name: "Renewal documents" });
+  const documents = dialog.getByRole("list", { name: "Uploaded documents" });
   await expect(documents.getByText("In quarantine", { exact: true })).toBeVisible();
   await expect(documents.getByText("Deleted", { exact: true })).toBeVisible();
   await expect(documents.getByRole("button", { name: /^Open / })).toHaveCount(1);
