@@ -212,7 +212,8 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
       body: JSON.stringify({
         intake: {},
         application: {
-          business_name: "Synthetic Lawn Co", first_name: "Ann", email: "Applicant@Example.test", phone: "synthetic",
+          business_name: "Synthetic Lawn Co", first_name: "Ann", last_name: "Synthetic", email: "Applicant@Example.test", phone: "synthetic",
+          address: "1 Synthetic Way, Fort Myers, FL", service_areas: "Cape Coral", license_number: "SYN-LIC-1", insurance_policy_number: "SYN-POL-1",
           years_experience: 3, services: ["lawn-mowing", "Other: lanai rescreening"], primary_category: "Lawn & Landscape", team_size: "1",
           ...overrides,
         },
@@ -228,7 +229,8 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
     const response = await POST(submit());
     expect(response.status).toBe(201);
     expect(inserted).toHaveLength(1);
-    expect(inserted[0]).toMatchObject({ status: "pending", email: "applicant@example.test", document_urls: [], services: ["lawn-mowing", "Other: lanai rescreening"] });
+    expect(inserted[0]).toMatchObject({ status: "pending", email: "applicant@example.test", document_urls: [], services: ["lawn-mowing", "Other: lanai rescreening"],
+      last_name: "Synthetic", address: "1 Synthetic Way, Fort Myers, FL", service_areas: "Cape Coral", license_number: "SYN-LIC-1", insurance_policy_number: "SYN-POL-1" });
     // The email runs after the response and cannot change it.
     await Promise.all(afterCallbacks.map((callback) => callback()));
     expect(rpcCalls.map((call) => call.name)).toEqual(["r0_claim_application_notification", "r0_record_application_notification"]);
@@ -242,6 +244,30 @@ describe("POST /api/vendor-applications", { timeout: 60_000 }, () => {
     expect(response.status).toBe(201);
     await expect(Promise.all(afterCallbacks.map((callback) => callback()))).resolves.toBeDefined();
     expect(inserted).toHaveLength(1);
+  });
+
+  // TRACE-105 (owner decision 2026-10-14): these fields are required; insurance and documents are not.
+  it.each([
+    [{ last_name: " " }, "Last name is required."],
+    [{ address: "" }, "Business address is required."],
+    [{ service_areas: null }, "Choose at least one Lee County service area."],
+    [{ service_areas: " , " }, "Choose at least one Lee County service area."],
+    [{ license_number: undefined }, "License or business tax receipt number is required."],
+  ])("refuses an application missing a required field (%o)", async (overrides, message) => {
+    mockSupabase(() => ({ data: null, error: null }));
+    const { POST } = await import("../../src/app/api/vendor-applications/route");
+    const response = await POST(submit(overrides));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: message });
+    expect(inserted).toHaveLength(0);
+  });
+
+  it("accepts an applicant who has no insurance yet", async () => {
+    mockSupabase(() => ({ data: null, error: null }));
+    const { POST } = await import("../../src/app/api/vendor-applications/route");
+    const response = await POST(submit({ insurance_policy_number: " " }));
+    expect(response.status).toBe(201);
+    expect(inserted[0]).toMatchObject({ insurance_policy_number: null });
   });
 
   it.each([
