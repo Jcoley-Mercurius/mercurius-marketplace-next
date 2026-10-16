@@ -50,6 +50,23 @@ export const applicationQueueLabel: Record<ApplicationQueueState, string> = {
   unavailable: "Status unavailable",
 };
 
+// TRACE-108 DEC-2026-032: closed applications leave the default view but are never
+// deleted; their record carries the closure and document retention (CFG-011).
+export const closedApplicationStates: readonly ApplicationQueueState[] = ["rejected", "abandoned"];
+
+export function isOpenApplication(state: ApplicationQueueState) {
+  return !closedApplicationStates.includes(state);
+}
+
+/** The status filter: "open" (the default) hides closed applications; "all" shows them. */
+export type ApplicationQueueFilter = "open" | "all" | ApplicationQueueState;
+
+export function matchesApplicationQueueFilter(state: ApplicationQueueState, filter: string) {
+  if (filter === "all") return true;
+  if (filter === "open") return isOpenApplication(state);
+  return state === filter;
+}
+
 export const applicationQueueFilters: ApplicationQueueState[] = [
   "awaiting_review",
   "in_review",
