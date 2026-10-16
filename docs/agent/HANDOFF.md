@@ -1,5 +1,15 @@
 # Agent handoff — 2026-10-01
 
+## Operator vendor price corrections (TRACE-109, DEC-2026-034), 2026-10-15
+
+- Branch `claude/admin-vendor-pricing` from `main` `81d7674`. Owner request: admins set or review vendor prices. Owner choices: an all-vendors price view, operator edits of custom packages, correction from the Package Reviews queue; reason and audit record required; vendor notified only (no acceptance).
+- Migration `20261016001000`: `admin_correct_package_prices` (operator; tier, add-on and deposit prices only; all or nothing; refused on a stale package or price read; custom guardrail via the existing triggers, template packages re-evaluated against template ranges; a correction is not an approval), private history, `admin_package_price_corrections`, `vendor_my_package_price_corrections` (no operator identity), vendor `pricing` notification.
+- UI: `/admin/vendor-prices` (sidebar "Vendor Prices"); vendor page "Vendor prices" card with history; Correct prices in Package Reviews (tiers and deposit); the managed-template editor is read-only for operators on the vendor page; vendor "Price changes by Mercurius" panel on `/vendor/packages` and `/vendor/pricing`.
+- Evidence: SQL 079 43/43 (stable over 3 runs); full SQL 3952 with only the known 003 local-data failure; `npm run check` (secrets, lint, typecheck, unit 407/407, synthetic build); browser `vendor-prices` 6/6 plus legacy-provider-review, onboarding-checklist, vendor-readiness, existing-provider-access, portals (65/65 together).
+- Open: direct admin writes to package tables are still allowed by RLS (only the UI routes through the command); add-on prices are corrected from Vendor Prices, not the queue; template activation still writes the template's suggested prices without a reason; managed-template `needs_review` is still set by the vendor's browser (pre-existing).
+- Hosted: `20261016001000` pushed 2026-10-15 at the owner's instruction (the only pending migration; dry run first). Read back: in hosted history; the three functions exist, signed-in only (not anon); history table has RLS, no signed-in read, 0 rows. Additive; the live site does not call it until PR #97 is deployed.
+- Next: owner review; Codex review of PR #97; merge; deploy. Numbering: PR #96 holds DEC-2026-032/033 and TRACE-108.
+
 ## Closed applications hidden from the queue (TRACE-108, DEC-2026-032/033), 2026-10-15
 
 - Branch `claude/applications-hide-closed` from `main` `34a4bc9`. Owner request: rejected applications stayed on `/admin/applications` indefinitely. The queue now defaults to "Open applications" (Rejected and Abandoned hidden), with "All, including closed", per-state filters and a "Show closed applications" link. Nothing is deleted; documents keep CFG-011's 90-day retention. The table's scroll region is focusable and named (axe `scrollable-region-focusable` when no rows show).
@@ -7,6 +17,7 @@
 - Evidence: unit 394/394 (`application-queue-state` 3 new), typecheck, lint, secret scan, synthetic build, browser applications-page suites 144/144 (`application-retention` 2 new, reject test extended).
 - Numbering: PR #95 holds DEC-2026-031; renumber on merge if needed.
 - Next: owner review; merge and deploy (client only, no migration).
+
 ## Required vendor application fields (TRACE-105, DEC-2026-031), 2026-10-14
 
 - Branch `claude/application-required-fields`, stacked on `claude/review-operator-upload` (PR #94, merged); renumbered 2026-10-15 from DEC-2026-030 to DEC-2026-031 when merging main. Owner decision: require more application fields; insurance (policy number and documents) and all documents stay optional so uninsured vendors can still apply.

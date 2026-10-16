@@ -11,10 +11,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminEmpty, AdminError, AdminLoading } from "@/components/admin/AdminPageState";
+import { PackagePriceCorrection } from "@/components/admin/PackagePriceCorrection";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import type { CorrectablePackage } from "@/lib/packagePriceCorrections";
 import { cn } from "@/lib/utils";
 import {
   evaluateCustomPackageFrequencyPriceReviews,
@@ -243,7 +245,7 @@ export default function AdminPricingReviewsPage() {
 
   return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Pricing operations</p><h1 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-tight"><AlertTriangle className="text-amber-600" />Package Reviews</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Review vendor package prices held outside public booking by the soft-launch guardrail. Approval clears only the review flag; it does not change the vendor’s price or active state.</p></div>
+      <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Pricing operations</p><h1 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-tight"><AlertTriangle className="text-amber-600" />Package Reviews</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Review vendor package prices held outside public booking by the soft-launch guardrail. Approval clears only the review flag; it does not change the vendor’s price or active state. Correct prices changes the price with a reason the vendor sees; a price still outside the band stays here.</p></div>
       <Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button>
     </header>
 
@@ -256,11 +258,11 @@ export default function AdminPricingReviewsPage() {
 
     <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"><p className="font-medium">Keep under review is the safe default</p><p className="mt-1 text-xs leading-5 opacity-80">No action is required to keep a package hidden. Approve only after accepting the displayed price as an intentional exception. Pause is available when an active package should also be disabled operationally.</p></div>
 
-    {items.length === 0 ? <Card><CardContent className="p-0"><AdminEmpty icon={CheckCircle2} title="No packages need pricing review" description="New guardrail exceptions will appear here automatically." /></CardContent></Card> : <div className="grid gap-5 xl:grid-cols-2">{items.map((item) => <ReviewCard key={item.id} item={item} busy={busy} approve={approve} pause={pause} />)}</div>}
+    {items.length === 0 ? <Card><CardContent className="p-0"><AdminEmpty icon={CheckCircle2} title="No packages need pricing review" description="New guardrail exceptions will appear here automatically." /></CardContent></Card> : <div className="grid gap-5 xl:grid-cols-2">{items.map((item) => <ReviewCard key={item.id} item={item} busy={busy} approve={approve} pause={pause} corrected={() => load(false)} />)}</div>}
   </div>;
 }
 
-function ReviewCard({ item, busy, approve, pause }: { item: ReviewItem; busy: { id: string; action: "approve" | "pause" } | null; approve: (item: ReviewItem) => Promise<void>; pause: (item: ReviewItem) => Promise<void> }) {
+function ReviewCard({ item, busy, approve, pause, corrected }: { item: ReviewItem; busy: { id: string; action: "approve" | "pause" } | null; approve: (item: ReviewItem) => Promise<void>; pause: (item: ReviewItem) => Promise<void>; corrected: () => Promise<void> }) {
   const itemBusy = busy?.id === item.id;
   const ready = canApprove(item);
   return <Card className="overflow-hidden border-amber-300/60 shadow-sm">
@@ -276,7 +278,7 @@ function ReviewCard({ item, busy, approve, pause }: { item: ReviewItem; busy: { 
 
         {!ready && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-5 text-destructive"><p className="font-medium">Approval blocked</p><p className="mt-0.5">{approvalBlockReason(item)}</p></div>}
 
-        <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center"><Button className="min-h-11 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={itemBusy || !ready} onClick={() => void approve(item)}>{busy?.id === item.id && busy.action === "approve" ? <RefreshCw className="animate-spin" /> : <CheckCircle2 />}Approve pricing</Button>{item.is_active && <Button variant="outline" className="min-h-11" disabled={itemBusy} onClick={() => void pause(item)}>{busy?.id === item.id && busy.action === "pause" ? <RefreshCw className="animate-spin" /> : <PauseCircle />}Pause &amp; keep under review</Button>}<Link href={`/admin/vendors/${item.contractor_id}`} className={cn(buttonVariants({ variant: "ghost" }), "min-h-11 sm:ml-auto")}>Open vendor</Link></div>
+        <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center"><PackagePriceCorrection pkg={correctable(item)} onCorrected={corrected} /><Button className="min-h-11 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={itemBusy || !ready} onClick={() => void approve(item)}>{busy?.id === item.id && busy.action === "approve" ? <RefreshCw className="animate-spin" /> : <CheckCircle2 />}Approve pricing</Button>{item.is_active && <Button variant="outline" className="min-h-11" disabled={itemBusy} onClick={() => void pause(item)}>{busy?.id === item.id && busy.action === "pause" ? <RefreshCw className="animate-spin" /> : <PauseCircle />}Pause &amp; keep under review</Button>}<Link href={`/admin/vendors/${item.contractor_id}`} className={cn(buttonVariants({ variant: "ghost" }), "min-h-11 sm:ml-auto")}>Open vendor</Link></div>
       </div>
     </CardContent>
   </Card>;
@@ -307,6 +309,25 @@ function buildTemplateGuidance(templates: PricingTemplate[], tiers: TemplateTier
     guidance[serviceId] = { minPrice: current ? Math.min(current.minPrice, tier.min_price) : tier.min_price, maxPrice: current ? Math.max(current.maxPrice, tier.max_price) : tier.max_price };
   });
   return guidance;
+}
+
+// DEC-2026-034: correct tier and deposit prices here; add-ons are corrected from Vendor Prices.
+function correctable(item: ReviewItem): CorrectablePackage {
+  return {
+    id: item.id,
+    contractorId: item.contractor_id,
+    contractorName: item.contractor?.name ?? "Unknown vendor",
+    serviceName: item.service?.name ?? item.service_id,
+    name: item.name,
+    pricingMode: item.pricing_mode,
+    templateId: item.template_id,
+    isActive: item.is_active,
+    needsReview: item.needs_review,
+    updatedAt: item.updated_at,
+    depositAmount: item.deposit_amount,
+    tiers: item.tiers.map((tier) => ({ kind: "tier", id: tier.id, name: tier.name, detail: frequencyLabel(tier.frequency), price: tier.price })),
+    addons: [],
+  };
 }
 
 function canApprove(item: ReviewItem) {
