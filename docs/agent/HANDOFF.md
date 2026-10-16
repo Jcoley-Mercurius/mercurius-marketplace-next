@@ -1,5 +1,12 @@
 # Agent handoff — 2026-10-01
 
+## Closed applications hidden from the queue (TRACE-108, DEC-2026-032/033), 2026-10-15
+
+- Branch `claude/applications-hide-closed` from `main` `34a4bc9`. Owner request: rejected applications stayed on `/admin/applications` indefinitely. The queue now defaults to "Open applications" (Rejected and Abandoned hidden), with "All, including closed", per-state filters and a "Show closed applications" link. Nothing is deleted; documents keep CFG-011's 90-day retention. The table's scroll region is focusable and named (axe `scrollable-region-focusable` when no rows show).
+- DEC-2026-033 is PROPOSED, drafted at the owner's request: applicant details erased 3 years after closure, de-identified closure and retention record deleted at 7 years, holds pause both. Owner (and counsel) review before any implementation slice.
+- Evidence: unit 394/394 (`application-queue-state` 3 new), typecheck, lint, secret scan, synthetic build, browser applications-page suites 144/144 (`application-retention` 2 new, reject test extended).
+- Numbering: PR #95 holds DEC-2026-031; renumber on merge if needed.
+- Next: owner review; merge and deploy (client only, no migration).
 ## Required vendor application fields (TRACE-105, DEC-2026-031), 2026-10-14
 
 - Branch `claude/application-required-fields`, stacked on `claude/review-operator-upload` (PR #94, merged); renumbered 2026-10-15 from DEC-2026-030 to DEC-2026-031 when merging main. Owner decision: require more application fields; insurance (policy number and documents) and all documents stay optional so uninsured vendors can still apply.

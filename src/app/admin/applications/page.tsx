@@ -45,6 +45,9 @@ import {
   applicationQueueFilters,
   applicationQueueLabel,
   applicationQueueState,
+  isOpenApplication,
+  matchesApplicationQueueFilter,
+  type ApplicationQueueFilter,
   type ApplicationQueueState,
 } from "@/lib/applicationQueueState";
 import { retentionStateLabel } from "@/lib/renewalRetention";
@@ -188,7 +191,7 @@ export default function AdminApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [selected, setSelected] = useState<Application | null>(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<ApplicationQueueFilter>("open");
   const [mode, setMode] = useState<PageMode>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
@@ -317,8 +320,7 @@ export default function AdminApplicationsPage() {
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return applications.filter((application) => {
-      const matchesStatus =
-        statusFilter === "all" || queueState(application) === statusFilter;
+      const matchesStatus = matchesApplicationQueueFilter(queueState(application), statusFilter);
       const matchesSearch =
         !query ||
         application.business_name.toLowerCase().includes(query) ||
@@ -334,7 +336,12 @@ export default function AdminApplicationsPage() {
   const counts = useMemo(() => {
     const states = applications.map(queueState);
     const count = (state: ApplicationQueueState) => states.filter((item) => item === state).length;
-    return { awaiting: count("awaiting_review"), review: count("in_review"), active: count("active") };
+    return {
+      awaiting: count("awaiting_review"),
+      review: count("in_review"),
+      active: count("active"),
+      closed: states.filter((state) => !isOpenApplication(state)).length,
+    };
   }, [applications, queueState]);
 
   if (mode === "loading") {
@@ -446,11 +453,12 @@ export default function AdminApplicationsPage() {
         </div>
         <select
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
+          onChange={(event) => setStatusFilter(event.target.value as ApplicationQueueFilter)}
           aria-label="Filter applications by status"
           className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-48"
         >
-          <option value="all">All statuses</option>
+          <option value="open">Open applications</option>
+          <option value="all">All, including closed</option>
           {applicationQueueFilters.map((state) => (
             <option key={state} value={state}>
               {applicationQueueLabel[state]}
@@ -459,9 +467,20 @@ export default function AdminApplicationsPage() {
         </select>
       </div>
 
+      {statusFilter === "open" && counts.closed > 0 && (
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          {counts.closed} rejected or abandoned application{counts.closed === 1 ? " is" : "s are"}{" "}
+          hidden. Their records and document retention are kept.
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setStatusFilter("all")}>
+            Show closed applications
+          </Button>
+        </p>
+      )}
+
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          {/* Focusable so the scrolled table stays keyboard-reachable even with no rows. */}
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Vendor applications">
             <table className="w-full min-w-[900px] text-sm">
               <thead className="border-b border-border bg-muted/60">
                 <tr className="text-left">

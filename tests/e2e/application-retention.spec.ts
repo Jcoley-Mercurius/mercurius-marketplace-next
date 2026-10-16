@@ -173,6 +173,10 @@ async function openApplication(page: Page, overview: () => Record<string, unknow
   await syntheticSession(page.context(), "admin");
   await page.setViewportSize({ width: 320, height: 900 });
   await page.goto("/admin/applications");
+  // TRACE-108: a closed application is hidden from the default open view.
+  if (application.status === "rejected" || application.status === "abandoned") {
+    await page.getByRole("combobox", { name: "Filter applications by status" }).selectOption("all");
+  }
   await page.getByRole("button", { name: "Review" }).click();
   const dialog = page.getByRole("dialog", { name: "Synthetic Applicant Services" });
   await expect(dialog.getByRole("heading", { name: "Closure and retention" })).toBeVisible();
@@ -215,7 +219,41 @@ test("an operator rejects an application with a reason, confirmed by rereading",
   await expect(dialog.getByText("Closed applications cannot start onboarding review.")).toBeVisible();
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(tags).analyze()).violations).toEqual([]);
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+
+  // TRACE-108: once the dialog closes, the rejected application leaves the open view.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Review" })).toHaveCount(0);
+  await expect(page.getByText("1 rejected or abandoned application is hidden.", { exact: false })).toBeVisible();
 });
+
+// TRACE-108 DEC-2026-032: closed applications are hidden by default, never deleted.
+for (const status of ["rejected", "abandoned"]) {
+  test(`a ${status} application is hidden from the open view and shown on request`, async ({ page }) => {
+    await page.route("**/rest/v1/vendor_applications*", async route => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const response = await route.fetch();
+      const rows = (await response.json()) as Record<string, unknown>[];
+      await route.fulfill({ response, json: rows.map(row => ({ ...row, status })) });
+    });
+    await syntheticSession(page.context(), "admin");
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto("/admin/applications");
+    const filter = page.getByRole("combobox", { name: "Filter applications by status" });
+    await expect(filter).toHaveValue("open");
+    await expect(page.getByText("1 rejected or abandoned application is hidden.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Review" })).toHaveCount(0);
+    expect((await new AxeBuilder({ page }).include("main").withTags(tags).analyze()).violations).toEqual([]);
+    await page.getByRole("button", { name: "Show closed applications" }).click();
+    await expect(filter).toHaveValue("all");
+    await expect(page.getByRole("button", { name: "Review" })).toHaveCount(1);
+    await filter.selectOption(status);
+    await expect(page.getByRole("button", { name: "Review" })).toHaveCount(1);
+    await filter.selectOption("open");
+    await expect(page.getByRole("button", { name: "Review" })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  });
+}
 
 test("a legacy rejection offers only to record it", async ({ page }) => {
   const dialog = await openApplication(page, () => ({ application_status: "rejected", close_outcomes: ["rejected"] }), { status: "rejected" });

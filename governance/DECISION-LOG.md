@@ -121,6 +121,40 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 078 and updated 040/074; browser `renewal-documents`/`onboarding-checklist`; hosted migration push by the owner.
 
+### DEC-2026-032 — Closed applications leave the default applications view
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-15 (America/New_York).
+
+**Decision:** `/admin/applications` opens on "Open applications", which hides every application whose queue state is Rejected or Abandoned. Closed applications are not deleted. "All, including closed", "Rejected" and "Abandoned" in the status filter still show them, and a line above the table says how many are hidden, with a "Show closed applications" link. An application rejected or abandoned in the dialog stays open in the dialog and leaves the default view once the dialog closes. A `/admin/recruiting` link to a closed application still opens it.
+
+**Context:** The queue showed every rejected application indefinitely. Only their documents are on a timer (CFG-011: 90 days, then quarantine and deletion). The owner asked for rejected applicants to come off the list.
+
+**Alternatives considered:** Deleting rejected application rows. Not chosen: the row carries the closure outcome, date and reason, holds, and each document retention step, which CFG-011 retention depends on, and deleting production data needs a separate owner decision. How long the record itself is kept is proposed in DEC-2026-033.
+
+**MPS impact:** None. **MDS impact:** The applications queue defaults to open applications and states how many closed ones are hidden. **MTS impact:** Client filter only (`matchesApplicationQueueFilter` in `src/lib/applicationQueueState.ts`); no schema, data or route change. **Data/payment/security impact:** None; nothing is deleted.
+
+**Required evidence:** Unit `application-queue-state`; browser `application-retention` (hidden by default, shown on request, leaves the view after rejection).
+
+### DEC-2026-033 — How long a closed application's record is kept
+
+**Status:** PROPOSED for owner review. Drafted by Claude at the owner's request on 2026-10-15. Not legal advice; confirm with counsel before approving. Nothing is implemented or deleted under it.
+
+**Decision (proposed):** For a vendor application closed as rejected or abandoned that never became a provider:
+
+1. **Applicant details, 3 years after closure.** Names, email, phone, address, business name and description, website, license and insurance numbers, credentials, service areas, notes, the closure reason text and document file names are kept for 3 years from the closure date. After that they are erased from the application and its retention records.
+2. **De-identified closure record, 7 years after closure.** The application id, outcome (rejected or abandoned), application and closure dates, closure source, and the dates and outcomes of each document retention step (quarantine, deletion, hold placed or released) are kept for 7 years from closure, then deleted.
+3. **Holds pause both clocks.** An active investigation or legal hold (CFG-011) stops erasure and deletion until it is released.
+4. **Not covered.** An application whose applicant became a provider (including one rejected through onboarding review) follows the provider's records, not this rule. CFG-011's 90-day document rule is unchanged.
+
+**Context:** CFG-011 sets 90 days for rejected or abandoned vendor documents but says nothing about the application record or its closure and retention audit. DEC-2026-032 hides closed applications from the default view; this decides when they actually go.
+
+**Rationale:** Three years matches CFG-011's support-ticket retention, covers a disputed rejection or a complaint, and lets operators recognise a repeat applicant. The de-identified record proves that documents were deleted on schedule, and 7 years matches the longest CFG-011 period, while holding no personal data.
+
+**Alternatives considered:** Keep everything indefinitely (current behavior; holds personal data with no purpose limit). Delete the whole record with the documents at 90 days (loses the record of why and when someone was rejected, and the proof of deletion). One period for everything (either keeps personal data too long or drops the audit too early).
+
+**MPS impact:** None. **MDS impact:** None until implemented; an erased application would show as "Details erased under retention". **MTS impact:** A later slice: an additive migration with an observable, held-aware erasure and deletion job, as CFG-011 requires of retention jobs. **Data/payment/security impact:** Reduces personal data kept. Running it on production data needs owner authorization.
+
+**Required evidence (when implemented):** SQL suite for erasure, deletion and holds; job observability; owner authorization before the first hosted run.
 ### DEC-2026-031 — Required vendor application fields; insurance and documents stay optional
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-14 (America/New_York).
