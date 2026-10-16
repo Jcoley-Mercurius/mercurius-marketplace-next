@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { frequencyLabel } from "@/lib/packagePriceCorrections";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -23,6 +22,8 @@ const PRICING_MODES = [{ value: "fixed", label: "Fixed Price" }, { value: "depos
 // TRACE-110: every cadence, including every two weeks and every two months. The
 // cadences a service offers limit what vendors and operators can price for it.
 const FREQUENCIES: readonly string[] = pricingFrequencies;
+// Stored lists keep the catalog's order: recurring from most to least frequent, then one-time.
+const CATALOG_ORDER = [...FREQUENCIES.filter((frequency) => frequency !== "one-time"), "one-time"];
 const selectClass = "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export default function AdminCatalogPage() {
@@ -78,7 +79,7 @@ export default function AdminCatalogPage() {
     if (!form.available_frequencies.includes(form.default_frequency)) { toast.error("The default cadence must be one the service offers."); return; }
     setSaving(true);
     try {
-      const result = await createClient().from("services_catalog").update({ name: form.name.trim(), descriptor: form.descriptor.trim(), category_id: form.category_id, weekly_price: form.weekly_price, monthly_price: form.monthly_price, one_time_price: form.one_time_price, default_frequency: form.default_frequency, available_frequencies: FREQUENCIES.filter((frequency) => form.available_frequencies.includes(frequency)), pricing_mode: form.pricing_mode, default_deposit_amount: form.pricing_mode === "deposit_quote" ? form.default_deposit_amount : null }).eq("id", form.id);
+      const result = await createClient().from("services_catalog").update({ name: form.name.trim(), descriptor: form.descriptor.trim(), category_id: form.category_id, weekly_price: form.weekly_price, monthly_price: form.monthly_price, one_time_price: form.one_time_price, default_frequency: form.default_frequency, available_frequencies: CATALOG_ORDER.filter((frequency) => form.available_frequencies.includes(frequency)), pricing_mode: form.pricing_mode, default_deposit_amount: form.pricing_mode === "deposit_quote" ? form.default_deposit_amount : null }).eq("id", form.id);
       if (result.error) throw result.error;
       toast.success("Service updated"); setEditing(null); await load(false);
     } catch (reason) { toast.error("Service could not be saved", { description: reason instanceof Error ? reason.message : "Please try again." }); }
@@ -113,7 +114,8 @@ function EditService({ service, categories, saving, close, save }: { service: Se
 
 function Toggle({ checked, disabled, label: ariaLabel, onChange, loading }: { checked: boolean; disabled: boolean; label: string; onChange: () => void; loading: boolean }) { return <button type="button" role="switch" aria-label={ariaLabel} aria-checked={checked} disabled={disabled} onClick={onChange} className={cn("relative inline-flex h-6 w-11 rounded-full transition-colors disabled:opacity-50", checked ? "bg-accent" : "bg-muted-foreground/30")}>{loading ? <Loader2 className="absolute left-3.5 top-1 h-4 w-4 animate-spin text-white" /> : <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", checked ? "left-5" : "left-0.5")} />}</button>; }
 const textareaClass = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-function Field({ label: fieldLabel, children }: { label: string; children: ReactNode }) { return <div className="space-y-2"><Label>{fieldLabel}</Label>{children}</div>; }
+// The control sits inside its label so each field is named (axe "label").
+function Field({ label: fieldLabel, children }: { label: string; children: ReactNode }) { return <label className="block space-y-2"><span className="block text-sm leading-none font-medium">{fieldLabel}</span>{children}</label>; }
 function optionalNumber(value: string) { const number = Number(value); return value === "" || !Number.isFinite(number) ? null : number; }
 function label(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()); }
 function pricingLabel(value: string) { return PRICING_MODES.find((mode) => mode.value === value)?.label ?? label(value); }
