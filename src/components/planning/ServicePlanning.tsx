@@ -394,6 +394,7 @@ export function planningPriceLabel(service: PlanningService, frequency: PricingF
   if (frequency === "one-time") return priceWithPromotion;
   if (frequency === "weekly") return `${priceWithPromotion}/wk`;
   if (frequency === "bi-monthly") return `${priceWithPromotion}/2 wks`;
+  if (frequency === "every-two-months") return `${priceWithPromotion}/2 mo`;
   if (frequency === "quarterly") return `${priceWithPromotion}/qtr`;
   return `${priceWithPromotion}/mo`;
 }
@@ -411,6 +412,7 @@ export function planningCardPriceLabel(service: PlanningService) {
 export function planningFrequencyLabel(frequency: PricingFrequency) {
   if (frequency === "one-time") return "One-time";
   if (frequency === "bi-monthly") return "Every two weeks";
+  if (frequency === "every-two-months") return "Every two months";
   return frequency.charAt(0).toUpperCase() + frequency.slice(1);
 }
 

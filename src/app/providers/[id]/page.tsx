@@ -621,6 +621,8 @@ function displayService(id: string, names: Record<string, string>) {
 }
 
 function frequencyLabel(value: Frequency) {
+  if (value === "bi-monthly") return "Every Two Weeks";
+  if (value === "every-two-months") return "Every Two Months";
   return value === "one-time" ? "One-Time" : value.charAt(0).toUpperCase() + value.slice(1);
 }
 
@@ -628,6 +630,7 @@ function frequencySuffix(value: Frequency) {
   if (value === "weekly") return "/wk";
   if (value === "bi-monthly") return "/2 wks";
   if (value === "monthly") return "/mo";
+  if (value === "every-two-months") return "/2 mo";
   if (value === "quarterly") return "/qtr";
   return "";
 }

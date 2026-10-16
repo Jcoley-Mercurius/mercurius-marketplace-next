@@ -48,8 +48,9 @@ function pill(active: boolean) { return cn("inline-flex items-center gap-2 round
 function getLivePrice(service: Service) {
   const prices = [
     service.weeklyPrice ? { frequency: "weekly" as const, price: service.weeklyPrice, suffix: "/weekly visit" } : null,
-    service.biMonthlyPrice ? { frequency: "bi-monthly" as const, price: service.biMonthlyPrice, suffix: "/visit every 2 months" } : null,
+    service.biMonthlyPrice ? { frequency: "bi-monthly" as const, price: service.biMonthlyPrice, suffix: "/visit every 2 weeks" } : null,
     service.avgMonthlyPrice ? { frequency: "monthly" as const, price: service.avgMonthlyPrice, suffix: "/month" } : null,
+    service.everyTwoMonthsPrice ? { frequency: "every-two-months" as const, price: service.everyTwoMonthsPrice, suffix: "/visit every 2 months" } : null,
     service.quarterlyPrice ? { frequency: "quarterly" as const, price: service.quarterlyPrice, suffix: "/quarterly visit" } : null,
     service.oneTimePrice ? { frequency: "one-time" as const, price: service.oneTimePrice, suffix: " one-time" } : null,
   ].filter((price): price is { frequency: ServiceFrequency; price: number; suffix: string } => price !== null);

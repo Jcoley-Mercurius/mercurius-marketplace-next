@@ -162,12 +162,14 @@ function priceLabel(price: number, frequency: PricingFrequency) {
   if (frequency === "weekly") return `${amount}/wk`;
   if (frequency === "bi-monthly") return `${amount}/2 wks`;
   if (frequency === "monthly") return `${amount}/mo`;
+  if (frequency === "every-two-months") return `${amount}/2 mo`;
   if (frequency === "quarterly") return `${amount}/qtr`;
   return amount;
 }
 
 function frequencyLabel(frequency: PricingFrequency) {
   if (frequency === "bi-monthly") return "Every two weeks";
+  if (frequency === "every-two-months") return "Every two months";
   if (frequency === "one-time") return "One-time";
   return frequency.charAt(0).toUpperCase() + frequency.slice(1);
 }

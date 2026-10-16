@@ -6244,6 +6244,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_discard_package_draft: {
+        Args: { p_draft: string; p_expected_updated_at: string }
+        Returns: Json
+      }
       admin_get_contractor_linked_email: {
         Args: { _contractor_id: string }
         Returns: string
@@ -6263,8 +6267,13 @@ export type Database = {
           phone: string
         }[]
       }
+      admin_package_drafts: { Args: { p_contractor?: string }; Returns: Json }
       admin_package_price_corrections: {
         Args: { p_contractor: string }
+        Returns: Json
+      }
+      admin_publish_package_draft: {
+        Args: { p_draft: string; p_expected_updated_at: string; p_reason: string }
         Returns: Json
       }
       admin_resolve_dispute: {
@@ -6274,6 +6283,18 @@ export type Database = {
           _status: Database["public"]["Enums"]["dispute_status"]
         }
         Returns: undefined
+      }
+      admin_save_package_draft: {
+        Args: {
+          p_contractor: string
+          p_description: string
+          p_draft: string
+          p_expected_updated_at: string
+          p_name: string
+          p_prices: Json
+          p_service: string
+        }
+        Returns: Json
       }
       admin_send_quote: {
         Args: {

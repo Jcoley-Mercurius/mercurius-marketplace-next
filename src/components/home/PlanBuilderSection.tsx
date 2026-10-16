@@ -49,6 +49,7 @@ type Service = {
   monthlyPrice: number;
   weeklyPrice?: number;
   biMonthlyPrice?: number;
+  everyTwoMonthsPrice?: number;
   quarterlyPrice?: number;
   oneTimePrice: number;
   defaultFrequency: Frequency;
@@ -74,6 +75,7 @@ const frequencyLabels: Record<Frequency, string> = {
   weekly: "Weekly",
   "bi-monthly": "Every two weeks",
   monthly: "Monthly",
+  "every-two-months": "Every two months",
   quarterly: "Quarterly",
   "one-time": "One-time",
 };
@@ -206,6 +208,7 @@ export function PlanBuilderSection() {
       catalogService.weeklyPrice ? "weekly" : null,
       catalogService.biMonthlyPrice ? "bi-monthly" : null,
       catalogService.avgMonthlyPrice ? "monthly" : null,
+      catalogService.everyTwoMonthsPrice ? "every-two-months" : null,
       catalogService.quarterlyPrice ? "quarterly" : null,
       catalogService.oneTimePrice ? "one-time" : null,
     ].filter((value): value is Frequency => value !== null) : ["one-time"];
@@ -217,6 +220,7 @@ export function PlanBuilderSection() {
       weeklyPrice: catalogService.weeklyPrice,
       biMonthlyPrice: catalogService.biMonthlyPrice,
       monthlyPrice: catalogService.avgMonthlyPrice,
+      everyTwoMonthsPrice: catalogService.everyTwoMonthsPrice,
       quarterlyPrice: catalogService.quarterlyPrice,
       oneTimePrice: catalogService.oneTimePrice,
       defaultFrequency,
@@ -255,18 +259,18 @@ export function PlanBuilderSection() {
     const frequency = getFrequency(service);
     totals[frequency] += planningPrice(toPlanningService(service), frequency);
     return totals;
-  }, { weekly: 0, "bi-monthly": 0, monthly: 0, quarterly: 0, "one-time": 0 });
+  }, { weekly: 0, "bi-monthly": 0, monthly: 0, "every-two-months": 0, quarterly: 0, "one-time": 0 });
 
   const summaryItems = selectedServices.map((service) =>
     planningSummaryItem(toPlanningService(service), getFrequency(service)),
   );
-  const totalRows: PlanningTotalRow[] = (["weekly", "bi-monthly", "monthly", "quarterly", "one-time"] as Frequency[])
+  const totalRows: PlanningTotalRow[] = (["weekly", "bi-monthly", "monthly", "every-two-months", "quarterly", "one-time"] as Frequency[])
     .filter((frequency) => pricedTotals[frequency] > 0)
     .map((frequency) => ({
       key: frequency,
       label: `${frequencyLabels[frequency]} priced today`,
       amount: pricedTotals[frequency],
-      detail: frequency === "one-time" ? "Live one-time rates" : frequency === "weekly" ? "Per weekly visit" : frequency === "bi-monthly" ? "Every two weeks" : frequency === "monthly" ? "Per month" : "Per quarter",
+      detail: frequency === "one-time" ? "Live one-time rates" : frequency === "weekly" ? "Per weekly visit" : frequency === "bi-monthly" ? "Every two weeks" : frequency === "monthly" ? "Per month" : frequency === "every-two-months" ? "Every two months" : "Per quarter",
       emphasis: frequency === "monthly" || (frequency === "one-time" && Object.values(pricedTotals).filter((total) => total > 0).length === 1),
     }));
 
@@ -610,6 +614,7 @@ function toPlanningService(service: Service): PlanningService {
       weekly: service.weeklyPrice ?? 0,
       "bi-monthly": service.biMonthlyPrice ?? 0,
       monthly: service.monthlyPrice,
+      "every-two-months": service.everyTwoMonthsPrice ?? 0,
       quarterly: service.quarterlyPrice ?? 0,
       "one-time": service.oneTimePrice,
     },

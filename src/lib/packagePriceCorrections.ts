@@ -132,7 +132,8 @@ export function parseCorrections(value: unknown): PriceCorrection[] {
 }
 
 export function describeChange(change: PriceCorrectionChange) {
-  const label = change.frequency && change.frequency !== "one-time" ? `${change.name} (${frequencyLabel(change.frequency)})` : change.name;
+  const label = change.frequency && change.frequency !== "one-time" && change.name !== frequencyLabel(change.frequency)
+    ? `${change.name} (${frequencyLabel(change.frequency)})` : change.name;
   return `${label}: ${change.from === null ? "not set" : formatPrice(change.from)} → ${formatPrice(change.to)}`;
 }
 
@@ -143,6 +144,7 @@ export function formatCorrectionTime(value: string) {
 export function frequencyLabel(value: string) {
   if (value === "one-time") return "One-time";
   if (value === "bi-monthly") return "Every two weeks";
+  if (value === "every-two-months") return "Every two months";
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 

@@ -10,7 +10,7 @@ export interface ServiceCategory {
   description: string;
 }
 
-export type ServiceFrequency = "weekly" | "monthly" | "bi-monthly" | "quarterly" | "one-time";
+export type ServiceFrequency = "weekly" | "monthly" | "bi-monthly" | "every-two-months" | "quarterly" | "one-time";
 
 export interface ServiceProviderProof {
   id: string;
@@ -31,6 +31,7 @@ export interface Service {
   weeklyPrice?: number; // only for services that support weekly
   avgMonthlyPrice: number;
   biMonthlyPrice?: number;
+  everyTwoMonthsPrice?: number;
   quarterlyPrice?: number;
   oneTimePrice: number;
   /** Default frequency suggestion for this service */
@@ -190,6 +191,7 @@ export const addOnSuggestions: Record<string, string[]> = {
 export function getServicePrice(service: Service, frequency: ServiceFrequency): number {
   if (frequency === "weekly" && service.weeklyPrice) return service.weeklyPrice;
   if (frequency === "bi-monthly" && service.biMonthlyPrice) return service.biMonthlyPrice;
+  if (frequency === "every-two-months" && service.everyTwoMonthsPrice) return service.everyTwoMonthsPrice;
   if (frequency === "quarterly" && service.quarterlyPrice) return service.quarterlyPrice;
   if (frequency === "one-time") return service.oneTimePrice;
   return service.avgMonthlyPrice;

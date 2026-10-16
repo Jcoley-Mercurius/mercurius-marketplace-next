@@ -31,7 +31,7 @@ type PackageRow = { id: string; contractor_id: string; service_id: string; name:
 type TierRow = { id: string; package_id: string; name: string; price: number | null; frequency: ServiceFrequency | null; includes: string[] | null };
 type QuestionRow = PackageQualifyingQuestion & { package_id: string };
 type PricePoint = { base: number; effective: number; promotionId?: string; promotionLabel?: string; selection: PublicPackageSelection; provider: RankedProviderProof | null };
-type PriceBucket = { weekly?: PricePoint; monthly?: PricePoint; biMonthly?: PricePoint; quarterly?: PricePoint; oneTime?: PricePoint; anyMin?: number; anyMinProviderId?: string };
+type PriceBucket = { weekly?: PricePoint; monthly?: PricePoint; biMonthly?: PricePoint; everyTwoMonths?: PricePoint; quarterly?: PricePoint; oneTime?: PricePoint; anyMin?: number; anyMinProviderId?: string };
 type RankedProviderProof = ServiceProviderProof & { marketingEnabled: boolean };
 type ProviderCoverage = { provider: RankedProviderProof; frequencies: Set<ServiceFrequency> };
 
@@ -141,6 +141,7 @@ export function useServiceCatalog() {
           if (frequency === "weekly") bucket.weekly = lowerPrice(bucket.weekly, point);
           else if (frequency === "monthly") bucket.monthly = lowerPrice(bucket.monthly, point);
           else if (frequency === "bi-monthly") bucket.biMonthly = lowerPrice(bucket.biMonthly, point);
+          else if (frequency === "every-two-months") bucket.everyTwoMonths = lowerPrice(bucket.everyTwoMonths, point);
           else if (frequency === "quarterly") bucket.quarterly = lowerPrice(bucket.quarterly, point);
           else bucket.oneTime = lowerPrice(bucket.oneTime, point);
         });
@@ -157,7 +158,7 @@ export function useServiceCatalog() {
           return {
             id: service.id, name: service.name, categoryId: service.category_id, category: mapCategoryToLegacy(service.category_id), tags: service.tags ?? [], icon: service.icon,
             descriptor: service.descriptor, popular: Boolean(service.is_popular), weeklyPrice: dynamic.weekly?.effective,
-            avgMonthlyPrice: dynamic.monthly?.effective ?? 0, biMonthlyPrice: dynamic.biMonthly?.effective, quarterlyPrice: dynamic.quarterly?.effective,
+            avgMonthlyPrice: dynamic.monthly?.effective ?? 0, biMonthlyPrice: dynamic.biMonthly?.effective, everyTwoMonthsPrice: dynamic.everyTwoMonths?.effective, quarterlyPrice: dynamic.quarterly?.effective,
             oneTimePrice: dynamic.oneTime?.effective ?? 0, defaultFrequency,
             availableFrequencies: hasLivePrice ? liveFrequencies : ["one-time"],
             availability: hasLivePrice ? "fixed" : coveredServices.has(service.id) ? "quote" : "sourcing",
@@ -182,6 +183,7 @@ export function useServiceCatalog() {
             weeklyPrice: dynamic.weekly?.effective,
             avgMonthlyPrice: dynamic.monthly?.effective ?? 0,
             biMonthlyPrice: dynamic.biMonthly?.effective,
+            everyTwoMonthsPrice: dynamic.everyTwoMonths?.effective,
             quarterlyPrice: dynamic.quarterly?.effective,
             oneTimePrice: dynamic.oneTime?.effective ?? 0,
             defaultFrequency,
@@ -218,6 +220,7 @@ function liveFrequenciesForBucket(bucket: PriceBucket): ServiceFrequency[] {
     if (frequency === "weekly") return Boolean(bucket.weekly?.effective);
     if (frequency === "bi-monthly") return Boolean(bucket.biMonthly?.effective);
     if (frequency === "monthly") return Boolean(bucket.monthly?.effective);
+    if (frequency === "every-two-months") return Boolean(bucket.everyTwoMonths?.effective);
     if (frequency === "quarterly") return Boolean(bucket.quarterly?.effective);
     return Boolean(bucket.oneTime?.effective);
   });
@@ -228,6 +231,7 @@ function pricePoints(bucket: PriceBucket, field: "base") {
     ["weekly", bucket.weekly?.[field]],
     ["bi-monthly", bucket.biMonthly?.[field]],
     ["monthly", bucket.monthly?.[field]],
+    ["every-two-months", bucket.everyTwoMonths?.[field]],
     ["quarterly", bucket.quarterly?.[field]],
     ["one-time", bucket.oneTime?.[field]],
   ].filter((entry): entry is [string, number] => typeof entry[1] === "number"));
@@ -238,6 +242,7 @@ function promotionStrings(bucket: PriceBucket, field: "promotionId" | "promotion
     ["weekly", bucket.weekly?.[field]],
     ["bi-monthly", bucket.biMonthly?.[field]],
     ["monthly", bucket.monthly?.[field]],
+    ["every-two-months", bucket.everyTwoMonths?.[field]],
     ["quarterly", bucket.quarterly?.[field]],
     ["one-time", bucket.oneTime?.[field]],
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string"));
@@ -248,6 +253,7 @@ function packageSelections(bucket: PriceBucket) {
     ["weekly", bucket.weekly?.selection],
     ["bi-monthly", bucket.biMonthly?.selection],
     ["monthly", bucket.monthly?.selection],
+    ["every-two-months", bucket.everyTwoMonths?.selection],
     ["quarterly", bucket.quarterly?.selection],
     ["one-time", bucket.oneTime?.selection],
   ].filter((entry): entry is [string, PublicPackageSelection] => Boolean(entry[1])));
@@ -266,6 +272,7 @@ function providersByFrequency(coverage: Map<string, ProviderCoverage> | undefine
     weekly: bucket.weekly,
     "bi-monthly": bucket.biMonthly,
     monthly: bucket.monthly,
+    "every-two-months": bucket.everyTwoMonths,
     quarterly: bucket.quarterly,
     "one-time": bucket.oneTime,
   };

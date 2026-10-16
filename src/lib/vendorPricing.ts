@@ -1,4 +1,4 @@
-export const pricingFrequencies = ["one-time", "weekly", "bi-monthly", "monthly", "quarterly"] as const;
+export const pricingFrequencies = ["one-time", "weekly", "bi-monthly", "monthly", "every-two-months", "quarterly"] as const;
 
 export type PricingFrequency = (typeof pricingFrequencies)[number];
 
@@ -343,7 +343,7 @@ function catalogGuidancePrice(
   const candidate =
     frequency === "weekly"
       ? weekly ?? monthly ?? oneTime
-      : frequency === "monthly" || frequency === "bi-monthly"
+      : frequency === "monthly" || frequency === "bi-monthly" || frequency === "every-two-months"
         ? monthly ?? oneTime
         : frequency === "quarterly"
           ? oneTime ?? monthly

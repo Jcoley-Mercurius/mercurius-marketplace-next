@@ -138,6 +138,7 @@ const FREQUENCIES: Record<PricingFrequency, string> = {
   weekly: "Weekly",
   "bi-monthly": "Every two weeks",
   monthly: "Monthly",
+  "every-two-months": "Every two months",
   quarterly: "Quarterly",
 };
 

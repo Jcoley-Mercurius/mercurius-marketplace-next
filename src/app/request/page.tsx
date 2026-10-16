@@ -419,6 +419,7 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
         weekly: service.weeklyPrice ?? 0,
         "bi-monthly": service.biMonthlyPrice ?? 0,
         monthly: service.avgMonthlyPrice,
+        "every-two-months": service.everyTwoMonthsPrice ?? 0,
         quarterly: service.quarterlyPrice ?? 0,
         "one-time": service.oneTimePrice,
       } : {};

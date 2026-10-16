@@ -177,6 +177,8 @@ const server = createServer(async (request, response) => {
   });
   // TRACE-109 price corrections: none by default; specs override per case.
   if (/\/rpc\/(admin_package_price_corrections|vendor_my_package_price_corrections)$/.test(url.pathname)) return send([]);
+  // TRACE-110 operator draft prices: none by default; specs override per case.
+  if (/\/rpc\/admin_package_drafts$/.test(url.pathname)) return send([]);
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {
