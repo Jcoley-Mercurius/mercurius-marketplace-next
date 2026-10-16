@@ -7,7 +7,8 @@
 - UI: `/admin/vendor-prices` (sidebar "Vendor Prices"); vendor page "Vendor prices" card with history; Correct prices in Package Reviews (tiers and deposit); the managed-template editor is read-only for operators on the vendor page; vendor "Price changes by Mercurius" panel on `/vendor/packages` and `/vendor/pricing`.
 - Evidence: SQL 079 43/43 (stable over 3 runs); full SQL 3952 with only the known 003 local-data failure; `npm run check` (secrets, lint, typecheck, unit 407/407, synthetic build); browser `vendor-prices` 6/6 plus legacy-provider-review, onboarding-checklist, vendor-readiness, existing-provider-access, portals (65/65 together).
 - Open: direct admin writes to package tables are still allowed by RLS (only the UI routes through the command); add-on prices are corrected from Vendor Prices, not the queue; template activation still writes the template's suggested prices without a reason; managed-template `needs_review` is still set by the vendor's browser (pre-existing).
-- Next: owner review; Codex review; merge; deploy; owner pushes `20261016001000`. Numbering: PR #96 holds DEC-2026-032/033 and TRACE-108.
+- Hosted: `20261016001000` pushed 2026-10-15 at the owner's instruction (the only pending migration; dry run first). Read back: in hosted history; the three functions exist, signed-in only (not anon); history table has RLS, no signed-in read, 0 rows. Additive; the live site does not call it until PR #97 is deployed.
+- Next: owner review; Codex review of PR #97; merge; deploy. Numbering: PR #96 holds DEC-2026-032/033 and TRACE-108.
 
 ## Required vendor application fields (TRACE-105, DEC-2026-031), 2026-10-14
 
