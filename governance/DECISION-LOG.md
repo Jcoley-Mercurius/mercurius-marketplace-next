@@ -135,6 +135,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** unit `vendor-readiness`; browser `vendor-service-areas`.
 
+### DEC-2026-034 — Operators correct vendor package prices with a reason
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-15 (America/New_York).
+
+**Decision:** An operator can see every vendor's package prices in one place (`/admin/vendor-prices`) and correct the prices of any package, managed-template or custom: tier prices, add-on prices and the quote deposit. Corrections are also offered on the admin vendor page and in the Package Reviews queue. Every correction requires a reason, records the old and new values, the reason and the operator, and notifies the linked vendor account. The vendor sees what changed and why, not which operator. The vendor does not have to accept; the corrected price applies to the package as saved, and whether it is customer-facing still depends on the package, review flag and provider eligibility. A correction is not an approval: a price still outside the soft-launch guardrail band stays in Package Reviews until approved there. Package name, tiers offered, cadence, mode and active state are unchanged. Prices already agreed on requests, quotes and checkout snapshots are unchanged. On the admin vendor page the managed-template editor no longer saves prices directly; activation and availability are unchanged.
+
+**Context:** Operators could change prices only by direct table writes for managed-template packages, with no reason or history, could not edit vendors' custom packages, and the guardrail queue could approve or pause but not correct. MPS §4 gives the admin "supervised" offering configuration and "send/correct with reason" for prices.
+
+**Alternatives considered:** Approval of every price change before it is customer-facing (not chosen; the existing out-of-band guardrail stays the only gate); vendor acceptance of operator prices (not chosen: vendor is notified only); corrections without a reason (not chosen).
+
+**MPS impact:** Implements the §4 admin price/offering row; no change to fees, payout or price display rules. **MDS impact:** New admin Vendor Prices page; correction dialog; vendor "Price changes by Mercurius" panel on Pricing & Packages and Managed Pricing. **MTS impact:** Migration `20261016001000` (`private.vendor_package_price_corrections`, `admin_correct_package_prices`, `admin_package_price_corrections`, `vendor_my_package_price_corrections`). **Data/payment/security impact:** Operator-only command (`vendor_require_operator`), all or nothing, refused on a stale package or price read; the history table is private; the vendor read omits operator identity. Direct admin table writes remain possible through existing RLS (not removed in this slice).
+
+**Required evidence:** SQL 079; unit `package-price-corrections`; browser `vendor-prices`; hosted migration push by the owner.
+
 ### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.

@@ -175,6 +175,8 @@ const server = createServer(async (request, response) => {
     close_outcomes: ["rejected", "abandoned"], retention_days: 90, quarantine_days: 14, unattached_days: 7, hold: null, provider_held: false,
     files: [], unattached_files: [],
   });
+  // TRACE-109 price corrections: none by default; specs override per case.
+  if (/\/rpc\/(admin_package_price_corrections|vendor_my_package_price_corrections)$/.test(url.pathname)) return send([]);
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {

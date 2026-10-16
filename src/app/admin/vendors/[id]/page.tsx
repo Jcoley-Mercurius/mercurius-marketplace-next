@@ -10,6 +10,7 @@ import {
   Award,
   Briefcase,
   ClipboardCheck,
+  DollarSign,
   Eye,
   ImageIcon,
   Loader2,
@@ -27,6 +28,7 @@ import { ExistingProviderAccess } from "@/components/admin/ExistingProviderAcces
 import { VendorAccountLinking } from "@/components/admin/VendorAccountLinking";
 import { VendorOnboardingChecklist } from "@/components/admin/VendorOnboardingChecklist";
 import { ManagedPricingEditor } from "@/components/vendor/ManagedPricingEditor";
+import { VendorPackagePrices } from "@/components/admin/VendorPackagePrices";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -239,7 +241,9 @@ export default function AdminVendorDetailPage() {
 
         <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><ImageIcon className="h-4 w-4" />Before &amp; After Gallery</CardTitle><CardDescription>Operationally managed public portfolio images.</CardDescription></div><Button variant="outline" size="sm" disabled={uploading} onClick={() => galleryInput.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Plus />}Add Photos</Button><input ref={galleryInput} hidden type="file" accept="image/*" multiple onChange={(event) => { if (event.target.files?.length) void addGallery(event.target.files); event.target.value = ""; }} /></div></CardHeader><CardContent>{gallery.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No gallery photos have been uploaded.</p> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{gallery.map((item) => <div key={item.id} className="space-y-2"><div className="group relative aspect-square overflow-hidden rounded-xl bg-muted"><img src={item.image_url} alt={item.caption || "Vendor project"} className="h-full w-full object-cover" /><button type="button" onClick={() => void removeGallery(item)} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" aria-label="Remove image"><Trash2 className="h-4 w-4" /></button></div><Input defaultValue={item.caption ?? ""} onBlur={(event) => void saveCaption(item, event.target.value)} placeholder="Caption" className="h-8 text-xs" /></div>)}</div>}</CardContent></Card>
 
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Briefcase className="h-4 w-4" />Managed Pricing</CardTitle><CardDescription>Activate Mercurius templates and publish provider-backed prices used by the public catalog.</CardDescription></CardHeader><CardContent><ManagedPricingEditor contractorId={id} /></CardContent></Card>
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Briefcase className="h-4 w-4" />Managed Pricing</CardTitle><CardDescription>Activate Mercurius templates and publish provider-backed prices used by the public catalog.</CardDescription></CardHeader><CardContent><ManagedPricingEditor contractorId={id} operator /></CardContent></Card>
+
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="h-4 w-4" />Vendor prices</CardTitle><CardDescription>Every package this vendor offers, template or custom. Correct a price with a reason; the vendor is notified and sees the reason.</CardDescription></CardHeader><CardContent><VendorPackagePrices contractorId={id} /></CardContent></Card>
       </div>
 
       <aside className="space-y-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="h-4 w-4" />Service Area</CardTitle><CardDescription>Select supported ZIP codes for matching.</CardDescription></CardHeader><CardContent><div className="max-h-80 space-y-2 overflow-y-auto pr-1">{areas.length ? areas.map((area) => { const checked = serviceZips.has(area.zip_code); return <button key={area.zip_code} type="button" onClick={() => setServiceZips((current) => { const next = new Set(current); if (next.has(area.zip_code)) next.delete(area.zip_code); else next.add(area.zip_code); return next; })} className={cn("flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors", checked ? "border-accent bg-accent/10" : "border-border bg-muted/40 text-muted-foreground hover:border-accent/40")}><span><strong>{area.zip_code}</strong><span className="ml-2 text-xs">{area.city}, {area.state}</span></span>{checked && <Badge variant="outline">Covered</Badge>}</button>; }) : <p className="text-sm text-muted-foreground">No active coverage areas have been configured.</p>}</div><p className="mt-3 text-xs text-muted-foreground">{serviceZips.size} ZIP code{serviceZips.size === 1 ? "" : "s"} selected</p></CardContent></Card>

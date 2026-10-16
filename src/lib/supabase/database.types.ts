@@ -6235,6 +6235,15 @@ export type Database = {
         Args: { _contractor_id: string; _job_id: string; _reason?: string }
         Returns: undefined
       }
+      admin_correct_package_prices: {
+        Args: {
+          p_expected_updated_at: string
+          p_package: string
+          p_prices: Json
+          p_reason: string
+        }
+        Returns: Json
+      }
       admin_get_contractor_linked_email: {
         Args: { _contractor_id: string }
         Returns: string
@@ -6253,6 +6262,10 @@ export type Database = {
           id: string
           phone: string
         }[]
+      }
+      admin_package_price_corrections: {
+        Args: { p_contractor: string }
+        Returns: Json
       }
       admin_resolve_dispute: {
         Args: {
@@ -7095,6 +7108,14 @@ export type Database = {
         Returns: Json
       }
       pricing_server_now: { Args: never; Returns: string }
+      provider_invitation_open: {
+        Args: { p_attempt: string; p_key_hash: string; p_source: string }
+        Returns: Json
+      }
+      provider_invitation_set_open_key: {
+        Args: { p_attempt: string; p_key_hash: string; p_source: string }
+        Returns: undefined
+      }
       r0_accept_provider_access: { Args: { p_attempt: string }; Returns: Json }
       r0_acknowledge_application_notification: {
         Args: { p_application: string; p_reason: string }
@@ -7535,6 +7556,7 @@ export type Database = {
         }
         Returns: Json
       }
+      vendor_my_package_price_corrections: { Args: never; Returns: Json }
       vendor_onboarding_checklist: {
         Args: { p_contractor: string }
         Returns: Json
