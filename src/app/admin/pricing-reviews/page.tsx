@@ -371,6 +371,7 @@ function pricingModeLabel(value: PricingMode) {
 function frequencyLabel(value: PricingFrequency) {
   if (value === "one-time") return "One-time";
   if (value === "bi-monthly") return "Every two weeks";
+  if (value === "every-two-months") return "Every two months";
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 

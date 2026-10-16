@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PackageDraftEditor, PackageDraftList } from "@/components/admin/PackageDrafts";
 import { PackagePriceCorrection } from "@/components/admin/PackagePriceCorrection";
+import { loadDraftContext, type DraftService, type PackageDraft } from "@/lib/packageDrafts";
 import { createClient } from "@/lib/supabase/client";
 import {
   describeChange,
@@ -18,22 +20,28 @@ import {
 
 // DEC-2026-034 (TRACE-109): every package of one provider, template or custom, with an
 // operator price correction (reason required) and the correction history.
+// DEC-2026-035 (TRACE-110): the operator can also add a price for this vendor as a draft.
 
 export function VendorPackagePrices({ contractorId }: { contractorId: string }) {
   const [packages, setPackages] = useState<CorrectablePackage[] | null>(null);
   const [history, setHistory] = useState<PriceCorrection[]>([]);
+  const [drafts, setDrafts] = useState<PackageDraft[]>([]);
+  const [services, setServices] = useState<DraftService[]>([]);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setError("");
     try {
       const supabase = createClient();
-      const [rows, events] = await Promise.all([
+      const [rows, events, context] = await Promise.all([
         loadCorrectablePackages(supabase, contractorId),
         supabase.rpc("admin_package_price_corrections", { p_contractor: contractorId }),
+        loadDraftContext(supabase, contractorId),
       ]);
       if (events.error) throw events.error;
       setPackages(rows);
+      setDrafts(context.drafts);
+      setServices(context.services);
       setHistory(parseCorrections(events.data));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Vendor prices could not be loaded.");
@@ -52,6 +60,13 @@ export function VendorPackagePrices({ contractorId }: { contractorId: string }) 
   if (!packages) return <p role="status" className="text-sm text-muted-foreground">Loading vendor prices…</p>;
 
   return <div className="space-y-6">
+    <section aria-labelledby={`price-drafts-${contractorId}`} className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 id={`price-drafts-${contractorId}`} className="text-sm font-semibold">Draft prices</h3>
+        <PackageDraftEditor contractorId={contractorId} services={services} onSaved={load} />
+      </div>
+      <PackageDraftList drafts={drafts} services={services} showVendor={false} onChanged={load} />
+    </section>
     {packages.length === 0
       ? <p className="text-sm text-muted-foreground">This vendor has no packages yet.</p>
       : <ul className="space-y-4">{packages.map((pkg) => <li key={pkg.id} className="space-y-3 rounded-lg border p-4">

@@ -183,6 +183,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 079; unit `package-price-corrections`; browser `vendor-prices`; hosted migration push by the owner.
 
+### DEC-2026-035 — Operators draft a price for a specific vendor; "every two months" cadence
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-16 (America/New_York).
+
+**Decision:** An operator can add a price for a specific vendor from `/admin/vendor-prices` ("Add a price", choosing the vendor) or the admin vendor page. It is saved first as a private draft: a vendor, a catalog service, a package name and description, and one price per visit for each cadence the vendor offers, limited to the cadences the catalog offers for that service. Drafts are visible only to operators and can be edited (refused on a stale read) or discarded. Only an operator publishes a draft, with a reason the vendor reads. Publishing creates the vendor's ordinary custom fixed package (active, one price level per cadence named by the cadence), records the new prices in the DEC-2026-034 price history with the reason, and notifies the linked vendor; the vendor manages it from then on. Publishing is not an approval: a price outside the soft-launch guardrail band waits in Package Reviews. Publishing is refused while the vendor already has an active package for the same service with a price at one of the same cadences; the operator corrects that package instead. "Every two months" (`every-two-months`) is added as a cadence alongside the existing ones, priced and charged per visit like every other cadence. `bi-monthly` keeps its meaning, every two weeks; the `/services` and `/pricing` labels that read it as two months or "bi-monthly" now say every two weeks. Operators choose the cadences a service offers in the Service Catalog editor.
+
+**Context:** Operators could correct an existing package's prices (DEC-2026-034) but not add a price for a vendor. Every cadence code except "every two months" existed; `bi-monthly` was labeled "Every two weeks" on the vendor editor, plan builder, provider pages and admin reviews, but "every 2 months" on `/services`. No production vendor package, tier or request used `bi-monthly` (read-only aggregate count, 2026-10-16), and only one catalog service listed it. The catalog editor could not change a service's cadence list.
+
+**Alternatives considered:** Redefine `bi-monthly` as every two months (not chosen: changes the meaning of an existing code that most screens and the guardrail treat as every two weeks). The vendor publishes Mercurius's draft, or either party does (not chosen: the operator publishes; the vendor is notified, as in DEC-2026-034). Drafts as inactive vendor packages (not chosen: vendors and the vendor editor would see and could publish them).
+
+**MPS impact:** Implements more of the §4 admin "configure provider offerings: supervised" row; no change to fees, payout, per-visit charging or price display rules. **MDS impact:** "Add a price" and Draft prices on Vendor Prices and the vendor page; Publish price dialog; "Cadences offered" in the catalog editor; "Every two months" label and "/2 mo" suffix wherever cadences show. **MTS impact:** Migration `20261016002000` (cadence constraints widened; guardrail, request preview and submission accept `every-two-months`; `private.operator_package_drafts`; `admin_save_package_draft`, `admin_package_drafts`, `admin_discard_package_draft`, `admin_publish_package_draft`). **Data/payment/security impact:** Operator-only commands (`vendor_require_operator`); drafts private; stale reads refused; publish serialized per vendor; existing packages, requests, quotes and checkout snapshots unchanged. The legacy visit generator still schedules only weekly and monthly (unchanged; already true for every two weeks and quarterly).
+
+**Required evidence:** SQL 080; unit `package-drafts`; browser `vendor-prices`; hosted migration push by the owner.
+
 ### DEC-2026-021 — Private-beta ZIP allowlist: every Lee County ZIP
 
 **Status:** APPROVED owner decision. **Date:** 2026-09-27 UTC.

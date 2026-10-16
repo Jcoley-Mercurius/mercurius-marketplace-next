@@ -92,19 +92,20 @@ export default function PricingPage() {
   );
 }
 
-function getRecurringPrice(service: { weeklyPrice?: number; avgMonthlyPrice: number; biMonthlyPrice?: number; quarterlyPrice?: number }) {
+function getRecurringPrice(service: { weeklyPrice?: number; avgMonthlyPrice: number; biMonthlyPrice?: number; everyTwoMonthsPrice?: number; quarterlyPrice?: number }) {
   if (service.weeklyPrice) return { frequency: "weekly" as const, label: "/visit (weekly)" };
   if (service.avgMonthlyPrice) return { frequency: "monthly" as const, label: "/month" };
-  if (service.biMonthlyPrice) return { frequency: "bi-monthly" as const, label: "/visit (bi-monthly)" };
+  if (service.biMonthlyPrice) return { frequency: "bi-monthly" as const, label: "/visit (every 2 weeks)" };
+  if (service.everyTwoMonthsPrice) return { frequency: "every-two-months" as const, label: "/visit (every 2 months)" };
   if (service.quarterlyPrice) return { frequency: "quarterly" as const, label: "/visit (quarterly)" };
   return null;
 }
 
 function PublicPrice({ service, frequency, suffix, accent = false }: { service: Service; frequency: RequestFrequency; suffix: string; accent?: boolean }) {
-  const effective = frequency === "weekly" ? service.weeklyPrice ?? 0 : frequency === "bi-monthly" ? service.biMonthlyPrice ?? 0 : frequency === "monthly" ? service.avgMonthlyPrice : frequency === "quarterly" ? service.quarterlyPrice ?? 0 : service.oneTimePrice;
+  const effective = frequency === "weekly" ? service.weeklyPrice ?? 0 : frequency === "bi-monthly" ? service.biMonthlyPrice ?? 0 : frequency === "monthly" ? service.avgMonthlyPrice : frequency === "every-two-months" ? service.everyTwoMonthsPrice ?? 0 : frequency === "quarterly" ? service.quarterlyPrice ?? 0 : service.oneTimePrice;
   const base = service.basePrices?.[frequency];
   const promoted = Boolean(service.promotionIds?.[frequency] && base && base > effective);
   return <div><p className={cn("text-base font-semibold tabular-nums", accent ? "text-accent" : "text-foreground")}>{promoted && <span className="mr-1.5 text-xs font-normal text-muted-foreground line-through">${base}</span>}From ${effective}<span className="text-xs font-normal text-muted-foreground">{suffix}</span></p>{promoted && <p className="mt-0.5 text-[10px] font-medium text-coral">{service.promotionLabels?.[frequency] || "Limited-time price"}</p>}</div>;
 }
 
-type RequestFrequency = "weekly" | "bi-monthly" | "monthly" | "quarterly" | "one-time";
+type RequestFrequency = "weekly" | "bi-monthly" | "monthly" | "every-two-months" | "quarterly" | "one-time";

@@ -1,5 +1,14 @@
 # Agent handoff — 2026-10-01
 
+## Operator draft prices and "every two months" (TRACE-110, DEC-2026-035), 2026-10-16
+
+- Branch `claude/admin-price-drafts`, stacked on `claude/admin-vendor-pricing` (PR #97, `195bee0`). Owner request: an admin way to add a price for a specific vendor, saved as a draft first; monthly and every-two-months options. Owner choices: a new `every-two-months` cadence (`bi-monthly` stays every two weeks); the admin publishes the draft (reason; vendor notified).
+- Migration `20261016002000`: cadence constraints widened; guardrail (monthly reference), request preview and submission accept `every-two-months` (the two request functions are restated in full from the applied state; only the cadence list changed); private `operator_package_drafts`; `admin_save_package_draft`, `admin_package_drafts`, `admin_discard_package_draft`, `admin_publish_package_draft` (creates a custom fixed package, one tier per cadence; refused while an active package for the service has the same cadence; price history + vendor `pricing` notice).
+- UI: "Add a price" + Draft prices on `/admin/vendor-prices` and the vendor page; Publish price dialog; catalog "Cadences offered"; every-two-months label/suffix on vendor, customer and admin surfaces; `/services` and `/pricing` now say every two weeks for `bi-monthly`; history lines no longer repeat a cadence-named tier ("Monthly (Monthly)").
+- Evidence: SQL 080 51/51; full SQL 4003 with only the known 003 local-data failure; `npm run check` (secrets, lint, typecheck, unit 420/420, synthetic build); browser `vendor-prices` 9/9 (3 new); full non-visual browser suite 507/507; vendor-page specs re-run after the default drafts stub.
+- Open: no catalog service offers every two months until an operator ticks it in Service Catalog; the legacy visit generator schedules weekly/monthly only (pre-existing); hosted migration not pushed.
+- Next: owner review; Codex review; merge after PR #97; owner pushes `20261016002000`.
+
 ## Operator vendor price corrections (TRACE-109, DEC-2026-034), 2026-10-15
 
 - Branch `claude/admin-vendor-pricing` from `main` `81d7674`. Owner request: admins set or review vendor prices. Owner choices: an all-vendors price view, operator edits of custom packages, correction from the Package Reviews queue; reason and audit record required; vendor notified only (no acceptance).
