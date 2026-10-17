@@ -183,6 +183,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 079; unit `package-price-corrections`; browser `vendor-prices`; hosted migration push by the owner.
 
+### DEC-2026-036 — Recurring cadences offered on routine-maintenance services
+
+**Status:** APPROVED owner instruction (choice of services delegated to the implementer). **Date:** 2026-10-16 (America/New_York).
+
+**Decision:** Vendors should be able to price weekly, every two weeks, monthly and every two months where those make sense. The catalog adds, without removing anything: every two weeks to House Cleaning, Lawn Care, Pool Service and Dumpster Cleaning; every two months to House Cleaning, Dumpster Cleaning, Trash Can Cleaning, Pest Control, Floor Cleaning, Shrub & Hedge Trimming, Window Cleaning, Irrigation Maintenance, Mulching & Bed Care and Lawn Fertilization; monthly to Window Cleaning, Irrigation Maintenance and Mulching & Bed Care. Weekly stays on House Cleaning, Lawn Care and Pool Service. Project work, repairs and seasonal or annual services (roofing, painting, HVAC, tree trimming, gutters, pressure washing and similar) are unchanged. Defaults, prices, pricing modes and existing vendor packages are unchanged; operators adjust any service later in the Service Catalog.
+
+**Context:** Vendors and operators can price only the cadences a service offers (DEC-2026-035). In production, weekly was on 3 of 45 services, every two weeks on 1, and every two months on none.
+
+**Alternatives considered:** All four cadences on every service (not chosen: weekly roofing or every-two-months HVAC is not a real offering); leaving it to manual catalog edits (not chosen at the owner's request).
+
+**MPS impact:** None to fees, payout or per-visit charging. **MDS impact:** More cadence choices in the vendor and operator price editors for the listed services; catalog editor fields are now labelled. **MTS impact:** Migration `20261016003000` (catalog rows only, additive, idempotent); `seed.sql` matches. **Data/payment/security impact:** Updates `services_catalog.available_frequencies` on 12 rows in hosted when pushed; no customer, vendor or price data.
+
+**Required evidence:** SQL 081; browser `catalog-cadences`; hosted migration push by the owner.
+
 ### DEC-2026-035 — Operators draft a price for a specific vendor; "every two months" cadence
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-16 (America/New_York).

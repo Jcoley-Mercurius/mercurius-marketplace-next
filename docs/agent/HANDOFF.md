@@ -1,5 +1,13 @@
 # Agent handoff — 2026-10-01
 
+## Recurring cadences on routine-maintenance services (TRACE-111, DEC-2026-036), 2026-10-16
+
+- Branch `claude/recurring-cadences`, stacked on `claude/admin-price-drafts` (PR #98). Owner request: vendors can price weekly, every two weeks, monthly and every two months; owner delegated which services.
+- Migration `20261016003000`: adds cadences to 12 catalog services (list in the migration header and DEC-2026-036), merged and idempotent; no removals, defaults or prices changed. `seed.sql` matches (seed runs after migrations, so a local reset would otherwise lose them). Local catalog matched production before the change.
+- Catalog editor: saves cadences recurring-first, then one-time; field labels now wrap their controls (axe `label` was failing on the existing fields).
+- Evidence: SQL 081 19/19; full SQL 4022 with only the known 003 local-data failure; second run of the migration updates 0 rows; `npm run check` (unit 420/420, synthetic build); browser `catalog-cadences` 2/2.
+- Next: review; merge after PR #98; owner pushes `20261016002000` then `20261016003000`.
+
 ## Operator draft prices and "every two months" (TRACE-110, DEC-2026-035), 2026-10-16
 
 - Branch `claude/admin-price-drafts`, stacked on `claude/admin-vendor-pricing` (PR #97, `195bee0`). Owner request: an admin way to add a price for a specific vendor, saved as a draft first; monthly and every-two-months options. Owner choices: a new `every-two-months` cadence (`bi-monthly` stays every two weeks); the admin publishes the draft (reason; vendor notified).
