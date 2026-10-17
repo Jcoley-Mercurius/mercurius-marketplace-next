@@ -1,5 +1,12 @@
 # Agent handoff — 2026-10-01
 
+## Production deploy and automatic deploys from main (DEC-2026-037), 2026-10-16
+
+- Hosted migrations verified current: `20261016002000` and `20261016003000` applied (draft commands present; 10 services offer every two months); dry run reports nothing pending.
+- Production had been on `dpl_9wD5Yx2SqxkQvznMi8FTMhbDEjfJ` (`283cfe5`, 2026-10-05). Deployed `main` `a245a99` from a clean `git archive` (no env file uploaded) as `dpl_AZEyDTVU95PoyFyzdKRbaTyRHYfS` (READY, 76 pages), promoted 2026-10-17 02:0x UTC; `www` and apex inspect to it, `www` 200, apex 308 → `www`. Rollback: promote `dpl_9wD5Yx2SqxkQvznMi8FTMhbDEjfJ`.
+- Cause of the drift: `vercel.json` `git.deploymentEnabled: false` (since 2026-09-04) although the repo was connected with production branch `main`. Branch `claude/auto-deploy-main` sets `{ "main": true, "**": false }`, adds the AGENTS.md release rule and a PR template. Previews stay off: the Preview environment holds production Supabase and email keys.
+- Next: merge; confirm the merge itself deploys to production; then catalog work.
+
 ## Recurring cadences on routine-maintenance services (TRACE-111, DEC-2026-036), 2026-10-16
 
 - Branch `claude/recurring-cadences`, stacked on `claude/admin-price-drafts` (PR #98). Owner request: vendors can price weekly, every two weeks, monthly and every two months; owner delegated which services.

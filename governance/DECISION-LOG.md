@@ -183,6 +183,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 079; unit `package-price-corrections`; browser `vendor-prices`; hosted migration push by the owner.
 
+### DEC-2026-037 — Merges to main deploy to production automatically
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-16 (America/New_York).
+
+**Decision:** The Vercel project (already connected to `Jcoley-Mercurius/mercurius-marketplace-next`, production branch `main`) deploys every commit on `main` to production automatically. Other branches do not deploy. Merging a reviewed PR with green CI is the release approval. A PR that carries a migration has it pushed to hosted before merge, with the owner's authorization; a missed migration is pushed as soon as it is noticed. Rollback is promoting the previous production deployment. A PR template records the migration and post-deploy steps.
+
+**Context:** `vercel.json` had set `git.deploymentEnabled: false` since 2026-09-04 as a release gate, so merges never deployed, and production ran 2026-10-05 code until a manual deploy of `a245a99` (`dpl_AZEyDTVU95PoyFyzdKRbaTyRHYfS`) on 2026-10-16, eleven days and every merge since PR #88 behind.
+
+**Alternatives considered:** Keep manual deploys (not chosen: production drifted behind). Build on merge but promote by hand (not chosen: the same gap reappears when a promote is forgotten). Preview deployments for every PR (not chosen yet: the Preview environment holds the production Supabase URL, service-role key and email key, so a preview would act on live data and send real email; revisit with a separate preview database).
+
+**MPS impact:** None. **MDS impact:** None. **MTS impact:** `vercel.json` `git.deploymentEnabled` = `{ "main": true, "**": false }`; AGENTS.md release rule; `.github/pull_request_template.md`. **Data/payment/security impact:** Code reaches production on merge; migrations remain an explicit, owner-authorized step before merge and stay additive. This supersedes the manual-promote expectation in older rollout notes for routine releases; `HOSTED-MIGRATION-ROLLOUT.md` still governs coordinated launch releases.
+
+**Required evidence:** The merge of this change deploys itself; its production deployment is recorded in the handoff.
+
 ### DEC-2026-036 — Recurring cadences offered on routine-maintenance services
 
 **Status:** APPROVED owner instruction (choice of services delegated to the implementer). **Date:** 2026-10-16 (America/New_York).
