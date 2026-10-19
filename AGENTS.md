@@ -43,6 +43,19 @@ Authority order is **MPS → MDS → MTS → implementation evidence**. When fil
 - Product state, role, price, fee, payout, matching, cancellation, support, retention, and design semantics come from approved authorities—not page-local invention.
 - A change is complete only when its required automated and manual acceptance evidence exists.
 
+## Release and deployment (DEC-2026-037)
+
+- Merging a reviewed PR to `main` is the release approval: Vercel deploys `main` to
+  production automatically. Other branches do not deploy (`vercel.json`), because
+  preview builds share the production database and email keys.
+- A PR with a migration has it pushed to hosted **before** merge: dry run
+  (`supabase db push --linked --dry-run`), then `supabase db push --linked`, with the
+  owner's authorization. Migrations stay additive so the live site keeps working on the
+  newer schema until the deploy lands.
+- If a migration was missed, push it as soon as it is noticed; if a deploy misbehaves,
+  promote the previous production deployment (`vercel promote <dpl_id>`) and fix forward.
+- Manual `vercel deploy --prod` remains for exceptional releases with owner instruction.
+
 ## Approved launch configuration
 
 - Geography: all Lee County, Florida ZIP codes through the authoritative backend allowlist.
