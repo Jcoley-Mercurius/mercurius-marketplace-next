@@ -94,7 +94,7 @@ export default function FinanceReconciliationPage() {
     <PageHeader
       eyebrow="Finance"
       title="Finance reconciliation"
-      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The platform fee is ${data?.fee_percent ?? 15}% of retained service, excluding tax and tips. Commands below are recorded as you; refunds, chargeback allocations, readback resolutions and event exclusions need a second finance operator within 24 hours. Bank outcomes are not recorded here.`}
+      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The platform fee is ${data?.fee_percent ?? 15}% of retained service, or 7.5% on a booking with an applied promotion, excluding tax and tips; a Mercurius-funded discount is a promotion subsidy, not a fee reduction. Commands below are recorded as you; refunds, chargeback allocations, readback resolutions and event exclusions need a second finance operator within 24 hours. Bank outcomes are not recorded here.`}
       actions={
         <Button variant="outline" disabled={loading} onClick={() => void load()}>
           <RefreshCw />
@@ -214,6 +214,12 @@ export default function FinanceReconciliationPage() {
         <dl className="grid grid-cols-[auto_auto] justify-start gap-x-3 gap-y-0.5 tabular-nums">
           <dt className="text-muted-foreground">Platform fee</dt>
           <dd>{formatCents(row.earnings.platform_fee_ledger)}</dd>
+          {(row.earnings.platform_subsidy || row.earnings.platform_subsidy_ledger) ? (
+            <>
+              <dt className="text-muted-foreground">Promotion subsidy</dt>
+              <dd>{formatCents(row.earnings.platform_subsidy_ledger ?? 0)}</dd>
+            </>
+          ) : null}
           <dt className="text-muted-foreground">Provider proceeds</dt>
           <dd>{formatCents(row.earnings.provider_proceeds)}</dd>
           <dt className="text-muted-foreground">Tax</dt>

@@ -38,6 +38,7 @@ import { Label } from "@/components/ui/label";
 import { PricingToggle } from "@/components/vendor/PricingToggle";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { VendorPriceApprovals } from "@/components/vendor/VendorPriceApprovals";
 import { VendorPriceCorrections } from "@/components/vendor/VendorPriceCorrections";
 import {
   evaluateCustomPackageFrequencyPriceReviews,
@@ -1090,6 +1091,7 @@ export function VendorPackagesManager() {
       </div>
 
       <VendorPriceCorrections />
+      <VendorPriceApprovals />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard icon={PackageCheck} label="Live Fixed Prices" value={packageStats.live} note="Instant-price packages available publicly" tone="live" />

@@ -3,6 +3,8 @@
 import { AlertTriangle, CheckCircle2, CircleSlash, FileQuestion, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UNAVAILABLE_IN_AREA } from "@/lib/requestSubmission";
+import { addonLines, estimateLabel } from "@/lib/requestPreview";
+import { blockingDetail, parseBlocking } from "@/lib/pricingContent";
 import type { ServiceAvailability } from "@/lib/requestPreview";
 
 export type AvailabilityItem = {
@@ -68,6 +70,12 @@ function AvailabilityRow({ item, formatMoney, onRemove, onUseAnyProvider, onRegi
           </div>
           <p className="text-xs text-muted-foreground">{item.cadence}</p>
           <p className="mt-2 text-sm"><span className="font-medium">{state.label}.</span> {state.detail}</p>
+          {item.availability && item.availability !== "error" && addonLines(item.availability.outcome).length > 0 && (
+            <ul className="mt-1 text-xs text-muted-foreground">{addonLines(item.availability.outcome).map((line, index) => <li key={index}>
+              {line.required ? "Includes " : "Plus "}{line.name}{line.quantity > 1 || line.unit_label ? ` × ${line.quantity}${line.unit_label ? ` ${line.unit_label}` : ""}` : ""}: {line.amount_max_cents != null && line.amount_max_cents !== line.amount_cents
+                ? `${formatMoney(line.amount_cents / 100)}–${formatMoney(line.amount_max_cents / 100)}` : formatMoney(line.amount_cents / 100)}{line.required ? " (required)" : ""}
+            </li>)}</ul>
+          )}
           {item.preferredProviderName && (
             <p className="mt-1 text-xs text-muted-foreground">Preferred provider: {item.preferredProviderName}. This is a preference until a provider accepts.</p>
           )}
@@ -102,22 +110,41 @@ function describe(item: AvailabilityItem, formatMoney: (value: number) => string
       return availability.exact
         ? { ...ok, amount: formatMoney(availability.total), label: "Available", detail: "Fixed price from an eligible provider here. It’s re-checked when you submit." }
         : { ...ok, amount: `From ${formatMoney(availability.total)}`, label: "Available", detail: "The price depends on your answers to the questions for this service." };
-    case "quote":
+    case "quote": {
+      // TRACE-112: an estimate is shown as an estimate; nothing is charged until a quote is accepted.
+      const estimate = estimateLabel(availability.outcome, formatMoney);
+      if (estimate) return { ...quote, amount: `Estimate ${estimate}`, label: "Quote required", detail: "This is an estimate. The provider confirms the final price in a quote; nothing is set until you accept it." };
+      if (availability.outcome.price_status === "quote") return { ...quote, amount: "Quote", label: "Quote after walkthrough", detail: "The provider prices this after seeing the job. No price is set until you accept a quote." };
       return { ...quote, amount: "Quote", label: "Quote required", detail: availability.offeringMode === "deposit_quote"
         ? "A provider here quotes this service. The quote, and any deposit, is set only when you accept it."
         : "A provider here quotes this service. No price is set until you accept a quote." };
+    }
     case "promotion":
       return { ...stop, amount: "", label: "Online pricing unavailable", detail: "This service’s current price can’t be booked online yet. Remove it, or ask us to notify you." };
-    case "unavailable":
+    case "unavailable": {
+      const priceReason = availability.outcome.price_reason;
+      if (priceReason === "no_matching_price_level" || priceReason === "ambiguous_price_levels") {
+        const detail = blockingDetail(parseBlocking(availability.outcome.price_blocking));
+        return { ...warn, amount: "", label: "Price requires confirmation", detail: `${detail ? `${detail.charAt(0).toUpperCase()}${detail.slice(1)}. ` : "Your answers don’t match exactly one of this offering’s price levels. "}It can’t be booked at a set price with these answers. Check your answers, or choose any eligible provider.` };
+      }
       return item.isSomethingElse
         ? { ...stop, amount: "", label: UNAVAILABLE_IN_AREA.replace(/\.$/, ""), detail: "Something Else isn’t a bookable service. We can record your description as interest; it won’t create a request or a quote." }
         : { ...stop, amount: "", label: UNAVAILABLE_IN_AREA.replace(/\.$/, ""), detail: "No eligible provider offers this service here at this frequency. It can’t be booked." };
+    }
     case "needs_attention":
       switch (availability.outcome.outcome) {
         case "answers_required": return { ...warn, amount: "", label: "Answers needed", detail: "Answer this service’s questions to see its price." };
         case "preferred_provider_unavailable": return { ...warn, amount: "", label: "Your preferred provider isn’t available here", detail: "Another eligible provider is offered this request only if you choose to allow it." };
         case "package_unavailable":
-        case "invalid_package": return { ...warn, amount: "", label: "The offering you chose isn’t available here", detail: item.explicitOffering ? `${item.explicitOffering} can’t be booked at this address.` : "Choose any eligible provider instead, or remove this service." };
+        case "invalid_package": {
+          const reason = availability.outcome.price_reason ?? availability.outcome.reason;
+          if (reason === "ambiguous_price_levels" || reason === "no_matching_price_level") {
+            // DEC-2026-041 item 7: no exact price, no nearest level and no lowest price; say which answer.
+            const detail = blockingDetail(parseBlocking(availability.outcome.price_blocking));
+            return { ...warn, amount: "", label: "Price requires confirmation", detail: `${detail ? `${detail.charAt(0).toUpperCase()}${detail.slice(1)}. ` : "Your answers don’t match exactly one of this offering’s price levels. "}It can’t be booked at a set price with these answers. Check your answers, or choose any eligible provider.` };
+          }
+          return { ...warn, amount: "", label: "The offering you chose isn’t available here", detail: item.explicitOffering ? `${item.explicitOffering} can’t be booked at this address.` : "Choose any eligible provider instead, or remove this service." };
+        }
         case "invalid_provider": return { ...warn, amount: "", label: "We couldn’t find the provider you chose", detail: "Remove the preference to use any eligible provider." };
         default: return { ...warn, amount: "", label: "Needs attention", detail: "Check this service, then continue." };
       }

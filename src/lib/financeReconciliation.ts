@@ -35,7 +35,8 @@ export type LedgerIssue =
   | "chargeback_suspense"
   | "stripe_clearing"
   | "recovery_ledger"
-  | "customer_refund_payable";
+  | "customer_refund_payable"
+  | "promotion_subsidy";
 
 export type BankStatus = "prepared" | "submitted" | "unknown" | "settled" | "failed" | "returned";
 
@@ -69,7 +70,11 @@ export type ObligationReconciliation = {
     reversed: number;
     customer_owed: number;
   };
-  earnings: { platform_fee: number; platform_fee_ledger: number; tax: number; tax_ledger: number; provider_proceeds: number };
+  earnings: {
+    platform_fee: number; platform_fee_ledger: number; tax: number; tax_ledger: number; provider_proceeds: number;
+    /** DEC-2026-038: a Mercurius-funded discount paid with the provider's proceeds, kept apart from the fee. */
+    platform_subsidy?: number; platform_subsidy_ledger?: number;
+  };
   payout: {
     funds_state: FundsState;
     not_eligible: NotEligibleReason[];
@@ -172,7 +177,8 @@ export type LedgerAccount =
   | "chargeback_suspense"
   | "bank"
   | "provider_recovery_loss"
-  | "customer_refund_payable";
+  | "customer_refund_payable"
+  | "promotion_subsidy";
 
 export type FinanceReconciliation = {
   evaluated_at: string;
@@ -257,6 +263,7 @@ export const issueLabel: Record<LedgerIssue, string> = {
   stripe_clearing: "Stripe clearing differs from charges less refunds, chargebacks and costs",
   recovery_ledger: "Recovery loss differs from recorded write-offs",
   customer_refund_payable: "Refunds owed to customers differ from open late refund failures",
+  promotion_subsidy: "Promotion subsidy differs from the subsidy on retained service",
 };
 
 export const accountLabel: Record<LedgerAccount, string> = {
@@ -270,6 +277,7 @@ export const accountLabel: Record<LedgerAccount, string> = {
   bank: "Bank",
   provider_recovery_loss: "Provider recovery loss",
   customer_refund_payable: "Refunds owed to customers",
+  promotion_subsidy: "Promotion subsidy",
 };
 
 export function labelOf<K extends string>(labels: Record<K, string>, key: string) {

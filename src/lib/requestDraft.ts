@@ -69,11 +69,22 @@ export type RequestDraft = {
   /** Only offerings the homeowner chose explicitly (plan builder or provider page). */
   packageSelections: Record<string, PublicPackageSelection>;
   questionAnswers: Record<string, Record<string, string>>;
+  /** DEC-2026-041 item 2: optional add-on quantities, for the chosen offering they were picked for. */
+  addonQuantities: Record<string, AddonQuantities>;
   submissionKey: string;
   /** The exact payload last sent without a confirmed answer; a retry resends it unchanged. */
   inFlight: SubmissionPayload | null;
   saved: SavedSubmission | null;
 };
+
+export type AddonQuantities = { packageId: string; quantities: Record<string, number> };
+
+/** The add-ons to send for a service: only for the offering they were picked for, quantities above 0. */
+export function addonSelection(entry: AddonQuantities | undefined, packageId: string | undefined): Array<{ id: string; quantity: number }> {
+  if (!entry || !packageId || entry.packageId !== packageId) return [];
+  return Object.entries(entry.quantities).filter(([, quantity]) => quantity > 0).sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, quantity]) => ({ id, quantity }));
+}
 
 export function emptyDraft(submissionKey: string): RequestDraft {
   return {
@@ -82,7 +93,7 @@ export function emptyDraft(submissionKey: string): RequestDraft {
     timeOfDay: "anytime", description: "", otherServiceDetails: "", accessMethod: "someone-home", petStatus: "none",
     entryInstructions: "", parkingNotes: "", firstName: "", lastName: "", email: "", phone: "", smsUpdates: false,
     serviceOverrides: {}, preferredProviders: {}, preferredProviderNames: {}, packageSelections: {}, questionAnswers: {},
-    submissionKey, inFlight: null, saved: null,
+    addonQuantities: {}, submissionKey, inFlight: null, saved: null,
   };
 }
 
@@ -235,6 +246,14 @@ export function parseDraft(raw: string | null, fallbackKey: string, today: strin
   keep("questionAnswers", isRecord(value.questionAnswers)
     ? Object.fromEntries(Object.entries(value.questionAnswers).filter(([id]) => idPattern.test(id)).map(([id, answers]) =>
         [id, stringMap(answers, (key) => key.length <= 100, () => true)]))
+    : undefined);
+  keep("addonQuantities", isRecord(value.addonQuantities)
+    ? Object.fromEntries(Object.entries(value.addonQuantities).flatMap(([id, entry]) => {
+        if (!idPattern.test(id) || !isRecord(entry) || typeof entry.packageId !== "string" || !uuidPattern.test(entry.packageId) || !isRecord(entry.quantities)) return [];
+        const quantities = Object.fromEntries(Object.entries(entry.quantities).filter(([key, quantity]) =>
+          key.length <= 64 && typeof quantity === "number" && Number.isInteger(quantity) && quantity >= 0 && quantity <= 99)) as Record<string, number>;
+        return [[id, { packageId: entry.packageId, quantities }]];
+      }))
     : undefined);
   keep("submissionKey", isSubmissionKey(value.submissionKey) ? value.submissionKey : undefined);
   keep("inFlight", isRecord(value.inFlight) && Array.isArray(value.inFlight.selections) ? value.inFlight as SubmissionPayload : value.inFlight === null ? null : undefined);
