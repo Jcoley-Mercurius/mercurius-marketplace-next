@@ -86,6 +86,8 @@ jobs:
         run: node scripts/phase5-intake-limit-concurrency.mjs
       - name: Concurrent early-access joins, consent, linkage and retention
         run: node scripts/r0-interest-concurrency.mjs
+      - name: Concurrent promotion redemptions, price approvals and publication
+        run: node scripts/pricing-concurrency.mjs
       - name: Concurrent finance operator commands
         run: node scripts/phase5-finance-command-concurrency.mjs
       - name: Concurrent finance refund and chargeback commands

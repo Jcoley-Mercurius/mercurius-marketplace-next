@@ -59,6 +59,8 @@ type Scenario = {
   checkout?: () => { status: number; json: unknown };
   previewFails?: () => boolean;
   readbackFails?: () => boolean;
+  /** TRACE-116: homeowner_promotion_options; without it promotions are closed, as on production. "fail" is an outage. */
+  offers?: (payload: { selections: Selection[]; codes: Record<string, string> }, count: number) => unknown;
 };
 
 class Recorder {
@@ -72,6 +74,7 @@ class Recorder {
   removed: string[] = [];
   checkouts = 0;
   trialReads = 0;
+  offers: { selections: Selection[]; codes: Record<string, string> }[] = [];
 }
 
 function submittedFor(selections: Selection[], reused = false) {
@@ -126,6 +129,12 @@ async function intake(page: Page, scenario: Scenario = {}) {
       if (coverage !== "covered") return route.fulfill({ json: { stage: payload.stage, coverage, outcomes: [] } });
       const outcomes = payload.selections.map((selection, index) => ({ selection_index: index, ...(scenario.outcomes?.(selection, payload.stage) ?? fixed(selection.service_id)) }));
       return route.fulfill({ json: { stage: payload.stage, coverage: "covered", outcomes } });
+    }
+    if (path === "/rest/v1/rpc/homeowner_promotion_options") {
+      const payload = request.postDataJSON().p_payload as { selections: Selection[]; codes: Record<string, string> };
+      record.offers.push(payload);
+      const answer = scenario.offers ? scenario.offers(payload, record.offers.length) : { available: false, credits: null, selections: [] };
+      return answer === "fail" ? route.fulfill({ status: 500, json: { code: "XX000", message: "Synthetic outage" } }) : route.fulfill({ json: answer });
     }
     if (path === "/rest/v1/rpc/submit_service_requests") {
       const body = request.postDataJSON() as { p_submission_key: string; p_payload: { selections: Selection[] } };
@@ -883,4 +892,188 @@ test.describe("visual baselines @visual", () => {
       await expect(page.locator("main")).toHaveScreenshot(`request-confirmation-${theme}-390.png`, { maxDiffPixelRatio: 0.01 });
     });
   }
+});
+
+// DEC-2026-041 items 2 and 7, synthetic: optional add-ons for a chosen offering, and answers
+// that match no price level. The server contract is SQL 082/086.
+test.describe("add-ons and unmatched answers", () => {
+  const offering = "00000000-0000-4000-8000-0000000000e2";
+  const extraBag = { id: "00000000-0000-4000-8000-0000000000e3", name: "Extra yard bag", unit_label: "bag", price_kind: "exact", price: 5,
+    price_max: null, min_quantity: 0, max_quantity: 3, is_required: false };
+
+  test("a chosen offering offers its optional add-ons and sends the quantities", async ({ page }) => {
+    const record = await intake(page, {
+      draft: { step: "details", packageSelections: { "lawn-mowing": { packageId: offering, pricingMode: "fixed" } } },
+      outcomes: (selection) => {
+        const bags = (selection as Selection & { addons?: { id: string; quantity: number }[] }).addons?.[0]?.quantity ?? 0;
+        return fixed(selection.service_id, 100 + bags * 5, { package_id: offering, addon_options: [extraBag],
+          price_breakdown: bags ? [{ kind: "addon", name: "Extra yard bag", quantity: bags, unit_label: "bag", amount_cents: bags * 500, amount_max_cents: bags * 500, required: false, price_kind: "exact" }] : [] });
+      },
+    });
+    const picker = page.getByRole("group", { name: /: add-ons$/ });
+    await expect(picker).toBeVisible();
+    await picker.getByLabel(/Extra yard bag/).fill("2");
+    await expect(page.locator("#availability-lawn-mowing")).toContainText("$110.00");
+    expect(record.previews.at(-1)?.selections[0]).toMatchObject({ package_id: offering, addons: [{ id: extraBag.id, quantity: 2 }] });
+    await expectAccessible(page);
+    await page.getByRole("button", { name: "Continue to review" }).click();
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits[0].payload.selections[0]).toMatchObject({ package_id: offering, addons: [{ id: extraBag.id, quantity: 2 }] });
+  });
+
+  test("without a chosen offering no add-on picker is shown", async ({ page }) => {
+    await intake(page, { draft: { step: "details" }, outcomes: (selection) => fixed(selection.service_id, 100, { addon_options: [extraBag] }) });
+    await expect(page.locator("#availability-lawn-mowing")).toContainText("$100.00");
+    await expect(page.getByRole("heading", { name: "Add-ons" })).toHaveCount(0);
+  });
+
+  test("answers that match no price level say which answer, and show no price", async ({ page }) => {
+    await intake(page, {
+      draft: { packageSelections: { "lawn-mowing": { packageId: offering, pricingMode: "fixed" } } },
+      outcomes: (selection) => ({ service_id: selection.service_id, outcome: "unavailable", reason: "no_eligible_provider",
+        price_reason: "no_matching_price_level", price_blocking: { answers: [{ question_key: "sqft", question_label: "Lawn size", answer: "90000" }], combination: false } }),
+    });
+    const row = page.locator("#availability-lawn-mowing");
+    await expect(row).toContainText("Price requires confirmation");
+    await expect(row).toContainText("No price level covers Lawn size 90000.");
+    await expect(row).not.toContainText("$");
+    await expect(submitButton(page)).toBeDisabled();
+  });
+});
+
+// TRACE-116 (DEC-2026-042), synthetic: the homeowner chooses an offer explicitly. Savings and
+// totals come from the server (SQL 087); nothing is applied, replaced or switched for them.
+test.describe("offers", () => {
+  const fp = (letter: string) => letter.repeat(64);
+  const option = (id: string, label: string, discount: number, extra: Record<string, unknown> = {}) => ({
+    offer_id: `00000000-0000-4000-8000-0000000007${id}`, fingerprint: fp(id.slice(-1)), label, terms: `${label} terms.`,
+    ends_at: "2026-12-31T23:59:00Z", timezone: "America/New_York", first_booking_only: false, requires_code: false, kind: "amount",
+    service_cents: 10000, discount_cents: discount, total_after_cents: 10000 - discount, best: false, ...extra });
+  const offers = (options: unknown[], code: unknown = null) => ({ available: true, credits: null,
+    selections: [{ selection_index: 0, service_id: "lawn-mowing", status: "priced", service_cents: 10000, options, code }] });
+  const three = [option("a1", "Synthetic $15 off", 1500, { best: true }), option("b2", "Synthetic $10 off", 1000), option("c3", "Synthetic welcome", 1000, { first_booking_only: true })];
+
+  for (const width of [320, 1440]) {
+    test(`the homeowner chooses one displayed offer; the best saving is labelled, never chosen (${width}px)`, async ({ page }) => {
+      const record = await intake(page, { width, offers: () => offers(three) });
+      const group = page.getByRole("group", { name: "Lawn Care: offers" });
+      await expect(group).toBeVisible();
+      await expect(group.getByRole("radio", { name: /^No offer/ })).toBeChecked();
+      await expect(group.getByRole("radio", { name: /Synthetic \$15 off/ })).not.toBeChecked();
+      await expect(group.getByText("Best savings")).toHaveCount(1);
+      await expect(group.getByText("Save $15: $100 → $85")).toBeVisible();
+      await expectAccessible(page);
+      await group.getByRole("radio", { name: /Synthetic \$10 off/ }).check();
+      await expect(page.getByText("Fixed prices after offers")).toBeVisible();
+      await expect(page.getByText("$90.00", { exact: true })).toBeVisible();
+      // Another offer replaces the first and the total follows.
+      await group.getByRole("radio", { name: /Synthetic \$15 off/ }).check();
+      await expect(page.getByText("$85.00", { exact: true })).toBeVisible();
+      await expect(group.getByRole("radio", { name: /Synthetic \$10 off/ })).not.toBeChecked();
+      await submitButton(page).click();
+      await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+      expect(record.submits[0].payload.selections[0]).toMatchObject({ expected: { pricing_mode: "fixed", total: 100 },
+        promotion: { offer_id: "00000000-0000-4000-8000-0000000007a1", fingerprint: fp("1"), expected_discount_cents: 1500 } });
+    });
+  }
+
+  test("choosing no offer sends none", async ({ page }) => {
+    const record = await intake(page, { offers: () => offers(three) });
+    const group = page.getByRole("group", { name: "Lawn Care: offers" });
+    await group.getByRole("radio", { name: /Synthetic welcome/ }).check();
+    await group.getByRole("radio", { name: /^No offer/ }).check();
+    await expect(page.getByText("Fixed prices after offers")).toHaveCount(0);
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits[0].payload.selections[0]).not.toHaveProperty("promotion");
+  });
+
+  test("a code-only offer appears only for its code, which the homeowner then applies", async ({ page }) => {
+    const code = option("d4", "Synthetic code offer", 500, { requires_code: true });
+    const record = await intake(page, {
+      offers: ({ codes }) => codes["0"] === "FALL-25" ? offers([code], { status: "eligible", offer_id: code.offer_id })
+        : codes["0"] ? offers([], { status: "not_found" }) : offers([]),
+    });
+    await expect(page.getByText("no offers apply right now.")).toBeVisible();
+    const field = page.getByRole("textbox", { name: "Promotion code" });
+    await field.fill("WRONG-1");
+    await page.getByRole("button", { name: "Apply code" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "We couldn’t find that code." })).toBeVisible();
+    await field.fill("FALL-25");
+    await page.getByRole("button", { name: "Apply code" }).click();
+    await expect(page.getByRole("radio", { name: /Synthetic code offer/ })).toBeChecked();
+    await expect(page.getByText("$95.00", { exact: true })).toBeVisible();
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits[0].payload.selections[0].promotion).toEqual({ offer_id: code.offer_id, fingerprint: fp("4"), expected_discount_cents: 500, code: "FALL-25" });
+  });
+
+  test("a saving that changed while reviewing clears the choice and says why", async ({ page }) => {
+    let discount = 1000;
+    await intake(page, { offers: ({ codes }) => offers([option("b2", "Synthetic $10 off", discount)], codes["0"] ? { status: "not_found" } : null) });
+    const group = page.getByRole("group", { name: "Lawn Care: offers" });
+    await group.getByRole("radio", { name: /Synthetic \$10 off/ }).check();
+    discount = 800;
+    await page.getByRole("textbox", { name: "Promotion code" }).fill("OTHER-1");
+    await page.getByRole("button", { name: "Apply code" }).click();
+    await expect(page.getByText("“Synthetic $10 off” changed: it now saves $8 on $100. Choose again.")).toBeVisible();
+    await expect(group.getByRole("radio", { name: /^No offer/ })).toBeChecked();
+  });
+
+  test("an offer refused at submission is explained, cleared and never re-applied", async ({ page }) => {
+    const record = await intake(page, {
+      offers: () => offers(three),
+      submit: (_call, count) => count === 1 ? { json: { status: "refused", coverage: "covered", reused: false, requests: [],
+        outcomes: [{ selection_index: 0, service_id: "lawn-mowing", outcome: "promotion_changed", reason: "redemption_limit_reached", pricing_mode: "fixed", total: 100 }] } } : {},
+    });
+    await page.getByRole("radio", { name: /Synthetic \$15 off/ }).check();
+    await submitButton(page).click();
+    await expect(summary(page)).toContainText("the offer you chose wasn’t applied because this offer has been fully claimed. Review the offers and choose again, or continue without one. Nothing was submitted.");
+    await expect(page.getByRole("radio", { name: /^No offer/ })).toBeChecked();
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits[1].payload.selections[0]).not.toHaveProperty("promotion");
+  });
+
+  test("an offers outage is said, keeps the chosen offer on screen as sent, and can be retried", async ({ page }) => {
+    let fail = false;
+    const record = await intake(page, { offers: () => fail ? "fail" : offers(three) });
+    const group = page.getByRole("group", { name: "Lawn Care: offers" });
+    await group.getByRole("radio", { name: /Synthetic \$10 off/ }).check();
+    fail = true;
+    await page.getByRole("textbox", { name: "Promotion code" }).fill("OTHER-1");
+    await page.getByRole("button", { name: "Apply code" }).click();
+    const alert = page.getByRole("alert").filter({ hasText: "We couldn’t check offers just now" });
+    await expect(alert).toContainText("Your chosen offer is still shown and is checked again when you submit.");
+    await expect(group.getByRole("radio", { name: /Synthetic \$10 off/ })).toBeChecked();
+    await expect(page.getByText("$90.00", { exact: true })).toBeVisible();
+    await expectAccessible(page);
+    fail = false;
+    await alert.getByRole("button", { name: "Check offers again" }).click();
+    await expect(alert).toHaveCount(0);
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits[0].payload.selections[0].promotion).toMatchObject({ offer_id: "00000000-0000-4000-8000-0000000007b2", expected_discount_cents: 1000 });
+  });
+
+  test("an offers outage before any answer is said, and the request can go ahead without an offer", async ({ page }) => {
+    const record = await intake(page, { width: 320, offers: () => "fail" });
+    const alert = page.getByRole("alert").filter({ hasText: "We couldn’t check offers just now" });
+    await expect(alert).toContainText("You can submit without an offer, or check again.");
+    await expect(page.getByRole("group", { name: "Lawn Care: offers" })).toHaveCount(0);
+    await expectAccessible(page);
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits[0].payload.selections[0]).not.toHaveProperty("promotion");
+  });
+
+  test("with the promotions gate closed no offer is shown or sent", async ({ page }) => {
+    const record = await intake(page, { offers: () => ({ available: false, credits: null, selections: [] }) });
+    await expect.poll(() => record.offers.length).toBeGreaterThan(0);
+    await expect(page.getByRole("heading", { name: "Offers" })).toHaveCount(0);
+    await submitButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+    expect(record.submits[0].payload.selections[0]).not.toHaveProperty("promotion");
+  });
 });

@@ -54,6 +54,11 @@ describe("finance reconciliation presentation", () => {
     expect(labelOf(reasonLabel, "future_reason")).toBe("future_reason");
   });
 
+  it("words the promotion subsidy account and its reconciliation issue (DEC-2026-038)", () => {
+    expect(labelOf(accountLabel, "promotion_subsidy")).toBe("Promotion subsidy");
+    expect(labelOf(issueLabel, "promotion_subsidy")).toBe("Promotion subsidy differs from the subsidy on retained service");
+  });
+
   it("flags rows with ledger issues, holds, failed payouts or readback drift", () => {
     expect(needsAttention(row())).toBe(false);
     expect(needsAttention(row({ payout: { ...row().payout, funds_state: "not_eligible", not_eligible: ["confirmation_window"] } }))).toBe(false);

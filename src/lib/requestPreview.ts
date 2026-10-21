@@ -14,6 +14,8 @@ export type PreviewSelection = {
   package_id?: string;
   tier_id?: string;
   answers?: Record<string, string>;
+  /** TRACE-112: chosen add-on quantities; required add-ons are always included. */
+  addons?: Array<{ id: string; quantity: number }>;
 };
 
 export type OfferingScope = {
@@ -42,6 +44,20 @@ export type PreviewOutcome = {
   tier_id?: string | null;
   question_details?: PackageQualifyingQuestion[];
   scope?: OfferingScope | null;
+  /** TRACE-112: the server calculation behind this outcome. */
+  price_status?: "exact" | "estimate" | "quote" | "unresolved" | "invalid" | null;
+  price_reason?: string | null;
+  /** DEC-2026-041 item 7: the answers that prevented an exact price (server shape). */
+  price_blocking?: { answers: Array<{ question_key: string; question_label: string; answer: string | null }>; combination: boolean } | null;
+  /** Lines in whole cents: the price level, then required and chosen add-ons. */
+  price_breakdown?: Array<{ kind: "tier" | "addon"; name: string | null; quantity: number; unit_label?: string | null;
+    amount_cents: number; amount_max_cents: number | null; required: boolean; price_kind: string }> | null;
+  /** A quote's estimate in dollars; never a payable amount. */
+  estimate?: { min: number; max: number | null } | null;
+  addon_options?: Array<{ id: string; name: string; unit_label: string | null; price_kind: string; price: number;
+    price_max: number | null; min_quantity: number; max_quantity: number; is_required: boolean }>;
+  /** Revision of the package priced; submission refuses a later revision as price_changed. */
+  package_revision?: string | null;
 };
 
 export type PreviewResult = {
@@ -91,6 +107,18 @@ export function serviceAvailability(outcome: PreviewOutcome): ServiceAvailabilit
     return { kind: "quote", offeringMode: outcome.offering_mode === "deposit_quote" ? "deposit_quote" : "custom_quote", outcome };
   }
   return { kind: "needs_attention", outcome };
+}
+
+/** "$180–$210" or "from $180" for a quote's estimate; null without one. */
+export function estimateLabel(outcome: PreviewOutcome, formatMoney: (value: number) => string): string | null {
+  const estimate = outcome.estimate;
+  if (!estimate || !(estimate.min > 0)) return null;
+  return estimate.max != null && estimate.max > estimate.min ? `${formatMoney(estimate.min)}–${formatMoney(estimate.max)}` : `from ${formatMoney(estimate.min)}`;
+}
+
+/** Add-on lines included in a priced outcome, for display. */
+export function addonLines(outcome: PreviewOutcome) {
+  return (outcome.price_breakdown ?? []).filter((line) => line.kind === "addon");
 }
 
 /** A plan can proceed to submission only when every selection is exactly eligible. */

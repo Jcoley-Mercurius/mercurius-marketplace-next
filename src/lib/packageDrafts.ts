@@ -1,12 +1,20 @@
 import type { createClient } from "@/lib/supabase/client";
 import { frequencyLabel, parsePriceInput } from "@/lib/packagePriceCorrections";
+import { emptyContent, parseContent, type PackageContent } from "@/lib/pricingContent";
 import { isPricingFrequency, pricingFrequencies, type PricingFrequency } from "@/lib/vendorPricing";
 
 // DEC-2026-035 (TRACE-110): an operator drafts a price for a specific vendor, then
 // publishes it with a reason. Drafts are private to Mercurius until published. The server
 // (admin_save_package_draft / admin_publish_package_draft) owns validation, stale-read
-// refusal, the duplicate-cadence check, the review flag, history and the vendor notice;
+// refusal, the same-name check (TRACE-112), the review flag, history and the vendor notice;
 // this module prepares requests and reads what comes back.
+// DEC-2026-039 (TRACE-113): a draft holds full package content and is published only after
+// the bound vendor account approves its exact revision.
+
+export type ApprovalState = "draft" | "sent" | "approved" | "changes_requested";
+export type DeliveryStatus = "not_sent" | "in_inbox" | "read" | "removed_by_vendor" | "emailed";
+/** DEC-2026-041 item 6: the email notice to an unbound vendor's contact on file. */
+export type EmailState = "not_sent" | "pending" | "sending" | "sent" | "failed" | "unknown" | "missed" | "resend_requested";
 
 export type DraftPrice = { frequency: PricingFrequency; price: number };
 
@@ -19,10 +27,51 @@ export type PackageDraft = {
   name: string;
   description: string | null;
   prices: DraftPrice[];
+  content: PackageContent;
+  revision: string;
+  targetPackageId: string | null;
+  targetPackageName: string | null;
+  approvalState: ApprovalState;
+  /** The vendor approved exactly the revision now saved. */
+  approvalCurrent: boolean;
+  sentAt: string | null;
+  approvedAt: string | null;
+  changeRequest: string | null;
+  vendorLink: { linked: boolean; vendorRole: boolean; emailOnFile: boolean; blocker: string | null };
+  delivery: { status: DeliveryStatus; readAt: string | null; emailSent: boolean; email: EmailState; emailError: string | null };
   createdByEmail: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export const approvalStateLabel: Record<ApprovalState, string> = {
+  draft: "Draft, not sent to the vendor",
+  sent: "Waiting for the vendor's approval",
+  approved: "Approved by the vendor, not yet published",
+  changes_requested: "Vendor asked for changes",
+};
+
+export const deliveryLabel: Record<DeliveryStatus, string> = {
+  not_sent: "Not sent",
+  in_inbox: "In the vendor's Mercurius inbox, not read yet",
+  read: "Read by the vendor",
+  removed_by_vendor: "Removed from the vendor's inbox",
+  emailed: "Email notice to the contact on file",
+};
+
+export const emailStateLabel: Record<EmailState, string> = {
+  not_sent: "No email sent",
+  pending: "Email waiting to send",
+  sending: "Email sending",
+  sent: "Email sent; not approval",
+  failed: "Email failed; the vendor was not told",
+  unknown: "Email result unknown",
+  missed: "Email was never sent",
+  resend_requested: "Email resend waiting",
+};
+
+/** Email states an operator can act on by resending. */
+export const emailNeedsAttention = (state: EmailState) => state === "failed" || state === "unknown" || state === "missed";
 
 export type DraftService = { id: string; name: string; defaultFrequency: string; offered: PricingFrequency[] };
 export type DraftVendor = { id: string; name: string };
@@ -30,7 +79,10 @@ export type DraftVendor = { id: string; name: string };
 /** Entered text per cadence. Blank cadences are not priced. */
 export type DraftPriceInput = Partial<Record<PricingFrequency, string>>;
 
-export type PublishResult = { package_id: string; needs_review: boolean; vendor_notified: boolean };
+export type PublishResult = {
+  package_id: string; needs_review: boolean; vendor_notified: boolean;
+  replaced_package_id?: string | null; revision_number?: number;
+};
 
 export const DRAFT_NAME_MAX = 120;
 export const DRAFT_DESCRIPTION_MAX = 1000;
@@ -85,6 +137,12 @@ export function parseDraft(value: unknown): PackageDraft | null {
     return typeof price.frequency === "string" && isPricingFrequency(price.frequency) && Number.isFinite(amount)
       ? [{ frequency: price.frequency, price: amount }] : [];
   }) : [];
+  const link = (item.vendor_link ?? {}) as Record<string, unknown>;
+  const delivery = (item.delivery ?? {}) as Record<string, unknown>;
+  const states: ApprovalState[] = ["draft", "sent", "approved", "changes_requested"];
+  const deliveries: DeliveryStatus[] = ["not_sent", "in_inbox", "read", "removed_by_vendor", "emailed"];
+  const emailStates: EmailState[] = ["not_sent", "pending", "sending", "sent", "failed", "unknown", "missed", "resend_requested"];
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
   return {
     id: item.id,
     contractorId: item.contractor_id,
@@ -94,6 +152,27 @@ export function parseDraft(value: unknown): PackageDraft | null {
     name: item.name,
     description: typeof item.description === "string" ? item.description : null,
     prices,
+    // An older readback without content is shown from its per-cadence prices.
+    content: parseContent(item.content) ?? { ...emptyContent(item.name),
+      description: typeof item.description === "string" ? item.description : null,
+      tiers: prices.map((price) => ({ id: `level-${price.frequency}`, name: frequencyLabel(price.frequency), frequency: price.frequency,
+        price_kind: "exact" as const, price: price.price, price_max: null, conditions: [], includes: [] })) },
+    revision: typeof item.revision === "string" ? item.revision : "",
+    targetPackageId: text(item.target_package_id),
+    targetPackageName: text(item.target_package_name),
+    approvalState: states.includes(item.approval_state as ApprovalState) ? item.approval_state as ApprovalState : "draft",
+    approvalCurrent: item.approval_current === true,
+    sentAt: text(item.sent_at),
+    approvedAt: text(item.approved_at),
+    changeRequest: text(item.change_request),
+    vendorLink: { linked: link.linked === true, vendorRole: link.vendor_role === true, emailOnFile: link.email_on_file === true, blocker: text(link.blocker) },
+    delivery: {
+      status: deliveries.includes(delivery.status as DeliveryStatus) ? delivery.status as DeliveryStatus : "not_sent",
+      readAt: text(delivery.read_at),
+      emailSent: delivery.email === "sent",
+      email: emailStates.includes(delivery.email as EmailState) ? delivery.email as EmailState : "not_sent",
+      emailError: text(delivery.email_error),
+    },
     createdByEmail: typeof item.created_by_email === "string" ? item.created_by_email : null,
     createdAt: typeof item.created_at === "string" ? item.created_at : item.updated_at,
     updatedAt: item.updated_at,

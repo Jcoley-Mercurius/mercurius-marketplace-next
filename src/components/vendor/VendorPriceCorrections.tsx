@@ -26,7 +26,7 @@ export function VendorPriceCorrections() {
   return <section aria-labelledby="vendor-price-corrections" className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
     <div>
       <h2 id="vendor-price-corrections" className="font-semibold">Price changes by Mercurius</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Mercurius corrected these prices. Requests and quotes you had already agreed keep their price. Questions? Contact Mercurius support.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Earlier price corrections and any listing Mercurius paused. Mercurius now asks for your approval before changing a price. Requests and quotes you had already agreed keep their price. Questions? Contact Mercurius support.</p>
     </div>
     <ol className="space-y-3">{items.slice(0, SHOWN).map((item) => <Correction key={item.id} item={item} />)}</ol>
     {items.length > SHOWN && <details>

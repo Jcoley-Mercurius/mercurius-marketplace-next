@@ -1,6 +1,8 @@
 // TRACE-095: browser side of the submit_service_requests contract. The database derives
 // coverage, eligibility and price; this module only shapes the payload and explains outcomes.
 
+import { promotionReason } from "@/lib/promotionSelection";
+
 export const UNAVAILABLE_IN_AREA = "Not available yet in your area.";
 
 export type SubmissionPricingMode = "fixed" | "quote";
@@ -13,8 +15,14 @@ export type SubmissionSelection = {
   package_id?: string;
   tier_id?: string;
   answers?: Record<string, string>;
+  /** TRACE-112: chosen add-on quantities; required add-ons are always included. */
+  addons?: Array<{ id: string; quantity: number }>;
+  /** TRACE-112: the package revision shown; a later revision is refused as price_changed. */
+  package_revision?: string;
   /** What the homeowner was shown. Compared on the server, never stored as the price. */
   expected: { pricing_mode: SubmissionPricingMode; total?: number };
+  /** TRACE-116: the offer the homeowner chose and the saving shown; reserved with the request. */
+  promotion?: { offer_id: string; fingerprint: string; expected_discount_cents: number; code?: string };
 };
 
 export type SubmissionPayload = {
@@ -33,7 +41,8 @@ export type SelectionOutcome =
   | "package_unavailable"
   | "preferred_provider_unavailable"
   | "answers_required"
-  | "price_changed";
+  | "price_changed"
+  | "promotion_changed";
 
 export type SelectionResult = {
   selection_index: number;
@@ -68,6 +77,7 @@ const submissionKeyPattern = /^[A-Za-z0-9_-]{16,128}$/;
 const outcomes = new Set<SelectionOutcome>([
   "eligible_fixed", "eligible_quote", "unavailable", "invalid_provider", "invalid_package",
   "package_unavailable", "preferred_provider_unavailable", "answers_required", "price_changed",
+  "promotion_changed",
 ]);
 
 export function newSubmissionKey() {
@@ -129,5 +139,8 @@ export function refusalMessage(
       return result.pricing_mode === "fixed" && typeof result.total === "number"
         ? `${serviceName}: the current price for this address is ${formatMoney(result.total)}. Review it, then submit again.`
         : `${serviceName}: this service needs a quote at this address. Review it, then submit again.`;
+    case "promotion_changed":
+      // TRACE-116: never applied silently at another saving or dropped without saying so.
+      return `${serviceName}: the offer you chose wasn’t applied because ${promotionReason(result.reason)}. Review the offers and choose again, or continue without one.`;
   }
 }

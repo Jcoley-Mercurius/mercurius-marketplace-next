@@ -2,6 +2,7 @@
 
 import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
 import { JobOperations } from "@/components/dashboard/JobOperations";
+import { RequestPromotionPanel } from "@/components/dashboard/RequestPromotionPanel";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -475,6 +476,9 @@ export function HomeownerJobDetailDialog({
             {!isQuoted && ["sourcing", "exhausted", "awaiting_consent", "quote_pending"].includes(job.matching_status ?? "") ? "Awaiting provider" : (isQuoted ? job.quote_amount : job.total_amount) == null ? "Not available" : formatMoney((isQuoted ? job.quote_amount : job.total_amount)!)}
           </Detail>
         </div>
+
+        {/* TRACE-116: the offer on a fixed-price request, and the homeowner's choice when it changes. */}
+        {job.pricing_mode === "fixed" && <RequestPromotionPanel key={`offer-${job.id}`} requestId={job.id} enabled={actionsEnabled} />}
 
         {actionsEnabled && ["pending", "matched", "quoted", "scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="homeowner" onSaved={() => {
           onOpenChange(false);

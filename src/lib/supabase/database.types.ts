@@ -1369,6 +1369,7 @@ export type Database = {
           id: string
           obligation_id: string
           platform_fee: number
+          platform_subsidy: number
           replaces_item_id: string | null
           service_retained: number
           snapshot_id: string
@@ -1384,6 +1385,7 @@ export type Database = {
           id?: string
           obligation_id: string
           platform_fee: number
+          platform_subsidy?: number
           replaces_item_id?: string | null
           service_retained: number
           snapshot_id: string
@@ -1399,6 +1401,7 @@ export type Database = {
           id?: string
           obligation_id?: string
           platform_fee?: number
+          platform_subsidy?: number
           replaces_item_id?: string | null
           service_retained?: number
           snapshot_id?: string
@@ -3447,6 +3450,50 @@ export type Database = {
           },
         ]
       }
+      money_snapshot_promotions: {
+        Row: {
+          commission: number
+          commission_base: number
+          commission_rate_bps: number
+          created_at: string
+          discount: number
+          funding: string
+          platform_subsidy: number
+          redemption_id: string
+          snapshot_id: string
+        }
+        Insert: {
+          commission: number
+          commission_base: number
+          commission_rate_bps: number
+          created_at?: string
+          discount: number
+          funding: string
+          platform_subsidy: number
+          redemption_id: string
+          snapshot_id: string
+        }
+        Update: {
+          commission?: number
+          commission_base?: number
+          commission_rate_bps?: number
+          created_at?: string
+          discount?: number
+          funding?: string
+          platform_subsidy?: number
+          redemption_id?: string
+          snapshot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_snapshot_promotions_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: true
+            referencedRelation: "money_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_snapshots: {
         Row: {
           addons: number
@@ -3615,37 +3662,58 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          frequencies: string[]
           id: string
           is_offered: boolean
+          is_required: boolean
+          max_quantity: number
+          min_quantity: number
           name: string | null
           package_id: string
           price: number
+          price_kind: string
+          price_max: number | null
           sort_order: number
           template_addon_id: string | null
+          unit_label: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           description?: string | null
+          frequencies?: string[]
           id?: string
           is_offered?: boolean
+          is_required?: boolean
+          max_quantity?: number
+          min_quantity?: number
           name?: string | null
           package_id: string
           price?: number
+          price_kind?: string
+          price_max?: number | null
           sort_order?: number
           template_addon_id?: string | null
+          unit_label?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           description?: string | null
+          frequencies?: string[]
           id?: string
           is_offered?: boolean
+          is_required?: boolean
+          max_quantity?: number
+          min_quantity?: number
           name?: string | null
           package_id?: string
           price?: number
+          price_kind?: string
+          price_max?: number | null
           sort_order?: number
           template_addon_id?: string | null
+          unit_label?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -3771,6 +3839,9 @@ export type Database = {
           name: string
           package_id: string
           price: number
+          price_kind: string | null
+          price_max: number | null
+          rule_conditions: Json
           rule_max: number | null
           rule_min: number | null
           rule_question_key: string | null
@@ -3785,6 +3856,9 @@ export type Database = {
           name: string
           package_id: string
           price: number
+          price_kind?: string | null
+          price_max?: number | null
+          rule_conditions?: Json
           rule_max?: number | null
           rule_min?: number | null
           rule_question_key?: string | null
@@ -3799,6 +3873,9 @@ export type Database = {
           name?: string
           package_id?: string
           price?: number
+          price_kind?: string | null
+          price_max?: number | null
+          rule_conditions?: Json
           rule_max?: number | null
           rule_min?: number | null
           rule_question_key?: string | null
@@ -5766,10 +5843,14 @@ export type Database = {
           deposit_amount: number | null
           description: string | null
           id: string
+          included_scope: string[]
           is_active: boolean
+          lineage_id: string | null
           name: string
           needs_review: boolean
+          policy_notes: string | null
           pricing_mode: string
+          revision_number: number
           service_id: string
           sort_order: number
           template_id: string | null
@@ -5782,10 +5863,14 @@ export type Database = {
           deposit_amount?: number | null
           description?: string | null
           id?: string
+          included_scope?: string[]
           is_active?: boolean
+          lineage_id?: string | null
           name: string
           needs_review?: boolean
+          policy_notes?: string | null
           pricing_mode?: string
+          revision_number?: number
           service_id: string
           sort_order?: number
           template_id?: string | null
@@ -5798,10 +5883,14 @@ export type Database = {
           deposit_amount?: number | null
           description?: string | null
           id?: string
+          included_scope?: string[]
           is_active?: boolean
+          lineage_id?: string | null
           name?: string
           needs_review?: boolean
+          policy_notes?: string | null
           pricing_mode?: string
+          revision_number?: number
           service_id?: string
           sort_order?: number
           template_id?: string | null
@@ -6235,6 +6324,10 @@ export type Database = {
         Args: { _contractor_id: string; _job_id: string; _reason?: string }
         Returns: undefined
       }
+      admin_authorize_platform_promotion: {
+        Args: { p_fingerprint: string; p_offer: string; p_reason: string }
+        Returns: Json
+      }
       admin_correct_package_prices: {
         Args: {
           p_expected_updated_at: string
@@ -6246,6 +6339,19 @@ export type Database = {
       }
       admin_discard_package_draft: {
         Args: { p_draft: string; p_expected_updated_at: string }
+        Returns: Json
+      }
+      admin_draft_from_package: {
+        Args: {
+          p_expected_updated_at: string
+          p_package: string
+          p_prices: Json
+          p_reason: string
+        }
+        Returns: Json
+      }
+      admin_draft_from_template: {
+        Args: { p_contractor: string; p_frequency?: string; p_template: string }
         Returns: Json
       }
       admin_get_contractor_linked_email: {
@@ -6267,13 +6373,31 @@ export type Database = {
           phone: string
         }[]
       }
+      admin_package_contents: { Args: { p_contractor?: string }; Returns: Json }
+      admin_package_draft_events: { Args: { p_draft: string }; Returns: Json }
       admin_package_drafts: { Args: { p_contractor?: string }; Returns: Json }
       admin_package_price_corrections: {
         Args: { p_contractor: string }
         Returns: Json
       }
+      admin_pricing_approval_inventory: { Args: never; Returns: Json }
+      admin_promotion_offer_events: { Args: { p_offer: string }; Returns: Json }
+      admin_promotion_offers: { Args: never; Returns: Json }
+      admin_promotion_reservation_health: { Args: never; Returns: Json }
       admin_publish_package_draft: {
-        Args: { p_draft: string; p_expected_updated_at: string; p_reason: string }
+        Args: {
+          p_draft: string
+          p_expected_updated_at: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      admin_request_draft_email: {
+        Args: {
+          p_confirm_unknown?: boolean
+          p_draft: string
+          p_resend: boolean
+        }
         Returns: Json
       }
       admin_resolve_dispute: {
@@ -6283,6 +6407,14 @@ export type Database = {
           _status: Database["public"]["Enums"]["dispute_status"]
         }
         Returns: undefined
+      }
+      admin_restore_promotion: {
+        Args: { p_reason: string; p_redemption: string }
+        Returns: Json
+      }
+      admin_retire_promotion_offer: {
+        Args: { p_offer: string; p_reason: string }
+        Returns: Json
       }
       admin_save_package_draft: {
         Args: {
@@ -6296,6 +6428,29 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_save_package_draft_content: {
+        Args: {
+          p_content: Json
+          p_contractor: string
+          p_draft: string
+          p_expected_updated_at: string
+          p_service: string
+          p_target_package: string
+        }
+        Returns: Json
+      }
+      admin_save_promotion_offer: {
+        Args: { p_expected_updated_at: string; p_offer: string; p_terms: Json }
+        Returns: Json
+      }
+      admin_send_package_draft: {
+        Args: { p_draft: string; p_revision: string }
+        Returns: Json
+      }
+      admin_send_promotion_for_vendor_approval: {
+        Args: { p_fingerprint: string; p_offer: string }
+        Returns: Json
+      }
       admin_send_quote: {
         Args: {
           _amount: number
@@ -6304,6 +6459,14 @@ export type Database = {
           _reason: string
         }
         Returns: undefined
+      }
+      admin_suspend_package: {
+        Args: {
+          p_expected_updated_at: string
+          p_package: string
+          p_reason: string
+        }
+        Returns: Json
       }
       admin_unlink_contractor: {
         Args: { _contractor_id: string }
@@ -6457,10 +6620,26 @@ export type Database = {
         }
         Returns: boolean
       }
+      homeowner_choose_request_promotion: {
+        Args: {
+          p_code: string
+          p_expected_cents: number
+          p_fingerprint: string
+          p_key: string
+          p_offer: string
+          p_request: string
+        }
+        Returns: Json
+      }
       homeowner_confirm_job: { Args: { _job_id: string }; Returns: undefined }
+      homeowner_promotion_options: { Args: { p_payload: Json }; Returns: Json }
       homeowner_raise_dispute: {
         Args: { _job_id: string; _reason: string }
         Returns: string
+      }
+      homeowner_request_promotion: {
+        Args: { p_code?: string; p_request: string }
+        Returns: Json
       }
       homeowner_respond_to_quote: {
         Args: { _approve: boolean; _job_id: string; _quote_id?: string }
@@ -7128,7 +7307,46 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      pricing_claim_draft_email: {
+        Args: { p_draft: string; p_mode: string }
+        Returns: Json
+      }
+      pricing_preview_content: {
+        Args: {
+          p_addons: Json
+          p_answers: Json
+          p_content: Json
+          p_frequency: string
+          p_service: string
+          p_tier: string
+        }
+        Returns: Json
+      }
+      pricing_preview_draft: {
+        Args: {
+          p_addons: Json
+          p_answers: Json
+          p_draft: string
+          p_frequency: string
+          p_tier: string
+        }
+        Returns: Json
+      }
+      pricing_record_draft_email: {
+        Args: {
+          p_claim: string
+          p_draft: string
+          p_error?: string
+          p_outcome: string
+          p_provider_id?: string
+        }
+        Returns: Json
+      }
       pricing_server_now: { Args: never; Returns: string }
+      promotion_offer_example: {
+        Args: { p_eligible_cents: number; p_offer: string }
+        Returns: Json
+      }
       provider_invitation_open: {
         Args: { p_attempt: string; p_key_hash: string; p_source: string }
         Returns: Json
@@ -7468,6 +7686,14 @@ export type Database = {
         }
         Returns: Json
       }
+      vendor_approve_package_draft: {
+        Args: { p_draft: string; p_revision: string }
+        Returns: Json
+      }
+      vendor_approve_promotion_offer: {
+        Args: { p_fingerprint: string; p_offer: string }
+        Returns: Json
+      }
       vendor_authorize_renewal_upload: {
         Args: { p_contractor?: string; p_kind: string }
         Returns: Json
@@ -7543,6 +7769,10 @@ export type Database = {
         Args: { _job_id: string; _reason?: string }
         Returns: undefined
       }
+      vendor_decline_promotion_offer: {
+        Args: { p_fingerprint: string; p_note: string; p_offer: string }
+        Returns: Json
+      }
       vendor_decline_renewal_document: {
         Args: { p_document: string; p_key: string; p_note: string }
         Returns: Json
@@ -7588,6 +7818,7 @@ export type Database = {
       }
       vendor_own_evidence_renewal: { Args: never; Returns: Json }
       vendor_own_renewal_documents: { Args: never; Returns: Json }
+      vendor_package_approvals: { Args: never; Returns: Json }
       vendor_place_application_retention_hold: {
         Args: { p_application: string; p_key: string; p_reason: string }
         Returns: Json
@@ -7609,6 +7840,7 @@ export type Database = {
         }
         Returns: Json
       }
+      vendor_promotion_offers: { Args: never; Returns: Json }
       vendor_record_checklist_evidence: {
         Args: {
           p_accepted: string
@@ -7723,6 +7955,10 @@ export type Database = {
           p_path: string
           p_reason: string
         }
+        Returns: Json
+      }
+      vendor_request_package_changes: {
+        Args: { p_draft: string; p_note: string; p_revision: string }
         Returns: Json
       }
       vendor_require_operator: { Args: never; Returns: string }

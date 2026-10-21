@@ -1,4 +1,5 @@
 import type { createClient } from "@/lib/supabase/client";
+import { parseContent, type PackageContent } from "@/lib/pricingContent";
 
 // DEC-2026-034 (TRACE-109): an operator corrects a vendor's package prices with a reason
 // through admin_correct_package_prices. The server owns validation, stale-read refusal,
@@ -23,7 +24,39 @@ export type CorrectablePackage = {
   depositAmount: number | null;
   tiers: PriceLine[];
   addons: PriceLine[];
+  /** The live package's content document (description, scope, price meaning, add-ons), when readable. */
+  content: PackageContent | null;
+  /** DEC-2026-041 item 5: approval evidence as recorded; never inferred. */
+  approval: PackageApproval | null;
 };
+
+export type ApprovalEvidence = "vendor_approved" | "operator_published" | "managed_template" | "unrecorded";
+export type PackageApproval = {
+  status: ApprovalEvidence;
+  operatorCorrected: boolean;
+  replacement: { draftId: string; approvalState: string } | null;
+};
+
+export const approvalEvidenceLabel: Record<ApprovalEvidence, string> = {
+  vendor_approved: "Vendor approved this revision",
+  operator_published: "Published by Mercurius without vendor approval",
+  managed_template: "From a Mercurius template; no approval recorded",
+  unrecorded: "No approval recorded",
+};
+
+function parseApproval(value: unknown): PackageApproval | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const statuses: ApprovalEvidence[] = ["vendor_approved", "operator_published", "managed_template", "unrecorded"];
+  if (!statuses.includes(item.status as ApprovalEvidence)) return null;
+  const replacement = item.replacement && typeof item.replacement === "object" ? item.replacement as Record<string, unknown> : null;
+  return {
+    status: item.status as ApprovalEvidence,
+    operatorCorrected: item.operator_corrected === true,
+    replacement: replacement && typeof replacement.draft_id === "string"
+      ? { draftId: replacement.draft_id, approvalState: String(replacement.approval_state ?? "draft") } : null,
+  };
+}
 
 /** Entered text per tier/add-on id, plus "deposit". Untouched lines are absent or unchanged. */
 export type PriceDraft = Record<string, string>;
@@ -35,13 +68,10 @@ export type CorrectionRequest = {
   deposit_from?: number | null;
 };
 
-export type PriceCorrectionChange = {
-  kind: "tier" | "addon" | "deposit";
-  name: string;
-  frequency: string | null;
-  from: number | null;
-  to: number;
-};
+export type PriceCorrectionChange =
+  | { kind: "tier" | "addon" | "deposit"; name: string; frequency: string | null; from: number | null; to: number }
+  /** DEC-2026-041 item 4: an operator suspended the listing while approval is obtained. */
+  | { kind: "suspended" };
 
 export type PriceCorrection = {
   id: number;
@@ -96,6 +126,7 @@ export function buildCorrection(pkg: CorrectablePackage, draft: PriceDraft):
 /** Server refusals worded for the operator. */
 export function correctionErrorMessage(error: { code?: string; message: string }) {
   if (error.code === "40001") return "This package changed since you opened it. Reload and review the vendor’s current prices before correcting.";
+  if (error.code === "55000" && /already open/.test(error.message)) return "A replacement draft for this package is already open. Edit it under Draft prices.";
   return error.message;
 }
 
@@ -105,9 +136,10 @@ export function parseCorrections(value: unknown): PriceCorrection[] {
     if (!row || typeof row !== "object") return [];
     const item = row as Record<string, unknown>;
     if (typeof item.package_id !== "string" || typeof item.reason !== "string" || typeof item.created_at !== "string") return [];
-    const changes = Array.isArray(item.changes) ? item.changes.flatMap((change) => {
+    const changes = Array.isArray(item.changes) ? item.changes.flatMap((change): PriceCorrectionChange[] => {
       if (!change || typeof change !== "object") return [];
       const entry = change as Record<string, unknown>;
+      if (entry.kind === "suspended") return [{ kind: "suspended" } satisfies PriceCorrectionChange];
       if (entry.kind !== "tier" && entry.kind !== "addon" && entry.kind !== "deposit") return [];
       const to = Number(entry.to);
       if (!Number.isFinite(to)) return [];
@@ -132,6 +164,7 @@ export function parseCorrections(value: unknown): PriceCorrection[] {
 }
 
 export function describeChange(change: PriceCorrectionChange) {
+  if (change.kind === "suspended") return "Listing suspended by Mercurius";
   const label = change.frequency && change.frequency !== "one-time" && change.name !== frequencyLabel(change.frequency)
     ? `${change.name} (${frequencyLabel(change.frequency)})` : change.name;
   return `${label}: ${change.from === null ? "not set" : formatPrice(change.from)} → ${formatPrice(change.to)}`;
@@ -181,20 +214,26 @@ export async function loadCorrectablePackages(supabase: ReturnType<typeof create
   const packages = (packageResult.data ?? []) as PackageRow[];
   if (!packages.length) return [];
   const ids = packages.map((item) => item.id);
-  const [contractorResult, serviceResult, tierResult, addonResult, templateAddonResult] = await Promise.all([
+  const [contractorResult, serviceResult, tierResult, addonResult, templateAddonResult, contentResult] = await Promise.all([
     supabase.from("contractors").select("id, name").in("id", [...new Set(packages.map((item) => item.contractor_id))]),
     supabase.from("services_catalog").select("id, name").in("id", [...new Set(packages.map((item) => item.service_id))]),
     supabase.from("package_tiers").select("id, package_id, name, price, frequency, sort_order").in("package_id", ids).order("sort_order"),
     supabase.from("package_addons").select("id, package_id, template_addon_id, name, price, is_offered, sort_order").in("package_id", ids).order("sort_order"),
     supabase.from("pricing_template_addons").select("id, label"),
+    supabase.rpc("admin_package_contents", contractorId ? { p_contractor: contractorId } : {}),
   ]);
-  const firstError = contractorResult.error ?? serviceResult.error ?? tierResult.error ?? addonResult.error ?? templateAddonResult.error;
+  const firstError = contractorResult.error ?? serviceResult.error ?? tierResult.error ?? addonResult.error ?? templateAddonResult.error ?? contentResult.error;
   if (firstError) throw firstError;
   const contractors = new Map(((contractorResult.data ?? []) as NamedRow[]).map((item) => [item.id, item.name]));
   const services = new Map(((serviceResult.data ?? []) as NamedRow[]).map((item) => [item.id, item.name]));
   const addonLabels = new Map(((templateAddonResult.data ?? []) as Array<{ id: string; label: string }>).map((item) => [item.id, item.label]));
   const tiers = (tierResult.data ?? []) as TierRow[];
   const addons = (addonResult.data ?? []) as AddonRow[];
+  const contents = new Map((Array.isArray(contentResult.data) ? contentResult.data : []).flatMap((entry) => {
+    const row = entry as { package_id?: unknown; content?: unknown; approval?: unknown } | null;
+    return typeof row?.package_id === "string"
+      ? [[row.package_id, { content: parseContent(row.content), approval: parseApproval(row.approval) }] as const] : [];
+  }));
   return packages.map((item) => ({
     id: item.id,
     contractorId: item.contractor_id,
@@ -217,5 +256,7 @@ export async function loadCorrectablePackages(supabase: ReturnType<typeof create
       detail: addon.is_offered ? "Add-on" : "Add-on, not offered",
       price: Number(addon.price),
     })),
+    content: contents.get(item.id)?.content ?? null,
+    approval: contents.get(item.id)?.approval ?? null,
   }));
 }

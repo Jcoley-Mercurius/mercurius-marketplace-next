@@ -85,6 +85,8 @@ type PackageRow = {
   is_active: boolean;
   needs_review: boolean | null;
   sort_order: number;
+  included_scope?: string[] | null;
+  policy_notes?: string | null;
 };
 
 type PackageTier = {
@@ -98,6 +100,9 @@ type PackageTier = {
   rule_max?: number | null;
   includes: string[] | null;
   sort_order: number;
+  price_kind?: string | null;
+  price_max?: number | null;
+  rule_conditions?: unknown;
 };
 
 type PackageAddon = {
@@ -107,6 +112,13 @@ type PackageAddon = {
   description: string | null;
   price: number;
   sort_order: number;
+  price_kind?: string | null;
+  price_max?: number | null;
+  unit_label?: string | null;
+  min_quantity?: number | null;
+  max_quantity?: number | null;
+  is_required?: boolean | null;
+  frequencies?: string[] | null;
 };
 
 type VendorPackage = Omit<PackageRow, "pricing_mode" | "default_frequency"> & {
@@ -201,7 +213,7 @@ export default function ProviderStorefrontPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("vendor_packages")
-          .select("id, contractor_id, service_id, name, description, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, sort_order")
+          .select("id, contractor_id, service_id, name, description, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, sort_order, included_scope, policy_notes")
           .eq("contractor_id", contractorId)
           .eq("is_active", true)
           .eq("needs_review", false)
@@ -233,13 +245,13 @@ export default function ProviderStorefrontPage() {
       const [tiersResult, addonsResult, promotionsResult, clockResult, zipsResult, areasResult] = await Promise.all([
         packageIds.length ? supabase
             .from("package_tiers")
-            .select("id, package_id, name, price, frequency, rule_question_key, rule_min, rule_max, includes, sort_order")
+            .select("id, package_id, name, price, frequency, rule_question_key, rule_min, rule_max, includes, sort_order, price_kind, price_max, rule_conditions")
             .in("package_id", packageIds)
             .order("sort_order")
           : Promise.resolve({ data: [] as PackageTier[], error: null }),
         packageIds.length ? supabase
           .from("package_addons")
-          .select("id, package_id, name, description, price, sort_order")
+          .select("id, package_id, name, description, price, sort_order, price_kind, price_max, unit_label, min_quantity, max_quantity, is_required, frequencies")
           .in("package_id", packageIds)
           .is("template_addon_id", null)
           .eq("is_offered", true)
@@ -296,11 +308,12 @@ export default function ProviderStorefrontPage() {
           .map((tier) => ({
             ...tier,
             price: Number(tier.price),
+            price_max: tier.price_max == null ? null : Number(tier.price_max),
             frequency: tierPricingFrequency(tier, isFrequency(item.default_frequency) ? item.default_frequency : "one-time"),
           })),
         addons: addons
           .filter((addon) => addon.package_id === item.id)
-          .map((addon) => ({ ...addon, price: Number(addon.price) })),
+          .map((addon) => ({ ...addon, price: Number(addon.price), price_max: addon.price_max == null ? null : Number(addon.price_max) })),
         promotions: promotions.filter((promotion) => promotion.package_id === item.id),
         questions: questionsResult.error
           ? []
@@ -367,7 +380,8 @@ export default function ProviderStorefrontPage() {
       ?? cadenceOptions.find((option) => option.frequency === selectedPackage?.default_frequency)
       ?? cadenceOptions[0]
       ?? null;
-    const tier = tierPrice?.tier ?? null;
+    // TRACE-112: a rule-based level is chosen from the homeowner's answers, never the cheapest.
+    const tier = tierPrice && !tierPrice.ruleBased ? tierPrice.tier : null;
     const frequency = tierPrice?.frequency ?? selectedPackage?.default_frequency ?? "one-time";
 
     if (serviceId) {
@@ -389,7 +403,7 @@ export default function ProviderStorefrontPage() {
         requestedServices: [{
           id: serviceId,
           name: serviceName,
-          availability: tier ? "fixed" : "quote",
+          availability: tierPrice ? "fixed" : "quote",
           descriptor: selectedPackage?.description ?? `Requested from ${contractor.name}`,
           defaultFrequency: frequency,
           frequencies: cadenceOptions.length ? cadenceOptions.map((option) => option.frequency) : [frequency],
@@ -497,15 +511,15 @@ export default function ProviderStorefrontPage() {
                       if (!cadenceOptions.length) return null;
                       const defaultOption = cadenceOptions.find((option) => option.frequency === item.default_frequency) ?? cadenceOptions[0];
                       return <article key={item.id} className="rounded-xl border border-border bg-background p-4">
-                        <div className="min-w-0"><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{displayService(item.service_id, serviceNames)} · {cadenceOptions.length} live {cadenceOptions.length === 1 ? "cadence" : "cadences"}</p>{item.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>}{defaultOption.tier.includes && defaultOption.tier.includes.length > 0 && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">{defaultOption.tier.includes.slice(0, 4).map((included) => <span key={included} className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="h-3 w-3 text-accent" />{included}</span>)}</div>}<PublicPackageAddons addons={item.addons} /></div>
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2">{cadenceOptions.map((option) => <button key={option.frequency} type="button" onClick={() => startRequest(item, option)} className="flex items-center justify-between rounded-lg border bg-muted/15 px-3 py-2.5 text-left transition-colors hover:border-accent/50 hover:bg-accent/5"><span><span className="block text-sm font-medium">{frequencyLabel(option.frequency)}</span>{option.frequency === item.default_frequency && <span className="text-[10px] text-muted-foreground">Default</span>}</span><span className="text-right">{option.price.isPromotionEffective && <span className="block text-[10px] text-muted-foreground line-through">{money(option.price.basePrice)}</span>}<span className="font-bold tabular-nums">{money(option.price.effectivePrice)}<span className="text-xs font-normal text-muted-foreground">{frequencySuffix(option.frequency)}</span></span>{option.price.isPromotionEffective && <span className="block text-[10px] font-medium text-coral">{option.price.promotionLabel || "Limited-time price"}</span>}</span></button>)}</div>
+                        <div className="min-w-0"><p className="font-semibold">{item.name}</p><p className="mt-1 text-sm text-muted-foreground">{displayService(item.service_id, serviceNames)} · {cadenceOptions.length} live {cadenceOptions.length === 1 ? "cadence" : "cadences"}</p>{item.description && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>}{defaultOption.tier.includes && defaultOption.tier.includes.length > 0 && <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">{defaultOption.tier.includes.slice(0, 4).map((included) => <span key={included} className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="h-3 w-3 text-accent" />{included}</span>)}</div>}<PackageScope item={item} /><PublicPackageAddons addons={item.addons} /></div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2">{cadenceOptions.map((option) => <button key={option.frequency} type="button" onClick={() => startRequest(item, option)} className="flex items-center justify-between rounded-lg border bg-muted/15 px-3 py-2.5 text-left transition-colors hover:border-accent/50 hover:bg-accent/5"><span><span className="block text-sm font-medium">{frequencyLabel(option.frequency)}</span>{option.frequency === item.default_frequency && <span className="text-[10px] text-muted-foreground">Default</span>}</span><span className="text-right">{option.price.isPromotionEffective && <span className="block text-[10px] text-muted-foreground line-through">{money(option.price.basePrice)}</span>}<span className="font-bold tabular-nums">{option.levels > 1 || option.estimate ? "From " : ""}{money(option.price.effectivePrice)}<span className="text-xs font-normal text-muted-foreground">{frequencySuffix(option.frequency)}</span></span>{option.levels > 1 && <span className="block text-[10px] text-muted-foreground">{option.ruleBased ? "Set by your answers" : `${option.levels} levels`}</span>}{option.price.isPromotionEffective && <span className="block text-[10px] font-medium text-coral">{option.price.promotionLabel || "Limited-time price"}</span>}</span></button>)}</div>
                       </article>;
                     })}
                   </div>
                 </SectionCard>}
 
                 {quotePackages.length > 0 && <SectionCard title="Services Requiring a Quote">
-                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p><Badge variant="outline" className="border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p>{item.pricing_mode === "deposit_quote" && item.deposit_amount && <p className="mt-2 text-xs text-muted-foreground">A {money(item.deposit_amount)} deposit may apply after scope, final pricing, and booking details are confirmed. Nothing is charged with the initial request.</p>}<PublicPackageAddons addons={item.addons} /></div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>{invited ? "Request & Match" : EARLY_ACCESS_CTA}<ArrowRight /></Button></div>)}</div>
+                  <div className="grid gap-3">{quotePackages.map((item) => <div key={item.id} className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{item.name}</p><Badge variant="outline" className="border-status-info bg-status-info-bg text-status-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.description || `${displayService(item.service_id, serviceNames)} requires scope confirmation.`}</p><QuoteEstimate item={item} />{item.pricing_mode === "deposit_quote" && item.deposit_amount && <p className="mt-2 text-xs text-muted-foreground">A {money(item.deposit_amount)} deposit may apply after scope, final pricing, and booking details are confirmed. Nothing is charged with the initial request.</p>}<PackageScope item={item} /><PublicPackageAddons addons={item.addons} /></div><Button variant="outline" className="shrink-0" onClick={() => startRequest(item)}>{invited ? "Request & Match" : EARLY_ACCESS_CTA}<ArrowRight /></Button></div>)}</div>
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Mercurius will coordinate the details with you and the provider before the work is confirmed. No unpublished price is presented as bookable.</p>
                 </SectionCard>}
 
@@ -586,16 +600,35 @@ function isFrequency(value: string): value is Frequency {
   return isPricingFrequency(value);
 }
 
+function hasLevelRule(tier: PackageTier) {
+  return Boolean(tier.rule_question_key) || (Array.isArray(tier.rule_conditions) && tier.rule_conditions.length > 0);
+}
+
+/** Required add-ons for a cadence are part of the price (TRACE-112). */
+function requiredAddons(item: VendorPackage, frequency: Frequency) {
+  return item.addons.filter((addon) => addon.is_required && (!addon.frequencies?.length || addon.frequencies.includes(frequency)));
+}
+
 function effectiveFrequencyOptions(item: VendorPackage, serverNow: string | null) {
   const promotion = promotionForPackage(item.promotions, item.id);
   const frequencies = publiclyEligibleFixedFrequencies(item, item.default_frequency);
   return frequencies
     .flatMap((frequency) => {
-      const tierPrice = item.tiers
-        .filter((tier) => tierPricingFrequency(tier, item.default_frequency) === frequency)
+      const levels = item.tiers.filter((tier) => tierPricingFrequency(tier, item.default_frequency) === frequency);
+      const required = requiredAddons(item, frequency);
+      const requiredAmount = required.reduce((sum, addon) => sum + addon.price * Math.max(1, addon.min_quantity ?? 1), 0);
+      const tierPrice = levels
         .map((tier) => ({ frequency, tier, price: resolveEffectiveTierPrice(tier.price, promotion, serverNow, item.tiers.length) }))
         .sort((left, right) => left.price.effectivePrice - right.price.effectivePrice)[0];
-      return tierPrice ? [tierPrice] : [];
+      return tierPrice ? [{
+        ...tierPrice,
+        // What the request is charged at the lowest level, required add-ons included.
+        price: { ...tierPrice.price, effectivePrice: Math.round((tierPrice.price.effectivePrice + requiredAmount) * 100) / 100,
+          basePrice: Math.round((tierPrice.price.basePrice + requiredAmount) * 100) / 100 },
+        levels: levels.length,
+        ruleBased: levels.some(hasLevelRule),
+        estimate: required.some((addon) => addon.price_kind === "range"),
+      }] : [];
     })
     .sort((left, right) => {
       if (left.frequency === item.default_frequency) return -1;
@@ -611,9 +644,39 @@ function StorefrontPriceOverview({ item, serverNow }: { item: VendorPackage; ser
   return <div className="mb-5"><p className="text-sm text-muted-foreground">Published provider-backed pricing{options.length > 1 ? ` · ${options.length} live cadences` : ""}</p>{tierPrice.price.isPromotionEffective && <p className="mt-2 text-sm text-muted-foreground line-through">From {money(tierPrice.price.basePrice)}</p>}<p className={cn("text-2xl font-bold tabular-nums", !tierPrice.price.isPromotionEffective && "mt-2")}>From {money(tierPrice.price.effectivePrice)}<span className="text-sm font-normal text-muted-foreground">{frequencySuffix(tierPrice.frequency)}</span></p>{tierPrice.price.isPromotionEffective && <p className="mt-1 text-xs font-medium text-coral">{tierPrice.price.promotionLabel || "Limited-time price"}</p>}</div>;
 }
 
+function addonAmount(addon: PackageAddon) {
+  const amount = addon.price_kind === "range" && addon.price_max != null ? `${money(addon.price)}–${money(addon.price_max)}` : money(addon.price);
+  return addon.unit_label ? `+${amount} per ${addon.unit_label}` : `+${amount}`;
+}
+
 function PublicPackageAddons({ addons }: { addons: PackageAddon[] }) {
   if (!addons.length) return null;
-  return <div className="mt-3 rounded-lg border bg-muted/30 p-2.5"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Optional extras · confirmed before booking</p><div className="mt-1.5 space-y-1">{addons.map((addon) => <div key={addon.id} className="flex items-start justify-between gap-3 text-xs"><span><span className="font-medium text-foreground">{addon.name}</span>{addon.description && <span className="ml-1 text-muted-foreground">— {addon.description}</span>}</span><span className="shrink-0 font-semibold text-foreground">+{money(addon.price)}</span></div>)}</div></div>;
+  const required = addons.filter((addon) => addon.is_required);
+  const optional = addons.filter((addon) => !addon.is_required);
+  const row = (addon: PackageAddon) => <div key={addon.id} className="flex items-start justify-between gap-3 text-xs"><span><span className="font-medium text-foreground">{addon.name}</span>{addon.description && <span className="ml-1 text-muted-foreground">— {addon.description}</span>}{(addon.max_quantity ?? 1) > 1 && <span className="ml-1 text-muted-foreground">(up to {addon.max_quantity})</span>}</span><span className="shrink-0 font-semibold text-foreground">{addonAmount(addon)}{addon.price_kind === "range" ? " estimate" : ""}</span></div>;
+  return <div className="mt-3 space-y-2 rounded-lg border bg-muted/30 p-2.5">
+    {required.length > 0 && <div><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Required · included in the price shown</p><div className="mt-1.5 space-y-1">{required.map(row)}</div></div>}
+    {optional.length > 0 && <div><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Optional extras · confirmed before booking</p><div className="mt-1.5 space-y-1">{optional.map(row)}</div></div>}
+  </div>;
+}
+
+/** A quote package's estimate, or that it is quoted after a walkthrough (TRACE-112). */
+function QuoteEstimate({ item }: { item: VendorPackage }) {
+  const estimates = item.tiers.filter((tier) => tier.price_kind === "starting_at" || tier.price_kind === "range");
+  if (!estimates.length) return <p className="mt-2 text-xs text-muted-foreground">Quote after walkthrough; no price is shown until then.</p>;
+  const low = Math.min(...estimates.map((tier) => tier.price));
+  const open = estimates.some((tier) => tier.price_kind === "starting_at");
+  const high = Math.max(...estimates.map((tier) => tier.price_max ?? tier.price));
+  return <p className="mt-2 text-sm"><span className="font-semibold tabular-nums">{open ? `From ${money(low)}` : `${money(low)}–${money(high)}`}</span><span className="text-xs text-muted-foreground"> estimate · the provider confirms the final price</span></p>;
+}
+
+function PackageScope({ item }: { item: VendorPackage }) {
+  const scope = item.included_scope ?? [];
+  if (!scope.length && !item.policy_notes) return null;
+  return <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+    {scope.length > 0 && <p><span className="font-medium text-foreground">Included:</span> {scope.join(" · ")}</p>}
+    {item.policy_notes && <p><span className="font-medium text-foreground">Provider notes:</span> {item.policy_notes} <span>(Mercurius booking terms apply.)</span></p>}
+  </div>;
 }
 
 function displayService(id: string, names: Record<string, string>) {

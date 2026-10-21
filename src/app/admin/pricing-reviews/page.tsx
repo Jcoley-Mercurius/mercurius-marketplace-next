@@ -245,7 +245,7 @@ export default function AdminPricingReviewsPage() {
 
   return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Pricing operations</p><h1 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-tight"><AlertTriangle className="text-amber-600" />Package Reviews</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Review vendor package prices held outside public booking by the soft-launch guardrail. Approval clears only the review flag; it does not change the vendor’s price or active state. Correct prices changes the price with a reason the vendor sees; a price still outside the band stays here.</p></div>
+      <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Pricing operations</p><h1 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-tight"><AlertTriangle className="text-amber-600" />Package Reviews</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Review vendor package prices held outside public booking by the soft-launch guardrail. Approval clears only the review flag; it does not change the vendor’s price or active state. Propose corrected prices creates a draft the vendor approves before it replaces the live price; a price still outside the band stays here.</p></div>
       <Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button>
     </header>
 
@@ -327,6 +327,8 @@ function correctable(item: ReviewItem): CorrectablePackage {
     depositAmount: item.deposit_amount,
     tiers: item.tiers.map((tier) => ({ kind: "tier", id: tier.id, name: tier.name, detail: frequencyLabel(tier.frequency), price: tier.price })),
     addons: [],
+    content: null,
+    approval: null,
   };
 }
 

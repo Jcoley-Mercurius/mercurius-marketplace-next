@@ -48,6 +48,8 @@ export type ConfirmationInput = {
   matching: Record<string, MatchingStart>;
   checkout: CheckoutState;
   formatMoney: (value: number) => string;
+  /** TRACE-116: the saving of the offer submitted with each service, in cents. */
+  offers?: Record<string, number>;
 };
 
 // P6-R2: once a request moves past intake, the database lifecycle wins over the initial
@@ -102,7 +104,9 @@ export function describeConfirmation(input: ConfirmationInput): ServiceConfirmat
     const amount = mode === "fixed" ? request.total_amount : null;
 
     const base = { requestId: request.request_id, serviceId: request.service_id, serviceName, mode, amount, canRetryMatching: false };
-    const payment = paymentLine(mode, amount, row, input.checkout, input.formatMoney);
+    const offer = mode === "fixed" ? input.offers?.[request.service_id] : undefined;
+    const payment = paymentLine(mode, amount, row, input.checkout, input.formatMoney)
+      + (offer ? ` Your offer saves ${input.formatMoney(offer / 100)}; your dashboard shows it, and checkout shows the final amount.` : "");
 
     if (!row) {
       return { ...base, status: "submitted", summary: "Saved. We couldn’t load its current status, so check your dashboard for the latest.",

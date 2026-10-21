@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  addonSelection,
   REQUEST_DRAFT_KEY,
   addDays,
   clearDraftStorage,
@@ -459,5 +460,25 @@ describe("sign-up continuation", () => {
     for (const value of [null, "", "/dashboard", "/request?x=1", "//evil.example", "https://evil.example/request"]) {
       expect(requestContinuationPath(value)).toBeNull();
     }
+  });
+});
+
+describe("optional add-ons in the draft (DEC-2026-041 item 2)", () => {
+  const pkg = "11111111-1111-4111-8111-111111111111";
+  it("keeps valid quantities per offering and drops anything else", () => {
+    const raw = JSON.stringify({ addonQuantities: {
+      "trash-can-cleaning": { packageId: pkg, quantities: { "extra-can": 2, bad: -1, worse: 1.5, huge: 100 } },
+      "BAD ID": { packageId: pkg, quantities: { a: 1 } },
+      "lawn-mowing": { packageId: "not-a-uuid", quantities: { a: 1 } },
+    } });
+    expect(parseDraft(raw, "key-1234567890", "2026-10-19").draft.addonQuantities).toEqual({
+      "trash-can-cleaning": { packageId: pkg, quantities: { "extra-can": 2 } },
+    });
+  });
+  it("sends quantities above zero only for the offering they were chosen for", () => {
+    const entry = { packageId: pkg, quantities: { b: 0, a: 2, c: 1 } };
+    expect(addonSelection(entry, pkg)).toEqual([{ id: "a", quantity: 2 }, { id: "c", quantity: 1 }]);
+    expect(addonSelection(entry, "22222222-2222-4222-8222-222222222222")).toEqual([]);
+    expect(addonSelection(undefined, pkg)).toEqual([]);
   });
 });

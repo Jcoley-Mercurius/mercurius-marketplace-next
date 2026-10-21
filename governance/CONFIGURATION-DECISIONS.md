@@ -53,6 +53,7 @@
 - **Refund effect:** After a full or partial refund, the 15% fee is calculated against the final retained service subtotal.
 - **Processor cost:** Customer-payment processing cost is a Mercurius operating cost and is not deducted a second time from provider proceeds.
 - **Tax:** Tracked separately from service subtotal and excluded from the 15% fee; calculation and remittance must follow the implemented tax authority.
+- **Promotional exception (DEC-2026-038, approved 2026-10-18):** a booking with one valid applied promotion pays 7.5% on its qualifying commissionable service amount: the discounted amount for a vendor-funded discount; the amount before the discount for a Mercurius-funded discount, whose discount is a platform subsidy kept apart from commission. One promotion per booking, no Credits stacking, Credits never offset commission. Refund allocation, release, restoration and first-booking eligibility are approved in DEC-2026-041; DEC-2026-042 defines how a homeowner applies one (explicit choice or code, never automatic). Checkout still refuses promotions (DEC-2026-015 §3) until that is implemented and passes the two-person finance review.
 
 ## CFG-006 — Customer cancellation and rescheduling
 

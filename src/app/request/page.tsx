@@ -46,6 +46,8 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { InterestConfirmation, RequestConfirmation } from "@/components/request/RequestConfirmation";
 import { ServiceAvailabilityList, type AvailabilityItem } from "@/components/request/ServiceAvailabilityList";
+import { AddonPicker, type AddonOption } from "@/components/request/AddonPicker";
+import { CodeEntry, OfferChoices } from "@/components/pricing/OfferChoices";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -62,6 +64,17 @@ import { BookingClosedState } from "@/components/early-access/BookingClosedState
 import { activeCells, bookingState, describeCells, earlyAccessServicesFromQuery } from "@/lib/earlyAccessExperience";
 import { paymentFunctionError, sameOriginReviewUrl } from "@/lib/payments";
 import {
+  centsLabel,
+  choiceFromOption,
+  codeMessage,
+  parsePromotionOptions,
+  promotionPayload,
+  reconcileChoice,
+  type PromotionChoice,
+  type PromotionOption,
+  type PromotionOptionsResult,
+} from "@/lib/promotionSelection";
+import {
   describeConfirmation,
   intakeCheckoutAllowed,
   intakeMatchingAllowed,
@@ -77,6 +90,7 @@ import {
 import {
   addDays,
   clearDraftStorage,
+  addonSelection,
   easternDateValue,
   emptyDraft,
   parseDraft,
@@ -102,6 +116,7 @@ import {
   type RequestPhotoDraft,
 } from "@/lib/requestPhotos";
 import {
+  estimateLabel,
   parsePreviewResult,
   planIsSubmittable,
   previewSignature,
@@ -259,6 +274,16 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
   const [submissionUnknown, setSubmissionUnknown] = useState(false);
   const [keyConflict, setKeyConflict] = useState(false);
   const [postSave, setPostSave] = useState<PostSave | null>(null);
+  // TRACE-116 (DEC-2026-042): offers the homeowner may choose on the final review. Kept in
+  // this page only (never in the saved draft), so a reload never carries a stale offer.
+  const [promotionCodes, setPromotionCodes] = useState<Record<string, string>>({});
+  const [promotionRefresh, setPromotionRefresh] = useState(0);
+  const [promotionOffers, setPromotionOffers] = useState<{ signature: string; status: "checking" | "ready" | "error"; result: PromotionOptionsResult | null } | null>(null);
+  const [promotionChoices, setPromotionChoices] = useState<Record<string, PromotionChoice>>({});
+  const [promotionNotices, setPromotionNotices] = useState<Record<string, string>>({});
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const promotionChoicesRef = useRef(promotionChoices);
+  promotionChoicesRef.current = promotionChoices;
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { services: catalogServices, categories: catalogCategories, loading: catalogLoading, error: catalogError, retry: retryCatalog } = useServiceCatalog();
@@ -267,7 +292,7 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
     step, selectedIds, frequencies, streetAddress, city, stateCode, zipCode, preferredDate, preferredEndDate,
     timeOfDay, description, accessMethod, petStatus, entryInstructions, parkingNotes, otherServiceDetails,
     firstName, lastName, email, phone, smsUpdates, serviceOverrides, preferredProviders, preferredProviderNames,
-    packageSelections, questionAnswers, submissionKey, saved,
+    packageSelections, questionAnswers, addonQuantities, submissionKey, saved,
   } = draft;
   const update = useCallback((patch: Partial<RequestDraft> | ((current: RequestDraft) => Partial<RequestDraft>)) => {
     setDraft((current) => ({ ...current, ...(typeof patch === "function" ? patch(current) : patch) }));
@@ -475,8 +500,11 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
       ...(selection ? { package_id: selection.packageId } : {}),
       ...(selection?.tierId ? { tier_id: selection.tierId } : {}),
       ...(stage === "final" && answers && Object.keys(answers).length ? { answers } : {}),
+      // DEC-2026-041 item 2: optional add-ons, only for the offering they were chosen for.
+      ...(addonSelection(addonQuantities[service.id], selection?.packageId).length
+        ? { addons: addonSelection(addonQuantities[service.id], selection?.packageId) } : {}),
     };
-  }), [explicitSelection, frequencies, preferredProviders, questionAnswers, selectedServices]);
+  }), [addonQuantities, explicitSelection, frequencies, preferredProviders, questionAnswers, selectedServices]);
 
   const runPreview = useCallback(async (stage: PreviewStage): Promise<PreviewState> => {
     const selections = previewSelections(stage);
@@ -516,10 +544,103 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
     return () => window.clearTimeout(timer);
   }, [coverageStatus, finalPreview?.signature, finalSignature, runPreview, saved, selectedServices.length, step]);
 
+  const finalReady = finalPreview?.signature === finalSignature && finalPreview.status === "ready";
+  const promotionSignature = JSON.stringify([finalSignature, promotionCodes, promotionRefresh]);
+  const loadPromotions = useCallback(async (signature: string) => {
+    const codes = Object.fromEntries(selectedServices.flatMap((service, index) => promotionCodes[service.id] ? [[String(index), promotionCodes[service.id]]] : []));
+    setPromotionOffers((current) => ({ signature, status: "checking", result: current?.result ?? null }));
+    let result: PromotionOptionsResult | null = null;
+    try {
+      const { data, error } = await createClient().rpc("homeowner_promotion_options", {
+        p_payload: { location: { zip_code: normalizedZip }, selections: previewSelections("final"), codes },
+      });
+      // Before the TRACE-116 migration reaches the database the function is missing: no offers.
+      if (error?.code === "PGRST202") result = { available: false, selections: [] };
+      else if (error) throw error;
+      else result = parsePromotionOptions(data);
+    } catch {
+      // The last offers and any choice stay on screen, so the review shows what will be sent;
+      // the server checks the saving again at submission.
+      setPromotionOffers((current) => current?.signature === signature ? { signature, status: "error", result: current.result } : current);
+      return;
+    }
+    // A choice survives only while the same offer, revision and saving are still offered;
+    // otherwise it is cleared and the homeowner is told why. Nothing is chosen for them.
+    const byService = new Map(result.selections.map((item) => [item.serviceId, item]));
+    const nextChoices: Record<string, PromotionChoice> = {};
+    const notices: Record<string, string> = {};
+    for (const [serviceId, choice] of Object.entries(promotionChoicesRef.current)) {
+      const kept = result.available ? reconcileChoice(choice, byService.get(serviceId)) : { choice: null, notice: `“${choice.label}” isn’t available. Choose again.` };
+      if (kept.choice) nextChoices[serviceId] = kept.choice;
+      if (kept.notice) notices[serviceId] = kept.notice;
+    }
+    // An entered code the homeowner just applied is their explicit choice.
+    if (pendingCode) {
+      const offers = byService.get(pendingCode);
+      const code = offers?.code;
+      const option = code?.status === "eligible" ? offers?.options.find((item) => item.offerId === code.offerId) : undefined;
+      if (option) { nextChoices[pendingCode] = choiceFromOption(option, promotionCodes[pendingCode] ?? null); delete notices[pendingCode]; }
+    }
+    setPendingCode(null);
+    setPromotionChoices(nextChoices);
+    setPromotionNotices((current) => ({ ...current, ...notices }));
+    setPromotionOffers((current) => current?.signature === signature ? { signature, status: "ready", result } : current);
+  }, [normalizedZip, pendingCode, previewSelections, promotionCodes, selectedServices]);
+
+  useEffect(() => {
+    if (step !== "contact" || !user || saved || coverageStatus !== "covered" || !finalReady) return;
+    if (promotionOffers?.signature === promotionSignature) return;
+    const timer = window.setTimeout(() => { void loadPromotions(promotionSignature); }, 100);
+    return () => window.clearTimeout(timer);
+  }, [coverageStatus, finalReady, loadPromotions, promotionOffers?.signature, promotionSignature, saved, step, user]);
+
+  const choosePromotion = (serviceId: string, option: PromotionOption | null) => {
+    setPromotionChoices((current) => {
+      const next = { ...current };
+      if (option) next[serviceId] = choiceFromOption(option, promotionCodes[serviceId] ?? null); else delete next[serviceId];
+      return next;
+    });
+    setPromotionNotices((current) => { const next = { ...current }; delete next[serviceId]; return next; });
+  };
+  const applyPromotionCode = (serviceId: string, code: string) => {
+    setPendingCode(serviceId);
+    setPromotionCodes((current) => ({ ...current, [serviceId]: code }));
+    // The same code applied again still asks the server again.
+    setPromotionRefresh((value) => value + 1);
+  };
+  // The latest offers stay on screen while a code is checked, so the form never jumps.
+  const offerItems: OfferItem[] = promotionOffers?.result?.available && step === "contact" ? selectedServices.flatMap((service) => {
+    const offers = promotionOffers.result!.selections.find((item) => item.serviceId === service.id);
+    if (!offers?.priced || offers.serviceCents == null) return [];
+    return [{ serviceId: service.id, name: service.name, serviceCents: offers.serviceCents, options: offers.options,
+      choice: promotionChoices[service.id] ?? null, notice: promotionNotices[service.id] ?? null,
+      codeMessage: pendingCode === service.id ? null : codeMessage(offers.code) }];
+  }) : [];
+  const offersChecking = promotionOffers?.status === "checking";
+  const offersError = promotionOffers?.status === "error" && step === "contact";
+
   const currentPreview = (stage: PreviewStage) => {
     const state = stage === "final" ? finalPreview : availabilityPreview;
     const signature = stage === "final" ? finalSignature : availabilitySignature;
     return state?.signature === signature ? state : null;
+  };
+  // DEC-2026-041 item 2: add-on choices come from the availability check of the offering the
+  // homeowner picked; quantities are kept per offering and sent with it.
+  const addonsFor = (serviceId: string) => {
+    const selection = explicitSelection(serviceId);
+    const availability = availabilityFor("availability", serviceId);
+    if (!selection || !availability || availability === "error" || availability.outcome.package_id !== selection.packageId) return null;
+    const entry = addonQuantities[serviceId];
+    return { options: availability.outcome.addon_options ?? [], quantities: entry?.packageId === selection.packageId ? entry.quantities : {} };
+  };
+  const setAddonQuantity = (serviceId: string, addonId: string, quantity: number) => {
+    const packageId = explicitSelection(serviceId)?.packageId;
+    if (!packageId) return;
+    update((current) => {
+      const entry = current.addonQuantities[serviceId];
+      const quantities = entry?.packageId === packageId ? entry.quantities : {};
+      return { addonQuantities: { ...current.addonQuantities, [serviceId]: { packageId, quantities: { ...quantities, [addonId]: quantity } } } };
+    });
   };
   const availabilityFor = (stage: PreviewStage, serviceId: string): ServiceAvailability | "error" | undefined => {
     const state = currentPreview(stage);
@@ -760,10 +881,17 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
           package_id: selection?.packageId,
           tier_id: selection?.packageId ? selection.tierId : undefined,
           answers: questionAnswers[service.id],
+          ...(addonSelection(addonQuantities[service.id], selection?.packageId).length
+            ? { addons: addonSelection(addonQuantities[service.id], selection?.packageId) } : {}),
+          // TRACE-112: an offering the homeowner chose is refused if it changed since it was shown.
+          ...(selection?.packageId && shown?.package_revision && shown.package_id === selection.packageId
+            ? { package_revision: shown.package_revision } : {}),
           // What the homeowner was shown for this address; the command compares it.
           expected: shown?.pricing_mode === "fixed" && typeof shown.total === "number"
             ? { pricing_mode: "fixed" as const, total: shown.total }
             : { pricing_mode: "quote" as const },
+          // TRACE-116: the offer the homeowner chose, with the saving they saw.
+          ...(promotionChoices[service.id] && shown?.pricing_mode === "fixed" ? { promotion: promotionPayload(promotionChoices[service.id]) } : {}),
         };
       }),
     };
@@ -823,6 +951,12 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
         const service = selectedServices.find((item) => item.id === outcome.service_id);
         const message = refusalMessage(outcome, service?.name ?? formatServiceName(outcome.service_id), formatMoney);
         if (message) nextErrors[`availability-${outcome.service_id}`] = `${message} Nothing was submitted.`;
+      }
+      // TRACE-116: an offer that changed is cleared, never re-applied at another saving.
+      const changedOffers = result.outcomes.filter((outcome) => outcome.outcome === "promotion_changed").map((outcome) => outcome.service_id);
+      if (changedOffers.length) {
+        setPromotionChoices((current) => Object.fromEntries(Object.entries(current).filter(([serviceId]) => !changedOffers.includes(serviceId))));
+        setPromotionRefresh((value) => value + 1);
       }
       setErrors(nextErrors);
       // Re-show current terms before another submission.
@@ -1155,6 +1289,8 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
       matching: postSave?.matching ?? {},
       checkout: postSave?.checkout ?? { kind: "pending" },
       formatMoney,
+      offers: Object.fromEntries(saved.payload.selections.flatMap((selection) => selection.promotion
+        ? [[selection.service_id, selection.promotion.expected_discount_cents]] : [])),
     });
     const single = saved.result.requests.length === 1 ? saved.result.requests[0] : null;
     const checkoutAvailable = Boolean(single && single.pricing_mode === "fixed" && single.package_tier_id && saved.photosPending === 0
@@ -1219,8 +1355,10 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
             <FormErrorSummary errors={errors} />
             <IntakeTrapField inputRef={trapRef} />
             {step === "services" && <ServicesStep services={requestServiceOptions} categories={catalogCategories} catalogLoading={catalogLoading} catalogError={catalogError} onRetryCatalog={retryCatalog} selectedIds={selectedIds} frequencies={frequencies} preferredProviderNames={preferredProviderNames} otherServiceDetails={otherServiceDetails} onOtherServiceDetails={(value) => update({ otherServiceDetails: value })} onToggle={toggleService} onFrequencyChange={changeServiceFrequency} localStatusFor={(service) => localStatus(service, catalogLoading || catalogError, availabilityFor("availability", service.id), selectedIds.includes(service.id))} onContinue={continueFromServices} />}
-            {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoMessages={photoMessages} selectedServices={selectedServices} availabilityItems={reviewItems} questionsFor={questionsFor} scopeFor={(serviceId) => scopeFor(explicitSelection(serviceId), availabilityFor("availability", serviceId))} questionAnswers={questionAnswers} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => update((current) => ({ questionAnswers: { ...current.questionAnswers, [serviceId]: { ...(current.questionAnswers[serviceId] ?? {}), [questionKey]: answer } } }))} onStreetAddress={(value) => update({ streetAddress: value })} onCity={(value) => update({ city: value })} onStateCode={(value) => update({ stateCode: value })} onZipCode={(value) => update({ zipCode: value })} onPreferredDate={(value) => update((current) => ({ preferredDate: value, preferredEndDate: current.preferredEndDate && current.preferredEndDate < value ? value : current.preferredEndDate }))} onPreferredEndDate={(value) => update({ preferredEndDate: value })} onTimeOfDay={(value) => update({ timeOfDay: value })} onDescription={(value) => update({ description: value })} onAccessMethod={(value) => update({ accessMethod: value })} onPetStatus={(value) => update({ petStatus: value })} onEntryInstructions={(value) => update({ entryInstructions: value })} onParkingNotes={(value) => update({ parkingNotes: value })} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onRetryAvailability={() => void runPreview("availability")} onRemoveService={removeService} onUseAnyProvider={allowAnyProvider} onBack={() => changeStep("services")} />}
-            {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} availabilityItems={reviewItems} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} submissionUnknown={submissionUnknown} keyConflict={keyConflict} interestOnly={interestOnly} onFinishWithInterest={finishWithInterest} onSubmitAsNew={() => void submitAsNew()} onRemoveService={removeService} onUseAnyProvider={allowAnyProvider} onRegisterInterest={(serviceId) => void registerServiceInterest(serviceId)} onRetryAvailability={() => void runPreview("final")} onFirstName={(value) => update({ firstName: value })} onLastName={(value) => update({ lastName: value })} onEmail={(value) => update({ email: value })} onPhone={(value) => update({ phone: value })} onSmsUpdates={(value) => update({ smsUpdates: value })} onRetryCoverage={() => void verifyCoverage()} onBack={() => changeStep("details")} />}
+            {step === "details" && <DetailsStep streetAddress={streetAddress} city={city} stateCode={stateCode} zipCode={zipCode} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} description={description} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoMessages={photoMessages} selectedServices={selectedServices} availabilityItems={reviewItems} questionsFor={questionsFor} scopeFor={(serviceId) => scopeFor(explicitSelection(serviceId), availabilityFor("availability", serviceId))} questionAnswers={questionAnswers} addonsFor={addonsFor} onAddonQuantity={setAddonQuantity} isSignedIn={!!user} onQuestionAnswer={(serviceId, questionKey, answer) => update((current) => ({ questionAnswers: { ...current.questionAnswers, [serviceId]: { ...(current.questionAnswers[serviceId] ?? {}), [questionKey]: answer } } }))} onStreetAddress={(value) => update({ streetAddress: value })} onCity={(value) => update({ city: value })} onStateCode={(value) => update({ stateCode: value })} onZipCode={(value) => update({ zipCode: value })} onPreferredDate={(value) => update((current) => ({ preferredDate: value, preferredEndDate: current.preferredEndDate && current.preferredEndDate < value ? value : current.preferredEndDate }))} onPreferredEndDate={(value) => update({ preferredEndDate: value })} onTimeOfDay={(value) => update({ timeOfDay: value })} onDescription={(value) => update({ description: value })} onAccessMethod={(value) => update({ accessMethod: value })} onPetStatus={(value) => update({ petStatus: value })} onEntryInstructions={(value) => update({ entryInstructions: value })} onParkingNotes={(value) => update({ parkingNotes: value })} onAddPhotos={addPhotos} onRemovePhoto={removePhoto} onPhotoDrop={handlePhotoDrop} onRetryCoverage={() => void verifyCoverage()} onRetryAvailability={() => void runPreview("availability")} onRemoveService={removeService} onUseAnyProvider={allowAnyProvider} onBack={() => changeStep("services")} />}
+            {step === "contact" && <ContactStep selectedServices={selectedServices} frequencies={frequencies} availabilityItems={reviewItems} coverageStatus={coverageStatus} coverageResult={coverageResult} preferredDate={preferredDate} preferredEndDate={preferredEndDate} timeOfDay={timeOfDay} accessMethod={accessMethod} petStatus={petStatus} entryInstructions={entryInstructions} parkingNotes={parkingNotes} photos={photos} photoUploadProgress={photoUploadProgress} firstName={firstName} lastName={lastName} email={email} phone={phone} smsUpdates={smsUpdates} isSubmitting={isSubmitting} isSignedIn={!!user} submissionUnknown={submissionUnknown} keyConflict={keyConflict} interestOnly={interestOnly} onFinishWithInterest={finishWithInterest} onSubmitAsNew={() => void submitAsNew()} onRemoveService={removeService} onUseAnyProvider={allowAnyProvider} onRegisterInterest={(serviceId) => void registerServiceInterest(serviceId)} onRetryAvailability={() => void runPreview("final")} onFirstName={(value) => update({ firstName: value })} onLastName={(value) => update({ lastName: value })} onEmail={(value) => update({ email: value })} onPhone={(value) => update({ phone: value })} onSmsUpdates={(value) => update({ smsUpdates: value })} onRetryCoverage={() => void verifyCoverage()} onBack={() => changeStep("details")}
+              offers={offerItems} offersChecking={offersChecking} offersError={offersError} onRetryOffers={() => setPromotionRefresh((value) => value + 1)}
+              onChooseOffer={choosePromotion} onApplyCode={applyPromotionCode} />}
           </form>
         </FormErrorsContext>
       </div>
@@ -1533,6 +1671,9 @@ type DetailsStepProps = {
   questionsFor: (serviceId: string) => PackageQualifyingQuestion[];
   scopeFor: (serviceId: string) => { name: string | null; description: string | null; tier: string | null; includes: string[] } | null;
   questionAnswers: Record<string, Record<string, string>>;
+  /** Add-on choices for a service whose offering the homeowner picked, with current quantities. */
+  addonsFor: (serviceId: string) => { options: AddonOption[]; quantities: Record<string, number> } | null;
+  onAddonQuantity: (serviceId: string, addonId: string, quantity: number) => void;
   isSignedIn: boolean;
   onQuestionAnswer: (serviceId: string, questionKey: string, answer: string) => void;
   onStreetAddress: (value: string) => void;
@@ -1563,6 +1704,10 @@ function DetailsStep(props: DetailsStepProps) {
   const questionGroups = props.selectedServices
     .map((service) => ({ service, questions: props.questionsFor(service.id) }))
     .filter((group) => group.questions.length);
+  const addonGroups = props.selectedServices.flatMap((service) => {
+    const addons = props.addonsFor(service.id);
+    return addons && addons.options.length ? [{ service, ...addons }] : [];
+  });
   const scopes = props.selectedServices.flatMap((service) => {
     const scope = props.scopeFor(service.id);
     const includes = scope?.includes.filter(Boolean) ?? [];
@@ -1644,6 +1789,19 @@ function DetailsStep(props: DetailsStepProps) {
                   <PackageQuestionInput key={question.question_key} serviceId={service.id} question={question} value={props.questionAnswers[service.id]?.[question.question_key] ?? ""} onChange={props.onQuestionAnswer} />
                 ))}
               </fieldset>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!coverageBlocksBooking && addonGroups.length > 0 && (
+        <section className="mt-6" aria-labelledby="addons-heading">
+          <h3 id="addons-heading" className="font-semibold">Add-ons</h3>
+          <p className="text-sm text-muted-foreground">Choose extras for the offering you picked. The price above updates when you change them.</p>
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            {addonGroups.map(({ service, options, quantities }) => (
+              <AddonPicker key={service.id} serviceId={service.id} serviceName={service.name} options={options} quantities={quantities}
+                onChange={(addonId, quantity) => props.onAddonQuantity(service.id, addonId, quantity)} />
             ))}
           </div>
         </section>
@@ -1899,6 +2057,16 @@ function PackageQuestionInput({ serviceId, question, value, onChange }: { servic
   </FormField>;
 }
 
+type OfferItem = {
+  serviceId: string;
+  name: string;
+  serviceCents: number;
+  options: PromotionOption[];
+  choice: PromotionChoice | null;
+  notice: string | null;
+  codeMessage: string | null;
+};
+
 type ContactStepProps = {
   selectedServices: ServiceOption[];
   frequencies: Record<string, Frequency>;
@@ -1937,6 +2105,12 @@ type ContactStepProps = {
   onSmsUpdates: (value: boolean) => void;
   onRetryCoverage: () => void;
   onBack: () => void;
+  offers: OfferItem[];
+  offersChecking: boolean;
+  offersError: boolean;
+  onRetryOffers: () => void;
+  onChooseOffer: (serviceId: string, option: PromotionOption | null) => void;
+  onApplyCode: (serviceId: string, code: string) => void;
 };
 
 function ContactStep(props: ContactStepProps) {
@@ -1950,6 +2124,8 @@ function ContactStep(props: ContactStepProps) {
     return !availability || availability === "error" || !((availability.kind === "fixed" && availability.exact) || availability.kind === "quote");
   });
   const singleFixed = props.availabilityItems.length === 1 && fixed.length === 1;
+  const offerFor = (serviceId: string) => props.offers.find((item) => item.serviceId === serviceId)?.choice ?? null;
+  const offerCents = props.offers.reduce((total, item) => total + (item.choice?.discountCents ?? 0), 0);
   const submitLabel = props.submissionUnknown ? "Check and finish submitting"
     : !covered
     ? props.coverageStatus === "waitlist" ? "Join the service-area list" : props.coverageStatus === "error" ? "Check coverage again" : "Notify me when coverage expands"
@@ -1986,6 +2162,42 @@ function ContactStep(props: ContactStepProps) {
 
           {covered && props.availabilityItems.length > 0 && (
             <ServiceAvailabilityList headingId="review-availability" items={props.availabilityItems} formatMoney={formatMoney} onRemove={props.onRemoveService} onUseAnyProvider={props.onUseAnyProvider} onRegisterInterest={props.onRegisterInterest} onRetry={props.onRetryAvailability} />
+          )}
+
+          {covered && (props.offers.length > 0 || props.offersError) && (
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle><h3>Offers</h3></CardTitle>
+                <p className="text-sm text-muted-foreground">Choose one offer per service, or none. Each saving is for that service with the add-ons shown, and is checked again when you submit.</p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {props.offersError && (
+                  <div role="alert" className="rounded-lg border border-status-warning bg-status-warning-bg p-3 text-sm text-foreground">
+                    <p className="font-medium">We couldn’t check offers just now</p>
+                    <p className="mt-1">{props.offers.some((item) => item.choice)
+                      ? "Your chosen offer is still shown and is checked again when you submit."
+                      : "You can submit without an offer, or check again."}</p>
+                    <Button type="button" variant="outline" size="sm" className="mt-3 min-h-11 bg-background" onClick={props.onRetryOffers}>Check offers again</Button>
+                  </div>
+                )}
+                {props.offers.map((item) => (
+                  <div key={item.serviceId} className="space-y-4 border-b border-border pb-6 last:border-0 last:pb-0">
+                    {item.notice && <p role="status" className="rounded-lg border border-status-warning bg-status-warning-bg p-3 text-sm text-foreground">{item.notice}</p>}
+                    {item.options.length > 0
+                      ? <OfferChoices name={`offer-${item.serviceId}`} legend={`${item.name}: offers`} serviceCents={item.serviceCents} options={item.options}
+                          chosenOfferId={item.choice?.offerId ?? null} onChoose={(option) => props.onChooseOffer(item.serviceId, option)}
+                          unavailable={(option) => {
+                            if (!option.firstBookingOnly) return null;
+                            const other = props.offers.find((entry) => entry.serviceId !== item.serviceId && entry.choice?.firstBookingOnly);
+                            return other ? `A first-booking offer applies to one service; it’s chosen for ${other.name}.` : null;
+                          }} />
+                      : <p className="text-sm"><span className="font-medium">{item.name}:</span> <span className="text-muted-foreground">no offers apply right now.</span></p>}
+                    <CodeEntry id={`promo-code-${item.serviceId}`} onApply={(code) => props.onApplyCode(item.serviceId, code)} message={item.codeMessage}
+                      busy={props.offersChecking} disabled={props.isSubmitting} />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
 
           {props.interestOnly && (
@@ -2062,14 +2274,19 @@ function ContactStep(props: ContactStepProps) {
             <ul className="space-y-3">
               {props.availabilityItems.map((item) => {
                 const availability = item.availability;
-                const amount = !covered ? "Not bookable here" : !availability ? "Checking…" : availability === "error" ? "Not checked" : availability.kind === "fixed" ? availability.exact ? formatMoney(availability.total) : `From ${formatMoney(availability.total)}` : availability.kind === "quote" ? "Quote required" : "Can’t be booked";
+                const amount = !covered ? "Not bookable here" : !availability ? "Checking…" : availability === "error" ? "Not checked" : availability.kind === "fixed" ? availability.exact ? formatMoney(availability.total) : `From ${formatMoney(availability.total)}` : availability.kind === "quote" ? (estimateLabel(availability.outcome, formatMoney) ? `Estimate ${estimateLabel(availability.outcome, formatMoney)}` : "Quote required") : "Can’t be booked";
+                const offer = offerFor(item.serviceId);
                 return (
                   <li key={item.serviceId} className="flex justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0">
                     <div>
                       <p className="text-sm font-medium">{item.name}</p>
                       <p className="text-sm text-muted-foreground">{item.cadence}</p>
+                      {offer && <p className="text-sm text-accent-active">{offer.label}</p>}
                     </div>
-                    <p className="shrink-0 text-sm font-semibold tabular-nums">{amount}</p>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold tabular-nums">{amount}</p>
+                      {offer && <p className="text-sm tabular-nums text-accent-active">−{centsLabel(offer.discountCents)}</p>}
+                    </div>
                   </li>
                 );
               })}
@@ -2077,9 +2294,15 @@ function ContactStep(props: ContactStepProps) {
 
             {covered ? (
               <div className="space-y-3 border-t border-accent-border pt-4">
+                {offerCents > 0 && (
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="text-muted-foreground">Offers</span>
+                    <span className="tabular-nums text-accent-active">−{centsLabel(offerCents)}</span>
+                  </div>
+                )}
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">Fixed prices</span>
-                  <span className="text-2xl font-semibold tabular-nums">{formatMoney(fixedTotal)}</span>
+                  <span className="text-sm text-muted-foreground">{offerCents > 0 ? "Fixed prices after offers" : "Fixed prices"}</span>
+                  <span className="text-2xl font-semibold tabular-nums">{formatMoney(fixedTotal - offerCents / 100)}</span>
                 </div>
                 <p className="text-sm leading-5 text-muted-foreground">
                   {quoteCount > 0 ? `${quoteCount} service${quoteCount === 1 ? " needs" : "s need"} a quote and ${quoteCount === 1 ? "isn’t" : "aren’t"} included. ` : ""}

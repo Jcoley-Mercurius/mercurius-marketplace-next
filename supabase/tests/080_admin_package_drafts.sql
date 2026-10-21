@@ -5,6 +5,8 @@ select no_plan();
 -- cadence, and an operator drafts a price for a specific vendor, then publishes it with a
 -- reason. A draft is private until published; publishing creates an ordinary custom fixed
 -- package, records the prices in the TRACE-109 history and notifies the linked vendor.
+-- TRACE-113 (DEC-2026-039, 20261018002000): publishing now needs the bound vendor's approval of
+-- the exact revision, and the duplicate rule is the package name, not the cadence (SQL 083).
 insert into auth.users(id,email,email_confirmed_at) values
  ('b8010000-0000-4000-8000-000000000001','draft-operator@example.invalid',now()),
  ('b8010000-0000-4000-8000-000000000002','draft-vendor@example.invalid',now());
@@ -36,6 +38,18 @@ create function pg_temp.stamp(p_draft uuid) returns timestamptz language sql sec
  select updated_at from private.operator_package_drafts where id = p_draft $$;
 create function pg_temp.publish(p_draft uuid, p_reason text default 'Synthetic agreed rate') returns jsonb language sql as $$
  select public.admin_publish_package_draft(p_draft, pg_temp.stamp(p_draft), p_reason) $$;
+-- TRACE-113 (DEC-2026-039): publishing needs the vendor's approval of the exact revision.
+-- Sends as the operator, approves as the bound vendor account, and returns as the operator.
+create function pg_temp.revision(p_draft uuid) returns text language sql security definer as $$
+ select content_hash from private.operator_package_drafts where id = p_draft $$;
+create function pg_temp.approved(p_draft uuid) returns uuid language plpgsql as $$
+begin
+  perform public.admin_send_package_draft(p_draft, pg_temp.revision(p_draft));
+  perform pg_temp.as_user('2');
+  perform public.vendor_approve_package_draft(p_draft, pg_temp.revision(p_draft));
+  perform pg_temp.as_user('1');
+  return p_draft;
+end $$;
 create temp table ids(name text primary key, id uuid);
 grant all on ids to authenticated;
 
@@ -127,7 +141,9 @@ select throws_ok($$select pg_temp.publish((select id from ids where name='a'),re
  'the reason is at most 500 characters');
 select throws_ok($$select public.admin_publish_package_draft((select id from ids where name='a'),'2000-01-01','Synthetic')$$,
  '40001','Draft changed since it was read; reload before publishing','a stale publish is refused');
-insert into ids select 'pkg', (pg_temp.publish((select id from ids where name='a'))->>'package_id')::uuid;
+select throws_ok($$select pg_temp.publish((select id from ids where name='a'))$$,'42501',
+ 'The vendor has not approved this revision; send it for approval first','an unapproved draft does not publish');
+insert into ids select 'pkg', (pg_temp.publish(pg_temp.approved((select id from ids where name='a')))->>'package_id')::uuid;
 select is(public.admin_package_drafts(pg_temp.vendor(1)),'[]'::jsonb,'a published draft leaves the list');
 select throws_ok($$select pg_temp.publish((select id from ids where name='a'))$$,'P0001',
  'This draft was already published or discarded','a draft publishes once');
@@ -146,8 +162,9 @@ select is((select (changes->1) - 'id' from private.vendor_package_price_correcti
  'the new prices are recorded in the price history');
 select is((select reason from private.vendor_package_price_corrections where package_id=(select id from ids where name='pkg')),
  'Synthetic agreed rate','the history keeps the reason');
-select is((select row(title,body,link)::text from public.notifications where user_id='b8010000-0000-4000-8000-000000000002' and type='pricing'),
- row('Mercurius added a price','Synthetic lawn plan: Synthetic agreed rate','/vendor/packages')::text,
+select is((select row(title,body,link)::text from public.notifications where user_id='b8010000-0000-4000-8000-000000000002'
+   and type='pricing' and title='Your approved price is live'),
+ row('Your approved price is live','Synthetic lawn plan: Synthetic agreed rate','/vendor/packages')::text,
  'the linked vendor is notified with the reason');
 
 -- The vendor reads it like a correction: what and why, not who.
@@ -159,29 +176,30 @@ select is((select count(*)::int from public.vendor_packages where id=(select id 
  'the published package is the vendor''s own');
 reset role;
 
--- Duplicates: an active package at the same cadence refuses; another cadence does not.
+-- Duplicates (TRACE-112): a second active package with the same name refuses; a distinct
+-- named package at the same cadence publishes beside it.
 select pg_temp.as_user('1');
 set local role authenticated;
 insert into ids select 'dup', (pg_temp.save(1,'synthetic-draft-svc',
-  jsonb_build_array(pg_temp.price('monthly',50),pg_temp.price('one-time',100)))->>'id')::uuid;
-select throws_ok($$select pg_temp.publish((select id from ids where name='dup'))$$,'23505',
- 'This vendor already has an active Monthly price for this service; correct that package instead',
- 'a second active price at the same cadence is refused');
-insert into ids select 'other', (pg_temp.save(1,'synthetic-draft-svc',jsonb_build_array(pg_temp.price('one-time',100)))->>'id')::uuid;
-select ok((pg_temp.publish((select id from ids where name='other'))->>'package_id') is not null,
- 'another cadence for the same service publishes');
+  jsonb_build_array(pg_temp.price('monthly',50),pg_temp.price('one-time',100)),' synthetic LAWN plan ')->>'id')::uuid;
+select throws_ok($$select pg_temp.publish(pg_temp.approved((select id from ids where name='dup')))$$,'23505',
+ 'This vendor already has an active package named "synthetic LAWN plan" for this service; rename it or replace that package',
+ 'a second active package with the same name is refused');
+insert into ids select 'other', (pg_temp.save(1,'synthetic-draft-svc',jsonb_build_array(pg_temp.price('monthly',50)))->>'id')::uuid;
+select ok((pg_temp.publish(pg_temp.approved((select id from ids where name='other')))->>'package_id') is not null,
+ 'a distinct named package at the same cadence publishes');
 
 -- Out-of-band prices wait in Package Reviews; publishing is not an approval.
 insert into ids select 'band', (pg_temp.save(1,'synthetic-draft-open',jsonb_build_array(pg_temp.price('quarterly',5000)))->>'id')::uuid;
-select is((pg_temp.publish((select id from ids where name='band'))->>'needs_review')::boolean,true,
+select is((pg_temp.publish(pg_temp.approved((select id from ids where name='band')))->>'needs_review')::boolean,true,
  'a price outside the guardrail band is flagged for review');
--- The monthly reference (40) bands every two months at 10 to 160; no account, no notice.
-insert into ids select 'edge', (pg_temp.save(2,'synthetic-draft-svc',jsonb_build_array(pg_temp.price('every-two-months',161)))->>'id')::uuid;
-select is(pg_temp.publish((select id from ids where name='edge')) - 'package_id',
- jsonb_build_object('needs_review',true,'vendor_notified',false),
- 'every two months is banded by the monthly reference; an unlinked vendor is not notified');
-insert into ids select 'in', (pg_temp.save(2,'synthetic-draft-open',jsonb_build_array(pg_temp.price('every-two-months',160)))->>'id')::uuid;
-select is((pg_temp.publish((select id from ids where name='in'))->>'needs_review')::boolean,false,
+-- The monthly reference (40) bands every two months at 10 to 160.
+insert into ids select 'edge', (pg_temp.save(1,'synthetic-draft-svc',jsonb_build_array(pg_temp.price('every-two-months',161)),'Synthetic edge plan')->>'id')::uuid;
+select is(pg_temp.publish(pg_temp.approved((select id from ids where name='edge'))) - 'package_id' - 'replaced_package_id' - 'revision_number',
+ jsonb_build_object('needs_review',true,'vendor_notified',true),
+ 'every two months is banded by the monthly reference');
+insert into ids select 'in', (pg_temp.save(1,'synthetic-draft-open',jsonb_build_array(pg_temp.price('every-two-months',160)),'Synthetic in-band plan')->>'id')::uuid;
+select is((pg_temp.publish(pg_temp.approved((select id from ids where name='in')))->>'needs_review')::boolean,false,
  'every two months at the top of the band is not flagged');
 
 -- Discarding.
