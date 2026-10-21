@@ -265,6 +265,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-043 — Accepting a provider invitation binds the account automatically
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-20 (America/New_York).
+
+**Decision:** When the verified recipient accepts an application-based provider invitation, the accepted account is bound to the provider in the same transaction, without a separate operator binding step (TRACE-117). The automatic binding proves everything the operator command (`vendor_bind_invited_account`, TRACE-070) proves: the provider is in review, the receipt answers the current application version, the Auth dispatch and receipt name the same confirmed account, that account's address is the reviewed application recipient, the provider has no account, the account belongs to no other provider and no other invitation is live. If any of these does not hold, acceptance still succeeds and nothing is bound; the operator command stays available as the fallback and reports the specific reason. Binding still grants no role, accepts no evidence, activates nothing and publishes no listing; the vendor role still follows only from a reviewed activation (TRACE-068).
+
+**Context:** Two applicants (2026-10-14 and 2026-10-16) were in review with no invitation sent. The operator binding step re-checked only conditions the database can prove at acceptance, and added a manual step between the vendor accepting and the operator approving.
+
+**Alternatives considered:** Keep the reviewed operator binding (not chosen: the review it added was mechanical). Also auto-bind existing-provider access invitations (not chosen: that binding grants the vendor role under DEC-2026-024, so it keeps its operator review).
+
+**MPS impact:** None to roles or approval; operator review stays at activation. **MDS impact:** Admin account panel copy names manual binding as the fallback. **MTS impact:** Migration `20261020001000`; `vendor_accept_invitation` replaced with the same signature. **Data/payment/security impact:** The link decision records the recipient as actor and the receipt it relied on; release and the reviewed-link predicate are unchanged. Supersedes TRACE-070's requirement that an operator decide the binding, for application-based invitations only.
+
+**Required evidence:** SQL 088; updated SQL 031/033/037/075; hosted migration push before merge.
+
 ### DEC-2026-037 — Merges to main deploy to production automatically
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-16 (America/New_York).
