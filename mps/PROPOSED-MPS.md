@@ -90,6 +90,8 @@ Targets must be approved after an instrumented pilot baseline; invented launch m
 
 **Proposed rule:** role checks must be enforced server-side and at the database boundary. Navigation guards are usability controls, not authorization.
 
+**Offering prices (DEC-2026-039/041):** an operator-prepared price or a material correction (price, included scope, quantities, cadence or material terms) is published only after the bound vendor account approves that exact revision; spelling or formatting fixes and suspending an incorrect listing stay operator actions; accepted bookings keep their terms.
+
 ## 5. Canonical lifecycle
 
 Separate domain states should be used instead of forcing every concern into one request-status field.
@@ -251,11 +253,11 @@ Every transition must define actor, prerequisites, side effects, notification, t
 ## 7. Approved commercial rules
 
 1. **Payment role:** customers pay Mercurius directly; Mercurius retains its fee and remits vendor proceeds. Formal legal, tax, and provider classification must validate this approved customer-facing model.
-2. **Platform fee:** 15% of the final service subtotal after discounts and adjustments, excluding tax and tips. After a refund, calculate the fee against the retained service subtotal.
+2. **Platform fee:** 15% of the final service subtotal after discounts and adjustments, excluding tax and tips. After a refund, calculate the fee against the retained service subtotal. Exception (DEC-2026-038): with one valid applied promotion, 7.5% of the qualifying commissionable amount (after a vendor-funded discount; before a Mercurius-funded one, which is a subsidy, not a fee reduction).
 3. **Vendor subscription:** $0 during soft launch; any future plan requires a separate approved product release.
 4. **Fixed price:** only a versioned eligible offering can generate a fixed commercial snapshot.
 5. **Deposit-plus-quote:** deposits apply toward the final service subtotal and do not create an additional fee base; refundability, expiry, and abandonment follow the approved commercial snapshot and cancellation policy.
-6. **Promotions:** funder, limits, stacking, refund allocation, expiry timezone, and customer/provider display must be defined.
+6. **Promotions:** funder, limits, stacking, refund allocation, expiry timezone, and customer/provider display must be defined. DEC-2026-038 defines funder (one per offer, vendor approval or admin authorization), limits, stacking (one per booking, no Credits) and the commission; DEC-2026-041 defines refund allocation (proportional reversal from the accepted snapshot; a vendor-funded discount is not cash), release and restoration (full refund before service with no retained charge; otherwise only by documented admin exception) and first-booking eligibility (no previous completed service); DEC-2026-042 defines application (the homeowner explicitly chooses a displayed offer or enters a code; the greatest saving is labelled, never chosen; changes need the homeowner's confirmation). Checkout refuses promotions until that is implemented and finance-reviewed.
 7. **Payout:** Mercurius pays vendors directly by ACH on a weekly schedule. Funds become eligible 48 hours after homeowner-confirmed completion. Disputed work remains held; no general beta reserve applies. Do not use Stripe Connect as the approved payout design.
 8. **Tax and tips:** tax is excluded from the platform-fee base and handled separately under the implemented tax authority. Tips are excluded from the fee base and belong 100% to the provider.
 

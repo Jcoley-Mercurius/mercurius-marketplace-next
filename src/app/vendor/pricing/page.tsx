@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DollarSign, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { ManagedPricingEditor } from "@/components/vendor/ManagedPricingEditor";
+import { VendorPriceApprovals } from "@/components/vendor/VendorPriceApprovals";
 import { VendorPriceCorrections } from "@/components/vendor/VendorPriceCorrections";
 import { buttonVariants } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -30,7 +31,8 @@ export default function VendorManagedPricingPage() {
   if (loading) return <div className="flex min-h-[360px] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading managed pricing…</div>;
 
   return <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 md:p-8">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="flex items-center gap-2 text-2xl font-semibold"><DollarSign className="h-6 w-6 text-accent" />Managed Pricing</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Set your own prices inside the template Mercurius has approved for your trade. Customers see a live estimate as they answer the qualifying questions.</p></div><Link href="/vendor/packages" className={buttonVariants({ variant: "outline", className: "min-h-10" })}>Your Prices</Link></div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="flex items-center gap-2 text-2xl font-semibold"><DollarSign className="h-6 w-6 text-accent" />Managed Pricing</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Set your own price for each level of the template Mercurius approved for your trade, within its range. Homeowners see your lowest level as the starting price and request that level; levels are not yet matched to a home&apos;s size automatically. To price by home size, ask Mercurius to set up rule-based levels for you to approve.</p></div><Link href="/vendor/packages" className={buttonVariants({ variant: "outline", className: "min-h-10" })}>Your Prices</Link></div>
+    {contractorId && <VendorPriceApprovals />}
     {contractorId && <VendorPriceCorrections />}
     {error ? <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center"><h2 className="font-semibold">Vendor profile couldn’t be loaded</h2><p className="mt-2 text-sm text-muted-foreground">{error}</p></div> : contractorId ? <ManagedPricingEditor contractorId={contractorId} /> : <div className="rounded-xl border bg-card p-8 text-center"><h2 className="font-semibold">Vendor profile not linked</h2><p className="mt-2 text-sm text-muted-foreground">Your account does not have a linked contractor record yet. Contact Mercurius support before publishing prices.</p></div>}
   </div>;

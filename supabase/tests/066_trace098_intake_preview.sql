@@ -123,7 +123,10 @@ select is(pg_temp.preview(pg_temp.plan('33921','[{"service_id":"pool-service","f
 select is(pg_temp.preview(pg_temp.plan('34110','[{"service_id":"pool-service","frequency":"one-time"}]'))->'outcomes','[]'::jsonb,'supply in an excluded ZIP does not make it bookable');
 
 -- Per-service outcomes at the covered ZIP.
-select is((pg_temp.preview(pg_temp.plan('00060','[{"service_id":"lawn-mowing","frequency":"one-time"}]'))#>'{outcomes,0}') - 'question_details' - 'scope',
+-- TRACE-112 adds the calculation's status, lines, estimate, add-on choices and revision;
+-- 082 covers them, so they are left out here.
+select is((pg_temp.preview(pg_temp.plan('00060','[{"service_id":"lawn-mowing","frequency":"one-time"}]'))#>'{outcomes,0}') - 'question_details' - 'scope' - 'price_status' - 'price_reason' - 'price_breakdown'
+  - 'estimate' - 'deposit' - 'addon_options' - 'package_revision',
   '{"tier_id": "d6650000-0000-4000-8000-000000000001", "total": 100, "outcome": "eligible_fixed", "promotion": false, "from_total": null, "package_id": "d6640000-0000-4000-8000-000000000001", "service_id": "lawn-mowing", "pricing_mode": "fixed", "offering_mode": "fixed", "selection_index": 0, "depends_on_answers": false}'::jsonb,
   'fixed price is the local provider-backed tier, not the cheaper out-of-area tier');
 select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"lawn-mowing","frequency":"one-time"}]'))#>'{outcomes,0,scope}',
@@ -139,7 +142,8 @@ select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"lawn-mowing","fr
 select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"lawn-mowing","frequency":"one-time","package_id":"d6640000-0000-4000-8000-000000000001","tier_id":"d6650000-0000-4000-8000-000000000003"}]'))#>>'{outcomes,0,outcome}','invalid_package','tier from another offering refused');
 
 -- Answer-based price levels: availability ignores answers; final evaluates them.
-select is((pg_temp.preview(pg_temp.plan('00060','[{"service_id":"shrub-hedge-trimming","frequency":"one-time"}]','availability'))#>'{outcomes,0}') - 'question_details' - 'scope' - 'tier_id',
+select is((pg_temp.preview(pg_temp.plan('00060','[{"service_id":"shrub-hedge-trimming","frequency":"one-time"}]','availability'))#>'{outcomes,0}') - 'question_details' - 'scope' - 'tier_id' - 'price_status' - 'price_reason'
+  - 'price_breakdown' - 'estimate' - 'deposit' - 'addon_options' - 'package_revision',
   '{"total": null, "outcome": "eligible_fixed", "promotion": false, "from_total": 80, "package_id": "d6640000-0000-4000-8000-000000000003", "service_id": "shrub-hedge-trimming", "pricing_mode": "fixed", "offering_mode": "fixed", "selection_index": 0, "depends_on_answers": true}'::jsonb,
   'availability shows answer-priced supply as a from amount instead of unavailable');
 select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"shrub-hedge-trimming","frequency":"one-time"}]','availability'))#>'{outcomes,0,question_details}',

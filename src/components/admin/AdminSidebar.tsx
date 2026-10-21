@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Archive, BarChart3, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, Zap } from "lucide-react";
+import { AlertTriangle, Archive, BadgePercent, BarChart3, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, Zap } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ const navigation = [
   { label: "Pricing Templates", href: "/admin/pricing-templates", icon: TrendingUp },
   { label: "Vendor Prices", href: "/admin/vendor-prices", icon: Tags },
   { label: "Package Reviews", href: "/admin/pricing-reviews", icon: DollarSign },
+  { label: "Promotions", href: "/admin/promotions", icon: BadgePercent },
   { label: "Pricing Analytics", href: "/admin/pricing-analytics", icon: BarChart3 },
   { label: "Smart Picks", href: "/admin/smart-picks", icon: Zap },
   { label: "Featured Providers", href: "/admin/featured", icon: Sparkles },

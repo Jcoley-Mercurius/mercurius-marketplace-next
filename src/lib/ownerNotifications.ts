@@ -23,6 +23,17 @@ export type NotificationResult =
 export async function sendOwnerNotification(
   notification: OwnerNotification,
 ): Promise<NotificationResult> {
+  return sendNotificationEmail(notification, null);
+}
+
+/**
+ * The Resend delivery behind owner notifications. `to` null sends to the owner inbox;
+ * DEC-2026-041 item 6 also uses it for the notice to a vendor's contact email on file.
+ */
+export async function sendNotificationEmail(
+  notification: OwnerNotification,
+  recipient: string | null,
+): Promise<NotificationResult> {
   let environment: ReturnType<typeof getOwnerNotificationEnvironment>;
   try {
     environment = getOwnerNotificationEnvironment();
@@ -37,7 +48,7 @@ export async function sendOwnerNotification(
     };
   }
   const { apiKey, from } = environment;
-  const to = environment.to || DEFAULT_OWNER_EMAIL;
+  const to = recipient ?? (environment.to || DEFAULT_OWNER_EMAIL);
 
   try {
     const response = await fetch("https://api.resend.com/emails", {

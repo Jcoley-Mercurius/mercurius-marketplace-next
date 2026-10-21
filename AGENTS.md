@@ -61,7 +61,7 @@ Authority order is **MPS → MDS → MTS → implementation evidence**. When fil
 - Geography: all Lee County, Florida ZIP codes through the authoritative backend allowlist.
 - Catalog: all services remain visible; unavailable supply displays “Not available yet in your area” and is not bookable.
 - Vendors: every approved and otherwise eligible vendor participates.
-- Platform fee: 15% of final service subtotal after discounts/adjustments, excluding tax and tips.
+- Platform fee: 15% of final service subtotal after discounts/adjustments, excluding tax and tips; 7.5% for a booking with one valid applied promotion (DEC-2026-038; not yet applied at checkout).
 - Customer payment: customers pay Mercurius; Mercurius remits provider proceeds.
 - Provider payout: weekly direct ACH, eligible 48 hours after homeowner-confirmed completion; disputes held; no Stripe Connect payout design.
 - Full policy details live in `governance/CONFIGURATION-DECISIONS.md`.

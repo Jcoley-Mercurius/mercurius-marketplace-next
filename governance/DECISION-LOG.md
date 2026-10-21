@@ -183,6 +183,88 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 079; unit `package-price-corrections`; browser `vendor-prices`; hosted migration push by the owner.
 
+### DEC-2026-038 — Promotional commission: 7.5% on any qualifying promotion
+
+**Status:** APPROVED owner decision (Josh), recorded in the pricing review of 2026-10-18 ("Josh approved early promotions and directed that Mercurius cut its commission in half on any promotion"). **Date:** 2026-10-18 (America/New_York).
+
+**Decision:** Ordinary commission stays 15% of the final service subtotal (CFG-005). A booking with one valid applied promotion pays 7.5% on its qualifying commissionable service amount, whether a first or a repeat booking; relief is automatic for a valid applied promotion, never discretionary, and never applied twice. Vendor-funded discount: commission is 7.5% of the discounted eligible amount (e.g. $100 − $10 = $90 paid, $6.75 commission, $83.25 to the vendor). Mercurius-funded discount: commission is 7.5% of the eligible amount before the discount and the discount is a platform subsidy kept apart from commission revenue (e.g. $90 paid, $7.50 commission, $92.50 to the vendor, $10 subsidy). Promotional package: 7.5% of its actual approved price; no invented regular price. One promotion per booking, no stacking with Credits initially; Credits never offset commission. A vendor-funded offer needs the vendor's approval of the offer revision; a Mercurius-funded offer needs admin authorization (with a budget). Changes to amount, scope or funding need approval again. The rate applies only while the booking or occurrence qualifies; a later non-promotional visit pays 15%. Accepted bookings are not repriced when a campaign changes or ends. Taxes, tips and unrelated charges keep their treatment. This replaces the review's proposed 10% rate and first-booking-only restriction.
+
+**Context:** MPS §7.6 requires promotion funder, limits, stacking, refund allocation, expiry timezone and display to be defined; DEC-2026-015 §3 refuses every promotion at checkout until funding, limits and allocation are approved.
+
+**Still open (blocks checkout use):** ~~refund allocation; restoration; the money path carrying the rate and subsidy~~ — answered by DEC-2026-041 items 1–3 (2026-10-18). DEC-2026-015 §3 stays in force for checkout until DEC-2026-041 is implemented and passes the two-person finance review.
+
+**Alternatives considered:** 10% promotional rate and first-booking-only relief (the review's proposal; superseded by the owner); relief only for vendor-funded offers (not chosen).
+
+**MPS impact:** Amends §7.2 for qualifying promotions and answers §7.6 funder, limits, stacking and display. **MDS impact:** Operator Promotions page and vendor offer approval show the rate and a worked split. **MTS impact:** Migration `20261018003000` (offers, redemptions, economics, reservation; not wired to checkout). **Data/payment/security impact:** No charge, refund or payout changes; subsidy and relief are tracked separately in redemption snapshots.
+
+**Required evidence:** SQL 084; unit `promotion-offers`; browser `pricing-approval`; `scripts/pricing-concurrency.mjs`. **Supersedes:** the general 15% statement in CFG-005 and MPS §7.2 for qualifying promotions only.
+
+### DEC-2026-039 — Vendors approve the exact revision of an operator-prepared price; price meaning and add-ons are priced end to end
+
+**Status:** APPROVED owner instruction (implementation task 2026-10-18). Items marked "owner to confirm" are implementation choices for review. **Date:** 2026-10-18 (America/New_York).
+
+**Decision:** (1) A package an operator prepares for a vendor is a private draft and is published only after the authenticated account bound to that vendor approves its exact revision; approval never publishes by itself; any change to price, scope, rule, cadence, add-on, vendor, service or replaced package needs approval again; operators cannot approve for vendors; a notice is not consent. (2) Several named packages may share a vendor, service and cadence; a second active package with the same name for the same vendor and service is refused; a replacement is a new revision of the package's lineage and pauses the previous one, so the approved live revision stays live until replaced and earlier bookings keep theirs. (3) A price is exact, starting at, a range, or quote after walkthrough; only exact prices can be booked as a fixed price; estimates are shown as estimates and need the provider's quote. (4) Add-ons are priced per unit with quantities, required or optional, by cadence, and reach the request amount; a range add-on makes the selection an estimate; included scope cannot be charged again. (5) When several rule-based levels match the same answers, or none does, there is no exact price (previously the cheapest matching level was used). (6) Provider notes are shown for information and are not enforced.
+
+**Context:** Operator drafts (DEC-2026-035) and corrections (DEC-2026-034) took effect with a vendor notice only. The review asked for revision-bound vendor approval and truthful price meaning end to end.
+
+**Owner to confirm:** ~~DEC-2026-034 corrections; the "first booking" definition~~ — answered by DEC-2026-041 items 3 and 4 (2026-10-18).
+
+**Alternatives considered:** Approval that publishes automatically (not chosen: approval and publication stay separate); operator checkbox as consent (not chosen); in-place edits of live packages for replacements (not chosen: would change rows that requests reference).
+
+**MPS impact:** Implements §4 "approve price/quote: vendor propose; admin send/correct" for prepared prices and §5.3 snapshot content for offerings. **MDS impact:** Draft package editor with homeowner preview; approval state, delivery and history; vendor approval panel; "From", "Set by your answers", estimate and walkthrough wording; required add-ons in the shown price; corrected Managed Pricing copy; Vendor Prices vendor filter. **MTS impact:** Migrations `20261018001000` and `20261018002000`. **Data/payment/security impact:** Restated request preview, submission, finder and checkout source; checkout refuses add-on requests until the money snapshot verifies add-ons; no hosted change until pushed by the owner.
+
+**Required evidence:** SQL 082, 083, 080 (updated), 066 (updated); unit `pricing-content`, `package-drafts`; browser `pricing-approval`, `vendor-prices`; `scripts/pricing-concurrency.mjs`. **Supersedes:** DEC-2026-035's "publishing is not gated by the vendor" and its same-cadence refusal.
+
+### DEC-2026-040 — Legacy live packages without vendor approval evidence
+
+**Status:** APPROVED, option (a), by DEC-2026-041 item 5 (2026-10-18). **Date:** 2026-10-18.
+
+**Context:** Hosted read-only aggregate (2026-10-18): 14 active packages; 6 published from operator drafts without vendor approval (DEC-2026-035), 8 from the vendor's own editor; none carries a recorded vendor approval. Nothing was changed, marked approved or taken offline.
+
+**Options:** (a) Leave them live; vendor-authored packages count as the vendor's own prices, and send the 6 operator-published ones to their vendors for approval as replacement drafts (recommended). (b) Pause the 6 until approved. (c) Treat all 14 as needing approval before R1.
+
+**Required evidence for any option:** the approval inventory (`admin_pricing_approval_inventory`) after the hosted push.
+
+### DEC-2026-041 — Pricing owner decisions: promotion refunds, add-on checkout, first booking, corrections, legacy packages, unlinked vendors, unmatched levels
+
+**Status:** APPROVED owner decisions (Josh), answers to the open questions of the pricing slice (TRACE-112–114). **Date:** 2026-10-18 (America/New_York).
+
+**Decision:**
+
+1. **Promotion refunds and restoration.** Refunds are calculated from the original accepted snapshot: the homeowner's refundable actual payment is refunded, and the corresponding vendor proceeds, Mercurius commission and platform subsidy are reversed proportionally. A vendor-funded discount is not cash and creates no further refund entitlement. Existing approved cancellation charges and fee treatment are preserved; no new fees. A promotion reservation is released after a failed checkout or an expired unpaid request. After cancellation before service, redemption eligibility is restored only when the homeowner receives a full refund and no charge is retained; never automatically after a partial refund, a retained charge or delivered service, except by a documented admin exception. Restoration never extends campaign dates or overrides eligibility. Refunds, releases and restorations are idempotent.
+2. **Checkout with add-ons: yes.** The authoritative money snapshot includes required and selected optional add-ons, quantities, the applicable promotion, its funding and the commission, all validated server-side, and preserves the accepted breakdown. Homeowners can select optional add-ons in the intake. These changes go through the existing two-person finance review (`money_publish_snapshot` actor and approver); nothing bypasses it.
+3. **First booking.** Eligible when the homeowner has no previous completed Marketplace service; pending, declined, expired or cancelled requests do not consume eligibility. At most one active first-booking reservation per homeowner, revalidated when the booking is committed. The restriction applies only to offers marked first-booking; every other qualifying promotion, including repeat-booking offers, still receives 7.5% (DEC-2026-038).
+4. **Operator price corrections.** A material change (price, included scope, quantities, cadence or material terms) requires the vendor's approval of the replacement revision; notification alone is insufficient. Spelling or formatting corrections stay operator-managed. Operators may suspend an incorrect listing while approval is obtained. Accepted bookings keep their original terms. Supersedes DEC-2026-034 for material changes.
+5. **The 14 live packages (DEC-2026-040 option a).** They stay live unless a known error warrants suspension. The six operator-published packages get replacement drafts sent for vendor approval; the live revision stays live until its approved replacement is published. Legacy approval status is recorded accurately; the approval evidence for the other eight is verified; no historical approval is fabricated.
+6. **Unlinked-vendor notice: email on file.** When the vendor account is not linked, the notice goes to the existing vendor contact email through the existing notification system, and explains that account linking and authenticated approval are required. Email delivery is not approval; replying cannot approve. Missing or failed delivery stays visible to the operator. The notice carries no sensitive information.
+7. **No matching level: no exact price.** The homeowner sees "Price requires confirmation" and which answer prevented an exact match. The next level is never chosen automatically and the lowest level's price is never shown as applicable. A "Starting at" amount is shown only when the vendor has explicitly approved an applicable fallback rule.
+
+**Order:** the four decision-free fixes from the source comparison; these decisions; two-person finance review and end-to-end verification; then the migrations prepared for review (owner dry run and push before merge, DEC-2026-037).
+
+**MPS impact:** Answers §7.6 refund allocation and restoration; amends §4 for corrections. **MDS impact:** optional add-on picker; "Price requires confirmation" with the blocking answer; operator delivery status including email. **MTS impact:** money source and snapshot carry add-ons and promotion economics; promotion release/restore paths; email notice through the existing notification system. **Data/payment/security impact:** reviewed money code changes (R1); no hosted change until pushed by the owner.
+
+**Supersedes:** DEC-2026-034 for material corrections; DEC-2026-039 "owner to confirm"; the first-booking definition implemented in `20261018003000`; DEC-2026-040 (decided).
+
+### DEC-2026-042 — How a homeowner applies an offer; matching keeps the priced selection
+
+**Status:** APPROVED owner directions (Josh), "Continue the existing Mercurius pricing implementation", 2026-10-20 (America/New_York). Items marked "implementation choice" are for review.
+
+**Decision:**
+
+1. **Explicit selection.** A homeowner selects an eligible displayed public offer or enters a promotion code. Nothing is applied, replaced or switched automatically. Code-only offers are never listed publicly. When several offers qualify, each shows its actual saving on the same service and selected add-ons; the greatest is labelled "Best savings" and is not selected. One promotion per booking; no Credits stacking. Where Credits are eligible the homeowner compares and chooses between Credits and a promotion (no Credits ledger exists yet, so nothing to compare). Applying another offer replaces the previous one and updates the total.
+2. **Server-side validation and confirmation.** Eligibility, dates, redemption limits and campaign budget are checked on the server before the booking is committed. If an offer becomes unavailable or the total changes, the homeowner is told and must confirm; another offer is never substituted and the undiscounted amount is never charged without confirmation. The selected offer revision, funding, discount, commission base and 7.5% promotional commission are snapshotted with the booking. Commission stays 15% on ordinary bookings and 7.5% on any qualifying applied promotion, repeat bookings included; Credits never offset commission (DEC-2026-038).
+3. **Automatic matching.** Unsupported add-on combinations are refused explicitly: add-ons are never silently removed, the total never misstated, and a request is never accepted for a provider who cannot fulfill it; supported add-on flows are preserved.
+4. **Deferred.** Vendor-approved "Starting at" fallback pricing and operator typo-only edits; price confirmation and vendor approval stay in use where those are absent.
+5. **Gates and rollout.** The promotions gate stays closed until the required two-person finance review passes. The unpaid-reservation cleanup schedule is prepared for Josh's authorization, not activated. Production migrations, real vendor notifications and the gate each need their own authorization; after the migrations are applied and the replacement-draft workflow is verified, the six operator-published packages get replacement drafts and approval requests, without duplicates and without fabricated historical approval.
+
+**Implementation choices (TRACE-116, for review):** the offer is chosen on the final review for each exactly priced service and reserved in the same transaction as the request; until checkout starts the homeowner can replace or remove it from the request; a request whose offer was released by cleanup, or whose confirmed price changed, cannot reach checkout until the homeowner chooses again (`private.promotion_selections`). A request carrying add-ons or an offer is matched only to the package, price level and revision it was priced from; when that provider cannot take it, matching stops for operator review. Add-ons without a chosen offering are refused at submission. Recurring visits of a request with add-ons carry its priced selection. Code lookups: 10 unknown codes per homeowner per hour. Cleanup also releases unpaid reservations whose offer ended, changed or was retired, since such a reservation can no longer reach checkout and would otherwise hold a first-booking slot and campaign limits.
+
+**Context:** PRICING-IMPROVEMENTS §5.2 left offer application open; nothing reserved an offer for a request.
+
+**MPS impact:** Answers the remaining §7.6 display question (how a promotion is applied). **MDS impact:** "Offers" on the request review (choice list, "Best savings" label, code entry, totals after offers); "Offer" section on the homeowner's request; gate and cleanup state on the operator Promotions page. **MTS impact:** Migration `20261018006000`; `scripts/install-promotion-sweep.sql` (inactive schedule template). **Data/payment/security impact:** restated `money_source`, `promotion_reserve`, `promotion_release_unpaid`, `submit_service_requests`, `find_eligible_packages_core`, `create_service_occurrence`, `admin_send_package_draft`; all money behavior stays behind the closed gate and is part of the finance review.
+
+**Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
+
 ### DEC-2026-043 — Accepting a provider invitation binds the account automatically
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-20 (America/New_York).
@@ -195,7 +277,7 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **MPS impact:** None to roles or approval; operator review stays at activation. **MDS impact:** Admin account panel copy names manual binding as the fallback. **MTS impact:** Migration `20261020001000`; `vendor_accept_invitation` replaced with the same signature. **Data/payment/security impact:** The link decision records the recipient as actor and the receipt it relied on; release and the reviewed-link predicate are unchanged. Supersedes TRACE-070's requirement that an operator decide the binding, for application-based invitations only.
 
-**Required evidence:** SQL 082; updated SQL 031/033/037/075; hosted migration push before merge.
+**Required evidence:** SQL 088; updated SQL 031/033/037/075; hosted migration push before merge.
 
 ### DEC-2026-037 — Merges to main deploy to production automatically
 
