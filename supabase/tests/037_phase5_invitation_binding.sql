@@ -1,6 +1,12 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- Acceptances recorded before DEC-2026-043 bound nothing, and an acceptance the
+-- automatic binding skips still binds nothing; these tests exercise the operator
+-- command for that state. Automatic binding is switched off inside this rolled-back
+-- transaction only; 082 covers it.
+create or replace function private.vendor_auto_bind_invited_account(p_attempt uuid,p_recipient uuid)
+returns boolean language sql as $$ select false $$;
 -- TRACE-070 synthetic fixtures only. Covers binding the account that accepted a
 -- provider invitation to the provider under review, and that activation then grants
 -- it the vendor role through the unchanged TRACE-068 path. No real provider, account,

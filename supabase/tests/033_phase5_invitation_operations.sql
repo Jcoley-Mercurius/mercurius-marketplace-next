@@ -147,8 +147,8 @@ select is(public.vendor_invitation_overview('f2000000-0000-4000-8000-00000000000
  'An accepted attempt stays the current record');
 select is((public.vendor_invitation_overview('f2000000-0000-4000-8000-000000000001')->'attempt'->>'live')::boolean,false,
  'An accepted attempt is no longer live');
-select is((public.vendor_invitation_overview('f2000000-0000-4000-8000-000000000001')->>'account_linked')::boolean,false,
- 'Acceptance did not link an account');
+select is((public.vendor_invitation_overview('f2000000-0000-4000-8000-000000000001')->>'account_linked')::boolean,true,
+ 'Acceptance binds the verified recipient (DEC-2026-043)');
 select is((select is_active from public.contractors where id='f2000000-0000-4000-8000-000000000001'),false,
  'Acceptance did not activate the provider');
 

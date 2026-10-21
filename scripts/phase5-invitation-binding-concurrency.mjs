@@ -73,7 +73,14 @@ select public.vendor_claim_invitation(id) from race_attempt;
 update auth.users set invited_at=clock_timestamp() where id='${recipient}';
 select public.vendor_finish_invitation(id,'${recipient}') from race_attempt;
 ${claims(recipient)}
+-- The races exercise the operator commands on an unbound receipt, the state a
+-- skipped automatic binding (DEC-2026-043) leaves. Automatic binding is swapped
+-- out for this acceptance only; the transaction restores it before commit.
+alter function private.vendor_auto_bind_invited_account(uuid,uuid) rename to vendor_auto_bind_invited_account_race_off;
+create function private.vendor_auto_bind_invited_account(uuid,uuid) returns boolean language sql as 'select false';
 select public.vendor_accept_invitation(id) from race_attempt;
+drop function private.vendor_auto_bind_invited_account(uuid,uuid);
+alter function private.vendor_auto_bind_invited_account_race_off(uuid,uuid) rename to vendor_auto_bind_invited_account;
 select id from race_attempt;
 commit;`).then((output) => output.split("\n").at(-1));
 }

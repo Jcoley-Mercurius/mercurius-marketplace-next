@@ -17,7 +17,9 @@ import { createClient } from "@/lib/supabase/client";
 // to a reviewed binding, and releasing that binding withdraws it. TRACE-070: the
 // account that accepted this provider's invitation can be bound from its receipt.
 // TRACE-105 (DEC-2026-028): a suspended provider can also be bound, so one activated
-// with no account is repaired by suspend, bind, activate.
+// with no account is repaired by suspend, bind, activate. TRACE-117 (DEC-2026-043):
+// acceptance binds the account itself when every binding condition holds, so the
+// bind command here is the fallback for an acceptance that was not bound.
 
 type Decision = {
   action: string;
@@ -456,10 +458,11 @@ export function VendorAccountLinking({
               ) : (
                 <>
                   <p className="text-xs leading-5 text-muted-foreground">
-                    The recipient explicitly accepted this provider&apos;s
-                    invitation. Binding records that account from the acceptance
-                    receipt; no role, compliance evidence, activation or public
-                    listing results from it.
+                    The recipient accepted this provider&apos;s invitation, but
+                    the account was not bound automatically. Binding records that
+                    account from the acceptance receipt, or reports why it cannot;
+                    no role, compliance evidence, activation or public listing
+                    results from it.
                   </p>
                   <ConfirmAction
                     disabled={busy}

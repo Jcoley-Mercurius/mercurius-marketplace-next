@@ -66,7 +66,8 @@ reset role;
 select is((select count(*) from public.vendor_invitation_acceptances),1::bigint,'One immutable acceptance receipt');
 select is((select status from public.vendor_onboarding where contractor_id='d2000000-0000-4000-8000-000000000001'),'review','Acceptance leaves onboarding in review');
 select is((select count(*) from public.user_roles where user_id='d1000000-0000-4000-8000-000000000002' and role='vendor'),0::bigint,'Acceptance grants no vendor role');
-select ok((select user_id is null and not is_active from public.contractors where id='d2000000-0000-4000-8000-000000000001'),'Acceptance neither links nor activates provider');
+select ok((select user_id='d1000000-0000-4000-8000-000000000002' and not is_active from public.contractors where id='d2000000-0000-4000-8000-000000000001'),
+ 'Acceptance binds the verified recipient (DEC-2026-043) and activates nothing');
 select throws_ok($$delete from public.vendor_invitation_acceptances$$,'55000','Immutable financial evidence; append a correction','Acceptance history cannot be deleted');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"d1000000-0000-4000-8000-000000000001"}',true);
 -- TRACE-070: an accepted recipient holds an account, so re-inviting it is refused
