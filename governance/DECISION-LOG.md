@@ -265,6 +265,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-044 — Operators add services to the catalog; taking one away hides it
+
+**Status:** APPROVED owner instruction. **Date:** 2026-10-21 (America/New_York).
+
+**Decision:** The catalog must grow as vendors are onboarded. Operators add a service from Service Catalog with a name, category, description, icon, search tags, reference prices, the cadences it offers and its pricing mode. Its id is derived from the name, can be changed before it is added, and is fixed afterwards. A new service is shown on the site at once; until an eligible vendor offers it, homeowners see "Not available yet in your area" (CFG-002), and vendors and operators can price it immediately. Taking a service away hides it: the row, its history and vendor prices are kept, and showing it again restores it. Services are not deleted from the operator UI (TRACE-118).
+
+**Context:** While building vendor profiles the owner could not add roof replacement, roof repair, pool construction, pool resurfacing or AC repair: the catalog editor only edited and hid the 45 seeded services.
+
+**Alternatives considered:** A migration seeding the five requested services (not chosen as the fix: the next request would need another migration; the owner can still ask for one). Deleting services (not chosen: `vendor_packages`, `pricing_templates` and operator drafts cascade on delete, and requests and compliance rows refer to the id). Categories added the same way (not requested; the six categories cover the requested services).
+
+**MPS impact:** None to fees, payout, matching or availability rules; a new service follows the existing rules. **MDS impact:** "Add service" dialog sharing the edit form; icon and tags editable; "Shown" switch. **MTS impact:** None to schema; the existing admin-only insert/update policies are the boundary (SQL 089). **Data/payment/security impact:** Catalog rows only; no customer, vendor or price data changes until an operator acts.
+
+**Required evidence:** Unit `service-catalog`; SQL 089; browser `catalog-cadences`.
+
 ### DEC-2026-043 — Accepting a provider invitation binds the account automatically
 
 **Status:** APPROVED owner instruction. **Date:** 2026-10-20 (America/New_York).

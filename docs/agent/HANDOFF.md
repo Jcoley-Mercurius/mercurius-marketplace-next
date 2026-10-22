@@ -1,5 +1,11 @@
 # Agent handoff — 2026-10-01
 
+## Operators add services to the catalog (TRACE-118, DEC-2026-044), 2026-10-21
+
+- Branch `claude/catalog-add-services` from `main` `60d4f06`. Owner request: no way to add roof and pool services while building vendor profiles. Service Catalog now has "Add service"; the id follows the name and is fixed once added; hiding ("Shown" switch) is how a service is taken away. No delete, no migration.
+- Evidence: unit `service-catalog` 10/10; SQL 089 10/10; browser `catalog-cadences` 5/5; full non-visual browser suite 544/544 after re-running sleep-induced timeouts (`request.spec.ts:1060` passed 3/3 alone). `@visual` not run.
+- Next: review and merge (client only); then the owner adds Roof Replacement, Roof Repair, Pool Construction, Pool Resurfacing (Outdoor & Exterior) and AC Repair (HVAC & Mechanical) in production, and prices AC Repair for the vendor through Vendor Prices.
+
 ## Pricing: packages, vendor approval and promotions (TRACE-112–114, DEC-2026-038/039/040), 2026-10-18
 
 - Branch `claude/pricing-revisions` from `main` `fdfb450`; uncommitted working tree for review. Owner task: the pricing review's copy-ready prompt (slice A, slice B, PR-10). Full record, observed-vs-reported matrix, evidence map, pilot steps and rollout: [PRICING-IMPROVEMENTS.md](../../governance/PRICING-IMPROVEMENTS.md).
