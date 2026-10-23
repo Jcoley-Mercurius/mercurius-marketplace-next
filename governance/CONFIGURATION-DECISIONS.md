@@ -50,6 +50,7 @@
 - **Excluded from fee base:** Tax and tips.
 - **Tips:** 100% belongs to the provider.
 - **Deposits:** A deposit is a payment toward the final service subtotal, not an additional fee base.
+- **Quote deposits (DEC-2026-045, approved 2026-10-22):** the initial beta quote workflow uses a $0 deposit and the existing invoice and checkout under its approved timing; jobs or vendors that ask for a deposit get an operator review before a quote is sent. Existing deposit records and accepted terms are unchanged. Configurable materials deposits, percentages, due dates and refund rules are a separate future policy.
 - **Refund effect:** After a full or partial refund, the 15% fee is calculated against the final retained service subtotal.
 - **Processor cost:** Customer-payment processing cost is a Mercurius operating cost and is not deducted a second time from provider proceeds.
 - **Tax:** Tracked separately from service subtotal and excluded from the 15% fee; calculation and remittance must follow the implemented tax authority.
@@ -150,3 +151,13 @@ The system and configuration baselines are approved. CFG-014 adds a distinct R0 
 - **R0 interest:** Email, Lee County ZIP, service interests or “still exploring”; optional first name; separate expansion-interest path for other ZIPs; independent unchecked marketing consent. Retention and withdrawal follow the full contract.
 - **Activation:** Merges are implementation evidence only. Hosted migration, email, deployment, domain and R0 activation each need the release procedure and specific owner go/no-go. R1 money/payout and Credits have a separate later gate.
 - **Acceptance evidence:** TRACE-100–105 and the R0 gate in the rebuild roadmap.
+
+## CFG-015 — Quote and payment exception thresholds
+
+- **Status:** APPROVED (DEC-2026-045), 2026-10-22.
+- **Provider proposal missing:** queued 24 hours after a quote becomes required from the assigned provider (offer acceptance, or a later decline, expiry or returned proposal).
+- **Proposal awaiting operator review or send:** queued 4 hours after submission.
+- **Sent quote awaiting the homeowner:** queued 12 hours after sending. The 24-hour quote expiry (DEC-2026-008) is unchanged and separate from the 4-hour provider offer and the 72-hour completion escalation.
+- **Payment:** a confirmed failure or an unresolved outcome is queued immediately; a confirmed failure unresolved for 24 hours is aged.
+- **Effect:** queue items only. No automatic acceptance, cancellation, reassignment, extension, charge, refund, service start, fund release, reminder or external message.
+- **Acceptance evidence:** boundary tests at each threshold (SQL 090); queue visibility in `/admin/requests`.

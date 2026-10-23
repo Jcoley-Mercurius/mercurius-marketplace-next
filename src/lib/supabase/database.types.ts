@@ -4231,6 +4231,214 @@ export type Database = {
         }
         Relationships: []
       }
+      request_quote_exceptions: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          id: string
+          kind: string
+          opened_at: string
+          opened_by: string
+          reason: string
+          request_id: string
+          resolution: string | null
+          subject: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          id?: string
+          kind: string
+          opened_at?: string
+          opened_by: string
+          reason: string
+          request_id: string
+          resolution?: string | null
+          subject: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          id?: string
+          kind?: string
+          opened_at?: string
+          opened_by?: string
+          reason?: string
+          request_id?: string
+          resolution?: string | null
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_quote_exceptions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      request_quote_proposals: {
+        Row: {
+          based_on_revision: number
+          context: Json
+          contractor_id: string
+          corrected: boolean | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_reason: string | null
+          id: string
+          items: Json
+          proposer_id: string
+          quote_id: string | null
+          request_id: string
+          scope: string
+          status: string
+          subtotal_cents: number
+        }
+        Insert: {
+          based_on_revision: number
+          context: Json
+          contractor_id: string
+          corrected?: boolean | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          id?: string
+          items: Json
+          proposer_id: string
+          quote_id?: string | null
+          request_id: string
+          scope: string
+          status?: string
+          subtotal_cents: number
+        }
+        Update: {
+          based_on_revision?: number
+          context?: Json
+          contractor_id?: string
+          corrected?: boolean | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          id?: string
+          items?: Json
+          proposer_id?: string
+          quote_id?: string | null
+          request_id?: string
+          scope?: string
+          status?: string
+          subtotal_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_quote_proposals_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_quote_proposals_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "request_quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_quote_proposals_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      request_quote_terms: {
+        Row: {
+          addons_cents: number
+          created_at: string
+          deposit_cents: number
+          discount_cents: number
+          items: Json
+          payment_terms: string
+          policy_version: string
+          proposal_id: string | null
+          quote_id: string
+          request_id: string
+          scope: string
+          service_cents: number
+          subtotal_cents: number
+          tax_basis: string | null
+          tax_cents: number | null
+          tax_status: string
+          total_cents: number | null
+        }
+        Insert: {
+          addons_cents: number
+          created_at?: string
+          deposit_cents?: number
+          discount_cents: number
+          items: Json
+          payment_terms: string
+          policy_version: string
+          proposal_id?: string | null
+          quote_id: string
+          request_id: string
+          scope: string
+          service_cents: number
+          subtotal_cents: number
+          tax_basis?: string | null
+          tax_cents?: number | null
+          tax_status: string
+          total_cents?: number | null
+        }
+        Update: {
+          addons_cents?: number
+          created_at?: string
+          deposit_cents?: number
+          discount_cents?: number
+          items?: Json
+          payment_terms?: string
+          policy_version?: string
+          proposal_id?: string | null
+          quote_id?: string
+          request_id?: string
+          scope?: string
+          service_cents?: number
+          subtotal_cents?: number
+          tax_basis?: string | null
+          tax_cents?: number | null
+          tax_status?: string
+          total_cents?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_quote_terms_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "request_quote_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_quote_terms_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: true
+            referencedRelation: "request_quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_quote_terms_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       request_quotes: {
         Row: {
           amount: number
@@ -6328,6 +6536,10 @@ export type Database = {
         Args: { p_fingerprint: string; p_offer: string; p_reason: string }
         Returns: Json
       }
+      admin_close_quote_exception: {
+        Args: { _exception_id: string; _resolution: string }
+        Returns: undefined
+      }
       admin_correct_package_prices: {
         Args: {
           p_expected_updated_at: string
@@ -6373,6 +6585,10 @@ export type Database = {
           phone: string
         }[]
       }
+      admin_open_quote_exception: {
+        Args: { _job_id: string; _reason: string }
+        Returns: string
+      }
       admin_package_contents: { Args: { p_contractor?: string }; Returns: Json }
       admin_package_draft_events: { Args: { p_draft: string }; Returns: Json }
       admin_package_drafts: { Args: { p_contractor?: string }; Returns: Json }
@@ -6391,6 +6607,11 @@ export type Database = {
           p_reason: string
         }
         Returns: Json
+      }
+      admin_quote_queue: { Args: never; Returns: Json }
+      admin_record_quote_review: {
+        Args: { _job_id: string; _kind: string; _note: string }
+        Returns: string
       }
       admin_request_draft_email: {
         Args: {
@@ -6415,6 +6636,10 @@ export type Database = {
       admin_retire_promotion_offer: {
         Args: { p_offer: string; p_reason: string }
         Returns: Json
+      }
+      admin_return_quote_proposal: {
+        Args: { _proposal_id: string; _reason: string }
+        Returns: undefined
       }
       admin_save_package_draft: {
         Args: {
@@ -6442,6 +6667,17 @@ export type Database = {
       admin_save_promotion_offer: {
         Args: { p_expected_updated_at: string; p_offer: string; p_terms: Json }
         Returns: Json
+      }
+      admin_send_itemized_quote: {
+        Args: {
+          _expected_revision: number
+          _items: Json
+          _job_id: string
+          _proposal_id?: string
+          _reason: string
+          _scope: string
+        }
+        Returns: string
       }
       admin_send_package_draft: {
         Args: { p_draft: string; p_revision: string }
@@ -7841,6 +8077,15 @@ export type Database = {
         Returns: Json
       }
       vendor_promotion_offers: { Args: never; Returns: Json }
+      vendor_propose_quote: {
+        Args: {
+          _expected_revision: number
+          _items: Json
+          _job_id: string
+          _scope: string
+        }
+        Returns: string
+      }
       vendor_record_checklist_evidence: {
         Args: {
           p_accepted: string

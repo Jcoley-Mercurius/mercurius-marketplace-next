@@ -12,6 +12,10 @@ insert into public.service_requests(id,customer_id,service_type,address,status,m
 insert into public.request_quotes(id,request_id,revision,amount,sender_id,reason)
  select ('74000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,('73000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
  1,100,'71000000-0000-4000-8000-000000000002','Synthetic quote' from generate_series(1,2)n;
+-- DEC-2026-045: approval needs itemized terms with a confirmed tax treatment (fixture; no command confirms tax).
+insert into public.request_quote_terms(quote_id,request_id,items,scope,service_cents,addons_cents,discount_cents,subtotal_cents,tax_status,tax_cents,tax_basis,total_cents,payment_terms,policy_version)
+ select q.id,q.request_id,'[{"kind":"service","description":"Synthetic","quantity":1,"unit_cents":9300,"amount_cents":9300}]','Synthetic scope',
+ 9300,0,0,9300,'confirmed',700,'Synthetic confirmed treatment',10000,'No deposit.','DEC-2026-045' from public.request_quotes q where q.request_id::text like '73000000-%';
 update public.service_requests r set current_quote_id=q.id,quote_revision=1,quote_status='submitted',quote_expires_at=q.expires_at from public.request_quotes q where q.request_id=r.id;
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000002"}',true);

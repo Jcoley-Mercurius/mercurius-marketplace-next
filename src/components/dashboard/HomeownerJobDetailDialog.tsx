@@ -20,6 +20,8 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { QuoteBreakdown } from "@/components/quotes/QuoteItems";
+import { quoteApproval, quoteWindowOpen, termsColumns, type QuoteTerms } from "@/lib/quoteProposals";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -118,6 +120,26 @@ export function HomeownerJobDetailDialog({
   const [comment, setComment] = useState("");
   const [signedPhotos, setSignedPhotos] = useState<string[]>([]);
   const [actionError, setActionError] = useState("");
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    // TRACE-119: the quote window clock starts after hydration; the server still decides expiry.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [open]);
+  // DEC-2026-045 G1: the itemized terms of the current quote revision.
+  const quoteId = open ? job?.current_quote_id ?? null : null;
+  const [quoteTerms, setQuoteTerms] = useState<{ id: string; terms: QuoteTerms | null; error: boolean } | null>(null);
+  useEffect(() => {
+    if (!quoteId) return;
+    let active = true;
+    void createClient().from("request_quote_terms").select(termsColumns).eq("quote_id", quoteId).maybeSingle().then((result) => {
+      if (active) setQuoteTerms({ id: quoteId, terms: (result.data ?? null) as unknown as QuoteTerms | null, error: Boolean(result.error) });
+    });
+    return () => { active = false; };
+  }, [quoteId]);
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (actionError && !document.querySelector('[role=alertdialog]')) errorRef.current?.focus(); }, [actionError]);
   const [provider, setProvider] = useState<ProviderSummary | null>(null);
@@ -237,6 +259,10 @@ export function HomeownerJobDetailDialog({
   const currentJob = job;
 
   const isQuoted = job.quote_status === "submitted" && !job.quote_declined_at && !job.quote_approved_at;
+  // A passed deadline closes the quote before the expiry worker records it (DEC-2026-008).
+  const quoteOpen = isQuoted && quoteWindowOpen(job, now);
+  const currentTerms = quoteTerms && quoteTerms.id === job.current_quote_id ? quoteTerms : null;
+  const approval = quoteApproval(currentTerms?.terms ?? null);
   const isPending = job.status === "pending";
   const needsConfirmation = ["vendor_completed"].includes(
     job.status,
@@ -472,7 +498,7 @@ export function HomeownerJobDetailDialog({
           <Detail icon={MapPin} label="Service address" wide>
             {location || "Address unavailable"}
           </Detail>
-          <Detail icon={CreditCard} label={isQuoted ? "Quoted price" : "Recorded amount"}>
+          <Detail icon={CreditCard} label={isQuoted ? (currentTerms?.terms?.tax_status === "confirmed" ? "Quoted total" : "Quoted subtotal") : "Recorded amount"}>
             {!isQuoted && ["sourcing", "exhausted", "awaiting_consent", "quote_pending"].includes(job.matching_status ?? "") ? "Awaiting provider" : (isQuoted ? job.quote_amount : job.total_amount) == null ? "Not available" : formatMoney((isQuoted ? job.quote_amount : job.total_amount)!)}
           </Detail>
         </div>
@@ -570,7 +596,8 @@ export function HomeownerJobDetailDialog({
         )}
 
         {job.quote_declined_at && <p role="status" className="rounded-xl border border-status-warning bg-status-warning-bg p-4 text-sm text-status-warning">Quote declined. Mercurius will review the next step; this request has not been cancelled.</p>}
-        {isQuoted && (
+        {isQuoted && !quoteOpen && <p role="status" className="rounded-xl border border-status-warning bg-status-warning-bg p-4 text-sm text-status-warning">The 24-hour approval window for this quote has closed, so it can no longer be approved. Contact Mercurius for a new quote; the service has not been cancelled.</p>}
+        {quoteOpen && (
           <div className="space-y-4 rounded-xl border border-status-info bg-status-info-bg p-4 bg-status-info-bg">
             <div>
               <p className="font-medium text-status-info text-status-info">
@@ -581,6 +608,16 @@ export function HomeownerJobDetailDialog({
                 the next step and does not cancel the request.
               </p>
             </div>
+            {!currentTerms ? (
+              <p role="status" className="flex items-center gap-2 text-sm text-status-info"><Loader2 className="h-4 w-4 animate-spin" />Loading the itemized quote…</p>
+            ) : currentTerms.error ? (
+              <p role="alert" className="text-sm text-status-danger">The itemized quote couldn’t be loaded, so it can’t be approved right now. You can still decline, or try again later.</p>
+            ) : (
+              <>
+                {currentTerms.terms && <div className="rounded-lg border bg-card p-3 text-foreground"><QuoteBreakdown terms={currentTerms.terms} /></div>}
+                {!approval.approvable && <p role="status" className="text-sm text-status-info">{approval.reason}</p>}
+              </>
+            )}
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 variant="outline"
@@ -594,7 +631,7 @@ export function HomeownerJobDetailDialog({
                 )}
                 Decline
               </Button>
-              <Button
+              {currentTerms && !currentTerms.error && approval.approvable && <Button
                 disabled={!actionsEnabled || Boolean(busyAction)}
                 className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
                 onClick={() => void respondToQuote(true)}
@@ -605,7 +642,7 @@ export function HomeownerJobDetailDialog({
                   <ThumbsUp />
                 )}
                 Approve quote
-              </Button>
+              </Button>}
             </div>
           </div>
         )}
