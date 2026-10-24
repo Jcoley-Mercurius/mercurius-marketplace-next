@@ -90,7 +90,7 @@ test("the vendor filter scopes packages and drafts with real counts", async ({ p
   await expect(page).toHaveURL(/\/admin\/vendor-prices$/);
 });
 
-test("a draft shows its full content and is sent for the vendor's approval of that revision", async ({ page }) => {
+test("a draft shows its full content, can be published, and is sent for the vendor's approval of that revision", async ({ page }) => {
   const sent: unknown[] = [];
   await page.route("**/rpc/admin_send_package_draft", route => {
     sent.push(route.request().postDataJSON());
@@ -101,7 +101,7 @@ test("a draft shows its full content and is sent for the vendor's approval of th
   await expect(page.getByText("+$30–$50")).toBeVisible();
   await expect(page.getByText("Kitchen · Bathrooms")).toBeVisible();
   await expect(page.getByText("For information. Mercurius booking, cancellation and refund terms apply.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
   expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await page.getByRole("button", { name: "Send for approval" }).click();
@@ -131,7 +131,7 @@ test("an unlinked vendor is emailed a notice that is not approval, and failures 
   await expect(page.getByText("Email failed; the vendor was not told")).toBeVisible();
   await expect(page.getByText("Email error: Resend returned 422: invalid to [address]")).toBeVisible();
   await expect(page.getByRole("button", { name: "Resend email" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
   expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
 });
 
@@ -200,7 +200,7 @@ test("the vendor approves the exact version Mercurius sent, or asks for changes"
   const panel = page.getByRole("region", { name: "Prices waiting for your approval" });
   await expect(panel.getByText("replaces \"Synthetic standard clean\"", { exact: false })).toBeVisible();
   await expect(panel.getByText("Waiting for your approval", { exact: true })).toBeVisible();
-  await expect(panel.getByText("Approving lets Mercurius publish exactly this version", { exact: false })).toBeVisible();
+  await expect(panel.getByText("Mercurius can also publish a price without your approval", { exact: false })).toBeVisible();
   expect((await new AxeBuilder({ page }).include("#price-approvals").withTags(tags).analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 

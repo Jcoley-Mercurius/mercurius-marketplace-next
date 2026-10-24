@@ -1,5 +1,13 @@
 # Agent handoff — 2026-10-01
 
+## Operators publish prices without the vendor's approval (TRACE-120, DEC-2026-046), 2026-10-24
+
+- Branch `claude/admin-publish-without-vendor-approval` from `main` `66d495e` (independent of PR #106, which holds DEC-2026-045/TRACE-119 and SQL 090). Owner instruction: the admin publishes pricing without the vendor's approval.
+- Migration `20261024001000` (additive; no data change): `admin_publish_package_draft` restated from `20261018002000` without the approval gate; returns, records and notifies `vendor_approved`. Send-for-approval, vendor approve/ask-for-changes and history unchanged and optional. Vendor-funded promotion offers keep vendor approval.
+- UI: Publish enabled on every open draft; the dialog says whether the vendor approved and shows a pending change request; admin, vendor and email copy updated.
+- Evidence: SQL 091 new (080/083/085 refusal assertions removed); clean replay, full SQL 81 files 4,494 PASS; unit 468/468; lint, typecheck, secret scan clean; synthetic build; browser `vendor-prices` + `pricing-approval` 23/23. Full non-visual suite and `@visual` not run.
+- Next: Codex review; owner pushes `20261024001000` (dry run first) before merge.
+
 ## Operators add services to the catalog (TRACE-118, DEC-2026-044), 2026-10-21
 
 - Branch `claude/catalog-add-services` from `main` `60d4f06`. Owner request: no way to add roof and pool services while building vendor profiles. Service Catalog now has "Add service"; the id follows the name and is fixed once added; hiding ("Shown" switch) is how a service is taken away. No delete, no migration.

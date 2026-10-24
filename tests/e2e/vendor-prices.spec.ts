@@ -7,10 +7,11 @@ import { syntheticSession } from "../fixtures/browser-session";
 // command are mocked readbacks and requests; nothing here claims a real vendor or price.
 // The database contract is SQL 079. TRACE-110 (DEC-2026-035) adds operator draft prices
 // and the every-two-months cadence (SQL 080), with the same synthetic mocks. TRACE-113
-// (DEC-2026-039): a draft is published only after the vendor approves its exact revision
-// (SQL 083); the approval flow itself is in pricing-approval.spec.ts. DEC-2026-041 item 4: a
-// price correction is proposed as a replacement draft the vendor approves (SQL 085); live
-// packages show their content, price meaning and recorded approval evidence.
+// (DEC-2026-039): the vendor can approve a draft's exact revision (SQL 083); the approval flow
+// itself is in pricing-approval.spec.ts. DEC-2026-046 (TRACE-120): an operator publishes with
+// or without that approval (SQL 091). DEC-2026-041 item 4: a price correction is proposed as
+// a replacement draft (SQL 085); live packages show their content, price meaning and
+// recorded approval evidence.
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const vendorA = "00000000-0000-4000-8000-000000000081";
 const vendorB = "00000000-0000-4000-8000-000000000082";
@@ -237,12 +238,39 @@ test("add a price saves a private draft for the chosen vendor at the catalog's c
   }]);
 });
 
-test("an unapproved draft cannot be published and an unbound vendor cannot be asked", async ({ page }) => {
+// DEC-2026-046 (TRACE-120): the vendor's approval is optional; SQL 091.
+test("an unapproved draft publishes without the vendor's approval and an unbound vendor cannot be asked", async ({ page }) => {
+  const sent: unknown[] = [];
+  await page.route("**/rpc/admin_publish_package_draft", route => {
+    sent.push(route.request().postDataJSON());
+    return route.fulfill({ json: { package_id: "00000000-0000-4000-8000-000000000089", needs_review: false, vendor_notified: false, vendor_approved: false } });
+  });
   await openPrices(page, "light", 320);
-  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Send for approval" })).toBeDisabled();
   await expect(page.getByRole("note")).toContainText("No vendor account is bound to this provider");
+  await expect(page.getByRole("note")).toContainText("you can still publish");
   expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
+
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish price" });
+  await expect(dialog.getByText("not approved by the vendor", { exact: false })).toBeVisible();
+  await expect(dialog.getByRole("note")).toHaveText("This version was not sent to the vendor for approval. Publishing does not need it.");
+  await dialog.getByRole("textbox", { name: "Reason (required)" }).fill("Synthetic: rate set by Mercurius");
+  expect((await new AxeBuilder({ page }).include("[role=dialog]").withTags(tags).analyze()).violations).toEqual([]);
+  await dialog.getByRole("button", { name: "Publish price" }).click();
+  await expect(page.getByText("Price published")).toBeVisible();
+  await expect(page.getByText("Published without the vendor's approval.", { exact: false })).toBeVisible();
+  expect(sent).toEqual([{ p_draft: draftId, p_expected_updated_at: draftUpdatedAt, p_reason: "Synthetic: rate set by Mercurius" }]);
+});
+
+test("publishing a draft the vendor asked to change shows their request", async ({ page }) => {
+  await page.route("**/rpc/admin_package_drafts", route => route.fulfill({ json: [{ ...draft, approval_state: "changes_requested",
+    change_request: "Synthetic: lower the monthly price", vendor_link: { linked: true, vendor_role: true, blocker: null } }] }));
+  await openPrices(page, "light", 1440);
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish price" });
+  await expect(dialog.getByRole("note")).toHaveText("The vendor asked for changes: \"Synthetic: lower the monthly price\". Publishing goes ahead without them.");
+  expect((await new AxeBuilder({ page }).include("[role=dialog]").withTags(tags).analyze()).violations).toEqual([]);
 });
 
 test("publishing an approved draft needs a reason and explains a refusal", async ({ page }) => {
