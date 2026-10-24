@@ -107,7 +107,7 @@ test("vendor: a lost acceptance response is recovered from the read-back, withou
   const state: VendorState = { rows: [request(fixedId)], readback: [accepted(request(fixedId), { scheduled_start_at: "2026-10-01T14:00:00.000Z" })], accept: "abort", lists: 0, calls: [] };
   await vendorOffers(page, state);
   await confirmAccept(page, "Synthetic Lawn Service");
-  await expect(page.getByRole("status").filter({ hasText: "Offer accepted" })).toContainText("Appointment: Oct 1, 2026, 10:00 AM ET.");
+  await expect(page.getByRole("status").filter({ hasText: "Offer accepted" })).toContainText("Appointment: Thu, Oct 1, 2026, 10:00 AM EDT.");
   expect(state.calls).toEqual(["accept"]);
 });
 

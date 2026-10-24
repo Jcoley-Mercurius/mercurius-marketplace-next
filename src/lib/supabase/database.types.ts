@@ -841,6 +841,7 @@ export type Database = {
           operation_key: string
           policy_assessment: Json
           reason: string
+          seq: number
         }
         Insert: {
           actor_id: string
@@ -852,6 +853,7 @@ export type Database = {
           operation_key: string
           policy_assessment: Json
           reason: string
+          seq?: never
         }
         Update: {
           actor_id?: string
@@ -863,6 +865,7 @@ export type Database = {
           operation_key?: string
           policy_assessment?: Json
           reason?: string
+          seq?: never
         }
         Relationships: [
           {
@@ -6609,6 +6612,17 @@ export type Database = {
         Returns: Json
       }
       admin_quote_queue: { Args: never; Returns: Json }
+      admin_record_appointment: {
+        Args: {
+          _expected_start?: string
+          _job_id: string
+          _local_start: string
+          _operation_key: string
+          _reason?: string
+          _starts_at: string
+        }
+        Returns: Json
+      }
       admin_record_quote_review: {
         Args: { _job_id: string; _kind: string; _note: string }
         Returns: string
@@ -6893,6 +6907,7 @@ export type Database = {
         Args: { p_bucket: string; p_name: string }
         Returns: boolean
       }
+      job_schedule: { Args: { _job_id: string }; Returns: Json }
       job_transition_actor_allowed: {
         Args: {
           _actor: string

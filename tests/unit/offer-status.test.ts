@@ -62,7 +62,7 @@ describe("TRACE-099 homeowner provider status", () => {
     expect(quote.explanation).toContain("a quote is required");
     expect(quote.explanation).toContain("No appointment time is recorded yet");
     const booked = providerStatus({ status: "scheduled", matching_status: "matched", contractor_id: vendor, pricing_mode: "fixed", scheduled_start_at: deadline });
-    expect(booked.explanation).toBe("A provider accepted this request. Appointment: Sep 27, 2026, 4:15 PM ET.");
+    expect(booked.explanation).toBe("A provider accepted this request. Appointment: Sun, Sep 27, 2026, 4:15 PM EDT.");
     const accepted = providerStatus({ status: "scheduled", matching_status: "matched", contractor_id: vendor, pricing_mode: "deposit_quote", quote_status: "accepted" });
     expect(accepted.explanation).not.toContain("quote is required");
   });
@@ -96,7 +96,7 @@ describe("TRACE-099 vendor accept/decline read-back", () => {
     expect(vendorOfferOutcome({ status: "scheduled", matching_status: "matched", contractor_id: vendor, pricing_mode: "custom_quote", quote_only: true }, vendor, false))
       .toEqual({ kind: "accepted", quote: true, appointment: null });
     expect(vendorOfferOutcome({ status: "scheduled", matching_status: "matched", contractor_id: vendor, pricing_mode: "fixed", scheduled_start_at: deadline }, vendor, false))
-      .toEqual({ kind: "accepted", quote: false, appointment: "Sep 27, 2026, 4:15 PM ET" });
+      .toEqual({ kind: "accepted", quote: false, appointment: "Sun, Sep 27, 2026, 4:15 PM EDT" });
   });
   it("treats a hidden or reassigned request as no longer this vendor's offer", () => {
     expect(vendorOfferOutcome(null, vendor, false)).toEqual({ kind: "gone" });

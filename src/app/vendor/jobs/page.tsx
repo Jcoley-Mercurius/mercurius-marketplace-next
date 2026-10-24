@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { JobOperations } from "@/components/dashboard/JobOperations";
+import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import Link from "next/link";
 import {
   AlertCircle, Briefcase, Calendar, Camera, CheckCircle2, Clock, DollarSign,
@@ -18,7 +19,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatEastern, isOpenVendorOffer, isQuoteWork, offerTimeLeft, vendorOfferOutcome } from "@/lib/offerStatus";
+import { formatAppointment, formatEastern, isOpenVendorOffer, isQuoteWork, offerTimeLeft, vendorOfferOutcome } from "@/lib/offerStatus";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { VendorRecruitingNotice } from "@/components/vendor/VendorRecruitingStatus";
@@ -391,7 +392,7 @@ function JobCard({ job, busy, view, start, complete }: {
         <div className="mb-4 flex flex-wrap items-center gap-3"><h3 className="font-heading text-lg font-semibold">{job.service_type}</h3><Status status={job.status} /></div>
         <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
           <span className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.address}, {job.city}, {job.state}</span>
-          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.scheduled_start_at ? `Appointment: ${formatEastern(job.scheduled_start_at)}` : job.status === "scheduled" ? "No appointment time recorded yet" : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}${job.preferred_time ? " · " + job.preferred_time : ""}` : "No preferred date"}</span>
+          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.scheduled_start_at ? `Appointment: ${formatAppointment(job.scheduled_start_at)}` : job.status === "scheduled" ? "No appointment time recorded yet" : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}${job.preferred_time ? " · " + job.preferred_time : ""}` : "No preferred date"}</span>
           <span className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.homeowner_name ?? "Homeowner"}</span>
         </div>
       </div>
@@ -418,12 +419,12 @@ function Details({ job, close, saved, refreshQuote }: { job: Job | null; close: 
     <DialogHeader><div className="flex flex-wrap items-center gap-2 pr-8"><DialogTitle>{job.service_type}</DialogTitle><Status status={job.status} /></div><DialogDescription>Job details and homeowner request information.</DialogDescription></DialogHeader>
     <div className="grid gap-4 py-2 sm:grid-cols-2">
       <Block icon={MapPin} title="Service address">{job.address}<br />{job.city}, {job.state} {job.zip_code}</Block>
-      <Block icon={Calendar} title="Preferred timing">{job.preferred_date ? formatDate(job.preferred_date) : "Date to be confirmed"}{job.preferred_time && <><br />{job.preferred_time}</>}</Block>
+      <Block icon={Calendar} title="Preferred timing (homeowner request)">{job.preferred_date ? formatDate(job.preferred_date) : "No preferred date"}{job.preferred_time && <><br />{job.preferred_time}</>}</Block>
       <Block icon={User} title="Homeowner">{job.homeowner_name ?? "Homeowner"}</Block>
       <Block icon={DollarSign} title={price.label}>{price.value}<br /><span className="text-muted-foreground">{price.note}</span></Block>
     </div>
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
-    {job.scheduled_start_at && <p>Appointment: {formatEastern(job.scheduled_start_at)}</p>}
+    {!isIncoming(job) && <AppointmentPanel key={`appointment-${job.id}-${job.status}`} jobId={job.id} role="vendor" onChanged={refreshQuote} />}
     {!isIncoming(job) && <VendorQuotePanel key={`quote-${job.id}`} job={job} onChanged={refreshQuote} />}
     {["scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="vendor" onSaved={saved} />}
     <QuestionAnswers job={job} />
@@ -522,7 +523,9 @@ function Block({ icon: Icon, title, children }: { icon: typeof MapPin; title: st
 function Empty({ icon: Icon, title, copy }: { icon: typeof MapPin; title: string; copy: string }) { return <Card className="border-dashed bg-card/70"><CardContent className="py-16 text-center"><span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted"><Icon className="h-7 w-7 text-muted-foreground" /></span><p className="font-heading font-semibold">{title}</p><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted-foreground">{copy}</p></CardContent></Card>; }
 function ErrorState({ message, retry }: { message: string; retry: () => void }) { return <Card className="border-destructive/20 bg-destructive/5"><CardContent className="py-14 text-center"><AlertCircle className="mx-auto mb-4 h-10 w-10 text-destructive" /><p className="font-heading text-lg font-semibold">We could not load your jobs</p><p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">No preview jobs have been substituted. {message}</p><Button className="mt-5" variant="outline" onClick={retry}><RefreshCw />Try again</Button></CardContent></Card>; }
 function Loading() { return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-3 h-6 w-6 animate-spin text-accent" />Loading jobs...</div>; }
-function sortBySchedule(a: Job, b: Job) { if (!a.preferred_date) return 1; if (!b.preferred_date) return -1; return a.preferred_date.localeCompare(b.preferred_date); }
+// A recorded appointment orders the job; otherwise the homeowner's preferred date does.
+function scheduleKey(job: Job) { return job.scheduled_start_at ? new Date(job.scheduled_start_at).toISOString() : job.preferred_date ? `${job.preferred_date}T12:00:00.000Z` : null; }
+function sortBySchedule(a: Job, b: Job) { const left = scheduleKey(a), right = scheduleKey(b); if (!left) return 1; if (!right) return -1; return left.localeCompare(right); }
 function relative(value: string, now: number) { if (!now) return "recently"; const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60_000)); if (minutes < 1) return "just now"; if (minutes < 60) return minutes + "m ago"; const hours = Math.floor(minutes / 60); if (hours < 24) return hours + "h ago"; const days = Math.floor(hours / 24); return days === 1 ? "1 day ago" : days + " days ago"; }
 function money(value: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value)); }
 function formatDate(value: string) { const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + "T12:00:00") : new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }

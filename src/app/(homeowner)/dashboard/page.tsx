@@ -48,7 +48,7 @@ import {
   serviceRequestStatusLabel,
   serviceRequestStatusStyle,
 } from "@/lib/serviceRequestStatus";
-import { providerStatus } from "@/lib/offerStatus";
+import { formatAppointment, providerStatus } from "@/lib/offerStatus";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -571,12 +571,12 @@ function EmptyState({ icon: Icon, title, description, actionHref, actionLabel, c
 }
 
 function ServiceRow({ job, compact = false, onOpen }: { job: ServiceRequest; compact?: boolean; onOpen?: () => void }) {
-  const displayDate = job.preferred_date ? formatDate(job.preferred_date) : "Date TBD";
+  const displayDate = job.scheduled_start_at ? `Appointment: ${formatAppointment(job.scheduled_start_at)}` : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}` : "No appointment yet";
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
   const className = cn("flex w-full flex-col justify-between gap-4 rounded-xl bg-muted p-4 text-left sm:flex-row sm:items-center", !compact && "border border-border bg-card p-5", onOpen && "cursor-pointer transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring");
   const isPast = isPastServiceRequestStatus(job.status);
   const needsAttention = job.status === "disputed" || job.status === "cancelled";
-  const content = <><div className="flex min-w-0 items-start gap-4"><div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", isPast ? "bg-sage-light" : "bg-background", needsAttention && "bg-status-danger-bg bg-status-danger-bg")} >{needsAttention ? <AlertTriangle className="h-5 w-5 text-status-danger text-status-danger" /> : isPast ? <CheckCircle2 className="h-5 w-5 text-sage-dark" /> : <Calendar className="h-5 w-5 text-accent" />}</div><div className="min-w-0"><p className="font-semibold">{job.service_type}</p><p className="text-sm text-muted-foreground">{providerStatus(job).line}</p>{!compact && location && <p className="truncate text-sm text-muted-foreground">{location}</p>}<p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" />{displayDate}{job.preferred_time ? ` • ${job.preferred_time}` : ""}</p></div></div><div className="flex items-center gap-2"><Badge className={cn("w-fit border", serviceRequestStatusStyle(job.status))}>{serviceRequestStatusLabel(job.status, job.matching_status)}</Badge>{onOpen && <ArrowRight className="h-4 w-4 text-muted-foreground" />}</div></>;
+  const content = <><div className="flex min-w-0 items-start gap-4"><div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", isPast ? "bg-sage-light" : "bg-background", needsAttention && "bg-status-danger-bg bg-status-danger-bg")} >{needsAttention ? <AlertTriangle className="h-5 w-5 text-status-danger text-status-danger" /> : isPast ? <CheckCircle2 className="h-5 w-5 text-sage-dark" /> : <Calendar className="h-5 w-5 text-accent" />}</div><div className="min-w-0"><p className="font-semibold">{job.service_type}</p><p className="text-sm text-muted-foreground">{providerStatus(job).line}</p>{!compact && location && <p className="truncate text-sm text-muted-foreground">{location}</p>}<p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><Clock className="h-3.5 w-3.5" />{displayDate}{!job.scheduled_start_at && job.preferred_date && job.preferred_time ? ` • ${job.preferred_time}` : ""}</p></div></div><div className="flex items-center gap-2"><Badge className={cn("w-fit border", serviceRequestStatusStyle(job.status))}>{serviceRequestStatusLabel(job.status, job.matching_status)}</Badge>{onOpen && <ArrowRight className="h-4 w-4 text-muted-foreground" />}</div></>;
   return onOpen ? <button type="button" className={className} onClick={onOpen} aria-label={`Open ${job.service_type} details`}>{content}</button> : <div className={className}>{content}</div>;
 }
 

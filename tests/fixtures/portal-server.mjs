@@ -33,6 +33,7 @@ const job = (suffix, service, status) => ({
   service_catalog_id: suffix === "11" ? "synthetic-pool-service" : null,
 });
 const jobs = [job("10", "Synthetic Lawn Service", "matched"), job("11", "Synthetic Pool Service", "in_progress")];
+const requestRows = role => role === "homeowner" ? [...jobs, job("12", "Synthetic Quote Service", "quoted"), job("13", "Synthetic Pending Service", "pending"), job("14", "Synthetic Review Service", "review_requested"), job("15", "Synthetic Completed Service", "vendor_completed")] : jobs;
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:55831");
@@ -176,6 +177,12 @@ const server = createServer(async (request, response) => {
     close_outcomes: ["rejected", "abandoned"], retention_days: 90, quarantine_days: 14, unattached_days: 7, hold: null, provider_held: false,
     files: [], unattached_files: [],
   });
+  // TRACE-121 schedule readback: no appointment or history by default; specs override per case.
+  if (url.pathname === "/rest/v1/rpc/job_schedule") {
+    const row = requestRows(user.testRole).find(item => item.id === body._job_id);
+    return row ? send({ timezone: "America/New_York", status: row.status, matching_status: row.matching_status, has_provider: Boolean(row.contractor_id),
+      recurring: false, appointment: null, open_request: null, history: [] }) : send({ message: "Not a participant in this service", code: "42501" }, 403);
+  }
   // TRACE-109 price corrections: none by default; specs override per case.
   if (/\/rpc\/(admin_package_price_corrections|vendor_my_package_price_corrections)$/.test(url.pathname)) return send([]);
   // TRACE-110 operator draft prices: none by default; specs override per case.
@@ -208,7 +215,7 @@ const server = createServer(async (request, response) => {
       additional_notes: null, document_urls: [],
     }]);
     if (table === "service_requests") {
-      const rows = user.testRole === "homeowner" ? [...jobs, job("12", "Synthetic Quote Service", "quoted"), job("13", "Synthetic Pending Service", "pending"), job("14", "Synthetic Review Service", "review_requested"), job("15", "Synthetic Completed Service", "vendor_completed")] : jobs;
+      const rows = requestRows(user.testRole);
       const id = url.searchParams.get("id");
       return send(id?.startsWith("eq.") ? rows.filter(row => row.id === id.slice(3)) : rows);
     }
