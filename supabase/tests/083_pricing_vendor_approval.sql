@@ -123,8 +123,7 @@ set local role authenticated;
 select is((select d->'delivery'->>'status' from jsonb_array_elements(public.admin_package_drafts(pg_temp.vendor(1))) d
   where (d->>'id')::uuid=(select id from ids where name='a')), 'read', 'a read notice shows as read');
 select is(pg_temp.state((select id from ids where name='a')), 'sent', 'a delivered or read notice is not an approval');
-select throws_ok($$select public.admin_publish_package_draft((select id from ids where name='a'), pg_temp.stamp((select id from ids where name='a')), 'Synthetic')$$,
- '42501', 'The vendor has not approved this revision; send it for approval first', 'a sent draft does not publish');
+-- Publishing without the vendor's approval is covered by SQL 091 (DEC-2026-046).
 -- The operator cannot approve on the vendor's behalf.
 select throws_ok($$select public.vendor_approve_package_draft((select id from ids where name='a'), pg_temp.rev((select id from ids where name='a')))$$,
  '42501', 'Vendor account required', 'an operator cannot approve for the vendor');
@@ -190,8 +189,6 @@ grant all on approved_rev to authenticated;
 select lives_ok($$select pg_temp.save(1, jsonb_set(pg_temp.content('Synthetic standard clean', 125), '{addons,1,price}', '12'), (select id from ids where name='a'))$$,
  'the operator changes an add-on after approval');
 select is(pg_temp.state((select id from ids where name='a')), 'draft', 'the edited revision is no longer approved');
-select throws_ok($$select public.admin_publish_package_draft((select id from ids where name='a'), pg_temp.stamp((select id from ids where name='a')), 'Synthetic')$$,
- '42501', 'The vendor has not approved this revision; send it for approval first', 'the edited revision does not publish');
 -- Put the approved content back: same revision again, but it must be approved again.
 select lives_ok($$select pg_temp.save(1, pg_temp.content('Synthetic standard clean', 125), (select id from ids where name='a'))$$, 'reverted');
 select is(pg_temp.rev((select id from ids where name='a')), (select r from approved_rev), 'the same content is the same revision');

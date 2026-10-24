@@ -18,8 +18,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { PricingFrequency } from "@/lib/vendorPricing";
 
 // TRACE-113 (DEC-2026-039): prices Mercurius prepared for this vendor wait here for the
-// vendor's decision on the exact version shown. Approving lets Mercurius publish that
-// version; it does not publish anything by itself. Any later change comes back here.
+// vendor's decision on the exact version shown. Approving does not publish anything by
+// itself. TRACE-120 (DEC-2026-046): Mercurius may publish without the vendor's approval.
 // TRACE-114 (DEC-2026-038): offers the vendor would fund wait here for approval too.
 
 type Approval = {
@@ -80,7 +80,7 @@ export function VendorPriceApprovals() {
     {items.length > 0 && <section id="price-approvals" aria-labelledby="vendor-price-approvals" className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
       <div>
         <h2 id="vendor-price-approvals" className="font-semibold">Prices waiting for your approval</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Mercurius prepared these for you. Approving lets Mercurius publish exactly this version; it is not live until then. Any change comes back to you for approval.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Mercurius prepared these for you and asks you to approve exactly this version or ask for changes. Mercurius can also publish a price without your approval; you are notified when a price goes live.</p>
       </div>
       <ul className="space-y-3">{items.map((item) => <ApprovalItem key={item.id} item={item} onChanged={load} />)}</ul>
     </section>}
@@ -101,7 +101,7 @@ function ApprovalItem({ item, onChanged }: { item: Approval; onChanged: () => Pr
     const { error } = await createClient().rpc("vendor_approve_package_draft", { p_draft: item.id, p_revision: item.revision });
     setPending(false);
     if (error) { toast.error("Not approved", { description: error.code === "40001" ? "This price changed since you opened it. Reload to review the current version." : error.message }); await onChanged(); return; }
-    toast.success("Approved", { description: "Mercurius can now publish this version. You'll be notified when it's live." });
+    toast.success("Approved", { description: "Mercurius has your approval of this version. You'll be notified when it's live." });
     await onChanged();
   }
   return <li className="space-y-3 rounded-lg border bg-muted/10 p-4">
@@ -140,7 +140,7 @@ function RequestChanges({ item, onChanged }: { item: Approval; onChanged: () => 
   return <Dialog open={open} onOpenChange={(next) => { if (pending) return; setOpen(next); if (next) { setNote(""); setError(""); } }}>
     <DialogTrigger render={<Button variant="outline" className="min-h-10" />}><MessageSquare />Ask for changes</DialogTrigger>
     <DialogContent className="sm:max-w-md">
-      <DialogHeader><DialogTitle>Ask for changes</DialogTitle><DialogDescription>{item.content.name}. Nothing is published while changes are pending.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>Ask for changes</DialogTitle><DialogDescription>{item.content.name}. Mercurius reads your note before publishing.</DialogDescription></DialogHeader>
       <FormField id={`changes-${item.id}`} label="What should change" required error={error || undefined}>
         {(control) => <Textarea {...control} value={note} maxLength={1000} disabled={pending} onChange={(event) => setNote(event.target.value)} />}
       </FormField>

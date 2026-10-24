@@ -38,8 +38,10 @@ import type { PricingFrequency } from "@/lib/vendorPricing";
 // DEC-2026-035 (TRACE-110): an operator adds a price for a specific vendor as a private
 // draft, then publishes it with a reason the vendor reads. Nothing reaches the vendor or
 // customers until the server accepts the publish.
-// DEC-2026-039 (TRACE-113): the draft is sent to the bound vendor account, which approves
-// the exact revision; only then can it be published. A notice is not consent.
+// DEC-2026-039 (TRACE-113): the draft can be sent to the bound vendor account, which approves
+// the exact revision or asks for changes. A notice is not consent.
+// DEC-2026-046 (TRACE-120): approval is optional. An operator publishes any open draft; the
+// dialog says whether the vendor approved the version being published.
 
 /** Start a draft (no `draft`) or edit an open one. `vendors` lets the operator choose the vendor. */
 export function PackageDraftEditor({ draft, contractorId, vendors, services, onSaved }: {
@@ -99,7 +101,7 @@ export function PackageDraftEditor({ draft, contractorId, vendors, services, onS
     setPending(false);
     if (rpcError) { setError(draftErrorMessage(rpcError)); return; }
     setOpen(false);
-    toast.success(draft ? "Draft updated" : "Draft saved", { description: "It stays private until the vendor approves it and you publish it." });
+    toast.success(draft ? "Draft updated" : "Draft saved", { description: "It stays private until you publish it." });
     await onSaved();
   }
 
@@ -112,7 +114,7 @@ export function PackageDraftEditor({ draft, contractorId, vendors, services, onS
     <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>{draft ? "Edit draft price" : "Add a price for a vendor"}</DialogTitle>
-        <DialogDescription>Saved as a private draft. Send it to the vendor for approval; once they approve this exact version, publish it with a reason.</DialogDescription>
+        <DialogDescription>Saved as a private draft. Publish it with a reason when it is ready; you can send it to the vendor for approval first.</DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
         {fixedVendor
@@ -183,6 +185,7 @@ export function PackageDraftPublish({ draft, onPublished }: { draft: PackageDraf
     toast.success("Price published", {
       description: [
         result.replaced_package_id ? `Version ${result.revision_number ?? ""} is live; the previous version is paused.` : null,
+        result.vendor_approved === false ? "Published without the vendor's approval." : null,
         result.needs_review ? "A price is outside the guardrail band, so it waits in Package Reviews until approved." : null,
         result.vendor_notified ? "The vendor was notified with your reason." : "No vendor account is linked, so no one was notified.",
       ].filter(Boolean).join(" "),
@@ -195,17 +198,24 @@ export function PackageDraftPublish({ draft, onPublished }: { draft: PackageDraf
     setOpen(next);
     if (next) { setReason(""); setError(""); }
   }}>
-    <DialogTrigger render={<Button variant="commitment" className="min-h-10" disabled={!draft.approvalCurrent} />}>Publish</DialogTrigger>
+    <DialogTrigger render={<Button variant="commitment" className="min-h-10" />}>Publish</DialogTrigger>
     <DialogContent className="sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>Publish price</DialogTitle>
         <DialogDescription>
-          {draft.contractorName} · {draft.name}, the version the vendor approved{draft.approvedAt ? ` ${formatCorrectionTime(draft.approvedAt)}` : ""}.
+          {draft.contractorName} · {draft.name}, {draft.approvalCurrent
+            ? `the version the vendor approved${draft.approvedAt ? ` ${formatCorrectionTime(draft.approvedAt)}` : ""}`
+            : "not approved by the vendor"}.
           {draft.targetPackageName ? ` It replaces "${draft.targetPackageName}"; the current version is paused and earlier bookings keep theirs.` : " It becomes a new package of the vendor."}
           {" "}It is active for customers once the vendor is eligible and listed. The vendor is notified with your reason.
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
+        {!draft.approvalCurrent && <p role="note" className="rounded-md border border-status-warning bg-status-warning-bg px-3 py-2 text-sm text-status-warning">
+          {draft.approvalState === "changes_requested" && draft.changeRequest
+            ? `The vendor asked for changes: "${draft.changeRequest}". Publishing goes ahead without them.`
+            : draft.approvalState === "sent" ? "The vendor has not answered yet. Publishing does not wait for their approval."
+            : "This version was not sent to the vendor for approval. Publishing does not need it."}</p>}
         <PackageContentSummary content={draft.content} />
         <FormField id={`draft-reason-${draft.id}`} label="Reason" required help={`The vendor is notified and sees this reason. Up to ${DRAFT_REASON_MAX} characters.`}>
           {(control) => <Textarea {...control} value={reason} maxLength={DRAFT_REASON_MAX} disabled={pending} onChange={(event) => setReason(event.target.value)} />}
@@ -329,7 +339,7 @@ export function PackageTemplateStart({ contractorId, vendors, onCreated }: { con
     if (rpcError) { setError(draftErrorMessage(rpcError)); return; }
     const notes = ((data as { copy_notes?: string[] }).copy_notes ?? []);
     setOpen(false);
-    toast.success("Draft copied from the template", { description: notes.length ? notes.join(". ") : "Review the prices, then send it to the vendor for approval." });
+    toast.success("Draft copied from the template", { description: notes.length ? notes.join(". ") : "Review the prices, then publish it or send it to the vendor for approval." });
     await onCreated();
   }
   return <Dialog open={open} onOpenChange={(next) => {
@@ -399,8 +409,8 @@ export function PackageDraftList({ drafts, services, showVendor, onChanged }: {
     </div>
     {!draft.vendorLink.vendorRole && <p role="note" className="rounded-md border border-status-warning bg-status-warning-bg px-3 py-2 text-sm text-status-warning">
       {draft.vendorLink.emailOnFile
-        ? "No vendor account is bound to this provider. Sending emails a notice to the contact email on file; the email is not approval. The vendor must link their account and approve before this can be published."
-        : `${draft.vendorLink.blocker}${draft.vendorLink.linked ? "" : " and no contact email is on file"}. Nothing can be sent. The vendor must approve before this can be published; bind their account from the vendor page first.`}</p>}
+        ? "No vendor account is bound to this provider. Sending emails a notice to the contact email on file; the email is not approval. To approve, the vendor links their account. You can publish without their approval."
+        : `${draft.vendorLink.blocker}${draft.vendorLink.linked ? "" : " and no contact email is on file"}. Nothing can be sent for approval; you can still publish. To ask for approval, bind their account from the vendor page first.`}</p>}
     {draft.approvalState === "sent" && draft.delivery.status === "emailed" && draft.delivery.emailError && emailNeedsAttention(draft.delivery.email) &&
       <p role="alert" className="text-sm text-status-warning">Email error: {draft.delivery.emailError}</p>}
     {draft.changeRequest && draft.approvalState === "changes_requested" && <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm"><p className="font-medium">The vendor asked for changes</p><p className="whitespace-pre-line">{draft.changeRequest}</p></div>}

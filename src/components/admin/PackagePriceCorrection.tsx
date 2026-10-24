@@ -24,8 +24,8 @@ export type CorrectionResult = { prices_changed: number; conversions: string[] }
 
 // DEC-2026-034 (TRACE-109), superseded for material changes by DEC-2026-041 item 4: the
 // operator enters new prices and a reason the vendor will read. They become a replacement
-// draft of the live package; the live price is unchanged until the vendor approves that
-// revision and the operator publishes it from Draft prices.
+// draft of the live package; the live price is unchanged until the operator publishes it
+// from Draft prices, with or without the vendor's approval (DEC-2026-046).
 
 /** Words the result of admin_draft_from_package for a toast. */
 function draftCreatedDescription(result: CorrectionResult) {
@@ -92,7 +92,7 @@ export function PackagePriceCorrection({ pkg, onCorrected }: {
         <DialogTitle>Propose corrected prices</DialogTitle>
         <DialogDescription>
           {pkg.contractorName} · {pkg.name}. This creates a replacement draft with the prices you change; everything else is copied from
-          the live package. The live price stays until the vendor approves the draft and you publish it. Requests and quotes already
+          the live package. The live price stays until you publish the draft from Draft prices. Requests and quotes already
           agreed keep their price.
         </DialogDescription>
       </DialogHeader>
@@ -130,13 +130,13 @@ function PriceInput({ id, label, current, value, invalid, disabled, onChange }: 
 
 /**
  * DEC-2026-041 items 4 and 5: start a replacement draft from the live package without price
- * changes (for vendor approval of a legacy package, or other material changes made in the
- * draft editor), or suspend an incorrect listing while approval is obtained.
+ * changes (for a legacy package, or other material changes made in the draft editor), or
+ * suspend an incorrect listing meanwhile.
  */
 export function PackageReplacementActions({ pkg, onChanged }: { pkg: CorrectablePackage; onChanged: () => Promise<void> | void }) {
   return <>
     <ConfirmAction triggerLabel="Start replacement draft" title="Start a replacement draft" entity={`${pkg.contractorName} · ${pkg.name}`}
-      consequence="Copies the live package into a draft the vendor approves before it can replace the live one. The live package is unchanged."
+      consequence="Copies the live package into a draft that replaces the live one when you publish it. The live package is unchanged until then."
       confirmLabel="Create draft" confirmationTone="commitment" requireReason reasonHelp="The vendor sees this reason with the draft."
       onConfirm={async (reason) => {
         const { data, error } = await createClient().rpc("admin_draft_from_package", {

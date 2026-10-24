@@ -156,13 +156,7 @@ reset role;
 select is((pg_temp.notice((select id from ids where name='email'))).state, 'sent', 'the notice is sent');
 select is((select approval_state from private.operator_package_drafts where id=(select id from ids where name='email')), 'sent',
  'an emailed notice leaves the draft waiting for approval, never approved');
-select pg_temp.as_user('1');
-set local role authenticated;
-select throws_ok($$select public.admin_publish_package_draft((select id from ids where name='email'),
-  (select (d->>'updated_at')::timestamptz from jsonb_array_elements(public.admin_package_drafts(pg_temp.vendor(2))) d
-   where (d->>'id')::uuid=(select id from ids where name='email')), 'Synthetic reason')$$,
- null, null, 'an emailed draft cannot be published without the vendor''s approval');
-reset role;
+-- Since DEC-2026-046 an operator may publish without the vendor's approval (SQL 091).
 -- The vendor links an account: only then can the sent revision be approved, by that account.
 update public.contractors set user_id='b8510000-0000-4000-8000-000000000003' where id=pg_temp.vendor(3);
 insert into auth.users(id,email,email_confirmed_at) values ('b8510000-0000-4000-8000-000000000004','decisions-linked@example.invalid',now());
@@ -228,9 +222,6 @@ select throws_ok($$select pg_temp.fix((select id from ids where name='first'), n
  'one open replacement draft per package');
 select is(public.admin_send_package_draft((select id from ids where name='fix'), pg_temp.rev((select id from ids where name='fix')))->>'status', 'sent',
  'the correction is sent to the bound vendor');
-select throws_ok($$select public.admin_publish_package_draft((select id from ids where name='fix'),
-  (select updated_at from private.operator_package_drafts where id=(select id from ids where name='fix')), 'Synthetic')$$,
- null, null, 'it cannot be published before the vendor approves');
 reset role;
 select pg_temp.as_user('2');
 set local role authenticated;

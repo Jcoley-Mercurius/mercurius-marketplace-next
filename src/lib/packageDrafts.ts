@@ -8,8 +8,8 @@ import { isPricingFrequency, pricingFrequencies, type PricingFrequency } from "@
 // (admin_save_package_draft / admin_publish_package_draft) owns validation, stale-read
 // refusal, the same-name check (TRACE-112), the review flag, history and the vendor notice;
 // this module prepares requests and reads what comes back.
-// DEC-2026-039 (TRACE-113): a draft holds full package content and is published only after
-// the bound vendor account approves its exact revision.
+// DEC-2026-039 (TRACE-113): a draft holds full package content; the bound vendor account can
+// approve its exact revision. DEC-2026-046 (TRACE-120): an operator publishes with or without it.
 
 export type ApprovalState = "draft" | "sent" | "approved" | "changes_requested";
 export type DeliveryStatus = "not_sent" | "in_inbox" | "read" | "removed_by_vendor" | "emailed";
@@ -82,6 +82,8 @@ export type DraftPriceInput = Partial<Record<PricingFrequency, string>>;
 export type PublishResult = {
   package_id: string; needs_review: boolean; vendor_notified: boolean;
   replaced_package_id?: string | null; revision_number?: number;
+  /** The vendor had approved the published revision (DEC-2026-046). */
+  vendor_approved?: boolean;
 };
 
 export const DRAFT_NAME_MAX = 120;

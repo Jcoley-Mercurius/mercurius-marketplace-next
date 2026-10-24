@@ -90,7 +90,7 @@ Targets must be approved after an instrumented pilot baseline; invented launch m
 
 **Proposed rule:** role checks must be enforced server-side and at the database boundary. Navigation guards are usability controls, not authorization.
 
-**Offering prices (DEC-2026-039/041):** an operator-prepared price or a material correction (price, included scope, quantities, cadence or material terms) is published only after the bound vendor account approves that exact revision; spelling or formatting fixes and suspending an incorrect listing stay operator actions; accepted bookings keep their terms.
+**Offering prices (DEC-2026-039/041/046):** an operator publishes a prepared price or a material correction (price, included scope, quantities, cadence or material terms) with a reason the vendor reads; the vendor's approval of that exact revision may be requested and is recorded, but is not required (DEC-2026-046); spelling or formatting fixes and suspending an incorrect listing stay operator actions; accepted bookings keep their terms.
 
 ## 5. Canonical lifecycle
 

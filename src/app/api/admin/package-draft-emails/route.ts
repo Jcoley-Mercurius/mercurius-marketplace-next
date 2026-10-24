@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 const resultMessage: Record<string, string> = {
-  sent: "Email sent to the contact on file. It is a notice only: the vendor still has to link their account and approve.",
+  sent: "Email sent to the contact on file. It is a notice only: to approve, the vendor links their account.",
   failed: "The email was refused. The vendor has not been told; resend it or contact them another way.",
   unknown: "The email result is unknown. Ask the vendor whether it arrived before resending.",
   unrecorded: "The email was attempted but its result was not saved. Ask the vendor whether it arrived.",
