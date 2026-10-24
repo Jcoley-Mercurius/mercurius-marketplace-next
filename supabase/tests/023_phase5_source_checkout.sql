@@ -44,12 +44,19 @@ select ok(not has_function_privilege('service_role','private.money_publish_snaps
 select ok(not has_table_privilege('authenticated','public.money_commercial_sources','SELECT'),'Internal source evidence is private');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000003"}',true);
 select lives_ok($$select public.money_preview_commercial_source('73000000-0000-4000-8000-000000000001')$$,'Finance can review exact offering version');
-select public.admin_send_quote('73000000-0000-4000-8000-000000000001',117,'Synthetic quote',0);
+-- DEC-2026-045: a final itemized quote with a confirmed tax treatment (fixture; no command confirms tax).
+insert into public.request_quotes(id,request_id,revision,amount,sender_id,reason)
+ values('74000000-0000-4000-8000-000000000001','73000000-0000-4000-8000-000000000001',1,117,'71000000-0000-4000-8000-000000000003','Synthetic quote');
+insert into public.request_quote_terms(quote_id,request_id,items,scope,service_cents,addons_cents,discount_cents,subtotal_cents,tax_status,tax_cents,tax_basis,total_cents,payment_terms,policy_version)
+ values('74000000-0000-4000-8000-000000000001','73000000-0000-4000-8000-000000000001','[{"kind":"service","description":"Synthetic","quantity":1,"unit_cents":11000,"amount_cents":11000}]',
+ 'Synthetic scope',11000,0,0,11000,'confirmed',700,'Synthetic confirmed treatment',11700,'No deposit.','DEC-2026-045');
+update public.service_requests set current_quote_id='74000000-0000-4000-8000-000000000001',quote_revision=1,quote_status='submitted',
+ quote_expires_at=(select expires_at from public.request_quotes where id='74000000-0000-4000-8000-000000000001'),quote_amount=117 where id='73000000-0000-4000-8000-000000000001';
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000001')$$,'P0001','Current homeowner-accepted quote required','Submitted quote is not checkout authority');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000001"}',true);
 select public.homeowner_respond_to_quote('73000000-0000-4000-8000-000000000001',true,(select current_quote_id from public.service_requests where id='73000000-0000-4000-8000-000000000001'));
 select throws_ok($$select public.money_preview_commercial_source('73000000-0000-4000-8000-000000000001')$$,'42501','Restricted finance authority required','Homeowner cannot read internal review evidence');
-insert into source_fixture(key,terms) values('quote',pg_temp.source_terms('73000000-0000-4000-8000-000000000001'));
+insert into source_fixture(key,terms) values('quote',pg_temp.source_terms('73000000-0000-4000-8000-000000000001')||'{"service":11000,"subtotal":11000,"tip":0}');
 select throws_ok($$select pg_temp.publish_source('73000000-0000-4000-8000-000000000001',(select terms||'{"total":12400}' from source_fixture where key='quote'))$$,'P0001','Checkout total must equal accepted quote','Cannot add tax on top of already accepted total');
 update source_fixture set id=pg_temp.publish_source('73000000-0000-4000-8000-000000000001',terms) where key='quote';
 select is(pg_temp.publish_source('73000000-0000-4000-8000-000000000001',(select terms from source_fixture where key='quote')),(select id from source_fixture where key='quote'),'Repeated source publication returns one snapshot');
@@ -62,13 +69,12 @@ update public.service_requests set description=null where id='73000000-0000-4000
 select throws_ok($$update public.money_quote_contexts set context='{}'$$,'55000','Immutable financial evidence; append a correction','Original quoted scope cannot be rewritten');
 
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000003"}',true);
-select public.admin_send_quote('73000000-0000-4000-8000-000000000001',117,'Synthetic replacement',1);
+-- DEC-2026-045 G3: an accepted quote is never replaced, by command or direct write.
+select throws_ok($$select public.admin_send_itemized_quote('73000000-0000-4000-8000-000000000001','[{"kind":"service","description":"Replacement","quantity":1,"unit_cents":11700}]','Synthetic scope','Synthetic replacement',1)$$,
+ '22023','The homeowner accepted the current quote; its terms cannot be replaced. Open an operator exception instead','Accepted quote cannot be replaced by a new revision');
+select throws_ok($$select public.admin_send_quote('73000000-0000-4000-8000-000000000001',117,'Synthetic replacement',1)$$,'22023',null,'Retired single-amount send cannot replace it either');
+select throws_ok($$update public.service_requests set current_quote_id=null,quote_revision=2,quote_status='submitted' where id='73000000-0000-4000-8000-000000000001'$$,'42501',null,'Direct write cannot repoint the accepted quote');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000001"}',true);
-select throws_ok($$select public.money_prepare_checkout((select id from source_fixture where key='quote'),'deposit')$$,'P0001','Current homeowner-accepted quote required','Replaced quote cannot reuse checkout URL');
-select public.homeowner_respond_to_quote('73000000-0000-4000-8000-000000000001',true,(select current_quote_id from public.service_requests where id='73000000-0000-4000-8000-000000000001'));
-select throws_ok($$select public.money_prepare_checkout((select id from source_fixture where key='quote'),'deposit')$$,'P0001','Commercial source changed; review current terms','Even equal-priced replacement needs new source review');
-update source_fixture set terms=pg_temp.source_terms('73000000-0000-4000-8000-000000000001') where key='quote';
-update source_fixture set id=pg_temp.publish_source('73000000-0000-4000-8000-000000000001',terms) where key='quote';
 set local role authenticated;
 select lives_ok($$select public.money_prepare_checkout((select id from source_fixture where key='quote'),'deposit')$$,'Owner checkout consumes accepted quote');
 select lives_ok($$select public.money_prepare_checkout((select id from source_fixture where key='quote'),'deposit')$$,'Duplicate checkout safely reuses the attempt');
@@ -77,8 +83,8 @@ select throws_ok($$select public.money_prepare_checkout((select id from source_f
 reset role;
 select is((select count(*) from public.money_checkout_attempts),1::bigint,'Exactly one checkout attempt');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000003"}',true);
-select throws_ok($$select public.admin_send_quote('73000000-0000-4000-8000-000000000001',118,'Unsafe concurrent replacement',2)$$,'P0001','Commercial checkout must be reconciled before changing source','Quote replacement cannot race a reserved provider checkout');
-select is((select quote_revision from public.service_requests where id='73000000-0000-4000-8000-000000000001'),2,'Rejected replacement rolls back lifecycle revision');
+select throws_ok($$select public.admin_send_itemized_quote('73000000-0000-4000-8000-000000000001','[{"kind":"service","description":"Unsafe","quantity":1,"unit_cents":11800}]','Synthetic scope','Unsafe concurrent replacement',1)$$,'22023',null,'Quote replacement cannot race a reserved provider checkout');
+select is((select quote_revision from public.service_requests where id='73000000-0000-4000-8000-000000000001'),1,'Rejected replacement leaves the accepted revision');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000001"}',true);
 
 
@@ -123,9 +129,13 @@ select throws_ok($$select private.money_source('73000000-0000-4000-8000-00000000
 update public.request_quotes set status='accepted',decision_actor='71000000-0000-4000-8000-000000000001',decided_at=now()-interval '47 hours' where id='74000000-0000-4000-8000-000000000003';
 update public.service_requests set quote_status='accepted' where id='73000000-0000-4000-8000-000000000003';
 select lives_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'Timely acceptance stays valid after the approval window closes');
+select throws_ok($$update public.request_quotes set decided_at=now() where id='74000000-0000-4000-8000-000000000003'$$,'42501','A decided quote cannot be changed','DEC-2026-045 G3: a decided quote cannot be rewritten');
+-- Defense in depth: with that guard switched off inside this rolled-back test, money_source still refuses forgeries.
+alter table public.request_quotes disable trigger preserve_quote_decision;
 update public.request_quotes set decided_at=now() where id='74000000-0000-4000-8000-000000000003';
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Current homeowner-accepted quote required','Forged late acceptance fails source validation');
 update public.request_quotes set status='declined' where id='74000000-0000-4000-8000-000000000003';
+alter table public.request_quotes enable trigger preserve_quote_decision;
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Current homeowner-accepted quote required','Declined quote is not payment authority');
 select pg_temp.approve_source('73000000-0000-4000-8000-000000000003',(select terms from source_fixture where key='quote'));
 insert into source_fixture(key,id) values('legacy',private.money_publish_snapshot('73000000-0000-4000-8000-000000000003',(select terms from source_fixture where key='quote'),'71000000-0000-4000-8000-000000000003','71000000-0000-4000-8000-000000000004'));

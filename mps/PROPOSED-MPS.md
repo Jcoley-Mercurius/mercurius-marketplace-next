@@ -176,6 +176,7 @@ Every transition must define actor, prerequisites, side effects, notification, t
 
 - A quote has an expiry, revision lineage, complete price breakdown, policy version, and acceptance actor/time.
 - Declining a quote does not automatically mean cancellation unless the UI says so and an owner approves that rule.
+- **Approved beta values (DEC-2026-045):** quotes are itemized (service, labor, materials, add-ons, discounts, service subtotal); unresolved tax reads "Tax pending confirmation" and a quote is approvable only with complete terms, confirmed tax treatment, payment terms and policy version; an accepted quote is never replaced, and a needed change is an operator exception; the assigned provider's eligibility is rechecked at proposal, send and approval.
 - Scheduling becomes confirmed only after the provider and customer conditions defined for that service mode are met.
 - Rescheduling preserves history and recalculates policy consequences before confirmation.
 
@@ -256,7 +257,7 @@ Every transition must define actor, prerequisites, side effects, notification, t
 2. **Platform fee:** 15% of the final service subtotal after discounts and adjustments, excluding tax and tips. After a refund, calculate the fee against the retained service subtotal. Exception (DEC-2026-038): with one valid applied promotion, 7.5% of the qualifying commissionable amount (after a vendor-funded discount; before a Mercurius-funded one, which is a subsidy, not a fee reduction).
 3. **Vendor subscription:** $0 during soft launch; any future plan requires a separate approved product release.
 4. **Fixed price:** only a versioned eligible offering can generate a fixed commercial snapshot.
-5. **Deposit-plus-quote:** deposits apply toward the final service subtotal and do not create an additional fee base; refundability, expiry, and abandonment follow the approved commercial snapshot and cancellation policy.
+5. **Deposit-plus-quote:** deposits apply toward the final service subtotal and do not create an additional fee base; refundability, expiry, and abandonment follow the approved commercial snapshot and cancellation policy. Initial beta quotes carry a $0 deposit and use the existing invoice and checkout (DEC-2026-045); a job asking for a deposit gets an operator review first.
 6. **Promotions:** funder, limits, stacking, refund allocation, expiry timezone, and customer/provider display must be defined. DEC-2026-038 defines funder (one per offer, vendor approval or admin authorization), limits, stacking (one per booking, no Credits) and the commission; DEC-2026-041 defines refund allocation (proportional reversal from the accepted snapshot; a vendor-funded discount is not cash), release and restoration (full refund before service with no retained charge; otherwise only by documented admin exception) and first-booking eligibility (no previous completed service); DEC-2026-042 defines application (the homeowner explicitly chooses a displayed offer or enters a code; the greatest saving is labelled, never chosen; changes need the homeowner's confirmation). Checkout refuses promotions until that is implemented and finance-reviewed.
 7. **Payout:** Mercurius pays vendors directly by ACH on a weekly schedule. Funds become eligible 48 hours after homeowner-confirmed completion. Disputed work remains held; no general beta reserve applies. Do not use Stripe Connect as the approved payout design.
 8. **Tax and tips:** tax is excluded from the platform-fee base and handled separately under the implemented tax authority. Tips are excluded from the fee base and belong 100% to the provider.
@@ -285,9 +286,9 @@ The soft launch requires named queues:
 |---|---|---|
 | Coverage interest | Unsupported ZIP/service demand | Aggregate demand; send no availability promise. |
 | Sourcing | No eligible provider or exhausted offers | Find supply or close transparently by deadline. |
-| Quote aging | Quote not received/accepted by threshold | Prompt, reassign, extend, or close with notice. |
+| Quote aging | Quote not received/accepted by threshold (CFG-015: proposal 24 h, operator send 4 h, homeowner 12 h) | Prompt, reassign, extend, or close with notice; the queue item itself changes nothing. |
 | Schedule exception | Conflict, reschedule, no-show | Apply approved policy and restore a valid plan. |
-| Payment exception | Failure, mismatch, webhook/reconciliation issue | Correct without duplicate charge or hidden balance. |
+| Payment exception | Failure, mismatch, webhook/reconciliation issue (CFG-015: immediate; confirmed failure aged at 24 h) | Correct without duplicate charge or hidden balance. |
 | Payout exception | Hold, failure, missing compliance | Resolve and communicate next action/date. |
 | Dispute | Customer/provider issue reported | Gather evidence and issue documented resolution. |
 | Support | User asks for help | Respond under approved SLA and escalate. |

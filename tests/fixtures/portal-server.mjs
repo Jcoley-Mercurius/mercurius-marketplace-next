@@ -54,6 +54,7 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/auth/v1/user") return send({ id: user.sub, aud: "authenticated", role: "authenticated", email: `${user.testRole}@example.invalid`, app_metadata: {}, user_metadata: {}, created_at: now.toISOString() });
   if (url.pathname === "/rest/v1/rpc/has_role") return send(body._user_id === user.sub && body._role === user.testRole);
   if (url.pathname === "/rest/v1/rpc/expire_stale_matches") return send(null);
+  if (url.pathname === "/rest/v1/rpc/admin_quote_queue") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [] } : { message: "Only admins can read the quote queue" }, user.testRole === "admin" ? 200 : 403);
   // TRACE-103 R0 readbacks: closed by default (no admission, no interest); specs override per case.
   if (url.pathname === "/rest/v1/rpc/r0_my_trial_access") return send({ homeowner: user.testRole === "homeowner", cells: [] });
   if (url.pathname === "/rest/v1/rpc/r0_my_interest") return send({ verified: true, interests: [], marketing_opted_in: false });
@@ -216,7 +217,12 @@ const server = createServer(async (request, response) => {
       const rows = [{ id: contractor, user_id: users.vendor, name: "Synthetic Vendor", services: [], is_active: true }];
       return send(url.searchParams.has("user_id") ? rows[0] : rows);
     }
-    if (["disputes", "job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications"].includes(table)) return send([]);
+    if (["disputes", "job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications", "request_quote_proposals", "request_quote_exceptions"].includes(table)) return send([]);
+    // DEC-2026-045: the homeowner quote fixture is a complete final quote, so approval reaches the (failing) command.
+    if (table === "request_quote_terms") return send(url.searchParams.get("quote_id") === "eq.00000000-0000-4000-8000-000000000099" ? { quote_id: "00000000-0000-4000-8000-000000000099",
+      items: [{ kind: "service", description: "Synthetic quote service", quantity: 1, unit_cents: 11200, amount_cents: 11200 }], scope: "Synthetic scope",
+      service_cents: 11200, addons_cents: 0, discount_cents: 0, subtotal_cents: 11200, tax_status: "confirmed", tax_cents: 800, total_cents: 12000,
+      deposit_cents: 0, payment_terms: "No deposit. Payment through a Mercurius invoice and secure checkout under the approved payment timing.", policy_version: "DEC-2026-045" } : null);
   }
   // Tests exercise persistent failure UI; never claim a real mutation succeeded.
   return send({ message: "Synthetic service unavailable. Please try again.", code: "FIXTURE_ONLY" }, 503);
