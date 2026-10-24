@@ -181,6 +181,6 @@ Additive: one identity column, one index, two new functions; `record_job_operati
 same signature. Hosted holds 0 job operations, so the new column backfills nothing. Between the
 migration push and the deploy, the live admin “appointment” option in the old Schedule panel is refused
 with a clear message (intended: it is the unguarded path); every other operation works unchanged.
-Order under DEC-2026-037: owner-authorized dry run and push, then merge. Rollback: promote the previous
+Order under DEC-2026-037: dry run and push, then merge. Done 2026-10-24 at the owner's instruction: the dry run listed only this file; after the push, hosted history holds it, `seq` exists, both functions are signed-in only, `record_job_operation` refuses the generic appointment kind, and the dry run reports up to date. PR #109. Rollback: promote the previous
 deployment; restoring the old appointment path needs a forward migration restating
 `record_job_operation` (not recommended: it reopens A1/A3/A4). Do not drop `seq` once rows exist.
