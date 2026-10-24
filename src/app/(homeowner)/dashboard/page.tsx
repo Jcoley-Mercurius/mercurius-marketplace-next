@@ -118,7 +118,7 @@ export default function DashboardPage() {
     const timer = window.setTimeout(() => {
       setRequestedJobId(searchParams.get("job"));
       if (searchParams.has("paid")) {
-        setPaymentNotice({ tone: "success", title: "Payment submitted securely", description: "Stripe returned you to Mercurius. The invoice status below is authoritative and will update after webhook confirmation." });
+        setPaymentNotice({ tone: "warning", title: "Waiting for payment confirmation", description: "Returning from Stripe doesn’t confirm a payment. The invoice status below is authoritative and changes only after Stripe confirms; don’t pay again while it shows as pending." });
       } else if (searchParams.has("subscribed")) {
         setPaymentNotice({ tone: "success", title: "Subscription checkout submitted", description: "Stripe is confirming the subscription. Your service and invoice status will update after confirmation." });
       } else if (searchParams.has("cancelled")) {

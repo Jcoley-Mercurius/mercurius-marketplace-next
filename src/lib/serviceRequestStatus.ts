@@ -32,7 +32,7 @@ export const serviceRequestStatusStyles = {
   pending: "border-status-warning bg-status-warning-bg text-status-warning",
   matched: "border-status-info bg-status-info-bg text-status-info",
   quoted: "border-status-info bg-status-info-bg text-status-info",
-  scheduled: "border-sage/20 bg-sage-light text-sage-dark",
+  scheduled: "border-status-info bg-status-info-bg text-status-info",
   in_progress: "border-accent/20 bg-accent/10 text-accent",
   pending_review: "border-status-warning bg-status-warning-bg text-status-warning",
   vendor_completed: "border-status-warning bg-status-warning-bg text-status-warning",

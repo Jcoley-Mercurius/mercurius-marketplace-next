@@ -10,6 +10,13 @@ recorded the bounded D3 role repair under TRACE-095. The [6.2 review](PHASE-6-IN
 clears its local re-review and requires P6-R2/P6-R3 intake fixes under TRACE-098.
 [6.3 starting brief](PHASE-6-MATCHING-BRIEF.md), TRACE-099: implemented, awaiting review ([report](PHASE-6-MATCHING.md)).
 
+2026-10-22 checkpoint: pricing (TRACE-112–116, PR #103) is merged and extends 6.1–6.3 intake, matching and
+vendor/admin pricing; it does not close any slice. 6.4 / TRACE-119 first sub-slice (provider quote proposal,
+operator send/correct/return, honest 24-hour window) implemented for review ([record](PHASE-6-QUOTES.md));
+owner decisions G1–G6 (DEC-2026-045, 2026-10-22) then implemented: itemized quotes with tax pending, $0 deposit
+with deposit review, accepted quotes final, aging and payment-exception queue (CFG-015), provider eligibility rechecks.
+No quote can be approved until a tax confirmation path exists (DEC-2026-015 §4).
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed
