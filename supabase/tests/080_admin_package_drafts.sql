@@ -38,7 +38,8 @@ create function pg_temp.stamp(p_draft uuid) returns timestamptz language sql sec
  select updated_at from private.operator_package_drafts where id = p_draft $$;
 create function pg_temp.publish(p_draft uuid, p_reason text default 'Synthetic agreed rate') returns jsonb language sql as $$
  select public.admin_publish_package_draft(p_draft, pg_temp.stamp(p_draft), p_reason) $$;
--- TRACE-113 (DEC-2026-039): publishing needs the vendor's approval of the exact revision.
+-- TRACE-113 (DEC-2026-039): the vendor approves the exact revision. Since DEC-2026-046
+-- (TRACE-120, SQL 091) publishing does not need it; these cases keep the approved path.
 -- Sends as the operator, approves as the bound vendor account, and returns as the operator.
 create function pg_temp.revision(p_draft uuid) returns text language sql security definer as $$
  select content_hash from private.operator_package_drafts where id = p_draft $$;
@@ -141,8 +142,6 @@ select throws_ok($$select pg_temp.publish((select id from ids where name='a'),re
  'the reason is at most 500 characters');
 select throws_ok($$select public.admin_publish_package_draft((select id from ids where name='a'),'2000-01-01','Synthetic')$$,
  '40001','Draft changed since it was read; reload before publishing','a stale publish is refused');
-select throws_ok($$select pg_temp.publish((select id from ids where name='a'))$$,'42501',
- 'The vendor has not approved this revision; send it for approval first','an unapproved draft does not publish');
 insert into ids select 'pkg', (pg_temp.publish(pg_temp.approved((select id from ids where name='a')))->>'package_id')::uuid;
 select is(public.admin_package_drafts(pg_temp.vendor(1)),'[]'::jsonb,'a published draft leaves the list');
 select throws_ok($$select pg_temp.publish((select id from ids where name='a'))$$,'P0001',
@@ -196,7 +195,7 @@ select is((pg_temp.publish(pg_temp.approved((select id from ids where name='band
 -- The monthly reference (40) bands every two months at 10 to 160.
 insert into ids select 'edge', (pg_temp.save(1,'synthetic-draft-svc',jsonb_build_array(pg_temp.price('every-two-months',161)),'Synthetic edge plan')->>'id')::uuid;
 select is(pg_temp.publish(pg_temp.approved((select id from ids where name='edge'))) - 'package_id' - 'replaced_package_id' - 'revision_number',
- jsonb_build_object('needs_review',true,'vendor_notified',true),
+ jsonb_build_object('needs_review',true,'vendor_notified',true,'vendor_approved',true),
  'every two months is banded by the monthly reference');
 insert into ids select 'in', (pg_temp.save(1,'synthetic-draft-open',jsonb_build_array(pg_temp.price('every-two-months',160)),'Synthetic in-band plan')->>'id')::uuid;
 select is((pg_temp.publish(pg_temp.approved((select id from ids where name='in')))->>'needs_review')::boolean,false,

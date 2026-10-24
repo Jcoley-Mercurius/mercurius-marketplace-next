@@ -9,6 +9,7 @@ import { sendNotificationEmail, type NotificationResult } from "@/lib/ownerNotif
 // approval is announced to the contact email on file. Same claim/record pattern as the
 // TRACE-104 owner email. The notice is not approval: it names no price, says approval needs
 // the linked vendor account, and has no reply-to, so a reply cannot approve anything.
+// DEC-2026-046: approval is optional, so the email says Mercurius may publish without it.
 
 export type DraftEmailMode = "initial" | "resend";
 
@@ -31,7 +32,7 @@ export function draftEmailMessage(vendorName: string, siteUrl: string) {
     text: [
       `Hello ${name},`,
       "",
-      "Mercurius has prepared a price for your business. It is not published, and it will not be published until you approve it.",
+      "Mercurius has prepared a price for your business and asks you to review it. It is not live yet. Mercurius can publish it without your approval, so please review it soon.",
       "",
       "This email cannot approve it, and replying does nothing. To review it:",
       "1. Link your Mercurius vendor account using your vendor invitation. If you don't have one, ask Mercurius for it.",

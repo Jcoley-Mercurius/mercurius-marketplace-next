@@ -24,8 +24,9 @@ import {
 } from "@/lib/packagePriceCorrections";
 
 // DEC-2026-034 (TRACE-109): every package of one provider, template or custom, with the
-// correction history. DEC-2026-041 item 4: corrections become replacement drafts the vendor
-// approves; an operator may suspend an incorrect listing meanwhile.
+// correction history. DEC-2026-041 item 4: corrections become replacement drafts, published
+// with or without the vendor's approval (DEC-2026-046); an operator may suspend an incorrect
+// listing meanwhile.
 // DEC-2026-035 (TRACE-110): the operator can also add a price for this vendor as a draft.
 // TRACE-112 (source items 4, 8, 13): live packages show their full content and price meaning,
 // and the summary separates live prices from drafts waiting for the vendor's approval.

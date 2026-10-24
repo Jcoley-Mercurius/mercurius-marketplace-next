@@ -205,6 +205,8 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Decision:** (1) A package an operator prepares for a vendor is a private draft and is published only after the authenticated account bound to that vendor approves its exact revision; approval never publishes by itself; any change to price, scope, rule, cadence, add-on, vendor, service or replaced package needs approval again; operators cannot approve for vendors; a notice is not consent. (2) Several named packages may share a vendor, service and cadence; a second active package with the same name for the same vendor and service is refused; a replacement is a new revision of the package's lineage and pauses the previous one, so the approved live revision stays live until replaced and earlier bookings keep theirs. (3) A price is exact, starting at, a range, or quote after walkthrough; only exact prices can be booked as a fixed price; estimates are shown as estimates and need the provider's quote. (4) Add-ons are priced per unit with quantities, required or optional, by cadence, and reach the request amount; a range add-on makes the selection an estimate; included scope cannot be charged again. (5) When several rule-based levels match the same answers, or none does, there is no exact price (previously the cheapest matching level was used). (6) Provider notes are shown for information and are not enforced.
 
+**Amended:** DEC-2026-046 (2026-10-24) removes the vendor's approval as a condition of publication (item 1); approval stays available and recorded.
+
 **Context:** Operator drafts (DEC-2026-035) and corrections (DEC-2026-034) took effect with a vendor notice only. The review asked for revision-bound vendor approval and truthful price meaning end to end.
 
 **Owner to confirm:** ~~DEC-2026-034 corrections; the "first booking" definition~~ — answered by DEC-2026-041 items 3 and 4 (2026-10-18).
@@ -243,6 +245,8 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **MPS impact:** Answers §7.6 refund allocation and restoration; amends §4 for corrections. **MDS impact:** optional add-on picker; "Price requires confirmation" with the blocking answer; operator delivery status including email. **MTS impact:** money source and snapshot carry add-ons and promotion economics; promotion release/restore paths; email notice through the existing notification system. **Data/payment/security impact:** reviewed money code changes (R1); no hosted change until pushed by the owner.
 
+**Amended:** DEC-2026-046 (2026-10-24): items 4 and 5 no longer require the vendor's approval before an operator publishes.
+
 **Supersedes:** DEC-2026-034 for material corrections; DEC-2026-039 "owner to confirm"; the first-booking definition implemented in `20261018003000`; DEC-2026-040 (decided).
 
 ### DEC-2026-042 — How a homeowner applies an offer; matching keeps the priced selection
@@ -264,6 +268,22 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 **MPS impact:** Answers the remaining §7.6 display question (how a promotion is applied). **MDS impact:** "Offers" on the request review (choice list, "Best savings" label, code entry, totals after offers); "Offer" section on the homeowner's request; gate and cleanup state on the operator Promotions page. **MTS impact:** Migration `20261018006000`; `scripts/install-promotion-sweep.sql` (inactive schedule template). **Data/payment/security impact:** restated `money_source`, `promotion_reserve`, `promotion_release_unpaid`, `submit_service_requests`, `find_eligible_packages_core`, `create_service_occurrence`, `admin_send_package_draft`; all money behavior stays behind the closed gate and is part of the finance review.
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
+
+### DEC-2026-046 — Operators publish prices without the vendor's approval
+
+**Status:** APPROVED owner instruction (Josh, 2026-10-24: "The admin should be able to publish pricing without the approval of the vendor"). **Date:** 2026-10-24 (America/New_York).
+
+**Decision:** An operator publishes any open draft price, a new package or a replacement (correction) of a live package, with a reason the vendor reads, whether or not the vendor approved it. Sending a draft to the vendor for approval stays available and optional: the vendor can still approve the exact revision or ask for changes, and both are recorded. Publication records and reports whether the vendor had approved the published revision; the vendor is told in their inbox ("Mercurius published a price for you", or "Your approved price is live" when they had approved it). Unchanged: only operators publish; a reason is required; a stale read is refused; distinct package names; the guardrail band still sends an out-of-band price to Package Reviews; accepted bookings and quotes keep their terms; package approval evidence never claims an approval that was not given (`operator_published`). Vendor-funded promotion offers still need the vendor's approval (DEC-2026-038), because the vendor funds the discount.
+
+**Context:** DEC-2026-039 item 1 and DEC-2026-041 item 4 made the vendor's approval of the exact revision a condition of publication. While onboarding vendors the owner needs to set prices without waiting for each vendor account to be linked and to answer; all 14 live production vendors were unlinked at the 2026-10-20 audit, so no operator price could be published at all.
+
+**Alternatives considered:** An approval override with a separate reason (not chosen: the publish reason already records why, and the owner asked for publication without approval, not an exception path). Removing the send-for-approval flow (not chosen: not requested, and it remains useful when an operator wants the vendor's agreement first).
+
+**MPS impact:** §4 offering prices note amended: publication no longer waits for the vendor's approval. **MDS impact:** Publish is available on every open draft; the publish dialog says whether the vendor approved the version and shows a pending change request; admin, vendor and email copy no longer says a price waits for approval. **MTS impact:** `admin_publish_package_draft` restated (`20261024001000`); no schema or data change. **Data/payment/security impact:** Vendors' live prices can change without their consent; the vendor is notified with the reason, and the event history records it. Fees, payout and checkout are unchanged.
+
+**Supersedes:** The publication condition of DEC-2026-039 item 1 ("published only after ... approves its exact revision") and DEC-2026-041 item 4 ("requires the vendor's approval of the replacement revision"); DEC-2026-041 item 5's replacement drafts no longer need approval before publication.
+
+**Required evidence:** SQL 091 (and 080/083/085 updated); browser `vendor-prices`, `pricing-approval`; unit `draft-email-notices`.
 
 ### DEC-2026-044 — Operators add services to the catalog; taking one away hides it
 

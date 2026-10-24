@@ -96,11 +96,11 @@ function VendorPricesContent() {
 
   return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
     <PageHeader eyebrow="Pricing operations" title="Vendor Prices"
-      description="Every vendor package and its saved prices. A new price or a correction is a draft the vendor approves before you publish it with a reason. You can suspend an incorrect listing meanwhile. Nothing here changes prices already agreed on a request or quote."
+      description="Every vendor package and its saved prices. A new price or a correction is a draft you publish with a reason; the vendor's approval is optional. You can suspend an incorrect listing meanwhile. Nothing here changes prices already agreed on a request or quote."
       metadata={<p className="text-sm text-muted-foreground">{vendorFilter ? `${filterVendorName ?? "Selected vendor"}: ` : ""}{scopedPackages.length} {scopedPackages.length === 1 ? "package" : "packages"} · {scopedDrafts.length} {scopedDrafts.length === 1 ? "draft" : "drafts"} · {reviewCount} {reviewCount === 1 ? "needs" : "need"} review{reviewCount > 0 && <> · <Link className="underline underline-offset-4" href="/admin/pricing-reviews">Open Package Reviews</Link></>}</p>}
       actions={<div className="flex flex-wrap gap-2"><PackageDraftEditor vendors={vendors} services={services} onSaved={() => load(false)} /><PackageContentEditor vendors={vendors} services={services} onSaved={() => load(false)} /><PackageTemplateStart vendors={vendors} onCreated={() => load(false)} /><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button></div>} />
 
-    <Card><CardHeader><CardTitle>Draft prices</CardTitle><CardDescription>Prices Mercurius is preparing for a vendor. Not visible to customers. The vendor approves the exact version before it can be published with a reason.</CardDescription></CardHeader>
+    <Card><CardHeader><CardTitle>Draft prices</CardTitle><CardDescription>Prices Mercurius is preparing for a vendor. Not visible to customers until published with a reason. Sending one to the vendor for approval first is optional.</CardDescription></CardHeader>
       <CardContent><PackageDraftList drafts={scopedDrafts} services={services} showVendor={!vendorFilter} onChanged={() => load(false)} /></CardContent></Card>
 
     <div className="flex flex-col gap-3 sm:flex-row">

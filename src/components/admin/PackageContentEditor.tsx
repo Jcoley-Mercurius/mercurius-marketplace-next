@@ -36,7 +36,7 @@ import type { PricingFrequency } from "@/lib/vendorPricing";
 // meaning, price levels and their rules, questions, add-ons, included scope and provider
 // notes. The server validates the content (overlapping rules, scope charged twice, cadences)
 // and the preview prices it with the same calculation requests use. Saving never publishes;
-// the vendor approves the exact revision before an operator can publish it.
+// an operator publishes, with or without the vendor's approval (DEC-2026-046).
 
 type QuestionInput = { question_key: string; question_label: string; input_type: ContentQuestion["input_type"]; unit: string; options: string; is_required: boolean };
 type ConditionInput = { min: string; max: string };
@@ -177,8 +177,8 @@ export function PackageContentEditor({ draft, contractorId, vendors, services, o
     setOpen(false);
     toast.success(draft ? "Draft updated" : "Draft saved", {
       description: draft?.approvalState && draft.approvalState !== "draft"
-        ? "If anything changed, the vendor must approve this version again before it can be published."
-        : "It stays private until the vendor approves it and you publish it.",
+        ? "If anything changed, the vendor's earlier answer no longer applies to this version."
+        : "It stays private until you publish it.",
     });
     await onSaved();
   }
@@ -190,7 +190,7 @@ export function PackageContentEditor({ draft, contractorId, vendors, services, o
     <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
       <DialogHeader>
         <DialogTitle>{draft ? "Edit draft package" : "Build a package for a vendor"}</DialogTitle>
-        <DialogDescription>A private draft. The vendor approves this exact version before you can publish it; any later change needs approval again.</DialogDescription>
+        <DialogDescription>A private draft until you publish it. You can send it to the vendor for approval first; any later change clears that approval.</DialogDescription>
       </DialogHeader>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
