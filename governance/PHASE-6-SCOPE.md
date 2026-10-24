@@ -17,6 +17,10 @@ owner decisions G1–G6 (DEC-2026-045, 2026-10-22) then implemented: itemized qu
 with deposit review, accepted quotes final, aging and payment-exception queue (CFG-015), provider eligibility rechecks.
 No quote can be approved until a tax confirmation path exists (DEC-2026-015 §4).
 
+2026-10-24 checkpoint: 6.4 merged (PR #106). 6.5 / TRACE-121 one-time appointments, Eastern Time and
+schedule history implemented for review ([record](PHASE-6-APPOINTMENTS.md)); MPS checklist E1 (what
+makes an appointment confirmed) remains an owner gap, so appointments read “recorded”, not “confirmed”.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

@@ -2,6 +2,7 @@
 
 import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
 import { JobOperations } from "@/components/dashboard/JobOperations";
+import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RequestPromotionPanel } from "@/components/dashboard/RequestPromotionPanel";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -476,7 +477,6 @@ export function HomeownerJobDetailDialog({
         </DialogHeader>
         {actionError && <p ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg border border-status-danger bg-status-danger-bg p-3 text-sm text-status-danger">{actionError}</p>}
 
-        {job.scheduled_start_at && <p className="font-medium">Appointment: {formatDateTime(job.scheduled_start_at)}</p>}
         {job.quote_expires_at && <p className="text-sm text-muted-foreground">Quote approval deadline: {formatDateTime(job.quote_expires_at)}</p>}
         {job.quote_status === "expired" && <p role="status">This quote expired. Contact Mercurius for a new quote; the service has not been cancelled.</p>}
         {job.quote_status === "legacy_review" && <p role="status">Mercurius must resend this quote with current terms before you can approve it.</p>}
@@ -488,12 +488,16 @@ export function HomeownerJobDetailDialog({
           {providerState.kind === "consent_needed" && <ConfirmAction disabled={!actionsEnabled || !!busyAction} confirmationTone="commitment" triggerLabel="Allow another provider" title="Allow another provider?" entity={job.service_type} consequence="Mercurius may offer this request to one eligible provider at a time instead of your preferred provider. If none accepts, it will show as not available yet in your area." confirmLabel="Allow other providers" onConfirm={consentToFallback} />}
         </section>
 
+        <AppointmentPanel key={`appointment-${job.id}-${job.status}`} jobId={job.id} role="homeowner" readOnly={!actionsEnabled} onChanged={() => {
+          void onRefresh().catch(() => toast.warning("Saved, but the dashboard could not refresh", { description: "Refresh the page to see the latest status." }));
+        }} />
+
         <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2">
-          <Detail icon={Calendar} label="Preferred date">
-            {job.preferred_date ? formatDate(job.preferred_date) : "Date TBD"}
+          <Detail icon={Calendar} label="Preferred date (your request)">
+            {job.preferred_date ? formatDate(job.preferred_date) : "No preferred date"}
           </Detail>
-          <Detail icon={Clock} label="Preferred time">
-            {job.preferred_time || "Time TBD"}
+          <Detail icon={Clock} label="Preferred time (your request)">
+            {job.preferred_time || "No preferred time"}
           </Detail>
           <Detail icon={MapPin} label="Service address" wide>
             {location || "Address unavailable"}

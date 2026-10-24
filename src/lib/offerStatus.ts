@@ -4,6 +4,18 @@
 
 export const offerTimeZone = "America/New_York";
 
+const appointmentFormat = new Intl.DateTimeFormat("en-US", {
+  weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  timeZone: offerTimeZone, timeZoneName: "short",
+});
+
+/** TRACE-121: every role reads an appointment as "Tue, Nov 3, 2026, 9:00 AM EST". */
+export function formatAppointment(value: string | number | Date | null | undefined) {
+  if (value == null) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : appointmentFormat.format(date);
+}
+
 export type ProviderStatusInput = {
   status: string;
   matching_status?: string | null;
@@ -133,7 +145,7 @@ export function providerStatus(input: ProviderStatusInput): ProviderStatus {
     return { kind: "closed", line: "See request details", explanation: "No provider is attached to this request.", nextAction: null, assigned: false };
   }
 
-  const appointment = formatEastern(input.scheduled_start_at);
+  const appointment = formatAppointment(input.scheduled_start_at);
   const quoteOpen = quote && input.quote_status !== "accepted";
   if (input.status === "scheduled" || input.status === "matched" || input.status === "quoted") {
     return {
@@ -177,7 +189,7 @@ export function vendorOfferOutcome(row: VendorOfferRow | null, contractorId: str
   if (readFailed) return { kind: "unknown" };
   if (!row || row.contractor_id !== contractorId) return { kind: "gone" };
   if (row.matching_status === "matched") {
-    return { kind: "accepted", quote: isQuoteWork(row), appointment: formatEastern(row.scheduled_start_at) };
+    return { kind: "accepted", quote: isQuoteWork(row), appointment: formatAppointment(row.scheduled_start_at) };
   }
   if (row.matching_status === "offered" && ["matched", "quoted"].includes(row.status)) return { kind: "still_open" };
   return { kind: "gone" };

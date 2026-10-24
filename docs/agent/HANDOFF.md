@@ -1,5 +1,15 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.5 appointments: Eastern Time and schedule history (TRACE-121), 2026-10-24
+
+- Branch `claude/phase6-5-appointment-confirmation` in worktree `../mercurius-phase6-5-appointments`, from `origin/main` `0ba710e` (6.4 PR #106 merged; its Codex review still open). PR #109. Record: [PHASE-6-APPOINTMENTS.md](../../governance/PHASE-6-APPOINTMENTS.md).
+- Migration `20261024002000` (additive): `job_operations.seq`; `admin_record_appointment` (Eastern wall-time check, stale guard, replay, recorded/changed/kept, keeps preferred date); `job_schedule` readback; `record_job_operation` restated with the generic `appointment` kind retired. Hosted read-only: 0 appointments, 0 scheduled, 0 job operations.
+- UI: `AppointmentPanel` on homeowner, vendor and admin job details; `EasternDateTimeField`; one format ("Tue, Nov 3, 2026, 9:00 AM EST").
+- Evidence: SQL 092 68/68; clean replay, full SQL 83 files 4,683 PASS; `scripts/appointment-concurrency.mjs` 3/3; unit 495/495; lint, typecheck, secret scan clean; synthetic build; browser `appointments` 8/8; regression 64/65 with `homeowner.spec.ts:23` timing out once under load and passing on reruns. Full non-visual suite, `@visual` and screen reader not run.
+- Open: MPS E1 (what makes an appointment confirmed; owner); 6.9 owns reschedule consequences and provider-withdrawal handling of a recorded time; 6.6 owns recurring visit times.
+- Hosted: `20261024002000` pushed 2026-10-24 at the owner's instruction (dry run showed only this file). Read back: in history, `seq` present, both functions signed-in only, generic appointment kind refused, 0 job operations; dry run now up to date.
+- Next: Codex review of PR #109; CI; merge.
+
 ## Next.js 16.4.3 and CI image registry fallback (PR #108), 2026-10-24
 
 - `npm audit --omit=dev` failed CI on `next` 16.0.0–16.4.0 (GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr critical; GHSA-p3m5-59mp-jv5r). `next` and `eslint-config-next` pinned to 16.4.3. Evidence: audit 0 vulnerabilities; `npm run check` (unit 468/468, synthetic build); CI backend, lifecycle and application green. Local browser suite did not start under machine load (first `/mds` render ~60 s exceeds the webServer timeout); CI ran it.
