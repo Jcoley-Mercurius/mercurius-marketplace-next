@@ -22,6 +22,7 @@ import { formatEastern, isOpenVendorOffer, isQuoteWork, offerTimeLeft, vendorOff
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { VendorRecruitingNotice } from "@/components/vendor/VendorRecruitingStatus";
+import { VendorQuotePanel } from "@/components/quotes/VendorQuotePanel";
 
 type Job = {
   id: string;
@@ -42,6 +43,10 @@ type Job = {
   state: string;
   zip_code: string | null;
   quote_amount: number | null;
+  quote_status?: string | null;
+  quote_expires_at?: string | null;
+  quote_revision?: number | null;
+  pricing_inputs?: unknown;
   total_amount: number | null;
   created_at: string;
   updated_at: string;
@@ -123,7 +128,7 @@ export default function VendorJobsPage() {
       setContractorId(contractorResult.data.id);
       const result = await supabase
         .from("service_requests")
-        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at, service_catalog_id")
+        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, quote_status, quote_expires_at, quote_revision, pricing_inputs, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at, service_catalog_id")
         .eq("contractor_id", contractorResult.data.id)
         .order("created_at", { ascending: false });
       if (result.error) throw result.error;
@@ -137,7 +142,10 @@ export default function VendorJobsPage() {
           if (profile.full_name) names.set(profile.user_id, profile.full_name);
         }
       }
-      setJobs(liveJobs.map((job) => ({ ...job, homeowner_name: names.get(job.customer_id) ?? null })));
+      const named = liveJobs.map((job) => ({ ...job, homeowner_name: names.get(job.customer_id) ?? null }));
+      setJobs(named);
+      // An open job dialog follows the reloaded row (quote state changes while it is open).
+      setSelected((current) => current ? named.find((job) => job.id === current.id) ?? current : null);
       setNow(Date.now());
       setStaleRefresh(false);
       setMode("live");
@@ -308,7 +316,7 @@ export default function VendorJobsPage() {
           </TabsContent>
         </Tabs>
       )}
-      <Details saved={() => { setSelected(null); void load(); }} job={selected} close={() => setSelected(null)} />
+      <Details saved={() => { setSelected(null); void load(); }} refreshQuote={() => void load({ silent: true })} job={selected} close={() => setSelected(null)} />
       <Complete job={completing} close={() => setCompleting(null)} done={(id) => { replaceStatus(id, "vendor_completed"); setCompleting(null); }} />
     </div>
   );
@@ -402,7 +410,7 @@ function JobCard({ job, busy, view, start, complete }: {
   );
 }
 
-function Details({ job, close, saved }: { job: Job | null; close: () => void; saved: () => void }) {
+function Details({ job, close, saved, refreshQuote }: { job: Job | null; close: () => void; saved: () => void; refreshQuote: () => void }) {
   if (!job) return null;
   const price = priceContext(job);
   const note = customerNote(job);
@@ -416,6 +424,7 @@ function Details({ job, close, saved }: { job: Job | null; close: () => void; sa
     </div>
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
     {job.scheduled_start_at && <p>Appointment: {formatEastern(job.scheduled_start_at)}</p>}
+    {!isIncoming(job) && <VendorQuotePanel key={`quote-${job.id}`} job={job} onChanged={refreshQuote} />}
     {["scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="vendor" onSaved={saved} />}
     <QuestionAnswers job={job} />
     {!isIncoming(job) && <Link href={`/vendor/messages?request=${encodeURIComponent(job.id)}`} onClick={close} className={cn(buttonVariants({ variant: "outline" }), "w-full")}><MessageSquare />Open Messages</Link>}

@@ -35,9 +35,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
-import { FormField } from "@/components/ui/form-field";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { AdminQuotePanel } from "@/components/quotes/AdminQuotePanel";
+import { AdminQuoteQueue } from "@/components/quotes/AdminQuoteQueue";
 import { Status as LifecycleStatus } from "@/components/ui/status";
 import { canonicalRequestState, adminTransitionTargets } from "@/lib/lifecycle";
 import { ConfirmAction } from "@/components/ui/confirm-action";
@@ -73,6 +74,11 @@ type ServiceRequest = {
   matching_status: string;
   preferred_contractor_id: string | null;
   quote_revision?: number;
+  quote_status?: string | null;
+  quote_expires_at?: string | null;
+  current_quote_id?: string | null;
+  pricing_mode?: string | null;
+  pricing_inputs?: unknown;
   frequency?: string | null;
   scheduled_start_at?: string | null;
 };
@@ -175,10 +181,7 @@ export default function AdminRequestsPage() {
   const [attemptError, setAttemptError] = useState("");
   const [eligibleMatches, setEligibleMatches] = useState<EligibleMatch[]>([]);
   const [eligibleError, setEligibleError] = useState("");
-  const [quoteError, setQuoteError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [quoteAmount, setQuoteAmount] = useState("");
-  const [quoteReason, setQuoteReason] = useState("");
   const [note, setNote] = useState("");
   const [action, setAction] = useState<Action>(null);
 
@@ -192,7 +195,7 @@ export default function AdminRequestsPage() {
       const expiryResult = await supabase.rpc("expire_stale_matches");
       if (expiryResult.error) console.warn("Unable to expire stale offers", expiryResult.error.message);
       const [requestResult, profileResult, contractorResult] = await Promise.all([
-        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, frequency, scheduled_start_at").order("created_at", { ascending: false }),
+        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at").order("created_at", { ascending: false }),
         supabase.from("profiles").select("user_id, full_name"),
         supabase.from("contractors").select("id, name, services, location, rating, jobs_completed, badges, is_active").order("name"),
       ]);
@@ -242,13 +245,10 @@ export default function AdminRequestsPage() {
   }, []);
 
   const openDetail = (request: ServiceRequest) => {
-    setQuoteError("");
     setActionError("");
     setSelected(request);
     setDetailTab("details");
     setAssignSearch("");
-    setQuoteReason("");
-    setQuoteAmount(String(request.quote_amount ?? request.total_amount ?? ""));
     setNote(request.notes ?? "");
     void loadAttempts(request.id);
     void loadEligible(request.id);
@@ -313,30 +313,6 @@ export default function AdminRequestsPage() {
     if (!changed) throw new Error("The status change was not saved.");
   };
 
-  const sendQuote = async (request: ServiceRequest) => {
-    setQuoteError("");
-    const amount = Number(quoteAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setQuoteError("Enter a quote amount greater than $0.");
-      document.getElementById("quote-amount")?.focus();
-      return;
-    }
-    if (!request.contractor_id) {
-      setQuoteError("Assign a vendor before sending a quote.");
-      document.getElementById("quote-amount")?.focus();
-      return;
-    }
-    if (!quoteReason.trim()) {
-      setQuoteError("Explain why this quote is being sent.");
-      document.getElementById("quote-reason")?.focus();
-      return;
-    }
-    await runAction(request, "quote", async () => {
-      const result = await createClient().rpc("admin_send_quote", { _job_id: request.id, _amount: amount, _reason: quoteReason.trim(), _expected_revision: request.quote_revision ?? 0 });
-      return { error: result.error };
-    }, "The quote was recorded and sent into the homeowner approval workflow.");
-  };
-
   const saveNote = async (request: ServiceRequest) => {
     await runAction(request, "note", async () => {
       const result = await createClient().from("service_requests").update({ notes: note.trim() || null }).eq("id", request.id);
@@ -365,6 +341,8 @@ export default function AdminRequestsPage() {
   return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
     <header><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Service operations</p><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-heading text-3xl font-semibold tracking-tight">Service Requests</h1><p className="mt-2 text-sm text-muted-foreground">{requests.length} live request{requests.length === 1 ? "" : "s"} across the platform</p></div><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button></div></header>
 
+    <AdminQuoteQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
+
     {overdueCount > 0 && <div className="flex flex-col gap-3 rounded-xl border border-status-danger bg-status-danger-bg p-4 text-status-danger sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0" /><div><p className="text-sm font-medium">{overdueCount} matched request{overdueCount === 1 ? " is" : "s are"} overdue</p><p className="mt-0.5 text-xs text-status-danger">Release the match for reassignment or coordinate directly with the vendor.</p></div><Button size="sm" variant="outline" className="sm:ml-auto" onClick={() => setStatusFilter("matched")}>View matched</Button></div>}
 
     <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search requests" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search service, homeowner, vendor, city, or ID..." className="bg-card pl-9" /></div><Select aria-label="Filter requests by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-52"><option value="all">All statuses</option>{statuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}</Select></div>
@@ -380,13 +358,12 @@ export default function AdminRequestsPage() {
       { key: "actions", label: "Actions", render: request => <Button variant="outline" size="sm" aria-label={`Review ${request.service_type} ${request.id.slice(0, 10)}`} onClick={() => openDetail(request)}><Eye />Review</Button> },
     ]} />}</CardContent></Card>
 
-    <RequestDialog saved={() => { void load(false); if (selected) { void loadAttempts(selected.id); void loadEligible(selected.id); } }} quoteReason={quoteReason} setQuoteReason={setQuoteReason} quoteError={quoteError} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} quoteAmount={quoteAmount} setQuoteAmount={setQuoteAmount} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} sendQuote={sendQuote} saveNote={saveNote} />
+    <RequestDialog saved={() => { void load(false); if (selected) { void loadAttempts(selected.id); void loadEligible(selected.id); } }} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} saveNote={saveNote} />
   </div>;
 }
 
 function RequestDialog(props: {
   saved: () => void;
-  quoteError: string;
   actionError: string;
   request: ServiceRequest | null;
   tab: string;
@@ -399,10 +376,6 @@ function RequestDialog(props: {
   setAssignSearch: (value: string) => void;
   attempts: MatchAttempt[];
   attemptError: string;
-  quoteReason: string;
-  setQuoteReason: (value: string) => void;
-  quoteAmount: string;
-  setQuoteAmount: (value: string) => void;
   note: string;
   setNote: (value: string) => void;
   action: Action;
@@ -411,7 +384,6 @@ function RequestDialog(props: {
   offerNext: (request: ServiceRequest) => Promise<void>;
   release: (request: ServiceRequest, reason: string) => Promise<void>;
   changeStatus: (request: ServiceRequest, status: string, reason: string) => Promise<void>;
-  sendQuote: (request: ServiceRequest) => Promise<void>;
   saveNote: (request: ServiceRequest) => Promise<void>;
 }) {
   const errorRef = useRef<HTMLParagraphElement>(null);
@@ -434,7 +406,7 @@ function RequestDialog(props: {
     {["pending", "matched", "quoted", "scheduled", "in_progress"].includes(request.status) && <JobOperations key={request.id} jobId={request.id} role="admin" onSaved={props.saved} recurring={!!request.frequency && request.frequency !== "one-time"} />}
     <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
 
-    <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><FormField id="quote-reason" label="Quote reason" required>{control => <Textarea {...control} value={props.quoteReason} onChange={event => props.setQuoteReason(event.target.value)} maxLength={1000} />}</FormField><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="min-w-0 flex-1"><FormField id="quote-amount" label="Total amount ($)" error={props.quoteError} required>{control => <Input {...control} type="number" min="0" step="0.01" value={props.quoteAmount} onChange={(event) => props.setQuoteAmount(event.target.value)} className="bg-card" />}</FormField></div><Button className="bg-commitment text-commitment-foreground hover:bg-commitment-hover" disabled={busy || !props.quoteAmount} onClick={() => void props.sendQuote(request)}>{props.action?.kind === "quote" && <Loader2 className="animate-spin" />}Send Quote</Button></div>{request.status === "quoted" && <p className="mt-2 text-xs text-status-info">Current quote: {money(request.quote_amount ?? request.total_amount ?? 0)} · awaiting homeowner action.</p>}</section>
+    <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><AdminQuotePanel key={`${request.id}:${request.quote_revision ?? 0}:${request.quote_status ?? ""}`} request={request} providerName={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "The provider" : "The provider"} onChanged={props.saved} /></section>
 
     <section><label htmlFor="admin-note" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Internal Notes</label><Textarea id="admin-note" rows={4} value={props.note} onChange={(event) => props.setNote(event.target.value)} placeholder="Add internal operations notes..." className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /><Button size="sm" className="mt-2" disabled={busy} onClick={() => void props.saveNote(request)}>{props.action?.kind === "note" ? <Loader2 className="animate-spin" /> : <Save />}Save Note</Button></section>
   </TabsContent><TabsContent value="chat" className="min-h-[460px] flex-1 overflow-hidden data-active:flex data-active:flex-col"><AdminChat key={request.id} requestId={request.id} homeowner={props.profiles[request.customer_id] ?? "Homeowner"} vendor={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Vendor" : "Vendor"} /></TabsContent></Tabs><DialogFooter><Button variant="outline" disabled={busy} onClick={props.close}>Close</Button></DialogFooter></DialogContent></Dialog>;

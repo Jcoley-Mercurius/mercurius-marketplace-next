@@ -1,7 +1,7 @@
 # Mercurius Rebuild and Implementation Roadmap
 
 **Status:** IN PROGRESS — Phase 6 continues; R0 public recruiting added as a parallel, separately gated release (DEC-2026-022, 2026-09-28)
-**Implementation checkpoint:** remote `main` at `37d212e` (2026-09-28 read-only recheck); open Phase 6 PR #64 remains separate. Original planning baseline: `94d608a`
+**Implementation checkpoint:** remote `main` at `60d4f06` (2026-10-22): pricing packages, vendor approval and gated promotions merged (PR #103, TRACE-112–116, six migrations `20261018001000`–`006000`); merges to `main` deploy production (DEC-2026-037). Phase 6.4 (TRACE-119) in progress. Earlier checkpoint `37d212e` (2026-09-28). Original planning baseline: `94d608a`
 **Authority:** owner-approved MPS, MDS, and MTS
 **Delivery model:** stabilize and rebuild in vertical slices; do not perform a blind rewrite
 

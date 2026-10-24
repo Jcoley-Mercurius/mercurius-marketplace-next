@@ -37,10 +37,14 @@ jobs:
       - name: Prepare isolated synthetic stack
         run: node scripts/prepare-phase5-local.mjs
       - name: Reconstruct database
+        # public.ecr.aws has also refused pulls ("toomanyrequests: Data limit exceeded", 2026-10-24),
+        # so each retry alternates registries.
         run: |
           for attempt in 1 2 3; do
+            [ "$attempt" = 2 ] && export SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io
+            [ "$attempt" = 3 ] && export SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws
             sh scripts/phase5-db.sh start && exit 0
-            echo "Isolated start attempt $attempt failed; retrying after a pause."
+            echo "Isolated start attempt $attempt from $SUPABASE_INTERNAL_IMAGE_REGISTRY failed; retrying after a pause."
             supabase stop --workdir .phase5-local --no-backup > /dev/null 2>&1 || true
             sleep 60
           done
@@ -142,9 +146,11 @@ jobs:
         run: |
           mkdir -p supabase/.audit
           for attempt in 1 2 3; do
+            [ "$attempt" = 2 ] && export SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io
+            [ "$attempt" = 3 ] && export SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws
             npx supabase start -x studio,imgproxy,mailpit,storage-api,realtime,postgres-meta,logflare,vector,supavisor > supabase/.audit/ci-start.log 2>&1 && break
             [ "$attempt" = 3 ] && { grep -iE "error|toomanyrequests" supabase/.audit/ci-start.log | tail -5; exit 1; }
-            echo "Stack start attempt $attempt failed; retrying after a pause."
+            echo "Stack start attempt $attempt from $SUPABASE_INTERNAL_IMAGE_REGISTRY failed; retrying after a pause."
             npx supabase stop --no-backup > /dev/null 2>&1 || true
             sleep 60
           done

@@ -12,9 +12,10 @@ insert into public.service_requests(id,customer_id,service_type,address,status,m
 
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000002"}',true);
-select lives_ok($$select public.admin_send_quote('73000000-0000-4000-8000-000000000001',100,'Initial quote',0)$$,'scheduled service can receive independent price quote');
-select throws_ok($$select public.admin_send_quote('73000000-0000-4000-8000-000000000001',100,'Initial quote',0)$$,'22023',null,'duplicate send with stale revision is rejected');
-select lives_ok($$select public.admin_send_quote('73000000-0000-4000-8000-000000000001',125,'Corrected scope',1)$$,'replacement preserves revision lineage');
+-- DEC-2026-045: quotes are itemized; revision, supersede and 24-hour rules unchanged.
+select lives_ok($$select public.admin_send_itemized_quote('73000000-0000-4000-8000-000000000001','[{"kind":"service","description":"Synthetic","quantity":1,"unit_cents":10000}]','Synthetic scope','Initial quote',0)$$,'scheduled service can receive independent price quote');
+select throws_ok($$select public.admin_send_itemized_quote('73000000-0000-4000-8000-000000000001','[{"kind":"service","description":"Synthetic","quantity":1,"unit_cents":10000}]','Synthetic scope','Initial quote',0)$$,'22023',null,'duplicate send with stale revision is rejected');
+select lives_ok($$select public.admin_send_itemized_quote('73000000-0000-4000-8000-000000000001','[{"kind":"service","description":"Synthetic","quantity":1,"unit_cents":12500}]','Synthetic scope','Corrected scope',1)$$,'replacement preserves revision lineage');
 reset role;
 select is((select count(*) from public.request_quotes where request_id='73000000-0000-4000-8000-000000000001'),2::bigint,'both revisions retained');
 select is((select status from public.request_quotes where request_id='73000000-0000-4000-8000-000000000001' and revision=1),'superseded','unanswered prior quote superseded');
@@ -23,7 +24,8 @@ select throws_ok($$update public.request_quotes set amount=1 where request_id='7
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-0000-4000-8000-000000000001"}',true);
 select throws_ok($$select public.homeowner_respond_to_quote('73000000-0000-4000-8000-000000000001',true,(select id from public.request_quotes where request_id='73000000-0000-4000-8000-000000000001' and revision=1))$$,'22023',null,'stale displayed quote cannot accept replacement amount');
-select lives_ok($$select public.homeowner_respond_to_quote('73000000-0000-4000-8000-000000000001',true,(select current_quote_id from public.service_requests where id='73000000-0000-4000-8000-000000000001'))$$,'homeowner approves current quote after vendor scheduling');
+select throws_ok($$select public.homeowner_respond_to_quote('73000000-0000-4000-8000-000000000001',true,(select current_quote_id from public.service_requests where id='73000000-0000-4000-8000-000000000001'))$$,'22023','Tax pending confirmation; this quote can''t be approved until Mercurius confirms tax','tax-pending quote is not approvable (DEC-2026-045)');
+select lives_ok($$select public.homeowner_respond_to_quote('73000000-0000-4000-8000-000000000001',false,(select current_quote_id from public.service_requests where id='73000000-0000-4000-8000-000000000001'))$$,'homeowner decides on the current quote after vendor scheduling');
 reset role;
 select is((select status::text from public.service_requests where id='73000000-0000-4000-8000-000000000001'),'scheduled','quote decision preserves scheduled service');
 insert into public.request_quotes(request_id,revision,amount,sender_id,reason,sent_at,expires_at)

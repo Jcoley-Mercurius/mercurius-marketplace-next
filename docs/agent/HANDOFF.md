@@ -1,12 +1,29 @@
 # Agent handoff — 2026-10-01
 
+## Next.js 16.4.3 and CI image registry fallback (PR #108), 2026-10-24
+
+- `npm audit --omit=dev` failed CI on `next` 16.0.0–16.4.0 (GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr critical; GHSA-p3m5-59mp-jv5r). `next` and `eslint-config-next` pinned to 16.4.3. Evidence: audit 0 vulnerabilities; `npm run check` (unit 468/468, synthetic build); CI backend, lifecycle and application green. Local browser suite did not start under machine load (first `/mds` render ~60 s exceeds the webServer timeout); CI ran it.
+- public.ecr.aws refused Supabase image pulls ("toomanyrequests: Data limit exceeded"); CI start retries now alternate public.ecr.aws, ghcr.io, public.ecr.aws. Merged as `b8f1095`; deployed.
+
 ## Operators publish prices without the vendor's approval (TRACE-120, DEC-2026-046), 2026-10-24
 
 - Branch `claude/admin-publish-without-vendor-approval` from `main` `66d495e` (independent of PR #106, which holds DEC-2026-045/TRACE-119 and SQL 090). Owner instruction: the admin publishes pricing without the vendor's approval.
 - Migration `20261024001000` (additive; no data change): `admin_publish_package_draft` restated from `20261018002000` without the approval gate; returns, records and notifies `vendor_approved`. Send-for-approval, vendor approve/ask-for-changes and history unchanged and optional. Vendor-funded promotion offers keep vendor approval.
 - UI: Publish enabled on every open draft; the dialog says whether the vendor approved and shows a pending change request; admin, vendor and email copy updated.
 - Evidence: SQL 091 new (080/083/085 refusal assertions removed); clean replay, full SQL 81 files 4,494 PASS; unit 468/468; lint, typecheck, secret scan clean; synthetic build; browser `vendor-prices` + `pricing-approval` 23/23. Full non-visual suite and `@visual` not run.
+- 2026-10-24: merged `main` `0675805` (PR #106 and #108); conflicts only in HANDOFF, DECISION-LOG and TRACEABILITY, both entries kept.
 - Next: Codex review; owner pushes `20261024001000` (dry run first) before merge.
+
+## Phase 6.4 quotes: itemized proposals and quotes, owner decisions G1–G6 (TRACE-119, DEC-2026-045), 2026-10-23
+
+- Branch `claude/phase6-4-vendor-quote-proposals`, uncommitted for review, fast-forwarded to `main` `66d495e` (PR #105). Record: [PHASE-6-QUOTES.md](../../governance/PHASE-6-QUOTES.md). Decisions: DEC-2026-045 (G1–G6), CFG-015 (thresholds), CFG-005 quote-deposit note, MPS §6.3/§7.5/§9 notes.
+- Migration `20261022001000_phase6_quotes.sql` (additive; replaces the unpushed first cut): `request_quote_proposals`, `request_quote_terms` (itemized, tax pending unless confirmed, deposit $0), `request_quote_exceptions`; `vendor_propose_quote`, `admin_send_itemized_quote`, `admin_return_quote_proposal`, `admin_open/close_quote_exception`, `admin_record_quote_review`, `admin_quote_queue`; restated `homeowner_respond_to_quote` (approval needs complete terms, confirmed tax, eligible provider) and `admin_send_quote` (retired); guards make decided quotes and accepted request quote fields immutable on every path.
+- UI: vendor itemized estimate (prefilled from the priced selection); admin quote panel and "Quote and payment exceptions" queue; homeowner breakdown with "Tax pending confirmation", Approve only for confirmed terms; Stripe return reads "Waiting for payment confirmation".
+- Evidence: clean replay of 195 migrations; SQL 090 118/118, 005/007/023 updated (10/16/44); full SQL 81 files 4,598 PASS; unit 481/481; lint, typecheck, secret scan clean; synthetic build; browser `quote-proposals` 12 tests, `portals`, `homeowner` (see below). Full non-visual suite on a quiet machine 555/556 in 26 min; the one failure (`request.spec.ts:904`, intake add-ons, not touched here) passed 3/3 alone. `@visual`, screen reader and hosted checks not run.
+- Machine note: WSL has 5.7 GB; under load the browser suite times out at 5 s/30 s. Never wrap `playwright test` in `timeout`: killing it orphans `next start` on 3103, and the next run silently uses the stale build. Check `ss -ltn | grep 3103` before a run.
+- Open: tax authority — no command confirms a quote's tax, so no quote can be approved yet (DEC-2026-015 §4); finance review of quote discount lines in snapshots; Codex review; owner pushes `20261022001000` (dry run first) before merge.
+- 2026-10-24: `20261022001000` already on hosted; merged to `main` as PR #106 (`0675805`) at the owner's instruction with CI green; Vercel deployed. Codex review still open.
+- Next: Codex review; then 6.5 appointments, or the tax-confirmation slice once the owner/accountant approves tax rules.
 
 ## Operators add services to the catalog (TRACE-118, DEC-2026-044), 2026-10-21
 

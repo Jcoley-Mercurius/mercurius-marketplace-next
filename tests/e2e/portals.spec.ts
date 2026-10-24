@@ -41,11 +41,11 @@ test("admin quote fields, nested confirmation and persistent action errors", asy
   await review.click();
   const dialog = page.getByRole("dialog", { name: "Synthetic Lawn Service" });
   await expect(dialog).toBeVisible();
-  const quote = dialog.getByLabel("Total amount ($) (required)", { exact: true });
-  await quote.fill("0");
-  await dialog.getByRole("button", { name: "Send Quote", exact: true }).click();
-  await expect(quote).toBeFocused();
-  await expect(quote).toHaveAccessibleDescription("Enter a quote amount greater than $0.");
+  // DEC-2026-045: quotes are itemized; an incomplete line is named and focused before sending.
+  await dialog.getByRole("listitem", { name: "Line 1" }).getByLabel("Unit price ($)", { exact: true }).fill("0");
+  await dialog.getByRole("button", { name: "Send itemized quote", exact: true }).click();
+  await expect(dialog.getByRole("listitem", { name: "Line 1" })).toBeFocused();
+  await expect(dialog.getByRole("alert").filter({ hasText: "Line 1: add a description" })).toBeVisible();
   const release = dialog.getByRole("button", { name: "Release match", exact: true });
   await release.click();
   const confirm = page.getByRole("alertdialog", { name: "Release this vendor?" });
