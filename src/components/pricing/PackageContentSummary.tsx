@@ -1,10 +1,12 @@
 import { frequencyLabel } from "@/lib/packagePriceCorrections";
+import { INTERNAL_NOTES_LABEL } from "@/lib/packageDrafts";
 import { addonPriceLabel, conditionsLabel, formatCents, priceKindLabel, toCents, walkthroughLabel, type PackageContent } from "@/lib/pricingContent";
 
 // TRACE-112/113: the full content of a package revision, read-only, worded the same way for
-// operators and vendors: price meaning, rules, included scope, add-ons and provider notes.
+// operators and vendors: price meaning, rules, included scope and add-ons. TRACE-122: notes are
+// Mercurius-internal and shown only when an operator view passes them in.
 
-export function PackageContentSummary({ content }: { content: PackageContent }) {
+export function PackageContentSummary({ content, internalNotes }: { content: PackageContent; internalNotes?: string | null }) {
   const cadences = [...new Set(content.tiers.map((tier) => tier.frequency))];
   return <div className="space-y-3 text-sm">
     {content.description && <p className="text-muted-foreground">{content.description}</p>}
@@ -28,7 +30,6 @@ export function PackageContentSummary({ content }: { content: PackageContent }) 
         <span className="font-medium tabular-nums">{addonPriceLabel(addon)}</span>
       </li>)}</ul></div>}
     {content.questions.length > 0 && <p className="text-muted-foreground">Asks: {content.questions.map((q) => q.question_label).join(" · ")}</p>}
-    {content.policy_notes && <div><p className="font-medium">Provider notes</p><p className="whitespace-pre-line text-muted-foreground">{content.policy_notes}</p>
-      <p className="text-xs text-muted-foreground">For information. Mercurius booking, cancellation and refund terms apply.</p></div>}
+    {internalNotes && <div><p className="font-medium">{INTERNAL_NOTES_LABEL}</p><p className="whitespace-pre-line text-muted-foreground">{internalNotes}</p></div>}
   </div>;
 }

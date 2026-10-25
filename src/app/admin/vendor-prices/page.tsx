@@ -8,7 +8,8 @@ import { AdminEmpty, AdminError, AdminLoading } from "@/components/admin/AdminPa
 import { PackageContentEditor } from "@/components/admin/PackageContentEditor";
 import { PackageDraftEditor, PackageDraftList, PackageTemplateStart } from "@/components/admin/PackageDrafts";
 import { PackagePriceCorrection, PackageReplacementActions } from "@/components/admin/PackagePriceCorrection";
-import { ApprovalBadges, PackageDetails, PriceList } from "@/components/admin/VendorPackagePrices";
+import { PackageInternalNotes } from "@/components/admin/PackageInternalNotes";
+import { ApprovalBadges, ArchivedPackages, PackageDetails, PriceList } from "@/components/admin/VendorPackagePrices";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import { loadCorrectablePackages, pricingModeLabel, type CorrectablePackage } fr
 // customer-facing also depends on the provider's eligibility and listing.
 // DEC-2026-035 (TRACE-110): "Add a price" drafts a price for a chosen vendor; drafts stay
 // private until published with a reason.
+// TRACE-122: archived packages leave the list and counts; they are kept under Archived prices.
 
 type StatusFilter = "all" | "active" | "paused" | "review";
 
@@ -76,6 +78,7 @@ function VendorPricesContent() {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return packages
+      .filter((pkg) => !pkg.archive)
       .filter((pkg) => !vendorFilter || pkg.contractorId === vendorFilter)
       .filter((pkg) => status === "all"
         || (status === "active" && pkg.isActive)
@@ -85,7 +88,9 @@ function VendorPricesContent() {
       .sort((a, b) => a.contractorName.localeCompare(b.contractorName) || a.serviceName.localeCompare(b.serviceName) || a.name.localeCompare(b.name));
   }, [packages, search, status, vendorFilter]);
 
-  const scopedPackages = vendorFilter ? packages.filter((pkg) => pkg.contractorId === vendorFilter) : packages;
+  const vendorPackages = vendorFilter ? packages.filter((pkg) => pkg.contractorId === vendorFilter) : packages;
+  const scopedPackages = vendorPackages.filter((pkg) => !pkg.archive);
+  const archivedPackages = vendorPackages.filter((pkg) => pkg.archive);
   const scopedDrafts = vendorFilter ? drafts.filter((draft) => draft.contractorId === vendorFilter) : drafts;
   const reviewCount = scopedPackages.filter((pkg) => pkg.needsReview).length;
   const filterVendorName = vendors.find((vendor) => vendor.id === vendorFilter)?.name;
@@ -124,8 +129,9 @@ function VendorPricesContent() {
         { key: "package", label: "Package", render: (pkg) => <><p className="font-medium break-words">{pkg.name}</p><p className="mt-1 text-xs text-muted-foreground">{pkg.serviceName} · {pricingModeLabel(pkg.pricingMode)}{pkg.templateId ? " · Managed template" : ""}</p><div className="mt-2 flex flex-wrap gap-1.5"><ApprovalBadges pkg={pkg} /></div></> },
         { key: "prices", label: "Prices", render: (pkg) => <div className="min-w-48 space-y-2"><PriceList pkg={pkg} /><PackageDetails pkg={pkg} /></div> },
         { key: "status", label: "Status", render: (pkg) => <div className="flex flex-wrap gap-2"><Badge variant="outline">{pkg.isActive ? "Active" : "Paused"}</Badge>{pkg.needsReview && <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-200">Needs review</Badge>}</div> },
-        { key: "action", label: "Action", render: (pkg) => <div className="flex flex-wrap gap-2"><PackagePriceCorrection pkg={pkg} onCorrected={() => load(false)} /><PackageReplacementActions pkg={pkg} onChanged={() => load(false)} /></div> },
+        { key: "action", label: "Action", render: (pkg) => <div className="flex flex-wrap gap-2"><PackagePriceCorrection pkg={pkg} onCorrected={() => load(false)} /><PackageReplacementActions pkg={pkg} onChanged={() => load(false)} /><PackageInternalNotes pkg={pkg} onSaved={() => load(false)} /></div> },
       ]} />}
     </CardContent></Card>
+    <ArchivedPackages packages={archivedPackages} showVendor={!vendorFilter} />
   </div>;
 }

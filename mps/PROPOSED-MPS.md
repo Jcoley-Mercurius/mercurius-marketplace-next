@@ -269,7 +269,7 @@ Every transition must define actor, prerequisites, side effects, notification, t
 - Identity and business contact verified.
 - Terms and marketplace agreement accepted with version/time.
 - Service categories and coverage approved.
-- Required licensing/insurance reviewed by category/jurisdiction with expiry.
+- Required licensing/insurance reviewed by category/jurisdiction with expiry. DEC-2026-047: an operator may record a licensing or insurance exception (reason, approver, follow-up due date) while the document is pending; it expires at the end of the follow-up date.
 - Payment/payout onboarding complete where required.
 - Profile and pricing claims reviewed.
 - Availability and response expectations accepted.

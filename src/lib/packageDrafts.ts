@@ -18,6 +18,8 @@ export type EmailState = "not_sent" | "pending" | "sending" | "sent" | "failed" 
 
 export type DraftPrice = { frequency: PricingFrequency; price: number };
 
+export const INTERNAL_NOTES_LABEL = "Internal notes (not shown to homeowners)";
+
 export type PackageDraft = {
   id: string;
   contractorId: string;
@@ -39,6 +41,8 @@ export type PackageDraft = {
   changeRequest: string | null;
   vendorLink: { linked: boolean; vendorRole: boolean; emailOnFile: boolean; blocker: string | null };
   delivery: { status: DeliveryStatus; readAt: string | null; emailSent: boolean; email: EmailState; emailError: string | null };
+  /** TRACE-122: Mercurius-internal; not part of the revision and never shown to homeowners. */
+  internalNotes: string | null;
   createdByEmail: string | null;
   createdAt: string;
   updatedAt: string;
@@ -175,6 +179,7 @@ export function parseDraft(value: unknown): PackageDraft | null {
       email: emailStates.includes(delivery.email as EmailState) ? delivery.email as EmailState : "not_sent",
       emailError: text(delivery.email_error),
     },
+    internalNotes: text(item.internal_notes),
     createdByEmail: typeof item.created_by_email === "string" ? item.created_by_email : null,
     createdAt: typeof item.created_at === "string" ? item.created_at : item.updated_at,
     updatedAt: item.updated_at,

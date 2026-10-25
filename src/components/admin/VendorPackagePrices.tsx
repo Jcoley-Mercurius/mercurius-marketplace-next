@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PackageContentEditor } from "@/components/admin/PackageContentEditor";
+import { PackageInternalNotes } from "@/components/admin/PackageInternalNotes";
 import { PackageDraftEditor, PackageDraftList, PackageTemplateStart } from "@/components/admin/PackageDrafts";
 import { PackagePriceCorrection, PackageReplacementActions } from "@/components/admin/PackagePriceCorrection";
 import { PackageContentSummary } from "@/components/pricing/PackageContentSummary";
@@ -30,6 +31,7 @@ import {
 // DEC-2026-035 (TRACE-110): the operator can also add a price for this vendor as a draft.
 // TRACE-112 (source items 4, 8, 13): live packages show their full content and price meaning,
 // and the summary separates live prices from drafts waiting for the vendor's approval.
+// TRACE-122: archived packages leave the list and counts and are kept under Archived prices.
 
 export function VendorPackagePrices({ contractorId }: { contractorId: string }) {
   const [packages, setPackages] = useState<CorrectablePackage[] | null>(null);
@@ -72,12 +74,14 @@ export function VendorPackagePrices({ contractorId }: { contractorId: string }) 
   </div>;
   if (!packages) return <p role="status" className="text-sm text-muted-foreground">Loading vendor prices…</p>;
 
-  const live = packages.filter((pkg) => pkg.isActive).length;
+  const archived = packages.filter((pkg) => pkg.archive);
+  const current = packages.filter((pkg) => !pkg.archive);
+  const live = current.filter((pkg) => pkg.isActive).length;
   const awaiting = drafts.filter((draft) => draft.approvalState === "sent").length;
-  const templatesInUse = [...new Set(packages.flatMap((pkg) => pkg.templateId ? [templates.get(pkg.templateId) ?? "Managed template"] : []))];
+  const templatesInUse = [...new Set(current.flatMap((pkg) => pkg.templateId ? [templates.get(pkg.templateId) ?? "Managed template"] : []))];
   return <div className="space-y-6">
     <div className="space-y-1 text-sm text-muted-foreground">
-      <p>{countLabel(live, "live price", "live prices")} · {countLabel(packages.length - live, "paused", "paused")} · {countLabel(awaiting, "awaiting vendor approval", "awaiting vendor approval")} · {countLabel(drafts.length - awaiting, "other draft", "other drafts")} ·{" "}
+      <p>{countLabel(live, "live price", "live prices")} · {countLabel(current.length - live, "paused", "paused")} · {countLabel(awaiting, "awaiting vendor approval", "awaiting vendor approval")} · {countLabel(drafts.length - awaiting, "other draft", "other drafts")} ·{" "}
         <Link className="underline underline-offset-4" href={`/admin/vendor-prices?vendor=${contractorId}`}>Open in Vendor Prices</Link></p>
       <p>Templates in use: {templatesInUse.length ? templatesInUse.join(", ") : "none"}</p>
     </div>
@@ -92,9 +96,9 @@ export function VendorPackagePrices({ contractorId }: { contractorId: string }) 
       </div>
       <PackageDraftList drafts={drafts} services={services} showVendor={false} onChanged={load} />
     </section>
-    {packages.length === 0
-      ? <p className="text-sm text-muted-foreground">This vendor has no packages yet.</p>
-      : <ul className="space-y-4">{packages.map((pkg) => <li key={pkg.id} className="space-y-3 rounded-lg border p-4">
+    {current.length === 0
+      ? <p className="text-sm text-muted-foreground">{archived.length ? "This vendor has no current packages." : "This vendor has no packages yet."}</p>
+      : <ul className="space-y-4">{current.map((pkg) => <li key={pkg.id} className="space-y-3 rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="font-medium break-words">{pkg.name}</h3>
@@ -105,11 +109,13 @@ export function VendorPackagePrices({ contractorId }: { contractorId: string }) 
               <ApprovalBadges pkg={pkg} />
             </div>
           </div>
-          <div className="flex flex-wrap gap-2"><PackagePriceCorrection pkg={pkg} onCorrected={load} /><PackageReplacementActions pkg={pkg} onChanged={load} /></div>
+          <div className="flex flex-wrap gap-2"><PackagePriceCorrection pkg={pkg} onCorrected={load} /><PackageReplacementActions pkg={pkg} onChanged={load} /><PackageInternalNotes pkg={pkg} onSaved={load} /></div>
         </div>
         <PriceList pkg={pkg} />
         <PackageDetails pkg={pkg} />
       </li>)}</ul>}
+
+    <ArchivedPackages packages={archived} />
 
     <section aria-labelledby={`price-history-${contractorId}`} className="space-y-3">
       <h3 id={`price-history-${contractorId}`} className="text-sm font-semibold">Corrections and suspensions by Mercurius</h3>
@@ -148,12 +154,29 @@ function countLabel(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-/** Description, included scope, rules, add-ons and provider notes of a live package. */
+/** Description, included scope, rules, add-ons and internal notes of a live package. */
 export function PackageDetails({ pkg }: { pkg: CorrectablePackage }) {
   if (!pkg.content) return null;
   return <details className="rounded-lg border bg-muted/10 px-3 py-2 text-sm">
     <summary className="cursor-pointer font-medium">Description, scope and add-ons</summary>
-    <div className="mt-2"><PackageContentSummary content={pkg.content} /></div>
+    <div className="mt-2"><PackageContentSummary content={pkg.content} internalNotes={pkg.internalNotes?.notes} /></div>
+  </details>;
+}
+
+/** TRACE-122: archived packages, kept for audit with who archived them and why. */
+export function ArchivedPackages({ packages, showVendor = false }: { packages: CorrectablePackage[]; showVendor?: boolean }) {
+  if (!packages.length) return null;
+  return <details className="rounded-lg border px-3 py-2 text-sm">
+    <summary className="cursor-pointer font-medium">Archived prices ({packages.length})</summary>
+    <ul className="mt-3 space-y-3">{packages.map((pkg) => <li key={pkg.id} className="space-y-2 rounded-lg border bg-muted/20 p-3">
+      <div>
+        <p className="font-medium break-words">{showVendor ? `${pkg.contractorName} · ` : ""}{pkg.name}</p>
+        <p className="text-xs text-muted-foreground">{pkg.serviceName} · archived {pkg.archive ? formatCorrectionTime(pkg.archive.archivedAt) : ""}{pkg.archive?.actorEmail ? ` by ${pkg.archive.actorEmail}` : ""}</p>
+        {pkg.archive && <p className="mt-1 break-words"><span className="text-muted-foreground">Reason: </span>{pkg.archive.reason}</p>}
+      </div>
+      <PriceList pkg={pkg} />
+      <PackageDetails pkg={pkg} />
+    </li>)}</ul>
   </details>;
 }
 

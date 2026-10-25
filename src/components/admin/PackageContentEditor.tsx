@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { frequencyLabel, parsePriceInput } from "@/lib/packagePriceCorrections";
-import { DRAFT_DESCRIPTION_MAX, DRAFT_NAME_MAX, draftErrorMessage, type DraftService, type DraftVendor, type PackageDraft } from "@/lib/packageDrafts";
+import { DRAFT_DESCRIPTION_MAX, DRAFT_NAME_MAX, draftErrorMessage, INTERNAL_NOTES_LABEL, type DraftService, type DraftVendor, type PackageDraft } from "@/lib/packageDrafts";
 import {
   lineAmountLabel,
   lineLabel,
@@ -37,27 +37,29 @@ import type { PricingFrequency } from "@/lib/vendorPricing";
 // notes. The server validates the content (overlapping rules, scope charged twice, cadences)
 // and the preview prices it with the same calculation requests use. Saving never publishes;
 // an operator publishes, with or without the vendor's approval (DEC-2026-046).
+// TRACE-122: internal notes are saved beside the draft, not in its content: changing them
+// creates no new version and clears no approval.
 
 type QuestionInput = { question_key: string; question_label: string; input_type: ContentQuestion["input_type"]; unit: string; options: string; is_required: boolean };
 type ConditionInput = { min: string; max: string };
 type TierInput = { id: string; name: string; frequency: PricingFrequency; price_kind: PriceKind; price: string; price_max: string; conditions: Record<string, ConditionInput>; includes: string };
 type AddonInput = { id: string; name: string; description: string; price_kind: "exact" | "range"; price: string; price_max: string; unit_label: string; min_quantity: string; max_quantity: string; is_required: boolean; frequencies: PricingFrequency[] };
-type Model = { name: string; description: string; pricing_mode: PricingMode; deposit: string; included: string; policy_notes: string; questions: QuestionInput[]; tiers: TierInput[]; addons: AddonInput[] };
+type Model = { name: string; description: string; pricing_mode: PricingMode; deposit: string; included: string; internal_notes: string; questions: QuestionInput[]; tiers: TierInput[]; addons: AddonInput[] };
 
 type VendorPackageOption = { id: string; name: string; is_active: boolean; lineage_id: string | null; revision_number: number };
 
-const blankModel = (name = ""): Model => ({ name, description: "", pricing_mode: "fixed", deposit: "", included: "", policy_notes: "", questions: [], tiers: [], addons: [] });
+const blankModel = (name = ""): Model => ({ name, description: "", pricing_mode: "fixed", deposit: "", included: "", internal_notes: "", questions: [], tiers: [], addons: [] });
 
 const numberText = (value: number | null | undefined) => (value === null || value === undefined ? "" : String(value));
 
-function modelFromContent(content: PackageContent): Model {
+function modelFromContent(content: PackageContent, internalNotes: string | null): Model {
   return {
     name: content.name,
     description: content.description ?? "",
     pricing_mode: content.pricing_mode,
     deposit: numberText(content.deposit_amount),
     included: content.included_scope.join("\n"),
-    policy_notes: content.policy_notes ?? "",
+    internal_notes: internalNotes ?? content.policy_notes ?? "",
     questions: content.questions.map((q) => ({ question_key: q.question_key, question_label: q.question_label, input_type: q.input_type,
       unit: q.unit ?? "", options: (q.options ?? []).join(", "), is_required: q.is_required })),
     tiers: content.tiers.map((t) => ({ id: t.id, name: t.name, frequency: t.frequency, price_kind: t.price_kind, price: numberText(t.price),
@@ -109,7 +111,7 @@ export function contentFromModel(model: Model): { content: PackageContent; error
   if (model.pricing_mode === "deposit_quote" && deposit === null) return { content: null, error: "Enter the deposit as dollars, at most two decimal places." };
   return { error: null, content: {
     name: model.name.trim(), description: model.description.trim() || null, pricing_mode: model.pricing_mode, deposit_amount: deposit,
-    included_scope: splitList(model.included, /\n/), policy_notes: model.policy_notes.trim() || null,
+    included_scope: splitList(model.included, /\n/), policy_notes: null,
     questions: model.questions.map((q) => ({ question_key: q.question_key.trim(), question_label: q.question_label.trim(), input_type: q.input_type,
       unit: q.unit.trim() || null, options: q.input_type === "select" ? splitList(q.options, /,/) : null, is_required: q.is_required })),
     tiers, addons,
@@ -153,7 +155,7 @@ export function PackageContentEditor({ draft, contractorId, vendors, services, o
     setVendor(fixedVendor ?? "");
     setServiceId(draft?.serviceId ?? "");
     setTarget(draft?.targetPackageId ?? "");
-    setModel(draft ? modelFromContent(draft.content) : blankModel());
+    setModel(draft ? modelFromContent(draft.content, draft.internalNotes) : blankModel());
     setError("");
   }
 
@@ -168,12 +170,27 @@ export function PackageContentEditor({ draft, contractorId, vendors, services, o
     if (!built.content) { setError(built.error); return; }
     setError("");
     setPending(true);
-    const { error: rpcError } = await createClient().rpc("admin_save_package_draft_content", {
+    const supabase = createClient();
+    const { data, error: rpcError } = await supabase.rpc("admin_save_package_draft_content", {
       p_draft: draft?.id ?? null, p_expected_updated_at: draft?.updatedAt ?? null, p_contractor: vendor,
       p_service: service.id, p_target_package: target || null, p_content: built.content,
     });
+    if (rpcError) { setPending(false); setError(draftErrorMessage(rpcError)); return; }
+    const notes = model.internal_notes.trim();
+    const savedId = (data as { id?: unknown } | null)?.id;
+    // Notes still held in a legacy draft's content are moved out on its first save.
+    if ((notes !== (draft?.internalNotes ?? "") || Boolean(draft?.content.policy_notes)) && typeof savedId === "string") {
+      const { error: notesError } = await supabase.rpc("admin_set_package_internal_notes", { p_draft: savedId, p_notes: notes });
+      if (notesError) {
+        // The draft itself is saved; reopen it to retry the notes.
+        setPending(false);
+        setOpen(false);
+        toast.error("Draft saved, but the internal notes were not", { description: draftErrorMessage(notesError) });
+        await onSaved();
+        return;
+      }
+    }
     setPending(false);
-    if (rpcError) { setError(draftErrorMessage(rpcError)); return; }
     setOpen(false);
     toast.success(draft ? "Draft updated" : "Draft saved", {
       description: draft?.approvalState && draft.approvalState !== "draft"
@@ -242,8 +259,8 @@ export function PackageContentEditor({ draft, contractorId, vendors, services, o
             <FormField id={`content-included-${key}`} label="Included in every visit" help="One item per line. An add-on cannot charge for an included item.">
               {(control) => <Textarea {...control} value={model.included} disabled={pending} onChange={(event) => update({ included: event.target.value })} />}
             </FormField>
-            <FormField id={`content-notes-${key}`} label="Provider notes" help="Shown with the package for information. Mercurius booking terms still apply; notes are not enforced.">
-              {(control) => <Textarea {...control} value={model.policy_notes} maxLength={2000} disabled={pending} onChange={(event) => update({ policy_notes: event.target.value })} />}
+            <FormField id={`content-notes-${key}`} label={INTERNAL_NOTES_LABEL} help="For Mercurius only. Changing them creates no new version, needs no republishing and does not notify the vendor.">
+              {(control) => <Textarea {...control} value={model.internal_notes} maxLength={2000} disabled={pending} onChange={(event) => update({ internal_notes: event.target.value })} />}
             </FormField>
           </fieldset>
 

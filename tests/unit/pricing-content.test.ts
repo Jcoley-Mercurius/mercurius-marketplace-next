@@ -87,7 +87,7 @@ describe("content documents", () => {
 
   it("builds editor input into content, refusing amounts it cannot read", () => {
     const model = {
-      name: " Synthetic clean ", description: "", pricing_mode: "fixed" as const, deposit: "", included: "Kitchen\nBathrooms\n", policy_notes: "",
+      name: " Synthetic clean ", description: "", pricing_mode: "fixed" as const, deposit: "", included: "Kitchen\nBathrooms\n", internal_notes: "Synthetic gate code",
       questions: [{ question_key: "sqft", question_label: "Square feet", input_type: "number" as const, unit: "", options: "", is_required: true }],
       tiers: [{ id: "level-1", name: "Small", frequency: "one-time" as const, price_kind: "exact" as const, price: "$120", price_max: "",
         conditions: { sqft: { min: "0", max: "1,500" } }, includes: "" }],
@@ -96,6 +96,8 @@ describe("content documents", () => {
     };
     const built = contentFromModel(model);
     expect(built.error).toBeNull();
+    // TRACE-122: internal notes never enter the content (the revision).
+    expect(built.content?.policy_notes).toBeNull();
     expect(built.content).toMatchObject({ name: "Synthetic clean", included_scope: ["Kitchen", "Bathrooms"],
       tiers: [{ price: 120, conditions: [{ question_key: "sqft", min: 0, max: 1500 }] }], addons: [{ price: 15, max_quantity: 6, unit_label: "can" }] });
     expect(contentFromModel({ ...model, tiers: [{ ...model.tiers[0], price: "12.345" }] }).error).toMatch(/Enter a price/);

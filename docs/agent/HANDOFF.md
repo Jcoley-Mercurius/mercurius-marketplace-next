@@ -1,5 +1,15 @@
 # Agent handoff — 2026-10-01
 
+## Vendor onboarding review fixes (TRACE-122, DEC-2026-047/048), 2026-10-24
+
+- Branch `claude/onboarding-review-fixes` from `main` `404ea29`, uncommitted for review. Owner review items 1, 2, 3, 5, 6 implemented; item 4 (prepaid plans) answered and recorded as DEC-2026-048, not implemented (own slice: checkout, scheduling, payout, refunds, finance review).
+- Migration `20261024003000` (additive; copies existing notes only). First cut was numbered `20261024002000`/TRACE-121/SQL 092, which PR #109 (appointments) took and pushed meanwhile; renumbered.
+- Notes: kept outside revision content because `package_revision_hash` covers `policy_notes` and requests bind to it. Hosted read-only: 4 lineages carry notes, none on an active revision; the legacy column keeps values on those inactive revisions (API-readable until replaced).
+- Exception: evidence `requirement_version = 'exception'`, `evidence_ref = 'Exception: document pending'`, expiring at the end of the follow-up date (Eastern); counts for activation and matching until then; never over a current document; scoped compliance unchanged.
+- Evidence: SQL 093 64/64, 083 updated; clean replay; full SQL 84 files 4,748 PASS; unit 498/498; lint, typecheck, secret scan clean; synthetic build; browser `vendor-prices`, `pricing-approval`, `onboarding-checklist` 40/40 (19 re-run after load timeouts). Full non-visual suite and `@visual` not run.
+- Owner actions: push `20261024003000` (dry run first) before merge; replace the four live package descriptions that repeat the size guide (replacement draft per package, description only), then archive superseded versions.
+- Next: Codex review; then the prepaid-plan slice (DEC-2026-048 open items first).
+
 ## Phase 6.5 appointments: Eastern Time and schedule history (TRACE-121), 2026-10-24
 
 - Branch `claude/phase6-5-appointment-confirmation` in worktree `../mercurius-phase6-5-appointments`, from `origin/main` `0ba710e` (6.4 PR #106 merged; its Codex review still open). PR #109. Record: [PHASE-6-APPOINTMENTS.md](../../governance/PHASE-6-APPOINTMENTS.md).

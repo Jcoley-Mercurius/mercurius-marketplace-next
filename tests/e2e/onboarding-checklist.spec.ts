@@ -5,6 +5,7 @@ import { syntheticSession } from "../fixtures/browser-session";
 
 // TRACE-069 synthetic browser evidence. The fixture never claims real evidence, a real
 // account, a role grant or an activation; decision states are mocked readbacks.
+// TRACE-122 (DEC-2026-047 item 5): checklist exceptions; the database contract is SQL 093.
 const contractor = "00000000-0000-4000-8000-000000000052";
 const version = "00000000-0000-4000-8000-000000000051";
 const kinds = ["identity", "agreement", "coverage", "license", "insurance", "bank_authorization", "profile_pricing", "availability", "test_notification"];
@@ -29,6 +30,7 @@ test.beforeEach(async ({ page }) => {
     });
     await route.fulfill({ response, json: data });
   });
+  await page.route("**/rpc/vendor_checklist_exceptions", route => route.fulfill({ json: [] }));
 });
 
 function checklist(page: Page, body: Record<string, unknown> | (() => Record<string, unknown>)) {
@@ -244,4 +246,50 @@ test("a superseded application revision blocks evidence in place", async ({ page
   const dialog = await openChecklist(page);
   await expect(dialog.getByText("Rebind onboarding to the current version before recording evidence", { exact: false })).toBeVisible();
   await expect(dialog.getByLabel("Checklist item (required)", { exact: true })).toHaveCount(0);
+});
+
+test("licensing can be marked current by an exception with a reason, approver and follow-up date", async ({ page }) => {
+  const exceptionId = "00000000-0000-4000-8000-000000000199";
+  const due = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+  let recorded = false;
+  const sent: Record<string, unknown>[] = [];
+  await page.route("**/rpc/vendor_record_checklist_exception", route => {
+    sent.push(route.request().postDataJSON());
+    recorded = true;
+    return route.fulfill({ json: { evidence_id: exceptionId, kind: "license", open: true, replayed: false } });
+  });
+  await page.route("**/rpc/vendor_checklist_exceptions", route => route.fulfill({ json: recorded ? [{
+    evidence_id: exceptionId, kind: "license", reason: "Synthetic: state portal down", approver: "Synthetic Approver", follow_up_due: due,
+    created_at: now, expires_at: null, actor_email: "operator@example.invalid", open: true, resolved_at: null }] : [] }));
+  await checklist(page, () => recorded ? {
+    items: kinds.map(kind => kind === "license"
+      ? { kind, evidence_id: exceptionId, requirement_version: "exception", evidence_ref: "Exception: document pending", accepted_at: now,
+        expires_at: new Date(Date.now() + 15 * 864e5).toISOString(), state: "current", renewal_due: true }
+      : { kind, evidence_id: null, requirement_version: null, evidence_ref: null, accepted_at: null, expires_at: null, state: "missing" }),
+  } : {});
+  const dialog = await openChecklist(page);
+  await dialog.getByLabel("Checklist item (required)", { exact: true }).selectOption("license");
+  await dialog.getByLabel("Evidence", { exact: true }).selectOption("exception");
+  await expect(dialog.getByLabel("Document (required)", { exact: true })).toHaveCount(0);
+  const record = dialog.getByRole("button", { name: "Record exception" });
+  await expect(record).toBeDisabled();
+  await dialog.getByLabel("Reason (required)", { exact: true }).fill("Synthetic: state portal down");
+  await dialog.getByLabel("Approver (required)", { exact: true }).fill("Synthetic Approver");
+  await dialog.getByLabel("Follow-up due (required)", { exact: true }).fill(due);
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await record.click();
+  const confirm = page.getByRole("alertdialog", { name: "Mark this item current without a document?" });
+  await expect(confirm.getByText("then lapses unless the document is recorded", { exact: false })).toBeVisible();
+  await confirm.getByRole("button", { name: "Record exception" }).click();
+  await expect(confirm).not.toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ p_contractor: contractor, p_kind: "license", p_reason: "Synthetic: state portal down",
+    p_approver: "Synthetic Approver", p_follow_up_due: due });
+  expect(sent[0].p_key).toMatch(/^checklist-exception:[0-9a-f-]+:license:new:[0-9a-f]+$/);
+  await expect(dialog.getByText("1 of 9 current")).toBeVisible();
+  await expect(dialog.getByText("Exception: document pending", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Synthetic: state portal down · approved by Synthetic Approver", { exact: false }).first()).toBeVisible();
+  // The exception's own follow-up date replaces the renewal notice.
+  await expect(dialog.getByText("Renewal due", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText("Checklist exceptions (1)")).toBeVisible();
 });

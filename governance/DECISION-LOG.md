@@ -269,6 +269,32 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-048 — Prepaid plans for recurring cadences
+
+**Status:** APPROVED owner answers (Josh, 2026-10-24, vendor onboarding review item 4); **not implemented**. Implementation is its own slice because it changes checkout, scheduling, payout and refunds, and the money path needs finance review. **Date:** 2026-10-24 (America/New_York).
+
+**Decision:** A price level can be billed "per visit" (current behavior) or as a "prepaid bundle": a total price and the number of visits it covers (e.g. Quarterly: $135 per quarter, 4 cleanings). Public profile and booking show the total. (1) Checkout charges the full prepaid amount up front and schedules the covered visits with no per-visit charge. (2) Add-ons chosen for a prepaid plan are multiplied by the visits covered and added to the up-front total; no per-visit charges. (3) Renewal: before the period ends the homeowner receives a payment link for the next period through the existing checkout; no card is stored and nothing is charged automatically. (4) Payout: each visit's share (total ÷ visits) becomes eligible 48 hours after that visit's homeowner-confirmed completion, held on dispute as usual; on cancellation, unused visits are refunded at their share under the approved cancellation policy.
+
+**Context:** Spiffy Clean Canz's quarterly plan ($135 prepaid for 4 cleanings) can only be entered as $33.75 per cleaning today. No saved-card or off-session charging exists, which is why renewal is a payment link.
+
+**Open before implementation:** the platform-fee base for a prepaid bundle (proposed: 15% of the bundle subtotal at charge, reversed per refunded visit share, per MPS §7.2); how the cancellation windows of MPS §6.6 apply to each future visit versus the bundle; rounding of a visit share that does not divide evenly; what happens when a renewal link is not paid (plan ends; no visits scheduled); finance review of the snapshot and ledger changes.
+
+**MPS impact:** §7 commercial rules gain a prepaid-bundle billing mode (amendment needed at implementation). **MDS impact:** price-level billing mode in the operator and vendor editors; bundle totals on the public profile and booking. **MTS impact:** none yet. **Data/payment/security impact:** money path, payout eligibility per visit share and refunds; requires finance review before release.
+
+### DEC-2026-047 — Vendor onboarding review: internal notes, size guide, archive, checklist exception
+
+**Status:** APPROVED owner instruction (Josh, 2026-10-24, vendor onboarding review items 1, 2, 3, 5 and 6) and owner answer to item 5 (exception counts as current until the follow-up date). **Date:** 2026-10-24 (America/New_York).
+
+**Decision:** (1) A package's notes are Mercurius-internal ("Internal notes (not shown to homeowners)"): never rendered on the public profile, kept outside the revision content and edited without a new version, republishing or vendor notice. They belong to the package across its versions. (2) The bedroom-to-size guide is shown once on the public profile ("How we size your home", in Pricing Overview) when a live fixed package is priced by number of bedrooms; package descriptions say only what the service includes. (3) An operator archives a paused or replaced package with a reason: removed from Vendor Prices and its counts, kept under "Archived prices" with the archive record, never turned back on, no vendor notice. A live package must be suspended first; an open replacement draft must be published or discarded first. (4) An operator marks licensing or insurance current without a document by an exception: reason, approver and follow-up due date are required. It is evidence that expires at the end of the follow-up date (America/New_York), so it counts toward activation and matching until then and lapses on its own; it is shown as "Exception: document pending" until a document is recorded over it, and every exception stays in the exception history. It never replaces a current document. Scoped (category/ZIP) compliance is unchanged. (5) "Experience 1 year" is pluralized correctly.
+
+**Context:** Owner review of vendor onboarding, 2026-10-24. Package notes were part of the revision hash that submitted requests are bound to, so a notes edit needed a replacement version; descriptions repeated the size guide on every card; paused and superseded versions had no discard action; licensing could not be current while its document was pending.
+
+**Alternatives considered:** Editing `policy_notes` on live revisions (not chosen: it changes the revision hash and invalidates bound requests); stripping the guide text from descriptions when displayed (not chosen: descriptions are vendor content; an operator replaces them through a draft); an exception without expiry (not chosen by the owner; MPS §8 requires an expiry).
+
+**MPS impact:** §8 activation checklist note: licensing/insurance may be current by a recorded, expiring exception. §6.7 badges unchanged (badges are operator-managed and not derived from this evidence). **MDS impact:** internal notes field and dialog; "How we size your home"; Archive action and Archived prices; exception form, badge and history. **MTS impact:** migration `20261024003000` (new private tables, guards and commands; `operator_package_draft_json`, `pricing_draft_content_from_package`, `admin_package_contents` restated). **Data/payment/security impact:** existing notes copied to the internal table; the legacy column keeps its values for existing revisions (their hashes) and stays readable through the API until those revisions are replaced; an exception can make a provider eligible for matching without a licensing document until its follow-up date. No money-path change.
+
+**Required evidence:** SQL 093; unit `home-size-guide`, `pricing-content`; browser `vendor-prices`, `pricing-approval`, `onboarding-checklist`.
+
 ### DEC-2026-046 — Operators publish prices without the vendor's approval
 
 **Status:** APPROVED owner instruction (Josh, 2026-10-24: "The admin should be able to publish pricing without the approval of the vendor"). **Date:** 2026-10-24 (America/New_York).

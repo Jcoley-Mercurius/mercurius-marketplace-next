@@ -209,8 +209,11 @@ insert into ids select 'pkg', (public.admin_publish_package_draft((select id fro
 reset role;
 select is((select row(name,pricing_mode,is_active,lineage_id=id,revision_number,included_scope,policy_notes)::text from public.vendor_packages
   where id=(select id from ids where name='pkg')),
- row('Synthetic standard clean','fixed',true,true,1,'{Kitchen,Bathrooms}'::text[],'Synthetic provider note')::text,
+ row('Synthetic standard clean','fixed',true,true,1,'{Kitchen,Bathrooms}'::text[],null::text)::text,
  'publishing creates the approved package as a first revision');
+-- TRACE-122 (SQL 093): the draft's notes become the package's internal notes, not revision content.
+select is((select notes from private.package_internal_notes where subject_id=(select id from ids where name='pkg')),
+ 'Synthetic provider note', 'the draft''s notes become the package''s internal notes');
 select is((select array_agg(row(name,price,price_kind,rule_conditions)::text order by sort_order) from public.package_tiers
   where package_id=(select id from ids where name='pkg')),
  array[row('Up to 1,500 sq ft',125::numeric,'exact','[{"max": 1500, "min": 0, "question_key": "sqft"}]'::jsonb)::text,
