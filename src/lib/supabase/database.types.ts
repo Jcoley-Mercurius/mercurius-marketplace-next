@@ -8086,6 +8086,7 @@ export type Database = {
       vendor_own_evidence_renewal: { Args: never; Returns: Json }
       vendor_own_renewal_documents: { Args: never; Returns: Json }
       vendor_package_approvals: { Args: never; Returns: Json }
+      vendor_package_archives: { Args: { p_contractor: string }; Returns: Json }
       vendor_place_application_retention_hold: {
         Args: { p_application: string; p_key: string; p_reason: string }
         Returns: Json

@@ -5,11 +5,17 @@ import { syntheticSession } from "../fixtures/browser-session";
 
 // TRACE-069 synthetic browser evidence. The fixture never claims real evidence, a real
 // account, a role grant or an activation; decision states are mocked readbacks.
-// TRACE-122 (DEC-2026-047 item 5): checklist exceptions; the database contract is SQL 093.
+// TRACE-122 (DEC-2026-047 item 5): checklist exceptions; the database contract is SQL 093,
+// and the 14-day follow-up window and repeat sequence are SQL 094.
 const contractor = "00000000-0000-4000-8000-000000000052";
 const version = "00000000-0000-4000-8000-000000000051";
 const kinds = ["identity", "agreement", "coverage", "license", "insurance", "bank_authorization", "profile_pricing", "availability", "test_notification"];
 const now = new Date().toISOString();
+/** A calendar date in America/New_York, offset by whole days. */
+function easternDay(offset: number) {
+  const [year, month, day] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date()).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + offset)).toISOString().slice(0, 10);
+}
 const complete = kinds.map(kind => ({
   kind, evidence_id: `00000000-0000-4000-8000-0000000001${String(kinds.indexOf(kind)).padStart(2, "0")}`,
   requirement_version: `${kind}-v1`, evidence_ref: ["license", "insurance"].includes(kind) ? `synthetic/applicant/${kind}.pdf` : `Synthetic ${kind} reference`,
@@ -250,7 +256,7 @@ test("a superseded application revision blocks evidence in place", async ({ page
 
 test("licensing can be marked current by an exception with a reason, approver and follow-up date", async ({ page }) => {
   const exceptionId = "00000000-0000-4000-8000-000000000199";
-  const due = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+  const due = easternDay(14);
   let recorded = false;
   const sent: Record<string, unknown>[] = [];
   await page.route("**/rpc/vendor_record_checklist_exception", route => {
@@ -292,4 +298,44 @@ test("licensing can be marked current by an exception with a reason, approver an
   // The exception's own follow-up date replaces the renewal notice.
   await expect(dialog.getByText("Renewal due", { exact: true })).toHaveCount(0);
   await expect(dialog.getByText("Checklist exceptions (1)")).toBeVisible();
+});
+
+test("an exception's follow-up is at most 14 Eastern days away and a further exception is shown as a repeat", async ({ page }) => {
+  const license = complete.find(item => item.kind === "license")!;
+  const first = "00000000-0000-4000-8000-000000000198";
+  await page.route("**/rpc/vendor_checklist_exceptions", route => route.fulfill({ json: [
+    { evidence_id: license.evidence_id, kind: "license", reason: "Synthetic: still pending", approver: "Synthetic Approver", follow_up_due: easternDay(5),
+      created_at: now, expires_at: null, actor_email: "operator@example.invalid", open: true, resolved_at: null, sequence: 2 },
+    { evidence_id: first, kind: "license", reason: "Synthetic: portal down", approver: "Synthetic Approver", follow_up_due: easternDay(-1),
+      created_at: now, expires_at: null, actor_email: "operator@example.invalid", open: false, resolved_at: now, sequence: 1 },
+  ] }));
+  await checklist(page, { items: complete.map(item => item.kind === "license"
+    ? { ...item, requirement_version: "exception", evidence_ref: "Exception: document pending" } : item) });
+  const dialog = await openChecklist(page);
+  await expect(dialog.getByText("Repeat exception (2nd)", { exact: true })).toBeVisible();
+  await dialog.getByText("Checklist exceptions (2)").click();
+  await expect(dialog.getByText("Licensing reviewed · 2nd exception (repeat)", { exact: false })).toBeVisible();
+
+  await dialog.getByLabel("Checklist item (required)", { exact: true }).selectOption("license");
+  await dialog.getByLabel("Evidence", { exact: true }).selectOption("exception");
+  await expect(dialog.getByRole("note").filter({ hasText: "This would be the 3rd exception for licensing" })).toBeVisible();
+  await dialog.getByLabel("Reason (required)", { exact: true }).fill("Synthetic: carrier delay");
+  await dialog.getByLabel("Approver (required)", { exact: true }).fill("Synthetic Approver");
+  const field = dialog.getByLabel("Follow-up due (required)", { exact: true });
+  await expect(field).toHaveAttribute("min", easternDay(1));
+  await expect(field).toHaveAttribute("max", easternDay(14));
+  const record = dialog.getByRole("button", { name: "Record exception" });
+  await field.fill(easternDay(15));
+  await expect(dialog.getByText("Choose a date no later than", { exact: false })).toBeVisible();
+  await expect(dialog.getByText("at most 14 days after today (Eastern)", { exact: false })).toBeVisible();
+  await expect(record).toBeDisabled();
+  await field.fill(easternDay(0));
+  await expect(dialog.getByText("Enter a date after today.")).toBeVisible();
+  await expect(record).toBeDisabled();
+  await field.fill(easternDay(14));
+  await expect(record).toBeEnabled();
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await record.click();
+  await expect(page.getByRole("alertdialog", { name: "Mark this item current without a document?" })
+    .getByText("This is the 3rd exception for this item.", { exact: false })).toBeVisible();
 });

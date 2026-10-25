@@ -143,7 +143,7 @@ Migration toward this structure must be incremental. Characterization tests come
 | Domain | Representative records | Invariants |
 |---|---|---|
 | Identity | profiles, user roles, contractors | One identity; explicit role grants; no client self-promotion |
-| Catalog | services, packages, tiers, add-ons, promotions | Only active/reviewed packages expose fixed prices |
+| Catalog | services, packages, tiers, add-ons, promotions | Only active/reviewed packages expose fixed prices; Mercurius-internal package notes are never readable by anon or authenticated (`vendor_packages` uses column-level grants, so a new column needs an explicit grant; TRACE-122); archived packages are read-only history |
 | Coverage | coverage areas, contractor service ZIPs | Public responses disclose only necessary coverage result |
 | Requests/jobs | service requests, matches, status events, photos | State changes go through authorized transactional functions |
 | Matching | job match attempts and price snapshots | At most one exclusive pending offer; deterministic retry-safe sequencing |

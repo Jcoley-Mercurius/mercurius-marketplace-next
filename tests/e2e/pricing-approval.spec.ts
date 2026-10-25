@@ -346,8 +346,46 @@ test("the public profile shows price meaning truthfully", async ({ page }) => {
   // TRACE-122: notes are never public; the bedroom size guide appears once; "1 year".
   await expect(page.getByText("Synthetic private note")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "How we size your home" })).toHaveCount(1);
+  await expect(page.getByText("Prices are set by the number of bedrooms.", { exact: false })).toBeVisible();
   await expect(page.getByText("about 1,300–1,800 sq ft")).toBeVisible();
   await expect(page.getByText("1 year", { exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).include("main").withTags(tags).analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
+
+// TRACE-122 review correction: the guide follows the price levels' conditions, not the questions asked.
+for (const [label, conditions, expected] of [
+  ["square-footage pricing that also asks bedrooms", [[{ question_key: "sqft", max: 1200 }], [{ question_key: "sqft", min: 1201 }]], null],
+  ["bedroom and square-footage pricing", [[{ question_key: "sqft", max: 1200 }, { question_key: "bedrooms", max: 2 }], [{ question_key: "sqft", min: 1201 }, { question_key: "bedrooms", min: 3 }]],
+    "Prices depend on the number of bedrooms and square footage."],
+] as const) {
+  test(`the public size guide describes ${label} accurately`, async ({ page }) => {
+    const provider = "00000000-0000-4000-8000-0000000000c1";
+    const pkg = "00000000-0000-4000-8000-0000000000c2";
+    await page.route("**/rest/v1/**", route => route.fulfill({ json: [] }));
+    await page.route("**/rpc/pricing_server_now", route => route.fulfill({ json: new Date().toISOString() }));
+    await page.route("**/rpc/r0_public_providers", route => route.fulfill({ json: {
+      id: provider, name: "Synthetic Sizing Co", logo_url: null, bio: "Synthetic description", location: "Lee County, FL", badges: [], services: [],
+      years_experience: 3, special_offer: null, our_promise: null, verified_specialty: null, tagline: null, video_url: null, website: null } }));
+    await page.route("**/rest/v1/vendor_packages?*", route => route.fulfill({ json: [
+      { id: pkg, contractor_id: provider, service_id: "synthetic-clean", name: "Synthetic sized clean", description: null, pricing_mode: "fixed",
+        default_frequency: "one-time", deposit_amount: null, is_active: true, needs_review: false, sort_order: 0, included_scope: [] }] }));
+    await page.route("**/rest/v1/package_tiers?*", route => route.fulfill({ json: conditions.map((rule, index) => ({
+      id: `t${index}`, package_id: pkg, name: `Level ${index + 1}`, price: 100 + index * 50, frequency: "one-time", includes: [], sort_order: index, rule_conditions: rule })) }));
+    await page.route("**/rest/v1/package_qualifying_questions?*", route => route.fulfill({ json: [
+      { id: "q1", package_id: pkg, question_key: "sqft", question_label: "Home size", input_type: "number", unit: "sq ft", options: null, is_required: true, sort_order: 0 },
+      { id: "q2", package_id: pkg, question_key: "bedrooms", question_label: "Bedrooms", input_type: "number", unit: "bedrooms", options: null, is_required: true, sort_order: 1 },
+    ] }));
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(`/providers/${provider}`);
+    await expect(page.getByRole("heading", { name: "Synthetic Sizing Co" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /one-time.*From \$100/i })).toBeVisible();
+    if (expected === null) {
+      await expect(page.getByRole("heading", { name: "How we size your home" })).toHaveCount(0);
+    } else {
+      await expect(page.getByText(expected, { exact: false })).toBeVisible();
+      await expect(page.getByText("not taken from the bedroom count", { exact: false })).toBeVisible();
+    }
+    await expect(page.getByText("Prices are set by the number of bedrooms", { exact: false })).toHaveCount(0);
+  });
+}

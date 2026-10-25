@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
+  Archive,
   ArrowDown,
   ArrowUp,
   CheckCircle2,
@@ -37,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PricingToggle } from "@/components/vendor/PricingToggle";
 import { cn } from "@/lib/utils";
+import { loadPackageArchives } from "@/lib/packageArchives";
 import { createClient } from "@/lib/supabase/client";
 import { VendorPriceApprovals } from "@/components/vendor/VendorPriceApprovals";
 import { VendorPriceCorrections } from "@/components/vendor/VendorPriceCorrections";
@@ -105,6 +107,8 @@ type PackageRow = {
   questions: QuestionRow[];
   addons: AddonRow[];
   promotions: PackagePromotion[];
+  /** TRACE-122: set when Mercurius archived this package; it is read-only history. */
+  archived_at?: string | null;
 };
 
 type PromotionDraft = {
@@ -199,23 +203,24 @@ export function VendorPackagesManager() {
     const supabase = createClient();
     const { data: packageData, error: packageError } = await supabase
       .from("vendor_packages")
-      .select("*")
+      .select("id, name, description, service_id, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, template_id, sort_order")
       .eq("contractor_id", id)
       .order("sort_order");
     if (packageError) throw packageError;
-    const rows = (packageData ?? []) as PackageRow[];
+    const rows = (packageData ?? []) as Omit<PackageRow, "tiers" | "questions" | "addons" | "promotions">[];
     if (!rows.length) {
       setPackages([]);
       setAllPackages([]);
       return;
     }
     const ids = rows.map((item) => item.id);
-    const [questionsResult, tiersResult, addonsResult, promotionsResult, clockResult] = await Promise.all([
+    const [questionsResult, tiersResult, addonsResult, promotionsResult, clockResult, archivedAt] = await Promise.all([
       supabase.from("package_qualifying_questions").select("*").in("package_id", ids).order("sort_order"),
       supabase.from("package_tiers").select("*").in("package_id", ids).order("sort_order"),
       supabase.from("package_addons").select("*").in("package_id", ids).order("created_at"),
       supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").in("package_id", ids).order("updated_at", { ascending: false }),
       supabase.rpc("pricing_server_now"),
+      loadPackageArchives(supabase, id),
     ]);
     if (questionsResult.error) throw questionsResult.error;
     if (tiersResult.error) throw tiersResult.error;
@@ -229,6 +234,7 @@ export function VendorPackagesManager() {
     const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
     const hydrated = rows.map((item) => ({
       ...item,
+      archived_at: archivedAt.get(item.id) ?? null,
       questions: questions.filter((question) => question.package_id === item.id),
       tiers: tiers
         .filter((tier) => tier.package_id === item.id)
@@ -359,6 +365,7 @@ export function VendorPackagesManager() {
   };
 
   const openEditor = (item: PackageRow) => {
+    if (item.archived_at) return;
     const normalizedTiers = item.tiers.map((tier) => ({
       ...tier,
       frequency: tierPricingFrequency(tier, item.default_frequency),
@@ -837,6 +844,7 @@ export function VendorPackagesManager() {
   };
 
   const togglePackage = async (item: PackageRow) => {
+    if (item.archived_at) return;
     if (!contractorId) return;
     const invalidFixed = item.pricing_mode === "fixed" && !hasValidFixedTiers(item.tiers);
     const invalidDeposit = item.pricing_mode === "deposit_quote" && (!Number.isFinite(Number(item.deposit_amount)) || Number(item.deposit_amount) <= 0);
@@ -855,6 +863,7 @@ export function VendorPackagesManager() {
   };
 
   const deletePackage = async (item: PackageRow) => {
+    if (item.archived_at) return;
     if (!contractorId || !window.confirm(`Delete “${item.name}”? This cannot be undone.`)) return;
     setMutatingId(item.id);
     const supabase = createClient();
@@ -956,12 +965,15 @@ export function VendorPackagesManager() {
     else { toast.success("Promotion disabled", { description: "The base price remains active." }); await refresh(contractorId); }
   };
 
+  // TRACE-122: archived packages are read-only history: no counts, coverage or actions.
+  const currentPackages = allPackages.filter((item) => !item.archived_at);
+  const archivedPackages = allPackages.filter((item) => item.archived_at);
   const serviceForProfileValue = (raw: string) => services.find((service) => normalize(service.id) === normalize(raw) || normalize(service.name) === normalize(raw));
   const uniqueProfileServices = [...new Map(profileServices.filter(Boolean).map((raw) => [normalize(raw), raw])).values()];
   const profileCoverage: ServiceCoverage[] = uniqueProfileServices.map((raw) => {
     const service = serviceForProfileValue(raw);
     const keys = new Set([normalize(raw), service ? normalize(service.id) : "", service ? normalize(service.name) : ""].filter(Boolean));
-    const matching = allPackages
+    const matching = currentPackages
       .filter((item) => {
         const catalogService = services.find((candidate) => candidate.id === item.service_id);
         return keys.has(normalize(item.service_id)) || Boolean(catalogService && keys.has(normalize(catalogService.name)));
@@ -1027,17 +1039,17 @@ export function VendorPackagesManager() {
   };
 
   const packageStats = {
-    live: allPackages.filter(isLiveFixedPackage).length,
-    paused: allPackages.filter((item) => !item.is_active).length,
-    review: allPackages.filter((item) => item.needs_review).length,
+    live: currentPackages.filter(isLiveFixedPackage).length,
+    paused: currentPackages.filter((item) => !item.is_active).length,
+    review: currentPackages.filter((item) => item.needs_review).length,
     coveredServices: pricedServiceCount,
   };
 
-  const managedPackages = allPackages.filter((item) => item.template_id !== null);
-  const sortedPackages = [...packages].sort((a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name));
+  const managedPackages = currentPackages.filter((item) => item.template_id !== null);
+  const sortedPackages = packages.filter((item) => !item.archived_at).sort((a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name));
   const copyTargetService = services.find((service) => service.id === copyTargetServiceId);
   const copyTargetPackages = copyTargetService
-    ? allPackages.filter((item) => item.service_id === copyTargetService.id)
+    ? currentPackages.filter((item) => item.service_id === copyTargetService.id)
     : [];
   const copyTargetHasLivePackage = copyTargetPackages.some((item) =>
     item.pricing_mode === "fixed"
@@ -1208,6 +1220,21 @@ export function VendorPackagesManager() {
         </div>
         )}
       </section>
+
+      {archivedPackages.length > 0 && <section aria-labelledby="archived-prices" className="space-y-3">
+        <div><h2 id="archived-prices" className="font-heading text-lg font-semibold">Archived prices</h2><p className="mt-1 text-sm text-muted-foreground">Mercurius archived these prices. They are kept as history, are never shown to customers and cannot be published or edited. Add a new package to offer the service again.</p></div>
+        <ul className="grid gap-3 lg:grid-cols-2">{archivedPackages.map((item) => {
+          const cadencePrices = lowestTierPriceByFrequency(item.tiers, item.default_frequency);
+          return <li key={item.id} className="rounded-xl border bg-muted/20 p-4">
+            <div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">{item.name}</h3><PackageStatus item={item} /></div>
+            <p className="mt-1 text-xs text-muted-foreground">{services.find((service) => service.id === item.service_id)?.name ?? "Service"} · archived {formatArchivedDate(item.archived_at)}</p>
+            {item.pricing_mode === "fixed" && cadencePrices.length > 0
+              ? <dl className="mt-3 space-y-1 text-sm">{cadencePrices.map(({ frequency, price }) => <div key={frequency} className="flex justify-between gap-3"><dt className="text-muted-foreground">{FREQUENCIES[frequency]}</dt><dd className="tabular-nums">{money(price)}</dd></div>)}</dl>
+              : <p className="mt-3 text-sm text-muted-foreground">{item.pricing_mode === "fixed" ? "No price levels" : "Quote required"}</p>}
+            {item.addons.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Add-ons: {item.addons.map((addon) => `${addon.name} +${money(addon.price)}`).join(" · ")}</p>}
+          </li>;
+        })}</ul>
+      </section>}
 
       {managedPackages.length > 0 && <section className="space-y-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-heading text-lg font-semibold">Managed pricing</h2><p className="mt-1 text-sm text-muted-foreground">Template-backed packages use Mercurius tiers and price guardrails.</p></div><Link href="/vendor/pricing" className={buttonVariants({ variant: "outline" })}>Edit managed pricing</Link></div><div className="grid gap-3 md:grid-cols-2">{managedPackages.map((item) => <Link key={item.id} href="/vendor/pricing" className="group flex items-center gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-accent-border hover:bg-surface-hover"><span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", isLiveFixedPackage(item) ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><PackageCheck className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="truncate text-sm font-medium">{item.name}</span><PackageStatus item={item} /></span><span className="mt-1 block text-xs text-muted-foreground">{services.find((service) => service.id === item.service_id)?.name ?? "Managed service pricing"}</span></span><ExternalLink className="h-4 w-4 text-muted-foreground" /></Link>)}</div></section>}
 
@@ -1646,7 +1673,14 @@ function PromotionDraftPreview({ item, draft }: { item: PackageRow; draft: Promo
   return <div className="rounded-xl border border-accent-border bg-accent-subtle p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer preview</p><p className="mt-2 text-lg"><span className="text-muted-foreground line-through">{money(preview.basePrice)}</span><span className="mx-2 text-muted-foreground">→</span><span className="font-semibold text-accent">{money(preview.effectivePrice)}</span>{item.tiers.length > 1 && <span className="ml-1 text-xs text-muted-foreground">starting tier</span>}</p><p className="mt-1 text-xs text-muted-foreground">{draft.label.trim() || (draft.promotion_type === "percent_off" ? `${draft.percent_off}% off` : "Limited-time price")}</p></div>;
 }
 
+function formatArchivedDate(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" });
+}
+
 function PackageStatus({ item }: { item: PackageRow }) {
+  if (item.archived_at) return <Badge variant="outline"><Archive />Archived</Badge>;
   const status = isLiveFixedPackage(item)
     ? <Badge className="border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 />Live / Active</Badge>
     : item.needs_review

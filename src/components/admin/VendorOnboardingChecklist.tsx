@@ -20,7 +20,9 @@ import { LegacyProviderReview } from "@/components/admin/LegacyProviderReview";
 // both are confirmed only by reading the checklist back.
 // TRACE-122 (DEC-2026-047 item 5): licensing or insurance can be marked current without a
 // document by an exception (reason, approver, follow-up due date). It lapses at the end of
-// the follow-up date and stays flagged until a document is recorded over it.
+// the follow-up date and stays flagged until a document is recorded over it. The follow-up
+// date is after today and at most 14 days after today, Eastern (owner, 2026-10-25); a further
+// exception is a fresh review and its sequence is shown so repeats stand out.
 
 type Kind =
   | "identity"
@@ -86,7 +88,12 @@ type ChecklistException = {
   actor_email: string | null;
   open: boolean;
   resolved_at: string | null;
+  /** 1 for the first exception for this item; 2 or more is a repeat. */
+  sequence?: number | null;
 };
+
+/** The longest follow-up an exception may have, in Eastern calendar days after today. */
+const EXCEPTION_MAX_DAYS = 14;
 
 const EXCEPTION_REFERENCE = "Exception: document pending";
 
@@ -166,6 +173,17 @@ function formatDay(value: string) {
 
 function todayInEastern() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+}
+
+/** A YYYY-MM-DD calendar date plus whole days (no time zone involved). */
+function addDays(day: string, days: number) {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
+
+function ordinal(value: number) {
+  const tail = value % 100 >= 11 && value % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[value % 10] ?? "th";
+  return `${value}${tail}`;
 }
 
 function toIso(value: string) {
@@ -364,7 +382,15 @@ export function VendorOnboardingChecklist({
     setFollowUp("");
   };
 
-  const followUpError = followUp && followUp <= todayInEastern() ? "Enter a date after today." : "";
+  const today = todayInEastern();
+  const earliestFollowUp = addDays(today, 1);
+  const latestFollowUp = addDays(today, EXCEPTION_MAX_DAYS);
+  const followUpError = !followUp ? ""
+    : followUp <= today ? "Enter a date after today."
+      : followUp > latestFollowUp ? `Choose a date no later than ${formatDay(latestFollowUp)}: at most ${EXCEPTION_MAX_DAYS} days after today (Eastern).`
+        : "";
+  // A further exception for the same item is a fresh review, not an extension of the last one.
+  const priorExceptions = kind === "" ? 0 : exceptions.filter((entry) => entry.kind === kind).length;
   const exceptionReady = needsDocument && exceptionReason.trim() !== "" && approver.trim() !== "" && followUp !== "" && !followUpError;
   const exceptionKey = useMemo(() => {
     if (!exceptionReady) return null;
@@ -549,6 +575,11 @@ export function VendorOnboardingChecklist({
                     Exception: document pending
                   </Badge>
                 )}
+                {exception && (exception.sequence ?? 1) > 1 && (
+                  <Badge variant="outline" className="border-status-warning bg-status-warning-bg text-status-warning">
+                    Repeat exception ({ordinal(exception.sequence ?? 1)})
+                  </Badge>
+                )}
                 {item.state === "current" && item.renewal_due && !exception && (
                   <Badge variant="outline" className="border-status-warning bg-status-warning-bg text-status-warning">
                     Renewal due
@@ -626,6 +657,11 @@ export function VendorOnboardingChecklist({
           )}
           {kind !== "" && exceptionMode && (
             <>
+              {priorExceptions > 0 && (
+                <p role="note" className="rounded-md border border-status-warning bg-status-warning-bg p-2 text-xs leading-5 text-status-warning">
+                  This would be the {ordinal(priorExceptions + 1)} exception for {kind === "insurance" ? "insurance" : "licensing"}. It does not extend an earlier one: review the provider again and record a new reason and approver. Every exception stays in the history.
+                </p>
+              )}
               <FormField label="Reason" required help="Why the item is current without its document. Kept in the audit history.">
                 {(control) => (
                   <Textarea
@@ -651,13 +687,15 @@ export function VendorOnboardingChecklist({
               <FormField
                 label="Follow-up due"
                 required
-                help="The item stops counting as current at the end of this day (Eastern) unless the document is recorded first."
+                help={`At most ${EXCEPTION_MAX_DAYS} days after today. The item stops counting as current at the end of this day (Eastern) unless the document is recorded first.`}
                 error={followUpError || undefined}
               >
                 {(control) => (
                   <Input
                     {...control}
                     type="date"
+                    min={earliestFollowUp}
+                    max={latestFollowUp}
                     value={followUp}
                     disabled={busy}
                     onChange={(event) => setFollowUp(event.target.value)}
@@ -674,6 +712,7 @@ export function VendorOnboardingChecklist({
                   (selected?.evidence_id
                     ? "Supersedes the current entry for this item, which stays in history. "
                     : "") +
+                  (priorExceptions > 0 ? `This is the ${ordinal(priorExceptions + 1)} exception for this item. ` : "") +
                   `Counts as current until the end of ${followUp ? formatDay(followUp) : "the follow-up date"}, then lapses unless the document is recorded. Shown as an exception until then. It activates nothing, grants no role and publishes no listing.`
                 }
                 confirmLabel="Record exception"
@@ -888,7 +927,7 @@ export function VendorOnboardingChecklist({
           <ul className="mt-2 space-y-1">
             {exceptions.map((entry) => (
               <li key={entry.evidence_id} className="break-words">
-                {itemLabel[entry.kind]} · {formatDateTime(entry.created_at)}
+                {itemLabel[entry.kind]}{(entry.sequence ?? 1) > 1 ? ` · ${ordinal(entry.sequence ?? 1)} exception (repeat)` : ""} · {formatDateTime(entry.created_at)}
                 {entry.actor_email ? ` by ${entry.actor_email}` : ""} · approved by {entry.approver} · follow-up due{" "}
                 {formatDay(entry.follow_up_due)} · {entry.reason} ·{" "}
                 {entry.open ? "open" : `closed ${formatDateTime(entry.resolved_at)}`}

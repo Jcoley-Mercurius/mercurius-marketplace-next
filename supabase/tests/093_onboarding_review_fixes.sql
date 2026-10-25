@@ -41,6 +41,9 @@ create function pg_temp.publish(p_draft uuid) returns uuid language sql as $$
  select (public.admin_publish_package_draft(p_draft, pg_temp.stamp(p_draft), 'Synthetic agreed rate')->>'package_id')::uuid $$;
 create function pg_temp.note(p_subject uuid) returns text language sql security definer as $$
  select notes from private.package_internal_notes where subject_id = p_subject $$;
+-- The stored legacy column; not readable by authenticated since 20261025001000.
+create function pg_temp.stored_notes(p_package uuid) returns text language sql security definer as $$
+ select policy_notes from public.vendor_packages where id = p_package $$;
 create function pg_temp.hash(p_package uuid) returns text language sql security definer as $$
  select private.package_revision_hash(p_package) $$;
 create function pg_temp.note_events(p_subject uuid) returns bigint language sql security definer as $$
@@ -98,7 +101,7 @@ select is(pg_temp.note((select id from ids where name='pkg')), 'Synthetic gate c
 select is(pg_temp.note((select id from ids where name='draft')), null, 'and removes them from the draft');
 select is(pg_temp.contents((select id from ids where name='pkg'))->'internal_notes'->>'notes', 'Synthetic gate code at office',
  'admin_package_contents reports the internal notes');
-select is((select policy_notes from public.vendor_packages where id = (select id from ids where name='pkg')), null,
+select is(pg_temp.stored_notes((select id from ids where name='pkg')), null,
  'the published revision stores no notes');
 
 insert into vals values ('pkg_hash', pg_temp.hash((select id from ids where name='pkg')));
@@ -139,7 +142,7 @@ select pg_temp.as_user('1');
 set local role authenticated;
 insert into ids values ('legacy_pkg', pg_temp.publish((select id from ids where name='legacy')));
 select is(pg_temp.note((select id from ids where name='legacy_pkg')), 'Synthetic legacy note', 'legacy draft notes move to the package');
-select is((select policy_notes from public.vendor_packages where id = (select id from ids where name='legacy_pkg')), null,
+select is(pg_temp.stored_notes((select id from ids where name='legacy_pkg')), null,
  'and the new revision stores none');
 
 -- 2. Archive --------------------------------------------------------------------------------

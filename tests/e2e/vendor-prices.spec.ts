@@ -12,7 +12,8 @@ import { syntheticSession } from "../fixtures/browser-session";
 // or without that approval (SQL 091). DEC-2026-041 item 4: a price correction is proposed as
 // a replacement draft (SQL 085); live packages show their content, price meaning and
 // recorded approval evidence. TRACE-122 (DEC-2026-047, SQL 093): internal notes are edited in
-// place and paused prices can be archived.
+// place and paused prices can be archived; the vendor sees an archived price as read-only
+// history, outside its counts and coverage (SQL 094).
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const vendorA = "00000000-0000-4000-8000-000000000081";
 const vendorB = "00000000-0000-4000-8000-000000000082";
@@ -367,4 +368,43 @@ test("a paused price can be archived with a reason; archived prices leave the li
   await page.getByText("Archived prices (1)").click();
   await expect(page.getByText("Reason: Synthetic: old price")).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
+});
+
+test("the vendor sees an archived price as Archived, read-only and outside counts and coverage", async ({ page }) => {
+  const livePkg = "00000000-0000-4000-8000-0000000000a1";
+  const archivedPkg = "00000000-0000-4000-8000-0000000000a2";
+  const row = (id: string, service: string, name: string, active: boolean) => ({ id, name, description: null, service_id: service, pricing_mode: "fixed",
+    default_frequency: "one-time", deposit_amount: null, is_active: active, needs_review: false, template_id: null, sort_order: 0 });
+  await page.route("**/rest/v1/contractors?*", route => route.fulfill({ json: { id: vendorA, services: ["synthetic-lawn", "synthetic-roof"] } }));
+  await page.route("**/rest/v1/vendor_packages?*", route => route.fulfill({ json: [
+    row(livePkg, "synthetic-lawn", "Synthetic live lawn", true), row(archivedPkg, "synthetic-roof", "Synthetic archived roof", false)] }));
+  await page.route("**/rest/v1/package_tiers?*", route => route.fulfill({ json: [
+    { id: "00000000-0000-4000-8000-0000000000a3", package_id: livePkg, name: "One-time", price: 50, frequency: "one-time", includes: [], sort_order: 0 },
+    { id: "00000000-0000-4000-8000-0000000000a4", package_id: archivedPkg, name: "One-time", price: 80, frequency: "one-time", includes: [], sort_order: 0 }] }));
+  await page.route("**/rest/v1/package_qualifying_questions?*", route => route.fulfill({ json: [] }));
+  await page.route("**/rest/v1/package_addons?*", route => route.fulfill({ json: [] }));
+  await page.route("**/rest/v1/package_promotions?*", route => route.fulfill({ json: [] }));
+  await page.route("**/rest/v1/pricing_templates?*", route => route.fulfill({ json: [] }));
+  await page.route("**/rpc/pricing_server_now", route => route.fulfill({ json: new Date().toISOString() }));
+  await page.route("**/rpc/vendor_package_approvals", route => route.fulfill({ json: [] }));
+  await page.route("**/rpc/vendor_package_archives", route => route.fulfill({ json: [{ package_id: archivedPkg, archived_at: "2026-10-20T15:00:00+00:00" }] }));
+  await syntheticSession(page.context(), "vendor");
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/vendor/packages");
+  const archived = page.getByRole("region", { name: "Archived prices" });
+  await expect(archived.getByText("Synthetic archived roof")).toBeVisible();
+  await expect(archived.getByText("Archived", { exact: true })).toBeVisible();
+  await expect(archived.getByText("Roof repair · archived Oct 20, 2026")).toBeVisible();
+  await expect(archived.getByText("Paused", { exact: false })).toHaveCount(0);
+  // No publish, reactivate, edit or delete action for the archived version.
+  await expect(page.getByLabel("Publish Synthetic archived roof")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit Synthetic archived roof" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Delete Synthetic archived roof" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit Synthetic live lawn" })).toBeVisible();
+  // Not counted as paused, and not offered as ready to publish for its service.
+  await expect(page.getByText("Draft or Paused", { exact: true }).locator("xpath=following-sibling::p[1]")).toHaveText("0");
+  await expect(page.getByText("Paused · ready")).toHaveCount(0);
+  await expect(page.getByText("1 service still needs a live fixed price.")).toBeVisible();
+  expect((await new AxeBuilder({ page }).include("section[aria-labelledby=archived-prices]").withTags(tags).analyze()).violations).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });

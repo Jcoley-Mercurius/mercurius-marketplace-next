@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
-import { HOME_SIZE_GUIDE, pricedByBedrooms } from "@/lib/homeSizeGuide";
+import { HOME_SIZE_GUIDE, homeSizeGuideText } from "@/lib/homeSizeGuide";
 import { createClient } from "@/lib/supabase/client";
 import { cn, yearsLabel } from "@/lib/utils";
 import { publicServiceAreas, type PublicServiceArea } from "@/lib/vendorServiceAreas";
@@ -357,7 +357,7 @@ export default function ProviderStorefrontPage() {
     () => packages.filter((item) => item.pricing_mode === "fixed" && item.tiers.length > 0),
     [packages],
   );
-  const sizedByBedrooms = useMemo(() => fixedPackages.some((item) => pricedByBedrooms(item.questions)), [fixedPackages]);
+  const sizeGuide = useMemo(() => homeSizeGuideText(fixedPackages), [fixedPackages]);
   const quotePackages = useMemo(
     () => packages.filter((item) => item.pricing_mode !== "fixed" || item.tiers.length === 0),
     [packages],
@@ -542,7 +542,7 @@ export default function ProviderStorefrontPage() {
               <aside className="space-y-6 md:sticky md:top-24 md:self-start">
                 <Card className="border-accent/20 shadow-sm"><CardHeader><CardTitle className="text-lg">Pricing Overview</CardTitle></CardHeader><CardContent>
                   {fixedPackages.length > 0 ? <StorefrontPriceOverview item={fixedPackages[0]} serverNow={serverNow} /> : <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Pricing depends on the scope. Mercurius will confirm availability and price before work begins.</p>}
-                  {sizedByBedrooms && <HomeSizeGuide />}
+                  {sizeGuide && <HomeSizeGuide summary={sizeGuide.summary} note={sizeGuide.note} />}
                   <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest(primaryPackage)}>{!invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
                 </CardContent></Card>
 
@@ -679,11 +679,12 @@ function PackageScope({ item }: { item: VendorPackage }) {
   return <p className="mt-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Included:</span> {scope.join(" · ")}</p>;
 }
 
-/** TRACE-122: the bedroom size guide, once per profile rather than in every description. */
-function HomeSizeGuide() {
+/** TRACE-122: the bedroom size guide, once per profile; the summary names what sets the price. */
+function HomeSizeGuide({ summary, note }: { summary: string; note: string | null }) {
   return <div className="mb-5 rounded-lg border bg-muted/30 p-3">
     <h3 className="text-sm font-semibold">How we size your home</h3>
-    <p className="mt-1 text-xs text-muted-foreground">Prices are set by the number of bedrooms. Approximate home size:</p>
+    <p className="mt-1 text-xs text-muted-foreground">{summary} Approximate home size by bedrooms:</p>
+    {note && <p className="mt-1 text-xs text-muted-foreground">{note}</p>}
     <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
       {HOME_SIZE_GUIDE.map((row) => <div key={row.bedrooms} className="contents"><dt className="font-medium">{row.bedrooms}</dt><dd className="text-muted-foreground">{row.squareFeet}</dd></div>)}
     </dl>
