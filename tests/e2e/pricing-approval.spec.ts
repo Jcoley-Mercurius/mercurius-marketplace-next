@@ -32,7 +32,7 @@ const draft = {
   name: content.name, description: content.description, prices: [], content, revision, target_package_id: null, target_package_name: null,
   status: "draft", approval_state: "draft", approval_current: false, sent_at: null, approved_at: null, change_request: null,
   vendor_link: { linked: true, vendor_role: true, blocker: null }, delivery: { channel: "in_app", status: "not_sent", email: "not_sent" },
-  created_by_email: "operator@example.invalid", created_at: updatedAt, updated_at: updatedAt,
+  internal_notes: "Synthetic internal note", created_by_email: "operator@example.invalid", created_at: updatedAt, updated_at: updatedAt,
 };
 const economics = (funding: "vendor" | "platform") => funding === "vendor"
   ? { eligible_cents: 10000, discount_cents: 1000, funding, homeowner_service_cents: 9000, commission_rate_bps: 750, commission_base_cents: 9000,
@@ -100,7 +100,10 @@ test("a draft shows its full content, can be published, and is sent for the vend
   await expect(page.getByText("Up to 1,500 sq ft · Square feet 0–1,500")).toBeVisible();
   await expect(page.getByText("+$30–$50")).toBeVisible();
   await expect(page.getByText("Kitchen · Bathrooms")).toBeVisible();
-  await expect(page.getByText("For information. Mercurius booking, cancellation and refund terms apply.")).toBeVisible();
+  // TRACE-122: notes are internal; the draft's content notes are not shown as provider notes.
+  await expect(page.getByText("Internal notes (not shown to homeowners)").first()).toBeVisible();
+  await expect(page.getByText("Synthetic internal note").first()).toBeVisible();
+  await expect(page.getByText("Synthetic provider note")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
   expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
@@ -298,11 +301,11 @@ test("the public profile shows price meaning truthfully", async ({ page }) => {
   await page.route("**/rpc/pricing_server_now", route => route.fulfill({ json: new Date().toISOString() }));
   await page.route("**/rpc/r0_public_providers", route => route.fulfill({ json: {
     id: provider, name: "Synthetic Pricing Co", logo_url: null, bio: "Synthetic description", location: "Lee County, FL", badges: [], services: [],
-    years_experience: 5, special_offer: null, our_promise: null, verified_specialty: null, tagline: null, video_url: null, website: null } }));
+    years_experience: 1, special_offer: null, our_promise: null, verified_specialty: null, tagline: null, video_url: null, website: null } }));
   await page.route("**/rest/v1/vendor_packages?*", route => route.fulfill({ json: [
     { id: "00000000-0000-4000-8000-0000000000b2", contractor_id: provider, service_id: "synthetic-cans", name: "Synthetic dump and clean", description: null,
       pricing_mode: "fixed", default_frequency: "one-time", deposit_amount: null, is_active: true, needs_review: false, sort_order: 0,
-      included_scope: ["Two cans"], policy_notes: null },
+      included_scope: ["Two cans"], policy_notes: "Synthetic private note" },
     { id: "00000000-0000-4000-8000-0000000000b3", contractor_id: provider, service_id: "synthetic-clean", name: "Synthetic sized clean", description: null,
       pricing_mode: "fixed", default_frequency: "one-time", deposit_amount: null, is_active: true, needs_review: false, sort_order: 1 },
     { id: "00000000-0000-4000-8000-0000000000b4", contractor_id: provider, service_id: "synthetic-walk", name: "Synthetic estimate", description: "Synthetic",
@@ -313,9 +316,9 @@ test("the public profile shows price meaning truthfully", async ({ page }) => {
   await page.route("**/rest/v1/package_tiers?*", route => route.fulfill({ json: [
     { id: "t1", package_id: "00000000-0000-4000-8000-0000000000b2", name: "One-time", price: 89, frequency: "one-time", includes: [], sort_order: 0 },
     { id: "t2", package_id: "00000000-0000-4000-8000-0000000000b3", name: "Small", price: 100, frequency: "one-time", includes: [], sort_order: 0,
-      rule_conditions: [{ question_key: "sqft", max: 1200 }] },
+      rule_conditions: [{ question_key: "bedrooms", max: 2 }] },
     { id: "t3", package_id: "00000000-0000-4000-8000-0000000000b3", name: "Large", price: 180, frequency: "one-time", includes: [], sort_order: 1,
-      rule_conditions: [{ question_key: "sqft", min: 1201 }] },
+      rule_conditions: [{ question_key: "bedrooms", min: 3 }] },
     { id: "t4", package_id: "00000000-0000-4000-8000-0000000000b4", name: "Estimate", price: 250, price_kind: "range", price_max: 400, frequency: "one-time", includes: [], sort_order: 0 },
   ] }));
   await page.route("**/rest/v1/package_addons?*", route => route.fulfill({ json: [
@@ -323,6 +326,10 @@ test("the public profile shows price meaning truthfully", async ({ page }) => {
       price_kind: "exact", is_required: true, min_quantity: 1, max_quantity: 1, frequencies: [] },
     { id: "a2", package_id: "00000000-0000-4000-8000-0000000000b2", name: "Extra can", description: null, price: 15, sort_order: 1,
       price_kind: "exact", unit_label: "can", is_required: false, min_quantity: 0, max_quantity: 6, frequencies: [] },
+  ] }));
+  await page.route("**/rest/v1/package_qualifying_questions?*", route => route.fulfill({ json: [
+    { id: "q1", package_id: "00000000-0000-4000-8000-0000000000b3", question_key: "bedrooms", question_label: "Bedrooms", input_type: "number",
+      unit: "bedrooms", options: null, is_required: true, sort_order: 0 },
   ] }));
   await page.setViewportSize({ width: 320, height: 900 });
   await page.goto(`/providers/${provider}`);
@@ -336,6 +343,49 @@ test("the public profile shows price meaning truthfully", async ({ page }) => {
   await expect(page.getByRole("button", { name: /one-time.*From \$100.*Set by your answers/i })).toBeVisible();
   await expect(page.getByText("$250–$400")).toBeVisible();
   await expect(page.getByText("Quote after walkthrough; no price is shown until then.")).toBeVisible();
+  // TRACE-122: notes are never public; the bedroom size guide appears once; "1 year".
+  await expect(page.getByText("Synthetic private note")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "How we size your home" })).toHaveCount(1);
+  await expect(page.getByText("Prices are set by the number of bedrooms.", { exact: false })).toBeVisible();
+  await expect(page.getByText("about 1,300–1,800 sq ft")).toBeVisible();
+  await expect(page.getByText("1 year", { exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).include("main").withTags(tags).analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
+
+// TRACE-122 review correction: the guide follows the price levels' conditions, not the questions asked.
+for (const [label, conditions, expected] of [
+  ["square-footage pricing that also asks bedrooms", [[{ question_key: "sqft", max: 1200 }], [{ question_key: "sqft", min: 1201 }]], null],
+  ["bedroom and square-footage pricing", [[{ question_key: "sqft", max: 1200 }, { question_key: "bedrooms", max: 2 }], [{ question_key: "sqft", min: 1201 }, { question_key: "bedrooms", min: 3 }]],
+    "Prices depend on the number of bedrooms and square footage."],
+] as const) {
+  test(`the public size guide describes ${label} accurately`, async ({ page }) => {
+    const provider = "00000000-0000-4000-8000-0000000000c1";
+    const pkg = "00000000-0000-4000-8000-0000000000c2";
+    await page.route("**/rest/v1/**", route => route.fulfill({ json: [] }));
+    await page.route("**/rpc/pricing_server_now", route => route.fulfill({ json: new Date().toISOString() }));
+    await page.route("**/rpc/r0_public_providers", route => route.fulfill({ json: {
+      id: provider, name: "Synthetic Sizing Co", logo_url: null, bio: "Synthetic description", location: "Lee County, FL", badges: [], services: [],
+      years_experience: 3, special_offer: null, our_promise: null, verified_specialty: null, tagline: null, video_url: null, website: null } }));
+    await page.route("**/rest/v1/vendor_packages?*", route => route.fulfill({ json: [
+      { id: pkg, contractor_id: provider, service_id: "synthetic-clean", name: "Synthetic sized clean", description: null, pricing_mode: "fixed",
+        default_frequency: "one-time", deposit_amount: null, is_active: true, needs_review: false, sort_order: 0, included_scope: [] }] }));
+    await page.route("**/rest/v1/package_tiers?*", route => route.fulfill({ json: conditions.map((rule, index) => ({
+      id: `t${index}`, package_id: pkg, name: `Level ${index + 1}`, price: 100 + index * 50, frequency: "one-time", includes: [], sort_order: index, rule_conditions: rule })) }));
+    await page.route("**/rest/v1/package_qualifying_questions?*", route => route.fulfill({ json: [
+      { id: "q1", package_id: pkg, question_key: "sqft", question_label: "Home size", input_type: "number", unit: "sq ft", options: null, is_required: true, sort_order: 0 },
+      { id: "q2", package_id: pkg, question_key: "bedrooms", question_label: "Bedrooms", input_type: "number", unit: "bedrooms", options: null, is_required: true, sort_order: 1 },
+    ] }));
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(`/providers/${provider}`);
+    await expect(page.getByRole("heading", { name: "Synthetic Sizing Co" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /one-time.*From \$100/i })).toBeVisible();
+    if (expected === null) {
+      await expect(page.getByRole("heading", { name: "How we size your home" })).toHaveCount(0);
+    } else {
+      await expect(page.getByText(expected, { exact: false })).toBeVisible();
+      await expect(page.getByText("not taken from the bedroom count", { exact: false })).toBeVisible();
+    }
+    await expect(page.getByText("Prices are set by the number of bedrooms", { exact: false })).toHaveCount(0);
+  });
+}

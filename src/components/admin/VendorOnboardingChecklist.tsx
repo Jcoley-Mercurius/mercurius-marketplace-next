@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { renewalDocumentKindLabel } from "@/lib/renewalDocuments";
 import { VendorRenewalDocuments, type RenewalOverview } from "@/components/admin/VendorRenewalDocuments";
@@ -17,6 +18,11 @@ import { LegacyProviderReview } from "@/components/admin/LegacyProviderReview";
 // decisions. Every decision is the server's: evidence is recorded through
 // vendor_record_checklist_evidence, decisions through vendor_decide_onboarding, and
 // both are confirmed only by reading the checklist back.
+// TRACE-122 (DEC-2026-047 item 5): licensing or insurance can be marked current without a
+// document by an exception (reason, approver, follow-up due date). It lapses at the end of
+// the follow-up date and stays flagged until a document is recorded over it. The follow-up
+// date is after today and at most 14 days after today, Eastern (owner, 2026-10-25); a further
+// exception is a fresh review and its sequence is shown so repeats stand out.
 
 type Kind =
   | "identity"
@@ -70,6 +76,26 @@ type Checklist = {
 };
 
 type Action = "activate" | "suspend" | "renew" | "reject";
+
+type ChecklistException = {
+  evidence_id: string;
+  kind: Kind;
+  reason: string;
+  approver: string;
+  follow_up_due: string;
+  created_at: string;
+  expires_at: string | null;
+  actor_email: string | null;
+  open: boolean;
+  resolved_at: string | null;
+  /** 1 for the first exception for this item; 2 or more is a repeat. */
+  sequence?: number | null;
+};
+
+/** The longest follow-up an exception may have, in Eastern calendar days after today. */
+const EXCEPTION_MAX_DAYS = 14;
+
+const EXCEPTION_REFERENCE = "Exception: document pending";
 
 // Labels restate MPS §8 and describe only what the operator records here.
 const itemLabel: Record<Kind, string> = {
@@ -139,6 +165,27 @@ function formatDateTime(value: string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? "Not recorded" : parsed.toLocaleString();
 }
 
+// A follow-up date (YYYY-MM-DD) as a calendar date, not shifted by the viewer's timezone.
+function formatDay(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return year && month && day ? new Date(year, month - 1, day).toLocaleDateString() : value;
+}
+
+function todayInEastern() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+}
+
+/** A YYYY-MM-DD calendar date plus whole days (no time zone involved). */
+function addDays(day: string, days: number) {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
+
+function ordinal(value: number) {
+  const tail = value % 100 >= 11 && value % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[value % 10] ?? "th";
+  return `${value}${tail}`;
+}
+
 function toIso(value: string) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -180,6 +227,13 @@ export function VendorOnboardingChecklist({
   // TRACE-073: renewal submissions load separately so a failure never hides the checklist.
   const [renewals, setRenewals] = useState<RenewalOverview | null>(null);
   const [renewalError, setRenewalError] = useState("");
+  const [exceptionMode, setExceptionMode] = useState(false);
+  const [exceptionReason, setExceptionReason] = useState("");
+  const [approver, setApprover] = useState("");
+  const [followUp, setFollowUp] = useState("");
+  // Loaded separately so a failure never hides the checklist.
+  const [exceptions, setExceptions] = useState<ChecklistException[]>([]);
+  const [exceptionError, setExceptionError] = useState("");
 
   const read = useCallback(async () => {
     const { data, error } = await createClient().rpc("vendor_onboarding_checklist", {
@@ -205,15 +259,30 @@ export function VendorOnboardingChecklist({
     }
   }, [contractorId]);
 
+  const readExceptions = useCallback(async () => {
+    try {
+      const { data, error } = await createClient().rpc("vendor_checklist_exceptions", { p_contractor: contractorId });
+      if (error) throw error;
+      const next = (Array.isArray(data) ? data : []) as unknown as ChecklistException[];
+      setExceptions(next);
+      setExceptionError("");
+      return next;
+    } catch (error) {
+      setExceptionError(messageOf(error, "Checklist exceptions could not be loaded."));
+      return null;
+    }
+  }, [contractorId]);
+
   const refresh = useCallback(async () => {
     setLoadError("");
     void readRenewals();
+    void readExceptions();
     try {
       setChecklist(await read());
     } catch (error) {
       setLoadError(messageOf(error, "The checklist could not be loaded."));
     }
-  }, [read, readRenewals]);
+  }, [read, readRenewals, readExceptions]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0);
@@ -307,6 +376,54 @@ export function VendorOnboardingChecklist({
     setReference("");
     setAccepted("");
     setExpires("");
+    setExceptionMode(false);
+    setExceptionReason("");
+    setApprover("");
+    setFollowUp("");
+  };
+
+  const today = todayInEastern();
+  const earliestFollowUp = addDays(today, 1);
+  const latestFollowUp = addDays(today, EXCEPTION_MAX_DAYS);
+  const followUpError = !followUp ? ""
+    : followUp <= today ? "Enter a date after today."
+      : followUp > latestFollowUp ? `Choose a date no later than ${formatDay(latestFollowUp)}: at most ${EXCEPTION_MAX_DAYS} days after today (Eastern).`
+        : "";
+  // A further exception for the same item is a fresh review, not an extension of the last one.
+  const priorExceptions = kind === "" ? 0 : exceptions.filter((entry) => entry.kind === kind).length;
+  const exceptionReady = needsDocument && exceptionReason.trim() !== "" && approver.trim() !== "" && followUp !== "" && !followUpError;
+  const exceptionKey = useMemo(() => {
+    if (!exceptionReady) return null;
+    return ["checklist-exception", nonce, kind, selected?.evidence_id ?? "new",
+      fingerprint(JSON.stringify([exceptionReason.trim(), approver.trim(), followUp]))].join(":");
+  }, [exceptionReady, nonce, kind, selected, exceptionReason, approver, followUp]);
+
+  const recordException = async () => {
+    if (!checklist || kind === "" || !exceptionKey) return;
+    const previous = selected?.evidence_id ?? null;
+    await run(
+      () =>
+        createClient().rpc("vendor_record_checklist_exception", {
+          p_contractor: contractorId,
+          p_kind: kind,
+          p_reason: exceptionReason.trim(),
+          p_approver: approver.trim(),
+          p_follow_up_due: followUp,
+          p_supersedes: previous ?? undefined,
+          p_key: exceptionKey,
+        }),
+      async (next) => {
+        const item = next.items.find((candidate) => candidate.kind === kind);
+        if (!item?.evidence_id || item.evidence_id === previous || item.evidence_ref !== EXCEPTION_REFERENCE) return false;
+        const recorded = await readExceptions();
+        return Boolean(recorded?.some((entry) => entry.evidence_id === item.evidence_id && entry.open));
+      },
+      {
+        title: "Exception recorded",
+        description: `${itemLabel[kind]} is current until ${formatDay(followUp)}. No decision, role or listing followed.`,
+      },
+    );
+    choose("");
   };
 
   const recordEvidence = async () => {
@@ -446,12 +563,24 @@ export function VendorOnboardingChecklist({
       </dl>
 
       <ul className="divide-y divide-border rounded-lg border border-border">
-        {checklist.items.map((item) => (
+        {checklist.items.map((item) => {
+          const exception = exceptions.find((entry) => entry.open && entry.evidence_id === item.evidence_id) ?? null;
+          return (
           <li key={item.kind} className="space-y-1 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium">{itemLabel[item.kind]}</span>
               <span className="flex flex-wrap gap-1.5">
-                {item.state === "current" && item.renewal_due && (
+                {exception && (
+                  <Badge variant="outline" className="border-status-warning bg-status-warning-bg text-status-warning">
+                    Exception: document pending
+                  </Badge>
+                )}
+                {exception && (exception.sequence ?? 1) > 1 && (
+                  <Badge variant="outline" className="border-status-warning bg-status-warning-bg text-status-warning">
+                    Repeat exception ({ordinal(exception.sequence ?? 1)})
+                  </Badge>
+                )}
+                {item.state === "current" && item.renewal_due && !exception && (
                   <Badge variant="outline" className="border-status-warning bg-status-warning-bg text-status-warning">
                     Renewal due
                   </Badge>
@@ -461,12 +590,19 @@ export function VendorOnboardingChecklist({
                 </Badge>
               </span>
             </div>
-            {item.state === "current" && item.renewal_due && (
+            {item.state === "current" && item.renewal_due && !exception && (
               <p className="text-xs leading-5 text-muted-foreground">
                 Expires within {checklist.renewal_notice_days ?? 30} days. Record renewed evidence before it lapses. A lapsed item makes the checklist incomplete, which takes an active provider out of matching; it does not change the provider&apos;s status or hold payouts, except when payout onboarding lapses.
               </p>
             )}
-            {item.evidence_id && (
+            {exception ? (
+              <p className="break-words text-xs leading-5 text-muted-foreground">
+                {exception.reason} · approved by {exception.approver} · follow-up due {formatDay(exception.follow_up_due)}
+                {item.state === "expired"
+                  ? ". The follow-up date has passed, so this item no longer counts as current. Record the document."
+                  : ". Counts as current until then; record the document to close the exception."}
+              </p>
+            ) : item.evidence_id && (
               <p className="break-words text-xs leading-5 text-muted-foreground">
                 {item.requirement_version} · {item.evidence_ref} · reviewed{" "}
                 {formatDateTime(item.accepted_at)}
@@ -474,7 +610,8 @@ export function VendorOnboardingChecklist({
               </p>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       {evidenceBlocked ? (
@@ -499,7 +636,91 @@ export function VendorOnboardingChecklist({
               </select>
             )}
           </FormField>
-          {kind !== "" && (
+          {needsDocument && (
+            <FormField
+              label="Evidence"
+              help="An exception marks the item current while the document is pending, until the follow-up date."
+            >
+              {(control) => (
+                <select
+                  {...control}
+                  className={selectClass}
+                  value={exceptionMode ? "exception" : "document"}
+                  disabled={busy}
+                  onChange={(event) => setExceptionMode(event.target.value === "exception")}
+                >
+                  <option value="document">Reviewed document</option>
+                  <option value="exception">Exception: document pending</option>
+                </select>
+              )}
+            </FormField>
+          )}
+          {kind !== "" && exceptionMode && (
+            <>
+              {priorExceptions > 0 && (
+                <p role="note" className="rounded-md border border-status-warning bg-status-warning-bg p-2 text-xs leading-5 text-status-warning">
+                  This would be the {ordinal(priorExceptions + 1)} exception for {kind === "insurance" ? "insurance" : "licensing"}. It does not extend an earlier one: review the provider again and record a new reason and approver. Every exception stays in the history.
+                </p>
+              )}
+              <FormField label="Reason" required help="Why the item is current without its document. Kept in the audit history.">
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    value={exceptionReason}
+                    maxLength={500}
+                    disabled={busy}
+                    onChange={(event) => setExceptionReason(event.target.value)}
+                  />
+                )}
+              </FormField>
+              <FormField label="Approver" required help="Who approved the exception.">
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={approver}
+                    maxLength={120}
+                    disabled={busy}
+                    onChange={(event) => setApprover(event.target.value)}
+                  />
+                )}
+              </FormField>
+              <FormField
+                label="Follow-up due"
+                required
+                help={`At most ${EXCEPTION_MAX_DAYS} days after today. The item stops counting as current at the end of this day (Eastern) unless the document is recorded first.`}
+                error={followUpError || undefined}
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    type="date"
+                    min={earliestFollowUp}
+                    max={latestFollowUp}
+                    value={followUp}
+                    disabled={busy}
+                    onChange={(event) => setFollowUp(event.target.value)}
+                  />
+                )}
+              </FormField>
+              <ConfirmAction
+                disabled={busy || !exceptionKey}
+                confirmationTone="commitment"
+                triggerLabel="Record exception"
+                title="Mark this item current without a document?"
+                entity={`${businessName} · ${itemLabel[kind]}`}
+                consequence={
+                  (selected?.evidence_id
+                    ? "Supersedes the current entry for this item, which stays in history. "
+                    : "") +
+                  (priorExceptions > 0 ? `This is the ${ordinal(priorExceptions + 1)} exception for this item. ` : "") +
+                  `Counts as current until the end of ${followUp ? formatDay(followUp) : "the follow-up date"}, then lapses unless the document is recorded. Shown as an exception until then. It activates nothing, grants no role and publishes no listing.`
+                }
+                confirmLabel="Record exception"
+                onConfirm={recordException}
+              />
+            </>
+          )}
+          {kind !== "" && !exceptionMode && (
             <>
               <FormField
                 label="Requirement version"
@@ -695,6 +916,25 @@ export function VendorOnboardingChecklist({
             </p>
           )}
         </div>
+      )}
+
+      {exceptionError && (
+        <p role="alert" className="text-xs text-destructive">{exceptionError}</p>
+      )}
+      {exceptions.length > 0 && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">Checklist exceptions ({exceptions.length})</summary>
+          <ul className="mt-2 space-y-1">
+            {exceptions.map((entry) => (
+              <li key={entry.evidence_id} className="break-words">
+                {itemLabel[entry.kind]}{(entry.sequence ?? 1) > 1 ? ` · ${ordinal(entry.sequence ?? 1)} exception (repeat)` : ""} · {formatDateTime(entry.created_at)}
+                {entry.actor_email ? ` by ${entry.actor_email}` : ""} · approved by {entry.approver} · follow-up due{" "}
+                {formatDay(entry.follow_up_due)} · {entry.reason} ·{" "}
+                {entry.open ? "open" : `closed ${formatDateTime(entry.resolved_at)}`}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {checklist.events.length > 0 && (

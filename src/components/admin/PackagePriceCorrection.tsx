@@ -131,7 +131,7 @@ function PriceInput({ id, label, current, value, invalid, disabled, onChange }: 
 /**
  * DEC-2026-041 items 4 and 5: start a replacement draft from the live package without price
  * changes (for a legacy package, or other material changes made in the draft editor), or
- * suspend an incorrect listing meanwhile.
+ * suspend an incorrect listing meanwhile. TRACE-122: archive a paused or replaced package.
  */
 export function PackageReplacementActions({ pkg, onChanged }: { pkg: CorrectablePackage; onChanged: () => Promise<void> | void }) {
   return <>
@@ -152,6 +152,15 @@ export function PackageReplacementActions({ pkg, onChanged }: { pkg: Correctable
       onConfirm={async (reason) => {
         const { error } = await createClient().rpc("admin_suspend_package", { p_package: pkg.id, p_expected_updated_at: pkg.updatedAt, p_reason: reason });
         if (error) throw new Error(correctionErrorMessage(error));
+        await onChanged();
+      }} />}
+    {!pkg.isActive && !pkg.archive && <ConfirmAction triggerLabel="Archive" title="Archive this price" entity={`${pkg.contractorName} · ${pkg.name}`}
+      consequence="Removes this paused or replaced price from Vendor Prices and its counts. It stays under Archived prices with your reason and cannot be turned back on. Requests and bookings keep their terms. The vendor is not notified."
+      confirmLabel="Archive" requireReason reasonHelp="Kept with the archive record for audit. The vendor does not see it."
+      onConfirm={async (reason) => {
+        const { error } = await createClient().rpc("admin_archive_package", { p_package: pkg.id, p_expected_updated_at: pkg.updatedAt, p_reason: reason });
+        if (error) throw new Error(correctionErrorMessage(error));
+        toast.success("Price archived", { description: "The vendor was not notified." });
         await onChanged();
       }} />}
   </>;

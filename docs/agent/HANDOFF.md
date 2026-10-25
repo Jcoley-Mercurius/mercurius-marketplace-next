@@ -1,5 +1,28 @@
 # Agent handoff — 2026-10-01
 
+## TRACE-122 review corrections (PR #110), 2026-10-25
+
+- Branch `claude/onboarding-review-fixes`, base `main` `404ea29`, reviewed head `55c39f9` (unchanged when work started). Owner-approved Codex review items 1–6; PR #110 not merged.
+- New forward migration `20261025001000` (not pushed; `20261024003000` untouched): column-level grants on `vendor_packages` without `policy_notes` (anon/authenticated cannot read, filter or write it); vendor draft/approval JSON drops legacy notes; `validate_package_promotion` reads named columns; archived packages read-only (row, levels, questions, add-ons) and `vendor_package_archives`; exception window today+1..today+14 Eastern, `recorded_seq`/`sequence`, NOT VALID check. Hashes, values and bound requests unchanged.
+- Rollout: push `20261025001000` AFTER the PR #110 deploy lands (the old client selects `policy_notes`/`*`); PR #110 client works on either schema. Deviates from the push-before-merge rule; owner decision.
+- Hosted read-only 2026-10-25: history ends at `20261024003000`; 0 exceptions (none out of policy), 0 archives; 4 inactive revisions and 4 drafts hold legacy notes; anon/authenticated can still select the column.
+- DEC-2026-048 owner rules recorded; slice brief [PHASE-6-PREPAID-PLANS-BRIEF.md](../../governance/PHASE-6-PREPAID-PLANS-BRIEF.md). Nothing prepaid built.
+- Evidence: run 2026-10-25 on this branch: SQL 094 93/93 new (3 consecutive passes after the sequence fix), 093 64/64 (two storage reads via a definer helper); clean replay of 199 migrations; full SQL 85 files 4,841 PASS; `scripts/pricing-concurrency.mjs` 3/3; unit 509/509 (`package-archives` new, `home-size-guide` rewritten); lint, typecheck, secret scan, `git diff --check` clean; synthetic build; full non-visual browser suite 572 tests: 490 passed first, 82 load timeouts (load ~10–30) re-run with 1 worker, 77 passed, last 5 passed alone; new/updated tests in `vendor-prices`, `pricing-approval`, `onboarding-checklist` with axe. Not run: `@visual`, screen reader, hosted migration, CI (pending push).
+- Found during verification: exception `sequence` first ordered by `created_at`/UUID, wrong for two writes in one transaction; now `recorded_seq` (identity).
+- Local Supabase stack was stopped for the browser runs (`supabase stop`, backup kept).
+- Next: Codex review of the corrections; owner merges, then pushes `20261025001000` (dry run first) once the deploy lands.
+
+## Vendor onboarding review fixes (TRACE-122, DEC-2026-047/048), 2026-10-24
+
+- Branch `claude/onboarding-review-fixes` from `main` `404ea29`, uncommitted for review. Owner review items 1, 2, 3, 5, 6 implemented; item 4 (prepaid plans) answered and recorded as DEC-2026-048, not implemented (own slice: checkout, scheduling, payout, refunds, finance review).
+- Migration `20261024003000` (additive; copies existing notes only). First cut was numbered `20261024002000`/TRACE-121/SQL 092, which PR #109 (appointments) took and pushed meanwhile; renumbered.
+- Notes: kept outside revision content because `package_revision_hash` covers `policy_notes` and requests bind to it. Hosted read-only: 4 lineages carry notes, none on an active revision; the legacy column keeps values on those inactive revisions (API-readable until replaced).
+- Exception: evidence `requirement_version = 'exception'`, `evidence_ref = 'Exception: document pending'`, expiring at the end of the follow-up date (Eastern); counts for activation and matching until then; never over a current document; scoped compliance unchanged.
+- Evidence: SQL 093 64/64, 083 updated; clean replay; full SQL 84 files 4,748 PASS; unit 498/498; lint, typecheck, secret scan clean; synthetic build; browser `vendor-prices`, `pricing-approval`, `onboarding-checklist` 40/40 (19 re-run after load timeouts). Full non-visual suite and `@visual` not run.
+- Owner actions: push `20261024003000` (dry run first) before merge; replace the four live package descriptions that repeat the size guide (replacement draft per package, description only), then archive superseded versions.
+- 2026-10-25: PR #110 opened. `20261024003000` pushed to hosted at the owner's instruction (dry run listed only it). Read back: in history; 4 internal-note rows copied; 0 archives, 0 exceptions; both triggers present; commands not executable by anon; no active revision holds notes.
+- Next: Codex review; then the prepaid-plan slice (DEC-2026-048 open items first).
+
 ## Phase 6.5 appointments: Eastern Time and schedule history (TRACE-121), 2026-10-24
 
 - Branch `claude/phase6-5-appointment-confirmation` in worktree `../mercurius-phase6-5-appointments`, from `origin/main` `0ba710e` (6.4 PR #106 merged; its Codex review still open). PR #109. Record: [PHASE-6-APPOINTMENTS.md](../../governance/PHASE-6-APPOINTMENTS.md).

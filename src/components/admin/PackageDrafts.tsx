@@ -216,7 +216,7 @@ export function PackageDraftPublish({ draft, onPublished }: { draft: PackageDraf
             ? `The vendor asked for changes: "${draft.changeRequest}". Publishing goes ahead without them.`
             : draft.approvalState === "sent" ? "The vendor has not answered yet. Publishing does not wait for their approval."
             : "This version was not sent to the vendor for approval. Publishing does not need it."}</p>}
-        <PackageContentSummary content={draft.content} />
+        <PackageContentSummary content={draft.content} internalNotes={draft.internalNotes} />
         <FormField id={`draft-reason-${draft.id}`} label="Reason" required help={`The vendor is notified and sees this reason. Up to ${DRAFT_REASON_MAX} characters.`}>
           {(control) => <Textarea {...control} value={reason} maxLength={DRAFT_REASON_MAX} disabled={pending} onChange={(event) => setReason(event.target.value)} />}
         </FormField>
@@ -414,6 +414,6 @@ export function PackageDraftList({ drafts, services, showVendor, onChanged }: {
     {draft.approvalState === "sent" && draft.delivery.status === "emailed" && draft.delivery.emailError && emailNeedsAttention(draft.delivery.email) &&
       <p role="alert" className="text-sm text-status-warning">Email error: {draft.delivery.emailError}</p>}
     {draft.changeRequest && draft.approvalState === "changes_requested" && <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm"><p className="font-medium">The vendor asked for changes</p><p className="whitespace-pre-line">{draft.changeRequest}</p></div>}
-    <PackageContentSummary content={draft.content} />
+    <PackageContentSummary content={draft.content} internalNotes={draft.internalNotes} />
   </li>)}</ul>;
 }

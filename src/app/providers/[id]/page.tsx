@@ -27,8 +27,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
+import { HOME_SIZE_GUIDE, homeSizeGuideText } from "@/lib/homeSizeGuide";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
+import { cn, yearsLabel } from "@/lib/utils";
 import { publicServiceAreas, type PublicServiceArea } from "@/lib/vendorServiceAreas";
 import {
   isPricingFrequency,
@@ -86,7 +87,6 @@ type PackageRow = {
   needs_review: boolean | null;
   sort_order: number;
   included_scope?: string[] | null;
-  policy_notes?: string | null;
 };
 
 type PackageTier = {
@@ -213,7 +213,7 @@ export default function ProviderStorefrontPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("vendor_packages")
-          .select("id, contractor_id, service_id, name, description, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, sort_order, included_scope, policy_notes")
+          .select("id, contractor_id, service_id, name, description, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, sort_order, included_scope")
           .eq("contractor_id", contractorId)
           .eq("is_active", true)
           .eq("needs_review", false)
@@ -357,6 +357,7 @@ export default function ProviderStorefrontPage() {
     () => packages.filter((item) => item.pricing_mode === "fixed" && item.tiers.length > 0),
     [packages],
   );
+  const sizeGuide = useMemo(() => homeSizeGuideText(fixedPackages), [fixedPackages]);
   const quotePackages = useMemo(
     () => packages.filter((item) => item.pricing_mode !== "fixed" || item.tiers.length === 0),
     [packages],
@@ -541,12 +542,13 @@ export default function ProviderStorefrontPage() {
               <aside className="space-y-6 md:sticky md:top-24 md:self-start">
                 <Card className="border-accent/20 shadow-sm"><CardHeader><CardTitle className="text-lg">Pricing Overview</CardTitle></CardHeader><CardContent>
                   {fixedPackages.length > 0 ? <StorefrontPriceOverview item={fixedPackages[0]} serverNow={serverNow} /> : <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Pricing depends on the scope. Mercurius will confirm availability and price before work begins.</p>}
+                  {sizeGuide && <HomeSizeGuide summary={sizeGuide.summary} note={sizeGuide.note} />}
                   <Button className="min-h-11 w-full bg-accent text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest(primaryPackage)}>{!invited ? EARLY_ACCESS_CTA : fixedPackages.length ? "Continue to Request" : "Request a Quote"}<ArrowRight /></Button>
                 </CardContent></Card>
 
                 <Card><CardHeader><CardTitle className="text-lg">Service Area</CardTitle></CardHeader><CardContent><ServiceAreaList areas={serviceAreas} />{contractor.location && <p className="mt-3 text-center text-sm text-muted-foreground">Based in {contractor.location}</p>}</CardContent></Card>
 
-                {hasQuickStats && <Card><CardHeader><CardTitle className="text-lg">Quick Stats</CardTitle></CardHeader><CardContent className="space-y-3">{averageRating !== null && <QuickStat label="Public review rating" value={Number(averageRating).toFixed(1)} />}{completedJobCount !== null && <QuickStat label="Completed through Mercurius" value={String(completedJobCount)} />}{contractor.years_experience !== null && <QuickStat label="Experience" value={`${contractor.years_experience} years`} />}{contractor.verified_specialty && <div className="border-t pt-3"><p className="text-xs text-muted-foreground">Verified Specialty</p><p className="mt-1 text-sm font-semibold">{contractor.verified_specialty}</p></div>}</CardContent></Card>}
+                {hasQuickStats && <Card><CardHeader><CardTitle className="text-lg">Quick Stats</CardTitle></CardHeader><CardContent className="space-y-3">{averageRating !== null && <QuickStat label="Public review rating" value={Number(averageRating).toFixed(1)} />}{completedJobCount !== null && <QuickStat label="Completed through Mercurius" value={String(completedJobCount)} />}{contractor.years_experience !== null && <QuickStat label="Experience" value={yearsLabel(contractor.years_experience)} />}{contractor.verified_specialty && <div className="border-t pt-3"><p className="text-xs text-muted-foreground">Verified Specialty</p><p className="mt-1 text-sm font-semibold">{contractor.verified_specialty}</p></div>}</CardContent></Card>}
               </aside>
             </div>
           </div>
@@ -670,12 +672,22 @@ function QuoteEstimate({ item }: { item: VendorPackage }) {
   return <p className="mt-2 text-sm"><span className="font-semibold tabular-nums">{open ? `From ${money(low)}` : `${money(low)}–${money(high)}`}</span><span className="text-xs text-muted-foreground"> estimate · the provider confirms the final price</span></p>;
 }
 
+// TRACE-122: a package's notes are internal to Mercurius and never shown here.
 function PackageScope({ item }: { item: VendorPackage }) {
   const scope = item.included_scope ?? [];
-  if (!scope.length && !item.policy_notes) return null;
-  return <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-    {scope.length > 0 && <p><span className="font-medium text-foreground">Included:</span> {scope.join(" · ")}</p>}
-    {item.policy_notes && <p><span className="font-medium text-foreground">Provider notes:</span> {item.policy_notes} <span>(Mercurius booking terms apply.)</span></p>}
+  if (!scope.length) return null;
+  return <p className="mt-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Included:</span> {scope.join(" · ")}</p>;
+}
+
+/** TRACE-122: the bedroom size guide, once per profile; the summary names what sets the price. */
+function HomeSizeGuide({ summary, note }: { summary: string; note: string | null }) {
+  return <div className="mb-5 rounded-lg border bg-muted/30 p-3">
+    <h3 className="text-sm font-semibold">How we size your home</h3>
+    <p className="mt-1 text-xs text-muted-foreground">{summary} Approximate home size by bedrooms:</p>
+    {note && <p className="mt-1 text-xs text-muted-foreground">{note}</p>}
+    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      {HOME_SIZE_GUIDE.map((row) => <div key={row.bedrooms} className="contents"><dt className="font-medium">{row.bedrooms}</dt><dd className="text-muted-foreground">{row.squareFeet}</dd></div>)}
+    </dl>
   </div>;
 }
 

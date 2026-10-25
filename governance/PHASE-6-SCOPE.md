@@ -44,6 +44,9 @@ for later slices follow before their implementation.
 | 6.12 | Vendor workflow | Compliance/renewal next actions and earnings/statements/ACH exceptions using existing reviewed commands and readbacks |
 | 6.13 | Admin workflow | Grouped navigation, operational queues, responsive lists, audit history and controlled overrides; remove public Admin and unapproved Smart Picks entry points |
 
+Prepaid plans (DEC-2026-048) are a separate slice after 6.6, with its own finance-review gate:
+[PHASE-6-PREPAID-PLANS-BRIEF.md](PHASE-6-PREPAID-PLANS-BRIEF.md).
+
 Every slice includes relevant navigation, loading/empty/error/permission states,
 role boundaries and MDS conformance. Remove premature links when touching their
 owning surface; 6.13 checks remaining navigation entry points. Hiding links does

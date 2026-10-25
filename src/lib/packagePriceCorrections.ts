@@ -28,7 +28,30 @@ export type CorrectablePackage = {
   content: PackageContent | null;
   /** DEC-2026-041 item 5: approval evidence as recorded; never inferred. */
   approval: PackageApproval | null;
+  /** TRACE-122: the package's internal notes (all revisions), never shown to homeowners. */
+  internalNotes: InternalNotes | null;
+  /** TRACE-122: set when an operator archived this paused or replaced package. */
+  archive: PackageArchive | null;
 };
+
+export type InternalNotes = { notes: string; updatedAt: string | null; updatedByEmail: string | null };
+export type PackageArchive = { reason: string; archivedAt: string; actorEmail: string | null };
+
+const optionalText = (value: unknown) => (typeof value === "string" ? value : null);
+
+function parseInternalNotes(value: unknown): InternalNotes | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  return typeof item.notes === "string" && item.notes.trim()
+    ? { notes: item.notes, updatedAt: optionalText(item.updated_at), updatedByEmail: optionalText(item.updated_by_email) } : null;
+}
+
+function parseArchive(value: unknown): PackageArchive | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  return typeof item.reason === "string" && typeof item.archived_at === "string"
+    ? { reason: item.reason, archivedAt: item.archived_at, actorEmail: optionalText(item.actor_email) } : null;
+}
 
 export type ApprovalEvidence = "vendor_approved" | "operator_published" | "managed_template" | "unrecorded";
 export type PackageApproval = {
@@ -230,9 +253,10 @@ export async function loadCorrectablePackages(supabase: ReturnType<typeof create
   const tiers = (tierResult.data ?? []) as TierRow[];
   const addons = (addonResult.data ?? []) as AddonRow[];
   const contents = new Map((Array.isArray(contentResult.data) ? contentResult.data : []).flatMap((entry) => {
-    const row = entry as { package_id?: unknown; content?: unknown; approval?: unknown } | null;
+    const row = entry as { package_id?: unknown; content?: unknown; approval?: unknown; internal_notes?: unknown; archive?: unknown } | null;
     return typeof row?.package_id === "string"
-      ? [[row.package_id, { content: parseContent(row.content), approval: parseApproval(row.approval) }] as const] : [];
+      ? [[row.package_id, { content: parseContent(row.content), approval: parseApproval(row.approval),
+        internalNotes: parseInternalNotes(row.internal_notes), archive: parseArchive(row.archive) }] as const] : [];
   }));
   return packages.map((item) => ({
     id: item.id,
@@ -258,5 +282,7 @@ export async function loadCorrectablePackages(supabase: ReturnType<typeof create
     })),
     content: contents.get(item.id)?.content ?? null,
     approval: contents.get(item.id)?.approval ?? null,
+    internalNotes: contents.get(item.id)?.internalNotes ?? null,
+    archive: contents.get(item.id)?.archive ?? null,
   }));
 }

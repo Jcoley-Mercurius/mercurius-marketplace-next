@@ -329,6 +329,8 @@ function correctable(item: ReviewItem): CorrectablePackage {
     addons: [],
     content: null,
     approval: null,
+    internalNotes: null,
+    archive: null,
   };
 }
 

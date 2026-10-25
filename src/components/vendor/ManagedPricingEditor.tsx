@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PricingToggle } from "@/components/vendor/PricingToggle";
+import { loadPackageArchives } from "@/lib/packageArchives";
 import { createClient } from "@/lib/supabase/client";
 
 type TemplateQuestion = {
@@ -62,24 +63,28 @@ type ManagedPackage = {
   needsReview: boolean;
 };
 type AvailableTemplate = { template: PricingTemplate; serviceName: string };
+type ArchivedManaged = { packageId: string; templateName: string; serviceName: string; archivedAt: string };
 
 // operator: the admin vendor page. Prices are read-only here; an operator proposes a change
 // as a replacement draft an operator publishes (DEC-2026-041 item 4, DEC-2026-046). Activation and availability are unchanged.
 export function ManagedPricingEditor({ contractorId, operator = false }: { contractorId: string; operator?: boolean }) {
   const [managed, setManaged] = useState<ManagedPackage[]>([]);
   const [availableTemplates, setAvailableTemplates] = useState<AvailableTemplate[]>([]);
+  const [archived, setArchived] = useState<ArchivedManaged[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [templatesResult, servicesResult, packagesResult] = await Promise.all([
+    const [templatesResult, servicesResult, packagesResult, archivesResult] = await Promise.all([
       supabase.from("pricing_templates").select("*").eq("is_active", true).order("name"),
       supabase.from("services_catalog").select("id, name").eq("is_active", true),
-      supabase.from("vendor_packages").select("*").eq("contractor_id", contractorId).not("template_id", "is", null),
+      supabase.from("vendor_packages").select("id, template_id, is_active, needs_review").eq("contractor_id", contractorId).not("template_id", "is", null),
+      loadPackageArchives(supabase, contractorId).then((archived) => ({ archived, error: null }),
+        (error: { message: string }) => ({ archived: new Map<string, string>(), error })),
     ]);
-    const firstError = templatesResult.error ?? servicesResult.error ?? packagesResult.error;
+    const firstError = templatesResult.error ?? servicesResult.error ?? packagesResult.error ?? archivesResult.error;
     if (firstError) {
       setLoadError(firstError.message);
       setLoading(false);
@@ -114,7 +119,10 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
       addons: addons.filter((addon) => addon.template_id === template.id),
     }));
     const serviceMap = new Map(((servicesResult.data ?? []) as { id: string; name: string }[]).map((service) => [service.id, service.name]));
-    const packageRows = (packagesResult.data ?? []) as { id: string; template_id: string; is_active: boolean; needs_review: boolean }[];
+    // TRACE-122: an archived package is read-only history; the template can be activated anew.
+    const archivedAt = archivesResult.archived;
+    const allRows = (packagesResult.data ?? []) as { id: string; template_id: string; is_active: boolean; needs_review: boolean }[];
+    const packageRows = allRows.filter((item) => !archivedAt.has(item.id));
     const packageIds = packageRows.map((item) => item.id);
     const [packageTierResult, packageAddonResult] = packageIds.length
       ? await Promise.all([
@@ -157,6 +165,12 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
     }
     setManaged(activeManaged);
     setAvailableTemplates(available);
+    setArchived(allRows.flatMap((item) => {
+      const at = archivedAt.get(item.id);
+      const template = fullTemplates.find((candidate) => candidate.id === item.template_id);
+      return at ? [{ packageId: item.id, archivedAt: at, templateName: template?.name ?? "Managed template",
+        serviceName: template ? serviceMap.get(template.service_id) ?? template.service_id : "Managed service pricing" }] : [];
+    }));
     setLoading(false);
   }, [contractorId]);
 
@@ -297,7 +311,7 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
   return <div className="space-y-6">
     {availableTemplates.length > 0 && <section className="space-y-3"><div><h2 className="font-medium">Available templates</h2><p className="mt-1 text-sm text-muted-foreground">Activate a Mercurius-approved structure, then set the live prices customers will see.</p></div><div className="grid gap-3 md:grid-cols-2">{availableTemplates.map((item) => <article key={item.template.id} className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-accent/40 bg-accent/5 p-4"><div><p className="font-medium">{item.serviceName}</p><p className="text-xs text-muted-foreground">{item.template.tiers.length} tiers · {item.template.addons.length} add-ons</p></div><Button size="sm" disabled={savingId === item.template.id} onClick={() => void activateTemplate(item)}>{savingId === item.template.id && <Loader2 className="animate-spin" />}Activate</Button></article>)}</div></section>}
 
-    {!managed.length && !availableTemplates.length && <div className="rounded-xl border border-dashed bg-card p-10 text-center"><Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-medium">No managed templates available</h2><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Mercurius has not published an approved pricing template for your services yet. You can still publish a fixed price from Your Prices.</p></div>}
+    {!managed.length && !availableTemplates.length && !archived.length && <div className="rounded-xl border border-dashed bg-card p-10 text-center"><Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-medium">No managed templates available</h2><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Mercurius has not published an approved pricing template for your services yet. You can still publish a fixed price from Your Prices.</p></div>}
 
     {managed.map((item) => <article key={item.packageId} className="space-y-5 rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold">{item.serviceName}</h2><Badge variant="outline">{item.template.name}</Badge>{!item.isActive && <Badge variant="secondary">Paused</Badge>}{item.needsReview && <Badge variant="destructive">Review flagged</Badge>}</div>{item.template.description && <p className="mt-1 text-sm text-muted-foreground">{item.template.description}</p>}</div><div className="flex items-center gap-2"><PricingToggle checked={item.isActive} disabled={savingId === item.packageId} onCheckedChange={() => void togglePackage(item)} label={`${item.isActive ? "Pause" : "Publish"} ${item.serviceName} managed pricing`} /><span className="text-xs text-muted-foreground">Live</span></div></div>
@@ -306,5 +320,7 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
       {item.template.addons.length > 0 && <section className="space-y-2"><h3 className="text-sm font-medium">Add-ons</h3>{item.template.addons.map((addon) => { const state = item.addonPrices[addon.id] ?? { price: addon.default_price, isOffered: true }; const outOfBand = state.isOffered && (state.price < addon.price_min || state.price > addon.price_max); const patch = (change: Partial<typeof state>) => setManaged((current) => current.map((candidate) => candidate.packageId === item.packageId ? { ...candidate, addonPrices: { ...candidate.addonPrices, [addon.id]: { ...state, ...change } } } : candidate)); return <div key={addon.id} className="grid items-center gap-3 rounded-lg border bg-background/50 p-3 sm:grid-cols-[1fr_110px_130px_1fr]"><div><p className="text-sm font-medium">{addon.label}</p>{addon.description && <p className="text-xs text-muted-foreground">{addon.description}</p>}</div><div className="flex items-center gap-2"><PricingToggle checked={state.isOffered} disabled={operator} onCheckedChange={(checked) => patch({ isOffered: checked })} label={`${state.isOffered ? "Remove" : "Offer"} ${addon.label}`} /><span className="text-xs text-muted-foreground">{state.isOffered ? "Offered" : "Off"}</span></div><div><Label htmlFor={`addon-${addon.id}`} className="mb-1 text-xs text-muted-foreground">Price ($)</Label><Input id={`addon-${addon.id}`} type="number" min="0" readOnly={operator} disabled={!state.isOffered} value={state.price} aria-invalid={outOfBand} onChange={(event) => patch({ price: Number(event.target.value) })} /></div><div className="text-xs"><p className="text-muted-foreground">Expected: <span className="text-foreground">${addon.price_min}–${addon.price_max}</span></p>{outOfBand && <p className="mt-1 flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3 w-3" />Outside typical range</p>}</div></div>; })}</section>}
       {operator ? <p className="text-sm text-muted-foreground">To change these prices, use Propose corrected prices under Vendor prices. It creates a draft that replaces these prices when you publish it.</p> : <div className="flex justify-end"><Button className="min-h-10" disabled={savingId === item.packageId} onClick={() => void savePackage(item)}>{savingId === item.packageId && <Loader2 className="animate-spin" />}Save prices</Button></div>}
     </article>)}
+
+    {archived.length > 0 && <section aria-labelledby="archived-managed" className="space-y-2"><h2 id="archived-managed" className="font-medium">Archived prices</h2><p className="text-sm text-muted-foreground">Mercurius archived these prices. They are kept as history and cannot be published or edited.</p><ul className="grid gap-2 md:grid-cols-2">{archived.map((item) => <li key={item.packageId} className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-3 text-sm"><span className="font-medium">{item.serviceName}</span><Badge variant="outline">{item.templateName}</Badge><Badge variant="outline">Archived</Badge><span className="text-xs text-muted-foreground">{new Date(item.archivedAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}</span></li>)}</ul></section>}
   </div>;
 }

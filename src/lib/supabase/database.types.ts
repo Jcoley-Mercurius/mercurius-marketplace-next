@@ -6531,6 +6531,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_archive_package: {
+        Args: {
+          p_expected_updated_at: string
+          p_package: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       admin_assign_contractor: {
         Args: { _contractor_id: string; _job_id: string; _reason?: string }
         Returns: undefined
@@ -6709,6 +6717,10 @@ export type Database = {
           _reason: string
         }
         Returns: undefined
+      }
+      admin_set_package_internal_notes: {
+        Args: { p_draft?: string; p_notes?: string; p_package?: string }
+        Returns: Json
       }
       admin_suspend_package: {
         Args: {
@@ -7975,6 +7987,10 @@ export type Database = {
         Args: { p_at?: string; p_contractor: string }
         Returns: boolean
       }
+      vendor_checklist_exceptions: {
+        Args: { p_contractor: string }
+        Returns: Json
+      }
       vendor_claim_invitation: { Args: { p_attempt: string }; Returns: Json }
       vendor_close_application: {
         Args: {
@@ -8070,6 +8086,7 @@ export type Database = {
       vendor_own_evidence_renewal: { Args: never; Returns: Json }
       vendor_own_renewal_documents: { Args: never; Returns: Json }
       vendor_package_approvals: { Args: never; Returns: Json }
+      vendor_package_archives: { Args: { p_contractor: string }; Returns: Json }
       vendor_place_application_retention_hold: {
         Args: { p_application: string; p_key: string; p_reason: string }
         Returns: Json
@@ -8110,6 +8127,18 @@ export type Database = {
           p_kind: string
           p_reference: string
           p_requirement: string
+          p_supersedes?: string
+        }
+        Returns: Json
+      }
+      vendor_record_checklist_exception: {
+        Args: {
+          p_approver: string
+          p_contractor: string
+          p_follow_up_due: string
+          p_key?: string
+          p_kind: string
+          p_reason: string
           p_supersedes?: string
         }
         Returns: Json

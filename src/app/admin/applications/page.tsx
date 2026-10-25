@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
+import { cn, yearsLabel } from "@/lib/utils";
 import { type ApplicationRetentionOverview } from "@/lib/applicationRetention";
 import {
   applicationQueueFilters,
@@ -648,7 +648,7 @@ function ApplicationDialog({
             {application.address || "Not provided"}
           </Detail>
           <Detail icon={Briefcase} label="Experience">
-            {application.years_experience} years ·{" "}
+            {yearsLabel(application.years_experience)} ·{" "}
             {application.team_size || "Team size not provided"}
           </Detail>
           <Detail icon={Globe} label="Website">
