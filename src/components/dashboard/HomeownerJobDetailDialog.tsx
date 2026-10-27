@@ -3,6 +3,8 @@
 import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
 import { JobOperations } from "@/components/dashboard/JobOperations";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
+import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
+import { isRecurringPlan } from "@/lib/recurringVisits";
 import { RequestPromotionPanel } from "@/components/dashboard/RequestPromotionPanel";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -73,6 +75,8 @@ export type HomeownerDashboardJob = {
   match_expires_at?: string | null;
   pricing_mode?: string | null;
   quote_only?: boolean | null;
+  frequency?: string | null;
+  recurrence_parent_id?: string | null;
 };
 
 type JobAction =
@@ -487,6 +491,9 @@ export function HomeownerJobDetailDialog({
           {providerState.nextAction && <p className="text-sm font-medium">{providerState.nextAction}</p>}
           {providerState.kind === "consent_needed" && <ConfirmAction disabled={!actionsEnabled || !!busyAction} confirmationTone="commitment" triggerLabel="Allow another provider" title="Allow another provider?" entity={job.service_type} consequence="Mercurius may offer this request to one eligible provider at a time instead of your preferred provider. If none accepts, it will show as not available yet in your area." confirmLabel="Allow other providers" onConfirm={consentToFallback} />}
         </section>
+
+        {isRecurringPlan(job) && <RecurringVisitsPanel key={`visits-${job.id}-${job.status}`} seriesId={job.id} role="homeowner" />}
+        {job.recurrence_parent_id && <p className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">This is one visit of your recurring plan. The provider accepts and completes each visit separately, and each visit is paid on its own.</p>}
 
         <AppointmentPanel key={`appointment-${job.id}-${job.status}`} jobId={job.id} role="homeowner" readOnly={!actionsEnabled} onChanged={() => {
           void onRefresh().catch(() => toast.warning("Saved, but the dashboard could not refresh", { description: "Refresh the page to see the latest status." }));

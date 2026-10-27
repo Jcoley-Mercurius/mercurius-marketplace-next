@@ -6560,6 +6560,16 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_create_recurring_visit: {
+        Args: {
+          _local_start: string
+          _operation_key: string
+          _reason: string
+          _series_id: string
+          _starts_at: string
+        }
+        Returns: Json
+      }
       admin_discard_package_draft: {
         Args: { p_draft: string; p_expected_updated_at: string }
         Returns: Json
@@ -7847,6 +7857,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      recurring_series: { Args: { _series_id: string }; Returns: Json }
       release_job_match: {
         Args: {
           _contractor_id: string

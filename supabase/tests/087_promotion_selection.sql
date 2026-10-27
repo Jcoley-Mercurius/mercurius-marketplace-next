@@ -360,8 +360,10 @@ insert into fx(key,id) select 'r4', (pg_temp.submit(9,'sel-r4-000000000001',json
   'addons',jsonb_build_array(jsonb_build_object('id','b8760000-0000-4000-8000-000000000002','quantity',2)),
   'expected',jsonb_build_object('pricing_mode','fixed','total',50))))#>>'{requests,0,request_id}')::uuid;
 select pg_temp.match((select id from fx where key='r4'));
-insert into fx(key,id) select 'v2', (pg_temp.call(4, format('select to_jsonb(public.create_service_occurrence(%L,%L,%L,''Synthetic next visit''))',
-  (select id from fx where key='r4'), gen_random_uuid(), now()+interval '30 days'))#>>'{}')::uuid;
+-- TRACE-123: visits are created by admin_create_recurring_visit (create_service_occurrence is retired).
+insert into fx(key,id) select 'v2', (pg_temp.call(4, format('select public.admin_create_recurring_visit(%L,%L,%L,%L,''Synthetic next visit'')',
+  (select id from fx where key='r4'), gen_random_uuid(), (l.local at time zone 'America/New_York'), l.local))->>'occurrence_id')::uuid
+  from (select (now() at time zone 'America/New_York')::date + 30 + time '10:00' as local) l;
 select is((select row(r.pricing_inputs->>'total_cents', r.total_amount, r.contractor_id)::text from public.service_requests r where id=(select id from fx where key='v2')),
   '(5000,50.00,b8720000-0000-4000-8000-000000000001)', 'the next visit is offered at the monthly level plus its two cans');
 

@@ -20,4 +20,6 @@ where (n.nspname, p.proname) in (
   ('private','find_eligible_packages_core'),
   ('public','money_publish_snapshot'), ('public','money_check_journal'), ('public','money_process_payment_event'),
   ('public','money_resolve_chargeback_loss'), ('public','admin_restore_promotion'), ('public','submit_service_requests'),
-  ('public','homeowner_choose_request_promotion'), ('public','create_service_occurrence'));
+  ('public','homeowner_choose_request_promotion'), ('public','create_service_occurrence'),
+  -- TRACE-123: carries the priced add-on selection into recurring visits (replaces create_service_occurrence).
+  ('public','admin_create_recurring_visit'));

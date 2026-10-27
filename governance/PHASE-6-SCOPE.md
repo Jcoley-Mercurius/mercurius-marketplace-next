@@ -21,6 +21,10 @@ No quote can be approved until a tax confirmation path exists (DEC-2026-015 §4)
 schedule history implemented for review ([record](PHASE-6-APPOINTMENTS.md)); MPS checklist E1 (what
 makes an appointment confirmed) remains an owner gap, so appointments read “recorded”, not “confirmed”.
 
+2026-10-25 checkpoint: 6.6 / TRACE-123 first sub-slice (visit identities, duplicate-safe operator-created visits on
+the accepted plan terms, history, guards) implemented for review ([record](PHASE-6-RECURRING-VISITS.md)). Cadence,
+pause/end and per-visit charge timing wait on DEC-2026-049 (proposed); 6.6 is not complete.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

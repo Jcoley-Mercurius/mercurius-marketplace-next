@@ -4,6 +4,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { JobOperations } from "@/components/dashboard/JobOperations";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
+import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
+import { isRecurringPlan } from "@/lib/recurringVisits";
 import Link from "next/link";
 import {
   AlertCircle, Briefcase, Calendar, Camera, CheckCircle2, Clock, DollarSign,
@@ -55,6 +57,8 @@ type Job = {
   match_expires_at: string | null;
   package_question_answers: Record<string, { question?: unknown; answer?: unknown; unit?: unknown }> | null;
   homeowner_name?: string | null;
+  frequency?: string | null;
+  recurrence_parent_id?: string | null;
 };
 
 type Mode = "loading" | "live" | "unlinked" | "error";
@@ -129,7 +133,7 @@ export default function VendorJobsPage() {
       setContractorId(contractorResult.data.id);
       const result = await supabase
         .from("service_requests")
-        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, quote_status, quote_expires_at, quote_revision, pricing_inputs, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at, service_catalog_id")
+        .select("id, customer_id, service_type, description, status, matching_status, pricing_mode, quote_only, payment_status, preferred_date, preferred_time, address, city, state, zip_code, quote_amount, quote_status, quote_expires_at, quote_revision, pricing_inputs, total_amount, created_at, updated_at, assigned_at, match_expires_at, package_question_answers, scheduled_start_at, service_catalog_id, frequency, recurrence_parent_id")
         .eq("contractor_id", contractorResult.data.id)
         .order("created_at", { ascending: false });
       if (result.error) throw result.error;
@@ -371,7 +375,7 @@ function RequestCard({ job, now, action, error, recheck, view, accept, decline }
             consequence="It won’t be offered to you again. Mercurius may offer it to another eligible provider, ask the homeowner how to proceed, or tell them it isn’t available yet."
             confirmLabel="Decline offer" disabled={!canRespond} onConfirm={decline} />
           <ConfirmAction triggerLabel="Accept offer" triggerVariant="commitment" confirmationTone="commitment" title="Accept this offer?" entity={entity}
-            consequence={`${quote ? "This is quote work: the price isn’t set until a quote is agreed." : job.total_amount !== null ? `You agree to the fixed price of ${money(job.total_amount)}.` : "You agree to the fixed price on this request."} The request moves to Active Jobs as scheduled, with no appointment time until one is recorded. If you cancel later, Mercurius rematches the homeowner and records a provider cancellation.`}
+            consequence={`${quote ? "This is quote work: the price isn’t set until a quote is agreed." : job.total_amount !== null ? `You agree to the fixed price of ${money(job.total_amount)}.` : "You agree to the fixed price on this request."} ${isRecurringPlan(job) ? " This is a recurring plan: Mercurius offers each visit to you separately at this price, and you accept each one." : ""} The request moves to Active Jobs as scheduled, with no appointment time until one is recorded. If you cancel later, Mercurius rematches the homeowner and records a provider cancellation.`}
             confirmLabel="Accept offer" disabled={!canRespond} onConfirm={accept} />
         </div>
       </CardFooter>
@@ -383,8 +387,10 @@ function JobCard({ job, busy, view, start, complete }: {
   job: Job; busy: boolean; view: () => void; start?: () => void; complete?: () => void;
 }) {
   const price = priceContext(job);
-  const canStart = job.status === "scheduled" && Boolean(start);
-  const canComplete = ["in_progress", "pending_review"].includes(job.status) && Boolean(complete);
+  // A recurring plan is never started or completed itself; each of its visits is (TRACE-123).
+  const plan = isRecurringPlan(job);
+  const canStart = !plan && job.status === "scheduled" && Boolean(start);
+  const canComplete = !plan && ["in_progress", "pending_review"].includes(job.status) && Boolean(complete);
   const waitingForHomeowner = job.status === "vendor_completed";
   return (
     <Card className="shadow-sm transition-shadow hover:shadow-md"><CardContent><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -398,6 +404,7 @@ function JobCard({ job, busy, view, start, complete }: {
       </div>
       <div className="flex flex-col gap-3 border-t pt-4 lg:min-w-56 lg:items-end lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
         <div className="text-left lg:text-right"><p className="font-heading text-xl font-semibold">{price.value}</p><p className="mt-0.5 text-xs text-muted-foreground">{price.label}</p></div>
+        {plan && <p className="text-xs text-muted-foreground">Recurring plan · each visit is offered and started separately</p>}
         {waitingForHomeowner && <p className="text-xs text-amber-700 dark:text-amber-300">Completion submitted · awaiting homeowner confirmation</p>}
         <div className="flex flex-wrap gap-2 lg:justify-end">
           {(canStart || canComplete) && <Button variant="outline" size="sm" onClick={view}><FileText />View details</Button>}
@@ -424,6 +431,7 @@ function Details({ job, close, saved, refreshQuote }: { job: Job | null; close: 
       <Block icon={DollarSign} title={price.label}>{price.value}<br /><span className="text-muted-foreground">{price.note}</span></Block>
     </div>
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
+    {!isIncoming(job) && isRecurringPlan(job) && <RecurringVisitsPanel key={`visits-${job.id}-${job.status}`} seriesId={job.id} role="vendor" />}
     {!isIncoming(job) && <AppointmentPanel key={`appointment-${job.id}-${job.status}`} jobId={job.id} role="vendor" onChanged={refreshQuote} />}
     {!isIncoming(job) && <VendorQuotePanel key={`quote-${job.id}`} job={job} onChanged={refreshQuote} />}
     {["scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="vendor" onSaved={saved} />}
