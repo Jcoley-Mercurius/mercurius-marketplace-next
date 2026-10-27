@@ -194,6 +194,7 @@ Every transition must define actor, prerequisites, side effects, notification, t
 - Required completion evidence is category-configurable.
 - Homeowner confirmation, dispute, and any auto-confirm timer are explicit and notified.
 - Recurring work creates auditable occurrences rather than overwriting one request.
+- **Recurring operating rules (DEC-2026-049 items 1–4, 9):** the cadence counts from an operator-recorded Eastern anchor (weekly/every two weeks by calendar days; monthly, every two months and quarterly from the original anchor's day of the month, clamped to shorter months without drift); operations reviews proposals (through today + 60 Eastern days, at least 24 hours away, up to two future visits) and explicitly creates each visit, with no background generation; missed, declined, cancelled or skipped dates never move the anchor or create make-up visits automatically; daylight-saving gaps and repeats need an explicit operator choice; pause stops new visits, resume does not backfill, and stopping future visits is final and leaves existing visits for individual handling; one visit per plan per Eastern date. Charge timing, price changes, quote/promotion plans and replacement providers (items 5–8) remain open.
 
 **Minimum acceptance**
 

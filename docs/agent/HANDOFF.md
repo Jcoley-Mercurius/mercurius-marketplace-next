@@ -1,5 +1,15 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.6b recurring cadence and plan controls (TRACE-124), 2026-10-27
+
+- Branch `claude/phase6-6b-recurring-cadence` from `main` `61f0601` (PR #111 merge; PR #111 checks and main CI 40435258272 green; nothing merged since). Record: [PHASE-6-RECURRING-VISITS.md §7](../../governance/PHASE-6-RECURRING-VISITS.md).
+- Owner decision 2026-10-26 recorded in DEC-2026-049: items 1–4 and 9 approved with clarifications; items 5–8 still PROPOSED. MPS §6.4 updated.
+- Migration `20261026002000` (additive, **not pushed**): anchors (basis, append-only chain), lifecycle (pause/resume/stop), skipped/replaced cadence dates, `private.recurring_cadence_preview`, shared `create_recurring_visit_core` (manual wrapper unchanged signature; pause/stop recorded on every path), `admin_create_cadence_visit`, `admin_record_recurring_anchor`, `admin_resolve_cadence_date`, `admin_set_recurring_plan_state`, `recurring_series` restated. UI `RecurringCadenceControls`.
+- Implementation choices for review: off-cadence visits count toward the two but handle no date until linked; skips/links are scoped to their anchor; proposal creation recomputes proposals under the lock (stale → `40001`, nothing recorded); lifecycle actions notify nobody.
+- Evidence: record §7. Not run: hosted migration, `@visual`, screen reader, full non-visual browser suite, CI (pending push).
+- Open: 6.6c charge timing (DEC-2026-049 items 5–8, finance review); `money_source` current-tier-price gap; homeowner self-service pause; lifecycle notifications (Phase 7); 6.9 per-visit cancellation economics.
+- Next: Codex review; with owner authorization, dry run then push `20261026002000` before merge (DEC-2026-037).
+
 ## Phase 6.6a recurring visits: identities and duplicate-safe creation (TRACE-123), 2026-10-25
 
 - Branch `claude/phase6-6-recurring-visits` in worktree `../mercurius-phase6-6-recurring-visits`, from `main` `0138080` (main CI run 40242555358 green). Record: [PHASE-6-RECURRING-VISITS.md](../../governance/PHASE-6-RECURRING-VISITS.md). Committed as PR #111.

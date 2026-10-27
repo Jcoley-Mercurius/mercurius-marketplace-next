@@ -6560,6 +6560,18 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_create_cadence_visit: {
+        Args: {
+          _anchor_id: string
+          _cadence_date: string
+          _local_start: string
+          _operation_key: string
+          _reason: string
+          _series_id: string
+          _starts_at: string
+        }
+        Returns: Json
+      }
       admin_create_recurring_visit: {
         Args: {
           _local_start: string
@@ -6645,11 +6657,35 @@ export type Database = {
         Args: { _job_id: string; _kind: string; _note: string }
         Returns: string
       }
+      admin_record_recurring_anchor: {
+        Args: {
+          _basis: string
+          _expected_anchor_id: string
+          _local_start: string
+          _operation_key: string
+          _reason: string
+          _series_id: string
+          _starts_at: string
+        }
+        Returns: Json
+      }
       admin_request_draft_email: {
         Args: {
           p_confirm_unknown?: boolean
           p_draft: string
           p_resend: boolean
+        }
+        Returns: Json
+      }
+      admin_resolve_cadence_date: {
+        Args: {
+          _anchor_id: string
+          _cadence_date: string
+          _kind: string
+          _occurrence_id: string
+          _operation_key: string
+          _reason: string
+          _series_id: string
         }
         Returns: Json
       }
@@ -6730,6 +6766,16 @@ export type Database = {
       }
       admin_set_package_internal_notes: {
         Args: { p_draft?: string; p_notes?: string; p_package?: string }
+        Returns: Json
+      }
+      admin_set_recurring_plan_state: {
+        Args: {
+          _action: string
+          _expected_state: string
+          _operation_key: string
+          _reason: string
+          _series_id: string
+        }
         Returns: Json
       }
       admin_suspend_package: {

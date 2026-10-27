@@ -22,4 +22,6 @@ where (n.nspname, p.proname) in (
   ('public','money_resolve_chargeback_loss'), ('public','admin_restore_promotion'), ('public','submit_service_requests'),
   ('public','homeowner_choose_request_promotion'), ('public','create_service_occurrence'),
   -- TRACE-123: carries the priced add-on selection into recurring visits (replaces create_service_occurrence).
-  ('public','admin_create_recurring_visit'));
+  ('public','admin_create_recurring_visit'),
+  -- TRACE-124: the 6.6a body moved into the shared core; the cadence path also reaches it.
+  ('private','create_recurring_visit_core'), ('public','admin_create_cadence_visit'));

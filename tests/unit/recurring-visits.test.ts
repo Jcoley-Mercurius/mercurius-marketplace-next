@@ -18,6 +18,7 @@ const entry = (overrides: Partial<SeriesHistoryEntry>): SeriesHistoryEntry => ({
 });
 const series = (history: SeriesHistoryEntry[]): SeriesReadback => ({
   series_id: "s1", timezone: "America/New_York", frequency: "weekly", status: "scheduled", has_provider: true, terms: null, visits: [], history,
+  plan_state: "active", anchor: null,
 });
 
 describe("plans and visits", () => {

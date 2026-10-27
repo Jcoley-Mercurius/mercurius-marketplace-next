@@ -25,6 +25,10 @@ makes an appointment confirmed) remains an owner gap, so appointments read “re
 the accepted plan terms, history, guards) implemented for review ([record](PHASE-6-RECURRING-VISITS.md)). Cadence,
 pause/end and per-visit charge timing wait on DEC-2026-049 (proposed); 6.6 is not complete.
 
+2026-10-27 checkpoint: 6.6a merged (PR #111). 6.6b / TRACE-124 (cadence anchor, proposals, skipped/replaced dates,
+pause/resume/stop future visits; DEC-2026-049 items 1–4 and 9 approved 2026-10-26) implemented for review. 6.6c charge
+timing and DEC-2026-049 items 5–8 remain open; 6.6 is not complete.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed
