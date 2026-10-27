@@ -2,6 +2,8 @@
 
 import { JobOperations } from "@/components/dashboard/JobOperations";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
+import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
+import { isRecurringPlan } from "@/lib/recurringVisits";
 import { formatAppointment } from "@/lib/offerStatus";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import {
@@ -83,6 +85,7 @@ type ServiceRequest = {
   pricing_inputs?: unknown;
   frequency?: string | null;
   scheduled_start_at?: string | null;
+  recurrence_parent_id?: string | null;
 };
 
 type Contractor = {
@@ -142,6 +145,8 @@ type Action = { id: string; kind: string } | null;
 type Mode = "loading" | "live" | "error";
 
 const statuses = ["pending", "matched", "quoted", "scheduled", "in_progress", "pending_review", "vendor_completed", "homeowner_confirmed", "completed", "review_requested", "reviewed", "disputed", "resolved", "closed", "cancelled"];
+// A recurring plan is never worked on itself; each visit is (TRACE-123, enforced by the database).
+const planWorkStatuses = new Set(["in_progress", "pending_review", "vendor_completed", "homeowner_confirmed", "completed", "disputed", "resolved", "review_requested", "reviewed"]);
 const statusStyle: Record<string, string> = {
   pending: "border-status-warning bg-status-warning-bg text-status-warning",
   matched: "border-status-info bg-status-info-bg text-status-info",
@@ -197,7 +202,7 @@ export default function AdminRequestsPage() {
       const expiryResult = await supabase.rpc("expire_stale_matches");
       if (expiryResult.error) console.warn("Unable to expire stale offers", expiryResult.error.message);
       const [requestResult, profileResult, contractorResult] = await Promise.all([
-        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at").order("created_at", { ascending: false }),
+        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id").order("created_at", { ascending: false }),
         supabase.from("profiles").select("user_id, full_name"),
         supabase.from("contractors").select("id, name, services, location, rating, jobs_completed, badges, is_active").order("name"),
       ]);
@@ -404,9 +409,11 @@ function RequestDialog(props: {
 
     {(props.attempts.length > 0 || props.attemptError) && <section className="rounded-xl border bg-muted/30 p-4"><div className="mb-2 flex justify-between"><h3 className="text-sm font-medium">Match History</h3><span className="text-xs text-muted-foreground">{props.attempts.length} attempt{props.attempts.length === 1 ? "" : "s"}</span></div>{props.attemptError ? <p className="text-xs text-destructive">History unavailable: {props.attemptError}</p> : <div className="space-y-2">{props.attempts.map((attempt) => <div key={attempt.id} className="flex items-center justify-between gap-3 text-xs"><div><p className="font-medium">#{attempt.attempt_number} {props.contractorNames[attempt.contractor_id] ?? "Vendor"}</p><p className="text-muted-foreground">Offered {formatDateTime(attempt.offered_at)}{attempt.reason ? ` · ${attempt.reason}` : ""}</p></div><Badge className={cn("border", outcomeStyle[attempt.outcome] ?? "bg-muted text-muted-foreground")}>{attempt.outcome}</Badge></div>)}</div>}</section>}
 
+    {isRecurringPlan(request) && <RecurringVisitsPanel key={`visits-${request.id}-${request.status}`} seriesId={request.id} role="admin" onChanged={props.saved} />}
+    {request.recurrence_parent_id && <p className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">This is one visit of a recurring plan. Its provider acceptance, work, evidence and payment are its own; the plan’s other visits are unaffected.</p>}
     <AppointmentPanel key={`appointment-${request.id}-${request.status}`} jobId={request.id} role="admin" onChanged={props.saved} />
-    {["pending", "matched", "quoted", "scheduled", "in_progress"].includes(request.status) && <JobOperations key={request.id} jobId={request.id} role="admin" onSaved={props.saved} recurring={!!request.frequency && request.frequency !== "one-time"} />}
-    <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
+    {["pending", "matched", "quoted", "scheduled", "in_progress"].includes(request.status) && <JobOperations key={request.id} jobId={request.id} role="admin" onSaved={props.saved} />}
+    <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).filter(status => !isRecurringPlan(request) || !planWorkStatuses.has(status)).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
 
     <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><AdminQuotePanel key={`${request.id}:${request.quote_revision ?? 0}:${request.quote_status ?? ""}`} request={request} providerName={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "The provider" : "The provider"} onChanged={props.saved} /></section>
 

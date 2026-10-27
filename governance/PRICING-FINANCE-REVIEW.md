@@ -188,6 +188,8 @@ Record against:
 - `sha256sum supabase/migrations/20261018001000_pricing_catalog_calculation.sql supabase/migrations/20261018002000_pricing_vendor_approval.sql supabase/migrations/20261018003000_promotion_offers.sql supabase/migrations/20261018004000_pricing_owner_decisions.sql supabase/migrations/20261018005000_pricing_checkout_promotions.sql supabase/migrations/20261018006000_promotion_selection.sql`;
 - the deployed money-code fingerprint, `scripts/promotion-money-fingerprint.sql` (39 functions). On a clean replay of the uncommitted tree on 2026-10-20 it was `39 | b2bcf028bb1b955fd8644e7a73be3c32`; on production before the push it covers only the 16 pre-existing functions. Record the production value after the push, check it equals the reviewed rehearsal value, and re-run it immediately before opening the gate (rollout §7). A different value means a listed function changed: review again.
 
+TRACE-123 (2026-10-25, `20261026001000`): `create_service_occurrence` now refuses and `admin_create_recurring_visit` carries a plan's priced add-on selection into each visit, offered only on the accepted package, level and revision. The list gains that function (40 functions), so the fingerprint differs from the 2026-10-20 rehearsal value; reviewers cover this change too (record the new value on the reviewed commit).
+
 | Reviewer (name) | Role | Date | Commit SHA | File hashes match | Decision | Findings |
 |---|---|---|---|---|---|---|
 | | | | | | | |

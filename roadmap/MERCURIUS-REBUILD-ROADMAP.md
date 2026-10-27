@@ -204,6 +204,9 @@ slice 6.1 (TRACE-095).
 The proposed 13-slice breakdown and 6.1 starting brief are in governance/PHASE-6-SCOPE.md. Steps 2–5 build on the
 accepted Phase 4 contracts. Carried in from Phase 5: hide promotion UI and set
 recurring generation and charge timing.
+2026-10-25: 6.6a (TRACE-123) implements recurring visit identities and duplicate-safe, operator-created
+visits on the accepted plan terms ([record](../governance/PHASE-6-RECURRING-VISITS.md)); cadence and
+charge timing remain open pending DEC-2026-049 (proposed).
 
 **Outcome:** each role can complete its core job using the approved lifecycle and design patterns.
 

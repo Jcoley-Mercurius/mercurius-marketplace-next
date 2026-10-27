@@ -40,8 +40,14 @@ update public.service_requests set frequency='weekly' where id='53000000-0000-40
 update public.vendor_packages set default_frequency='weekly';
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000003"}',true);
-select lives_ok($$select public.create_service_occurrence('53000000-0000-4000-8000-000000000003','56000000-0000-4000-8000-000000000003',now()+interval '7 days','Next weekly visit')$$,'recurrence creates a separate visit');
-select lives_ok($$select public.create_service_occurrence('53000000-0000-4000-8000-000000000003','56000000-0000-4000-8000-000000000003',now()+interval '7 days','Next weekly visit')$$,'recurrence replay does not duplicate visit');
+-- TRACE-123: visits are created by admin_create_recurring_visit (SQL 095 covers creation and replay).
+select throws_ok($$select public.create_service_occurrence('53000000-0000-4000-8000-000000000003','56000000-0000-4000-8000-000000000003',now()+interval '7 days','Next weekly visit')$$,'22023','Create recurring visits with admin_create_recurring_visit','caller-keyed occurrence creation is retired');
+reset role;
+insert into public.service_requests(customer_id,service_type,address,service_catalog_id,frequency,zip_code,status,matching_status,recurrence_parent_id,occurrence_key,scheduled_start_at)
+ select customer_id,service_type,address,service_catalog_id,'weekly',zip_code,'matched','offered',id,'56000000-0000-4000-8000-000000000003',now()+interval '7 days'
+ from public.service_requests where id='53000000-0000-4000-8000-000000000003';
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000003"}',true);
 select lives_ok($$select public.record_job_operation('53000000-0000-4000-8000-000000000003','56000000-0000-4000-8000-000000000004','customer_cancel','Cancel this visit only')$$,'admin can cancel one visit with recorded policy');
 reset role;
 select is((select count(*) from public.service_requests where recurrence_parent_id='53000000-0000-4000-8000-000000000003'),1::bigint,'one auditable child occurrence');

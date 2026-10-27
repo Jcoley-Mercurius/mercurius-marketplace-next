@@ -8,7 +8,7 @@ A recurring price level can be sold as a prepaid bundle (a total price covering 
 
 ## Dependencies
 
-- **Phase 6.6 recurring operation** (PHASE-6-SCOPE): auditable visit identities, duplicate-safe occurrence generation and recurring charge timing. Prepaid visits must be 6.6 occurrences; this slice starts after 6.6's visit identity contract is merged.
+- **Phase 6.6 recurring operation** (PHASE-6-SCOPE): auditable visit identities, duplicate-safe occurrence generation and recurring charge timing. Prepaid visits must be 6.6 occurrences; this slice starts after 6.6's visit identity contract is merged. The contract is TRACE-123 ([record](PHASE-6-RECURRING-VISITS.md)): visit identity `private.recurring_visit_key(plan, Eastern date)` in `occurrence_key`, accepted terms in `private.recurring_series_terms` and attempts in `private.recurring_visit_generations`; per-visit allocations should reference the visit request and its identity.
 - **6.7 fulfillment**: homeowner-confirmed completion per visit (payout eligibility starts 48 hours after it).
 - **6.9 exceptions**: cancellation/rescheduling and provider cancellation under CFG-006/007, applied per visit share.
 - **Promotions money path** (TRACE-115/116, `20261018005000`/`006000`): the 7.5% rule and subsidy allocation; the promotions gate stays closed until its own finance review passes.

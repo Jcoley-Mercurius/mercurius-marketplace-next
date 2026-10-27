@@ -269,6 +269,24 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-049 — Recurring visit operating rules and charge timing
+
+**Status:** PROPOSED (drafted for Josh's approval by the 6.6 implementer, 2026-10-25); **not implemented**. 6.6a (TRACE-123) builds only what does not depend on these rules: visit identities, operator-created visits on the accepted plan terms, history and guards. **Date:** 2026-10-25 (America/New_York).
+
+**Context:** No approved rule says how recurring visits follow a cadence or when each becomes payable (roadmap Phase 6 carry-in; PHASE-5-CLOSURE-READINESS). Each item needs an answer before its sub-slice; the recommended default is in brackets. See [PHASE-6-RECURRING-VISITS.md](PHASE-6-RECURRING-VISITS.md) §4.
+
+1. **Anchoring.** [The first visit's Eastern date and time, agreed when the plan starts, is the anchor. Weekly and every two weeks: same weekday and time, +7/+14 days. Monthly, every two months, quarterly: the anchor's day of month, or the month's last day when shorter (31 Jan → 28/29 Feb → 31 Mar), always computed from the anchor so it never drifts.]
+2. **Horizon.** [Keep the next two visits created, never more than 60 days ahead; operators confirm each proposed visit until scheduled generation is approved separately.]
+3. **Daylight saving.** [Visits keep their Eastern wall time. A time that does not exist on a spring-forward date moves to the same minutes after 3:00 AM; a repeated fall-back time uses the first (EDT).] Implemented today: explicit times only; nonexistent times refused; the operator chooses EDT or EST.
+4. **Missed visits; pause, resume, end.** [A cancelled, declined, no-show or skipped visit does not move the cadence and creates no automatic make-up visit. Homeowner or operations may pause (no new visits), resume (next visit from the anchor on or after the resume date) or end the plan; ending cancels each remaining scheduled visit individually under CFG-006, never as one charge.]
+5. **When a visit is payable.** [Each visit's commercial snapshot is published after its provider accepts that visit; the homeowner receives a payment link through the existing checkout; no stored card and no automatic charge. An unpaid visit 24 hours before its appointment enters an operator queue (no automatic cancellation). Payout unchanged: 48 hours after that visit's homeowner-confirmed completion, held on dispute.] Requires the finance review gate before release.
+6. **Price change during a plan.** [Visits keep the accepted plan terms. A provider price change or new revision blocks new visits (as implemented) until the homeowner accepts the new terms through a new plan acceptance; operations is notified through the history.]
+7. **Quote-priced plans; promotions on plans.** [Quote-priced plans need a per-plan accepted quote that sets the visit price before visits are created. A promotion applies to the first visit only (one promotion per booking, DEC-2026-038), not to later visits.] Implemented today: both block visit creation.
+8. **Replacement provider for one visit.** [When the plan provider declines or lets a visit's offer expire, the existing fallback consent applies per visit; a replacement must accept the plan's visit price; the plan's provider is unchanged.]
+9. **Implementation choices to confirm.** One visit per plan per Eastern date (a cancelled visit keeps its date; a replacement on the same date is a 6.9 reschedule). The legacy `job_visits` generator is stopped (0 hosted rows); existing rows and functions are kept.
+
+**MPS impact:** answers §6.4/§6.6 recurring service operating rules once approved. **MDS impact:** proposed visits, pause/resume/end and unpaid visit states. **MTS impact:** cadence and charge-timing commands (6.6b/6.6c); scheduler only with separate activation approval. **Data/payment/security impact:** item 5 touches the money path and needs the two-person finance review; nothing activates payments, Cron or messages.
+
 ### DEC-2026-048 — Prepaid plans for recurring cadences
 
 **Status:** APPROVED owner answers (Josh, 2026-10-24, vendor onboarding review item 4) and APPROVED owner rules for the open items (Josh, 2026-10-25, Codex review of PR #110); **not implemented**. Implementation is its own slice ([brief](PHASE-6-PREPAID-PLANS-BRIEF.md)) because it changes checkout, scheduling, payout and refunds, and the money path needs finance review. **Date:** 2026-10-24, amended 2026-10-25 (America/New_York).
