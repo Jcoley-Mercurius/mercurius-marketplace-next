@@ -8,7 +8,8 @@
 - Implementation choices for review: off-cadence visits count toward the two but handle no date until linked; skips/links are scoped to their anchor; proposal creation recomputes proposals under the lock (stale → `40001`, nothing recorded); lifecycle actions notify nobody.
 - Evidence: record §7. Not run: hosted migration, `@visual`, screen reader, full non-visual browser suite, CI (pending push).
 - Open: 6.6c charge timing (DEC-2026-049 items 5–8, finance review); `money_source` current-tier-price gap; homeowner self-service pause; lifecycle notifications (Phase 7); 6.9 per-visit cancellation economics.
-- Next: Codex review; with owner authorization, dry run then push `20261026002000` before merge (DEC-2026-037).
+- PR #112 (CI green on `c54a5ba`; a cancelled duplicate push run is not a failure). Hosted: `20261026002000` pushed 2026-10-27 at the owner's instruction (dry run listed only it); read back as in the record §7; fingerprint `42 | 1fe362b…`; dry run now up to date.
+- Next: owner merges PR #112 (production deploy); then 6.6c (DEC-2026-049 items 5–8, finance review) or the prepaid slice.
 
 ## Phase 6.6a recurring visits: identities and duplicate-safe creation (TRACE-123), 2026-10-25
 
