@@ -2,12 +2,13 @@
 
 ## Phase 6.6a recurring visits: identities and duplicate-safe creation (TRACE-123), 2026-10-25
 
-- Branch `claude/phase6-6-recurring-visits` in worktree `../mercurius-phase6-6-recurring-visits`, from `main` `0138080` (main CI run 40242555358 green). Record: [PHASE-6-RECURRING-VISITS.md](../../governance/PHASE-6-RECURRING-VISITS.md). Not committed for review yet.
+- Branch `claude/phase6-6-recurring-visits` in worktree `../mercurius-phase6-6-recurring-visits`, from `main` `0138080` (main CI run 40242555358 green). Record: [PHASE-6-RECURRING-VISITS.md](../../governance/PHASE-6-RECURRING-VISITS.md). Committed as PR #111.
 - Migration `20261026001000` (not pushed): accepted plan terms recorded at acceptance; visit identity = plan + Eastern date; `admin_create_recurring_visit` (replay, recorded blocked outcomes, plan provider/package/level/price only); `recurring_series` readback; plan never worked on itself; legacy `job_visits` triggers dropped; `create_service_occurrence` refuses. UI `RecurringVisitsPanel` (admin, homeowner, vendor).
 - Open: DEC-2026-049 (PROPOSED) cadence, horizon, DST/month-end, missed visits, pause/end, per-visit charge timing, price changes, quote/promotion plans, replacement provider. 6.6 not complete. Tax confirmation (6.4) and appointment confirmation E1 (6.5) remain separate.
 - Hosted read-only 2026-10-25: 3 recurring requests (cancelled), 0 occurrences, 0 `job_visits`, 0 identities. PR #110's `20261025001000` is in hosted history and effective (anon/authenticated cannot select `policy_notes`); PR #110 deployed at `0138080` (22:58 UTC); the push itself is not recorded elsewhere and its timing relative to the deploy was not verified.
 - Evidence: record §5. SQL 095 99/99; full SQL 86 files 4,939 PASS after a clean replay of 200; concurrency 3/3; unit 518/518; lint, typecheck, secret scan clean; synthetic build; browser `recurring-visits` 8/8, regression 70/73 with the 3 load timeouts passing alone. Not run: full non-visual suite, `@visual`, screen reader, CI, hosted.
-- Next: Codex review; owner answers DEC-2026-049; owner pushes `20261026001000` (dry run first) before merge; then 6.6b/6.6c or the prepaid slice.
+- PR #111. Hosted: `20261026001000` pushed 2026-10-26 at the owner's instruction (dry run listed only it); read back as in the record §6; dry run now up to date.
+- Next: Codex review; owner answers DEC-2026-049; then 6.6b/6.6c or the prepaid slice.
 
 ## TRACE-122 review corrections (PR #110), 2026-10-25
 
