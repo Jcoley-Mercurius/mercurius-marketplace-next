@@ -110,6 +110,8 @@ jobs:
         run: node scripts/phase5-late-reversal-concurrency.mjs
       - name: Concurrent recurring visit creation
         run: node scripts/recurring-visit-concurrency.mjs
+      - name: Concurrent recurring cadence, pause and stop
+        run: node scripts/recurring-cadence-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay

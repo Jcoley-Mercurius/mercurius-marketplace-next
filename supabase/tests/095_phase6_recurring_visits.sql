@@ -161,7 +161,8 @@ select is((select row(contractor_id, package_id, package_tier_id, base_price::nu
   '(95200000-0000-4000-8000-000000000001,95400000-0000-4000-8000-000000000001,95500000-0000-4000-8000-000000000001,40.00,45.00,pending)',
   'the visit has its own exclusive offer to the plan provider on the plan terms');
 select is(pg_temp.visit(5, pg_temp.id('s1'), pg_temp.k(1), pg_temp.day(10), 'First visit agreed') - 'generation_id' - 'visit_key' - 'starts_at' - 'local_start',
-  jsonb_build_object('code', null, 'outcome', 'created', 'replayed', true, 'timezone', 'America/New_York', 'occurrence_id', pg_temp.id('v1')),
+  jsonb_build_object('code', null, 'outcome', 'created', 'replayed', true, 'timezone', 'America/New_York', 'occurrence_id', pg_temp.id('v1'),
+    'source', 'manual', 'cadence_date', null),
   'a retry with the same key and intent returns the recorded result');
 select throws_ok($$select pg_temp.visit(5, pg_temp.id('s1'), pg_temp.k(1), pg_temp.day(10, '10:00'), 'First visit agreed')$$, '22023',
   'Operation key reused with different intent', 'the same key with another time is refused');

@@ -1,4 +1,5 @@
 import { formatAppointment } from "@/lib/offerStatus";
+import type { AnchorEntry, CadencePreview, CadenceResolution, LifecycleEntry, PlanState } from "@/lib/recurringCadence";
 
 // TRACE-123 (Phase 6.6): a recurring request accepted by a provider is the plan; each visit is a
 // separate service with its own provider acceptance, work, evidence and payment. Operations adds a
@@ -8,7 +9,8 @@ import { formatAppointment } from "@/lib/offerStatus";
 export type SeriesViewer = "admin" | "vendor" | "homeowner";
 export type BlockCode =
   | "series_not_active" | "terms_missing" | "quote_terms" | "promotion_decision"
-  | "homeowner_not_admitted" | "terms_changed" | "provider_ineligible" | "visit_date_taken";
+  | "homeowner_not_admitted" | "terms_changed" | "provider_ineligible" | "visit_date_taken"
+  | "series_paused" | "series_ended";
 export type SeriesVisit = {
   id: string;
   visit_key: string;
@@ -21,6 +23,9 @@ export type SeriesVisit = {
   provider_completed_at: string | null;
   homeowner_confirmed_at: string | null;
   payment: "none" | "awaiting_payment" | "paid" | null;
+  /** Operations only (TRACE-124): on a cadence date of the current anchor, and the cadence date it replaces. */
+  on_cadence?: boolean | null;
+  replaces?: { cadence_date: string; anchor_id: string; current_anchor: boolean } | null;
 };
 export type SeriesHistoryEntry = {
   id: string;
@@ -33,6 +38,8 @@ export type SeriesHistoryEntry = {
   actor: "operations";
   reason: string;
   operation_key: string | null;
+  source?: "manual" | "cadence";
+  cadence_date?: string | null;
 };
 export type SeriesReadback = {
   series_id: string;
@@ -53,6 +60,14 @@ export type SeriesReadback = {
   } | null;
   visits: SeriesVisit[];
   history: SeriesHistoryEntry[];
+  plan_state: PlanState;
+  anchor: { starts_at: string; local_start: string } | null;
+  // Operations only (TRACE-124).
+  anchor_id?: string | null;
+  cadence?: CadencePreview;
+  anchors?: AnchorEntry[];
+  lifecycle?: LifecycleEntry[];
+  resolutions?: CadenceResolution[];
 };
 export type CreateResult = { outcome: SeriesHistoryEntry["outcome"]; code: BlockCode | null; occurrence_id: string | null; starts_at: string };
 
@@ -103,6 +118,8 @@ export function blockMessage(code: BlockCode | null) {
     case "promotion_decision": return "This plan has a promotion. How a promotion applies to each visit hasn’t been decided, so no visit was added.";
     case "homeowner_not_admitted": return "The homeowner’s access for this service and ZIP has ended, so no visit was added.";
     case "terms_changed": return "The provider’s price, package or the property changed since the plan was accepted. No visit was added and no other price or provider was used.";
+    case "series_paused": return "The plan is paused, so no visit was added. Resume the plan first.";
+    case "series_ended": return "Future visits for this plan were stopped, so no visit was added.";
     case "provider_ineligible": return "The plan’s provider can’t take this visit right now (coverage, status or eligibility). No visit was added and no other provider was offered it.";
     default: return "No visit was added.";
   }
@@ -110,7 +127,7 @@ export function blockMessage(code: BlockCode | null) {
 
 export function historyLine(entry: SeriesHistoryEntry) {
   const when = formatAppointment(entry.starts_at);
-  if (entry.outcome === "created") return `Visit added: ${when}`;
+  if (entry.outcome === "created") return entry.source === "cadence" ? `Proposed visit added: ${when}` : `Visit added: ${when}`;
   if (entry.outcome === "existing") return `Already added: ${when}; nothing new was created`;
   return `Not added: ${when}`;
 }

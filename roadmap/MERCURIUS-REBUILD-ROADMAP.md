@@ -207,6 +207,9 @@ recurring generation and charge timing.
 2026-10-25: 6.6a (TRACE-123) implements recurring visit identities and duplicate-safe, operator-created
 visits on the accepted plan terms ([record](../governance/PHASE-6-RECURRING-VISITS.md)); cadence and
 charge timing remain open pending DEC-2026-049 (proposed).
+2026-10-27: 6.6a merged (PR #111). 6.6b (TRACE-124) implements the approved cadence rules (DEC-2026-049 items 1–4, 9):
+recorded anchor, operator-confirmed proposals, skipped/replaced dates, pause/resume/stop future visits. Charge timing
+(6.6c, items 5–8) remains open; recurring payments are not activated.
 
 **Outcome:** each role can complete its core job using the approved lifecycle and design patterns.
 

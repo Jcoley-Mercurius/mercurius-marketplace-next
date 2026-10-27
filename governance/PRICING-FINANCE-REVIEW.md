@@ -190,6 +190,8 @@ Record against:
 
 TRACE-123 (2026-10-25, `20261026001000`): `create_service_occurrence` now refuses and `admin_create_recurring_visit` carries a plan's priced add-on selection into each visit, offered only on the accepted package, level and revision. The list gains that function (40 functions), so the fingerprint differs from the 2026-10-20 rehearsal value; reviewers cover this change too (record the new value on the reviewed commit).
 
+TRACE-124 (2026-10-27, `20261026002000`): the `admin_create_recurring_visit` body moves into `private.create_recurring_visit_core` (adds the recorded paused/stopped refusals and the cadence source; the pricing, offer and terms checks are unchanged) and `public.admin_create_cadence_visit` reaches the same core. Both join the list (42 functions); the local value on this branch is `42 | 1fe362b252a565ffe58d3f0ad36e1ee4`. Recurring visit charge timing (6.6c) is not built.
+
 | Reviewer (name) | Role | Date | Commit SHA | File hashes match | Decision | Findings |
 |---|---|---|---|---|---|---|
 | | | | | | | |

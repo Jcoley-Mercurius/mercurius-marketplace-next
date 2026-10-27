@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { EasternDateTimeField, easternInstant, type EasternDateTimeValue } from "@/components/ui/eastern-date-time-field";
 import { formatAppointment, localStartParam } from "@/lib/appointments";
-import { blockMessage, historyLine, paymentLabel, recordedAttempt, seriesErrorMessage, termsLine, visitState, type CreateResult, type SeriesReadback, type SeriesViewer } from "@/lib/recurringVisits";
+import { anchorLine, formatCadenceDate, planStateLabel } from "@/lib/recurringCadence";
+import { blockMessage, cadenceLabel, historyLine, paymentLabel, recordedAttempt, seriesErrorMessage, termsLine, visitState, type CreateResult, type SeriesReadback, type SeriesViewer } from "@/lib/recurringVisits";
+import { RecurringCadenceControls } from "@/components/dashboard/RecurringCadenceControls";
 import { createClient } from "@/lib/supabase/client";
 
 const emptyEntry: EasternDateTimeValue = { date: "", time: "", choice: "" };
@@ -14,7 +16,9 @@ type Load = { state: "loading" } | { state: "error"; permission: boolean } | { s
 
 // TRACE-123: the plan's accepted terms, its visits (each with its own acceptance, work and
 // payment) and the history of every attempt to add one. Operations adds one visit at a time at an
-// Eastern wall time; nothing is scheduled automatically.
+// Eastern wall time; nothing is scheduled automatically. TRACE-124: the plan state and cadence
+// anchor for everyone; for operations, proposals and pause/resume/stop (RecurringCadenceControls),
+// and manual visits for off-cadence or make-up visits.
 export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: string; role: SeriesViewer; onChanged?: () => void }) {
   const headingId = useId();
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -61,7 +65,7 @@ export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: 
   }
 
   const series = load.series;
-  const canAdd = role === "admin" && series.status === "scheduled" && series.has_provider;
+  const canAdd = role === "admin" && series.status === "scheduled" && series.has_provider && series.plan_state === "active";
   const entryInstant = easternInstant(entry);
   const upcoming = series.visits;
 
@@ -109,6 +113,7 @@ export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: 
         <h3 id={headingId} className="font-semibold">Recurring visits</h3>
         <p className="font-medium" data-testid="series-terms">{series.terms ? termsLine(series.terms) : "No accepted plan terms yet"}</p>
         <p className="text-sm text-muted-foreground">Each visit is a separate service: the provider accepts it, does the work and records evidence for that visit alone{role === "vendor" ? "." : ", and each visit is paid on its own."}</p>
+        <p className="text-sm" data-testid="plan-schedule"><span className="font-medium">{planStateLabel(series.plan_state)}</span> · {anchorLine(cadenceLabel(series.frequency), series.anchor)}</p>
         <p className="text-xs text-muted-foreground">Visit times are shown in Eastern Time (America/New_York).</p>
       </div>
     </div>
@@ -122,12 +127,16 @@ export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: 
           <p className="font-medium">{formatAppointment(visit.starts_at)}</p>
           <p className="text-muted-foreground">{visitState(visit)}</p>
           {paymentLabel(visit.payment) && <p className="text-muted-foreground">Payment: {paymentLabel(visit.payment)}</p>}
+          {role === "admin" && visit.replaces && <p className="text-muted-foreground">Replaces the cadence date {formatCadenceDate(visit.replaces.cadence_date)}{visit.replaces.current_anchor ? "" : " (earlier anchor)"}</p>}
+          {role === "admin" && !visit.replaces && visit.on_cadence === false && <p className="text-muted-foreground">Off-cadence visit</p>}
         </li>)}</ol>}
     </div>
 
+    {role === "admin" && <RecurringCadenceControls seriesId={seriesId} series={series} reread={read} onChanged={onChanged} />}
+
     {role === "admin" && <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-      <h4 className="text-sm font-semibold">Add a visit</h4>
-      <p className="text-sm text-muted-foreground">Visits are added one at a time. Automatic scheduling, missed-visit handling and when each visit is charged aren’t set up yet.</p>
+      <h4 className="text-sm font-semibold">Add a visit manually</h4>
+      <p className="text-sm text-muted-foreground">For an off-cadence or make-up visit at any future time; the 60-day and 24-hour proposal limits don’t apply. If it stands in for a cadence date, link it under Off-cadence visits. Nothing is scheduled automatically, and when each visit is charged isn’t set up yet.</p>
       {canAdd ? <>
         <EasternDateTimeField legend="Visit time" value={entry} onChange={setEntry} />
         <ConfirmAction requireReason triggerLabel="Review visit" disabled={!entryInstant} confirmationTone="commitment"
@@ -135,7 +144,8 @@ export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: 
           consequence="The plan’s provider receives an exclusive offer for this visit at the accepted plan price; they accept it separately. If the price, package, property or provider’s eligibility changed, nothing is added and no other provider or price is used. No charge is made."
           reasonHelp="The homeowner sees this reason." confirmLabel="Add visit"
           onConfirm={reason => addVisit(reason, entryInstant!, localStartParam(entry.date, entry.time))} />
-      </> : <p className="text-sm text-muted-foreground">A visit can be added only while the plan is active with an accepted provider.</p>}
+      </> : <p className="text-sm text-muted-foreground">{series.plan_state === "paused" ? "The plan is paused. Resume it to add visits."
+        : series.plan_state === "ended" ? "Future visits for this plan were stopped." : "A visit can be added only while the plan is active with an accepted provider."}</p>}
     </div>}
 
     {role === "admin" && <div className="space-y-2">
