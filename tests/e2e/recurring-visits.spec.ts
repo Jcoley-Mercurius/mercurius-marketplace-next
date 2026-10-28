@@ -5,6 +5,8 @@
 // an off-cadence visit, pause and "stop future visits" with the visits that stay in place.
 // Synthetic fixture only; outcomes come from stubbed read-backs, and the real commands are proven
 // by SQL 095/096 and scripts/recurring-visit-concurrency.mjs and recurring-cadence-concurrency.mjs.
+// TRACE-125: each visit's payment state, the homeowner's link into the reviewed checkout and the
+// operations payment queue (stubbed; the commands are proven by SQL 097 and recurring-payment-concurrency.mjs).
 import { test, expect, type Page, type Route } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { syntheticSession } from "../fixtures/browser-session";
@@ -15,7 +17,7 @@ const axe = async (page: Page) => (await new AxeBuilder({ page }).withTags(["wca
 type Row = Record<string, unknown>;
 type Reply = "ok" | "abort" | { status: number; body: Row };
 type State = { visits: Row[]; history: Row[]; calls: Row[]; create?: Reply; read?: Reply; onCreate?: (body: Row) => Row;
-  planState?: string; anchor?: Row | null; admin?: Row; commands?: Row[]; onCommand?: (rpc: string, body: Row) => void };
+  planState?: string; anchor?: Row | null; admin?: Row; commands?: Row[]; onCommand?: (rpc: string, body: Row) => void; queue?: Row[] };
 
 const terms = { provider: "Synthetic Vendor", package: "Synthetic lawn plan", price_level: "Weekly", pricing_mode: "fixed", frequency: "weekly",
   visit_price: 40, visit_total: 45, has_addons: true, accepted_at: "2030-10-01T12:00:00Z" };
@@ -50,6 +52,7 @@ async function open(page: Page, role: "admin" | "homeowner" | "vendor", state: S
   await page.route("**/rest/v1/rpc/job_schedule", route => route.fulfill({ json: { timezone: "America/New_York", status: "scheduled", matching_status: "matched",
     has_provider: true, recurring: true, appointment: null, open_request: null, history: [] } }));
   await page.route("**/rest/v1/rpc/recurring_series", route => reply(route, state.read ?? "ok", readback(state)));
+  await page.route("**/rest/v1/rpc/admin_recurring_payment_queue", route => route.fulfill({ json: { checked_at: "2030-11-04T15:00:00Z", items: state.queue ?? [] } }));
   await page.route(/rest\/v1\/rpc\/admin_(record_recurring_anchor|resolve_cadence_date|set_recurring_plan_state)$/, async route => {
     const rpc = new URL(route.request().url()).pathname.split("/").pop()!;
     const body = route.request().postDataJSON() as Row;
@@ -90,7 +93,7 @@ test.describe("device in Pacific Time", () => {
       const panel = dialog.getByRole("region", { name: "Recurring visits" });
       await expect(panel.getByTestId("series-terms")).toHaveText("Weekly · $45.00 a visit, including add-ons · Synthetic Vendor");
       await expect(panel.getByText("No visits have been added yet.")).toBeVisible();
-      await expect(panel.getByText(/the 60-day and 24-hour proposal limits don’t apply.*when each visit is charged isn’t set up yet/)).toBeVisible();
+      await expect(panel.getByText(/the 60-day and 24-hour proposal limits don’t apply.*payable only after its provider accepts it and Mercurius reviews its price/)).toBeVisible();
       await expect(panel.getByRole("button", { name: "Review visit" })).toBeDisabled();
       expect(await axe(page)).toEqual([]);
 
@@ -202,7 +205,7 @@ test("homeowner: reads each visit and its payment, with no way to add one", asyn
 
 test("provider: the plan card has no start action; details show visits without payment", async ({ page }) => {
   test.slow();
-  const state: State = { calls: [], history: [], visits: [visit({ status: "scheduled", matching_status: "matched", offer: "accepted", payment: null })] };
+  const state: State = { calls: [], history: [], visits: [visit({ status: "scheduled", matching_status: "matched", offer: "accepted", payment: null, payment_state: null })] };
   const card = await open(page, "vendor", state, 320);
   await expect(card.getByText("Recurring plan · each visit is offered and started separately")).toBeVisible();
   await expect(card.getByRole("button", { name: "Start job" })).toHaveCount(0);
@@ -380,5 +383,66 @@ test("homeowner: sees that the plan is paused and its cadence, with no schedule 
   await expect(panel.getByTestId("plan-schedule")).toHaveText("Paused · no new visits · Weekly, counted from Tue, Nov 5, 2030, 9:00 AM EST");
   await expect(panel.getByRole("region", { name: "Plan schedule" })).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /Pause|Resume|Stop future visits|Skip/ })).toHaveCount(0);
+  expect(await axe(page)).toEqual([]);
+});
+
+// TRACE-125 ---------------------------------------------------------------------------------------
+const snapshot = "00000000-0000-4000-8000-0000000000c1";
+const pay = (overrides: Row): Row => ({ state: "ready", reason: null, action: "pay", snapshot_id: snapshot, amount_cents: 4500,
+  accepted_at: "2030-11-01T14:00:00Z", attempt_status: null, ...overrides });
+const accepted = (starts: string, local: string, payment_state: Row): Row => visit({ starts_at: starts, local_start: local, status: "scheduled",
+  matching_status: "matched", offer: "accepted", payment_state });
+
+test("homeowner 320px: pays a ready visit through the reviewed checkout; no pay action otherwise", async ({ page }) => {
+  test.slow();
+  const state: State = { calls: [], history: [], visits: [
+    accepted("2030-11-05T14:00:00Z", "2030-11-05T09:00:00", pay({})),
+    accepted("2030-11-12T14:00:00Z", "2030-11-12T09:00:00", pay({ state: "processing", action: "continue", attempt_status: "session_created" })),
+    accepted("2030-11-19T14:00:00Z", "2030-11-19T09:00:00", pay({ state: "unknown", action: null })),
+    accepted("2030-11-26T14:00:00Z", "2030-11-26T09:00:00", pay({ state: "review_pending", reason: "no_snapshot", action: null, snapshot_id: null })),
+    accepted("2030-12-03T14:00:00Z", "2030-12-03T09:00:00", pay({ state: "paid", action: null })),
+  ] };
+  const dialog = await open(page, "homeowner", state, 320);
+  const items = dialog.getByRole("region", { name: "Recurring visits" }).getByRole("list").first().getByRole("listitem");
+  await expect(items.nth(0)).toContainText("Payment: Ready to pay · $45.00");
+  await expect(items.nth(0).getByRole("link", { name: "Review and pay" })).toHaveAttribute("href", `/checkout/${snapshot}?mode=full`);
+  await expect(items.nth(1)).toContainText("Payment: Payment in progress");
+  await expect(items.nth(1).getByRole("link", { name: "Continue payment" })).toHaveAttribute("href", `/checkout/${snapshot}?mode=full`);
+  await expect(items.nth(2)).toContainText("Mercurius is confirming this payment. Don’t pay again.");
+  await expect(items.nth(3)).toContainText("Payment opens after Mercurius reviews this visit’s price");
+  await expect(items.nth(4)).toContainText("Payment: Paid · $45.00");
+  for (const n of [2, 3, 4]) await expect(items.nth(n).getByRole("link")).toHaveCount(0);
+  await expect(dialog).not.toContainText("Package Reviews");
+  expect(await page.locator("[role=dialog]").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  // At 320px the dashboard header behind the dialog has a pre-existing 4.49:1 subtitle (recorded,
+  // outside this slice), so this width scans the dialog; the full page is scanned at 1440px.
+  expect((await new AxeBuilder({ page }).include("[role=dialog]").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  expect(await axe(page)).toEqual([]);
+});
+
+test("admin: the payment queue separates review missing, ready, failed and unknown; a blocked visit names its recovery", async ({ page }) => {
+  test.slow();
+  const problem = { code: "package_in_review", message: "The plan’s package is held in Package Reviews.", recovery: "Approve or correct it in Package Reviews. The visit keeps its accepted price." };
+  const item = (kind: string, detail: Row, aged = false): Row => ({ kind, request_id: crypto.randomUUID(), series_id: planId, service_type: "Synthetic Lawn Service",
+    since: "2030-11-04T14:00:00Z", due_at: "2030-11-05T14:00:00Z", aged, exception_id: null, detail: { starts_at: "2030-11-05T14:00:00Z", amount_cents: 4500, ...detail } });
+  const state: State = { calls: [], history: [], visits: [accepted("2030-11-05T14:00:00Z", "2030-11-05T09:00:00",
+      pay({ state: "review_pending", reason: "no_snapshot", action: null, snapshot_id: null, problem }))],
+    queue: [item("review_missing", { state: "review_pending", reason: "no_snapshot", problem }, true), item("ready_unpaid", { state: "ready" }),
+      item("payment_failed", { state: "failed" }), item("payment_unresolved", { state: "unknown" })] };
+  const dialog = await open(page, "admin", state);
+  await expect(dialog.getByTestId("visit-payment")).toHaveText("Payment: Waiting for commercial review · $45.00");
+  await expect(dialog.getByTestId("visit-payment-problem")).toContainText("The visit keeps its accepted price.");
+  await expect(dialog.getByRole("link", { name: /pay/i })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  const queue = page.getByRole("list", { name: "Recurring visit payments" });
+  await expect(queue.getByRole("listitem")).toHaveCount(4);
+  await expect(queue.getByRole("listitem").nth(0)).toContainText("Visit needs commercial review");
+  await expect(queue.getByRole("listitem").nth(0)).toContainText("Appointment passed");
+  await expect(queue.getByRole("listitem").nth(0)).toContainText("Approve or correct it in Package Reviews.");
+  await expect(queue.getByRole("listitem").nth(1)).toContainText("Visit ready but unpaid");
+  await expect(queue.getByRole("listitem").nth(2)).toContainText("Payment not completed");
+  await expect(queue.getByRole("listitem").nth(3)).toContainText("Payment outcome unknown");
+  await expect(page.getByRole("region", { name: "Recurring visit payments" }).getByRole("button", { name: /charge|cancel|publish/i })).toHaveCount(0);
   expect(await axe(page)).toEqual([]);
 });

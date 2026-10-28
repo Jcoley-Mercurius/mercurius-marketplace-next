@@ -43,6 +43,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminQuotePanel } from "@/components/quotes/AdminQuotePanel";
 import { AdminQuoteQueue } from "@/components/quotes/AdminQuoteQueue";
+import { AdminRecurringPaymentQueue } from "@/components/dashboard/AdminRecurringPaymentQueue";
 import { Status as LifecycleStatus } from "@/components/ui/status";
 import { canonicalRequestState, adminTransitionTargets } from "@/lib/lifecycle";
 import { ConfirmAction } from "@/components/ui/confirm-action";
@@ -349,6 +350,7 @@ export default function AdminRequestsPage() {
     <header><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Service operations</p><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-heading text-3xl font-semibold tracking-tight">Service Requests</h1><p className="mt-2 text-sm text-muted-foreground">{requests.length} live request{requests.length === 1 ? "" : "s"} across the platform</p></div><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button></div></header>
 
     <AdminQuoteQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
+    <AdminRecurringPaymentQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
 
     {overdueCount > 0 && <div className="flex flex-col gap-3 rounded-xl border border-status-danger bg-status-danger-bg p-4 text-status-danger sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0" /><div><p className="text-sm font-medium">{overdueCount} matched request{overdueCount === 1 ? " is" : "s are"} overdue</p><p className="mt-0.5 text-xs text-status-danger">Release the match for reassignment or coordinate directly with the vendor.</p></div><Button size="sm" variant="outline" className="sm:ml-auto" onClick={() => setStatusFilter("matched")}>View matched</Button></div>}
 

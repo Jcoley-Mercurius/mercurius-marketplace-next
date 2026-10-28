@@ -1,5 +1,23 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.6c recurring visit payments (TRACE-125), 2026-10-27
+
+- Branch `claude/phase6-6c-recurring-payments` from `main` `5e6d6ce` (PR #112 merge; main CI 40515529609 green). Record: [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](../../governance/PHASE-6-RECURRING-PAYMENTS-BRIEF.md).
+- Owner decision 2026-10-27 recorded in DEC-2026-049: items 5–6 approved; items 7–8 kept blocked (proposed rules not approved). MPS §6.4 updated; 6.7 acceptance item for unpaid start added to PHASE-6-SCOPE.
+- Migration `20261027001000` (additive, **not pushed**):
+  - a visit priced from its bound plan terms (`recurring_visit_terms`, `recurring_visit_source_check`) with catalog-stable evidence (`money_source` restated, one-time path byte-identical);
+  - shared G6 classification `money_payment_exceptions` (quote queue restated onto it);
+  - `recurring_visit_payment`, `admin_recurring_payment_queue`, `recurring_series` restated.
+- UI: homeowner "Review and pay" link to `/checkout/{snapshot}`; `AdminRecurringPaymentQueue` on `/admin/requests`.
+- Evidence: brief §8 (clean replay 202 migrations; SQL 5,213 PASS; SQL 097 117/117; concurrency; browser 14/14). Fingerprint `44 | f845be9c…`.
+- Open:
+  - **two-person finance review before merge, reviewers not named**;
+  - hosted push and merge (separate authorization);
+  - TRACE-126 one-time accepted-price exposure (separate slice);
+  - F11 add-on visit acceptance after a price change;
+  - F13 dashboard header contrast at 320 px.
+- Next: owner names the finance reviewers; Codex reviews the diff.
+
 ## Phase 6.6b recurring cadence and plan controls (TRACE-124), 2026-10-27
 
 - Branch `claude/phase6-6b-recurring-cadence` from `main` `61f0601` (PR #111 merge; PR #111 checks and main CI 40435258272 green; nothing merged since). Record: [PHASE-6-RECURRING-VISITS.md §7](../../governance/PHASE-6-RECURRING-VISITS.md).
