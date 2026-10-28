@@ -258,6 +258,9 @@ update public.vendor_packages set needs_review = true where id = '97400000-0000-
 select set_config('request.jwt.claims','',true);
 select is(pg_temp.refusal(pg_temp.id('v3')), 'recurring_visit:package_in_review', 'a package in review blocks the visit''s source');
 select is(pg_temp.pay(pg_temp.id('v3'))#>>'{problem,code}', 'package_in_review', 'and the payment state names it');
+select is(pg_temp.pay(pg_temp.id('v3'))->>'reason', 'source_blocked', 'as blocked terms, not merely a missing review');
+select is(pg_temp.q(pg_temp.id('v3'), pg_temp.day(17) at time zone 'America/New_York' - interval '1 hour')->>'reason', 'source_blocked',
+  'the queue item carries the blocked-terms reason');
 select ok(length(pg_temp.pay(pg_temp.id('v3'))#>>'{problem,recovery}') > 0, 'with a recovery');
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
 update public.vendor_packages set needs_review = false where id = '97400000-0000-4000-8000-000000000001';
@@ -330,6 +333,7 @@ delete from public.service_requests where id = '97300000-0000-4000-8000-00000000
 select set_config('t.v5', (select scheduled_start_at from public.service_requests where id = pg_temp.id('v5'))::text, true);
 select is(pg_temp.q(pg_temp.id('v5'), current_setting('t.v5')::timestamptz - interval '24 hours 1 minute'), null, 'absent 24 h + 1 min before the appointment');
 select is(pg_temp.q(pg_temp.id('v5'), current_setting('t.v5')::timestamptz - interval '24 hours')->>'kind', 'review_missing', 'present at exactly 24 h: review missing');
+select is(pg_temp.q(pg_temp.id('v5'), current_setting('t.v5')::timestamptz - interval '24 hours')->>'reason', 'no_snapshot', 'because no snapshot exists yet');
 select is((pg_temp.q(pg_temp.id('v5'), current_setting('t.v5')::timestamptz - interval '24 hours')->>'since')::timestamptz,
   current_setting('t.v5')::timestamptz - interval '24 hours', 'since the 24-hour threshold');
 select is((pg_temp.q(pg_temp.id('v5'), current_setting('t.v5')::timestamptz - interval '24 hours')->>'aged')::boolean, false, 'not aged before the appointment');
@@ -338,6 +342,14 @@ insert into fx values ('v5snap', pg_temp.publish(pg_temp.id('v5'), 4000, 0, inte
 select is(pg_temp.q(pg_temp.id('v5'), current_setting('t.v5')::timestamptz - interval '12 hours')->>'kind', 'ready_unpaid', 'after publication: ready but unpaid');
 select is(pg_temp.pay(pg_temp.id('v5'), now() + interval '40 days')->>'reason', 'snapshot_expired',
   'an expired snapshot is waiting for review again');
+select is(pg_temp.q(pg_temp.id('v5'), now() + interval '40 days')->>'reason', 'snapshot_expired', 'and the queue says the reviewed terms expired');
+-- A dispute or refund holds the obligation: a distinct reason, no pay action.
+update public.money_obligations set dispute_open = true where service_request_id = pg_temp.id('v5');
+select is(pg_temp.pay(pg_temp.id('v5'))->>'reason', 'held', 'a dispute holds the visit''s payment');
+select is(pg_temp.pay(pg_temp.id('v5'))->>'action', null, 'with no pay action');
+select is(pg_temp.q(pg_temp.id('v5'), current_setting('t.v5')::timestamptz - interval '12 hours')->>'reason', 'held', 'and the queue says it is held');
+update public.money_obligations set dispute_open = false where service_request_id = pg_temp.id('v5');
+select is(pg_temp.pay(pg_temp.id('v5'))->>'state', 'ready', 'released, it is ready again');
 -- Late acceptance: a manual visit 10 hours away, accepted now, appears at once since its acceptance.
 insert into fx values ('v6', pg_temp.visit(pg_temp.id('s3'), 6, date_trunc('minute', (now() + interval '10 hours') at time zone 'America/New_York')));
 select isnt(pg_temp.id('v6'), null, 'a manual visit 10 hours away is created');
@@ -371,6 +383,10 @@ select is((pg_temp.q(pg_temp.id('v8'))->>'since')::timestamptz, (select received
   'since the webhook');
 insert into fx values ('v8a2', (pg_temp.checkout(2, pg_temp.id('v8snap'))->>'id')::uuid);
 select isnt(pg_temp.id('v8a2'), pg_temp.id('v8a1'), 'a retry after failure is a new attempt');
+-- Tie-break: both attempts were created in this one transaction, so their created_at is equal; the
+-- latest is the higher attempt_number (the retry), never a random id.
+select is((select count(distinct created_at)||':'||max(attempt_number) from public.money_checkout_attempts where snapshot_id = pg_temp.id('v8snap')), '1:2',
+  'the two attempts tie on created_at; the retry is attempt 2');
 select is(pg_temp.pay(pg_temp.id('v8'))->>'state', 'processing', 'which is processing');
 select lives_ok(format($$select public.money_flag_checkout(%L,'synthetic_lost_response')$$, pg_temp.id('v8a2')), 'a lost provider response flags the attempt');
 select is(pg_temp.pay(pg_temp.id('v8'))->>'state', 'unknown', 'the outcome is unknown, not failed or paid');
@@ -392,6 +408,19 @@ select set_eq(
   'the quote queue lists exactly the shared payment exceptions');
 select is((select count(*) from jsonb_array_elements(pg_temp.call(5, 'select public.admin_quote_queue()')->'items') i
   where i->>'request_id' = pg_temp.id('v8')::text and i->>'kind' = 'payment_unresolved'), 1::bigint, 'including the visit''s unresolved payment');
+-- Both queues name the same obligation and carry the same classification for it.
+create function pg_temp.quote_item(p_request uuid) returns jsonb language sql as $$
+  select i from jsonb_array_elements(pg_temp.call(5, 'select public.admin_quote_queue()')->'items') i
+  where i->>'request_id' = p_request::text and i->>'kind' in ('payment_failed', 'payment_unresolved') $$;
+select is((pg_temp.q(pg_temp.id('v8'))->>'obligation_id')::uuid, (select id from public.money_obligations where service_request_id = pg_temp.id('v8')),
+  'the recurring queue names the visit''s obligation');
+select is((pg_temp.quote_item(pg_temp.id('v8'))#>>'{detail,obligation_id}')::uuid, (pg_temp.q(pg_temp.id('v8'))->>'obligation_id')::uuid,
+  'the quote queue names the same obligation');
+select is(pg_temp.q(pg_temp.id('v8'))->>'kind', pg_temp.quote_item(pg_temp.id('v8'))->>'kind', 'with the same kind');
+select is(pg_temp.q(pg_temp.id('v8'))->>'since', pg_temp.quote_item(pg_temp.id('v8'))->>'since', 'the same clock');
+select is(pg_temp.q(pg_temp.id('v8'))#>'{detail,exception}', pg_temp.quote_item(pg_temp.id('v8'))->'detail', 'and the same detail');
+select is((pg_temp.q(pg_temp.id('v9'), now() + interval '2 hours')->>'obligation_id')::uuid, (select id from public.money_obligations where service_request_id = pg_temp.id('v9')),
+  'every visit item carries its obligation');
 
 -- Readback by role --------------------------------------------------------------------------------
 create function pg_temp.rb_visit(p_user integer, p_series uuid, p_visit uuid) returns jsonb language sql as $$

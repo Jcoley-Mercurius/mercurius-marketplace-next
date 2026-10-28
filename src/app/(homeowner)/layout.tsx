@@ -100,7 +100,7 @@ export default function HomeownerPortalLayout({ children }: { children: ReactNod
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center border-b border-border bg-background/95 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-20 flex h-16 items-center border-b border-border bg-background px-4 sm:px-6">
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger className="lg:hidden" render={<Button variant="ghost" size="icon" />} aria-label="Open homeowner menu"><Menu className="h-5 w-5" /></SheetTrigger>
             <SheetContent side="left" className="w-72 p-0"><SheetTitle className="sr-only">Homeowner navigation</SheetTitle><SheetDescription className="sr-only">Navigate your Mercurius homeowner account.</SheetDescription>

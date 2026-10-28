@@ -134,7 +134,8 @@ export function visitPaymentLine(payment: VisitPayment | null | undefined, role:
     case "review_pending":
       if (role === "homeowner") return `Payment opens after Mercurius reviews this visit’s price${amount}`;
       if (payment.reason === "snapshot_expired") return `Reviewed price expired · needs a new commercial review${amount}`;
-      if (payment.reason === "held") return "Payment held (dispute or refund) · needs a commercial review";
+      if (payment.reason === "held") return "Payment held (dispute or refund) · finance must resolve it before any review";
+      if (payment.reason === "source_blocked") return `Terms blocked · resolve the exception below before review${amount}`;
       return `Waiting for commercial review${amount}`;
     case "ready": return `Ready to pay${amount}`;
     case "processing": return role === "homeowner" ? `Payment in progress${amount}` : `Checkout open · not paid yet${amount}`;
@@ -199,6 +200,9 @@ export function seriesErrorMessage(error: unknown) {
 /** TRACE-125: the recurring payment queue (admin_recurring_payment_queue). */
 export type RecurringPaymentQueueItem = QueueItem & {
   series_id: string;
+  obligation_id: string | null;
+  /** review_missing only: why the review is missing. */
+  reason?: VisitPayment["reason"];
   detail: {
     starts_at?: string; state?: VisitPayment["state"]; reason?: VisitPayment["reason"]; snapshot_id?: string | null;
     amount_cents?: number | null; attempt_status?: string | null; problem?: PaymentProblem | null;
@@ -206,15 +210,18 @@ export type RecurringPaymentQueueItem = QueueItem & {
 };
 
 /** Failure and unknown outcomes keep the shared G6 wording; the two visit states are added. */
-export function recurringQueueLabel(item: Pick<RecurringPaymentQueueItem, "kind" | "detail">) {
+export function recurringQueueLabel(item: Pick<RecurringPaymentQueueItem, "kind" | "detail"> & { reason?: VisitPayment["reason"] }) {
   if (item.kind === "review_missing") {
-    const expired = item.detail.reason === "snapshot_expired";
-    return {
-      title: expired ? "Visit price review expired" : "Visit needs commercial review",
-      action: expired
-        ? "The reviewed price expired unpaid. Two finance operators review and publish it again at the accepted plan price."
-        : "Accepted by the provider and unpaid. Two finance operators review and publish its price; nothing is published automatically.",
-    };
+    switch (item.reason ?? item.detail.reason) {
+      case "snapshot_expired": return { title: "Visit price review expired",
+        action: "The reviewed price expired unpaid. Two finance operators review and publish it again at the accepted plan price." };
+      case "held": return { title: "Visit payment held",
+        action: "A dispute or refund holds this visit's obligation. Finance resolves it first; no new checkout is offered." };
+      case "source_blocked": return { title: "Visit terms blocked",
+        action: "The visit can't be reviewed or paid until the exception below is resolved. Nothing is substituted or repriced." };
+      default: return { title: "Visit needs commercial review",
+        action: "Accepted by the provider and unpaid. Two finance operators review and publish its price; nothing is published automatically." };
+    }
   }
   if (item.kind === "ready_unpaid") {
     return {

@@ -1,7 +1,7 @@
 # Phase 6.6c — recurring visit payment timing, accepted-price integrity and payment exceptions
 
 **Status:** IMPLEMENTED FOR REVIEW, 2026-10-27 (America/New_York), on branch `claude/phase6-6c-recurring-payments` from `main` `5e6d6ce` (PR #112 merge; main CI run `40515529609` green). **Not releasable yet:** the two-person finance review must finish before merge, and its reviewers are not yet named (§6). Nothing here activates payments, provisions finance authority, publishes a snapshot, pushes a migration or merges.
-**Governing decision:** DEC-2026-049 items 5 and 6 (existing visits), owner decision 2026-10-27; items 7 and 8 kept blocked, their proposed rules not approved. **Trace:** TRACE-125; the one-time exposure is the separate corrective issue TRACE-126. Parent record: [PHASE-6-RECURRING-VISITS.md](PHASE-6-RECURRING-VISITS.md) §8.
+**Governing decision:** DEC-2026-049 items 5 and 6 (existing visits), owner decision 2026-10-27; items 7 and 8 kept blocked, their proposed rules not approved. **Trace:** TRACE-125; follow-ups: TRACE-126 (one-time accepted-price exposure) and TRACE-127 (add-on visit acceptance after a price change). Parent record: [PHASE-6-RECURRING-VISITS.md](PHASE-6-RECURRING-VISITS.md) §8.
 
 ## 1. Outcome
 
@@ -45,9 +45,9 @@ Each recurring visit becomes payable on its own, only after its own provider acc
 | F8 | Snapshot expiry is not tied to the appointment. | Unchanged. An expired snapshot shows as review missing (`snapshot_expired`). |
 | F9 | One-time requests have the same current-price exposure; DEC-2026-034 conflict. | **Not changed.** Separate corrective issue TRACE-126; characterized in SQL 097. |
 | F10 | A stable queue cannot call `money_source` (it locks tables). | **Resolved:** one lock-free rule, `private.recurring_visit_source_check`, used by `money_source` (after its locks), the readback and the queue. |
-| F11 | **New (characterized, unchanged):** after a price change, an add-on visit's offer bound to the old revision cannot be **accepted** ("Provider is no longer eligible", `find_eligible_packages_core`). | A refusal, not a repricing. Accepting such visits is acceptance policy and outside 6.6c. |
+| F11 | **New (characterized, unchanged):** after a price or add-on change, an add-on visit's offer bound to the old revision cannot be **accepted** (`vendor_accept_job` → "Provider is no longer eligible", because `find_eligible_packages_core` matches a bound request only at its revision and price). A visit without add-ons is accepted. | A refusal, not a repricing: the visit stays offered and unpaid, and nothing is substituted. **Regression evidence:** SQL 097, "existing rule (unchanged): an add-on visit's offer bound to the old revision cannot be accepted after a price change; nothing is repriced" (`22023`). **Follow-up:** TRACE-127 (open), which needs an owner decision on whether an already-offered visit may be accepted at its bound terms after a catalog change. That is acceptance policy, outside 6.6c. |
 | F12 | **New (pre-existing, one-time path):** `money_source` share-locks the package before the tier, while a tier edit locks the tier and then (review trigger) the package, so publication and a tier edit can deadlock. | PostgreSQL aborts one side; no wrong data. The visit branch locks tier before package and does not deadlock (concurrency script). The one-time path is unchanged; noted for TRACE-126. |
-| F13 | **New (pre-existing UI):** at 320 px the homeowner dashboard header subtitle "Manage your Mercurius services" is 4.49:1 (needs 4.5:1). | Outside this slice. The 320 px browser test scans the dialog; the full page is scanned at 1440 px. |
+| F13 | **New (pre-existing UI):** at 320 px the homeowner header subtitle "Manage your Mercurius services" was 4.49:1 (needs 4.5:1). The header was 95% opaque with a blur, so scrolled content tinted its background. | **Fixed:** the homeowner header is opaque (`bg-background`). The 320 px browser test runs the full-page scan. The vendor layout header uses the same translucent pattern and was not changed or scanned here. |
 
 ## 4. Owner decisions (DEC-2026-049, 2026-10-27)
 
@@ -65,10 +65,10 @@ Migration `20261027001000_phase6_recurring_payments.sql` (additive: new private 
 | `private.recurring_visit_payment_problem(code)` | **New.** The message and recovery for each exception code. |
 | `private.recurring_visit_source_check(visit row)` | **New, the single rule set for a visit's source.** It returns a code on the first failing check. **Blocked plan types:** `terms_missing`, `quote_terms`, `promotion_decision`, `replacement_provider`. **Consistency with the accepted offer and bound terms:** `offer_mismatch`, `terms_inconsistent` (the visit's customer, package, level, cadence, property, service, answers or priced selection; whole-cent amounts; add-on lines summing to `visit_total − visit_price`). **Live eligibility:** `provider_inactive`, `service_inactive`, `coverage_inactive`, `provider_zip`, `package_in_review`, `package_unavailable`. If no check fails, it returns the service and add-on cents **from the terms** and the immutable evidence. It never reads the current tier or add-on price. |
 | `private.money_source` | **Restated.** A branch for a visit only: share-locks the rows the check reads (tier before package, F12), calls the check, and raises its message (`DETAIL recurring_visit:<code>`, `HINT` recovery). The evidence holds `recurring_terms` and `visit_offer`, not the current package or tier. The one-time and quote paths are byte-identical (the diff is the declare line and the inserted branch). |
-| `private.money_payment_exceptions(at)` | **New.** The DEC-2026-045 G6 classification, moved out of `admin_quote_queue`, with one added tie-break (`attempt_number` when two attempts share `created_at`, i.e. one transaction). |
+| `private.money_payment_exceptions(at)` | **New.** The DEC-2026-045 G6 classification, moved out of `admin_quote_queue`. Its detail adds `obligation_id`, so both queues name the same obligation. One tie-break is added (§5a). |
 | `public.admin_quote_queue` | **Restated.** The payment items come from the shared classification; everything else is unchanged. Parity is checked by `set_eq` in SQL 097. |
-| `private.recurring_visit_payment(visit, at)` | **New.** The canonical state: `not_accepted`, `review_pending` (`no_snapshot`, `snapshot_expired`, `held`, `source_blocked`), `ready`, `processing`, `paid` (captured ≥ total), `failed`, `unknown` (G6 unresolved or a partial capture), or `cancelled`. **`action`:** `pay` only for `ready`/`failed` with a current unexpired snapshot, a passing source check and an admitted homeowner; `continue` only for the visit's own open checkout session. Operations also get `problem` and `exception`. Legacy invoices are never read. |
-| `private.recurring_payment_queue(at)`, `public.admin_recurring_payment_queue()` | **New, read-only, admin only.** `review_missing` and `ready_unpaid` from `greatest(appointment − 24 h, acceptance)`, with `aged` meaning the appointment has passed. `payment_failed` and `payment_unresolved` appear at once with the G6 clocks. |
+| `private.recurring_visit_payment(visit, at)` | **New.** The canonical state, with the visit's `obligation_id`: `not_accepted`, `review_pending`, `ready`, `processing`, `paid` (captured ≥ total), `failed`, `unknown` (G6 unresolved or a partial capture), or `cancelled`. `review_pending` carries one distinct operator reason, taken in this order: `held` (a dispute or refund), `source_blocked` (the terms fail the source check now, whatever the snapshot), `no_snapshot`, `snapshot_expired`. **`action`:** `pay` only for `ready`/`failed` with a current unexpired snapshot, a passing source check and an admitted homeowner; `continue` only for the visit's own open checkout session. Operations also get `problem` and `exception`. Legacy invoices are never read. |
+| `private.recurring_payment_queue(at)`, `public.admin_recurring_payment_queue()` | **New, read-only, admin only.** `review_missing` (with its distinct `reason`) and `ready_unpaid` from `greatest(appointment − 24 h, acceptance)`, with `aged` meaning the appointment has passed. `payment_failed` and `payment_unresolved` appear at once with the G6 clocks. Every item carries `obligation_id`. The operator titles are distinct: "Visit terms blocked", "Visit needs commercial review", "Visit price review expired", "Visit payment held". |
 | `public.recurring_series` | **Restated.** Adds per-visit `payment_state` (no `problem`/`exception` for the homeowner; null for the provider). `payment` keeps its three values; `paid` now needs the whole total. |
 
 **UI:**
@@ -83,9 +83,16 @@ Migration `20261027001000_phase6_recurring_payments.sql` (additive: new private 
 - **Other recurring work:** cadence and creation commands, `vendor_accept_job` (F11), notifications, Cron, cancellation, replacement, quote and promotion plans, and prepaid bundles.
 - **The one-time source path** (TRACE-126).
 
-**Money fingerprint** (`scripts/promotion-money-fingerprint.sql`): it gains `private.recurring_visit_terms` and `private.recurring_visit_source_check`, and `money_source` is restated. The value is `44 | f845be9c1a9505d03a2b21854e7bc937`, the same on the main local stack and after a clean replay of 202 migrations (§8).
+**5a. Tie-break for "latest attempt".** The G6 classification (and the visit payment state) reads each obligation's latest checkout attempt. Before: `order by created_at desc, id desc`. Now: `order by created_at desc, attempt_number desc, id desc`.
+- **Distinct `created_at`** (every production checkout: each `money_prepare_checkout` is its own transaction): the newest attempt wins, exactly as before.
+- **Equal `created_at`** (attempts made in one transaction, where `now()` is fixed): the higher `attempt_number` wins. `money_prepare_checkout` numbers attempts per snapshot and mode, and allows a new one only after the previous expired, so this is the retry. Previously the winner was decided by random UUID order. For example, an expired attempt 1 could be read as latest after attempt 2 was opened, reporting `payment_failed` instead of processing, or hiding a flagged attempt 2's unknown outcome.
+- **Equal `created_at` and equal `attempt_number`** (only for different snapshots or modes in one transaction, which no command does): `id` decides, deterministically for a given pair but not meaningfully. No supported path reaches this case.
 
-**Read-only, outside the fingerprint:** `money_payment_exceptions`, `recurring_visit_payment`, `recurring_payment_queue`, `admin_recurring_payment_queue`, `admin_quote_queue`, `recurring_series` and `recurring_visit_payment_problem`. They classify and display. They decide no amount and write nothing (SQL 097 checks money, invoice and review row counts). Reviewers should still read them, because they choose when the homeowner is offered a pay link.
+Tests: SQL 097 "the two attempts tie on created_at; the retry is attempt 2", "which is processing", "the outcome is unknown, not failed or paid", "and is queued as unresolved", and the quote-queue parity `set_eq`. Before the tie-break, 5 of these assertions failed intermittently in the full-suite run.
+
+**Money fingerprint** (`scripts/promotion-money-fingerprint.sql`): it gains the changed commercial-source helpers `private.recurring_visit_terms`, `private.recurring_visit_source_check` and `private.recurring_visit_payment_problem` (whose text the source check raises), and `money_source` is restated. The value is `45 | 34c51131e2ca18f65d3b29afd8d12e11` (§8).
+
+**Read-only, outside the fingerprint:** `money_payment_exceptions`, `recurring_visit_payment`, `recurring_payment_queue`, `admin_recurring_payment_queue`, `admin_quote_queue` and `recurring_series`. They classify and display. They decide no amount and write nothing (SQL 097 checks money, invoice and review row counts). Reviewers should still read them, because they choose when the homeowner is offered a pay link.
 
 ## 6. Gates and deployment order
 
@@ -103,7 +110,7 @@ Migration `20261027001000_phase6_recurring_payments.sql` (additive: new private 
 
 ## 7. Tests
 
-**SQL `097_phase6_recurring_payments.sql`** (117 assertions; synthetic). It uses the real path: submit → plan acceptance → `admin_create_recurring_visit` → `vendor_accept_job` → two-person `money_publish_snapshot` → `money_prepare_checkout` → webhook events.
+**SQL `097_phase6_recurring_payments.sql`** (132 assertions; synthetic). It uses the real path: submit → plan acceptance → `admin_create_recurring_visit` → `vendor_accept_job` → two-person `money_publish_snapshot` → `money_prepare_checkout` → webhook events.
 
 - **Access:** the private functions are not client- or service-callable; the queue is admin only (homeowner and provider get `42501`).
 - **Eligibility after acceptance:** an offered visit has no source, cannot be published, shows `not_accepted` and never enters the queue.
@@ -119,8 +126,10 @@ Migration `20261027001000_phase6_recurring_payments.sql` (additive: new private 
   - Each refusal, named by `DETAIL`: package in review, package unavailable, provider ZIP, provider inactive, coverage inactive, service inactive, legacy package promotion. Each clears at the same price once resolved.
   - After publication, an ineligible provider refuses checkout. The state is `review_pending/source_blocked` with no action, and the queue names `provider_inactive`. Payable again once resolved.
 - **Inconsistent terms:** changed answers, a changed priced selection and a different accepted-offer price are refused. A replacement provider is refused (item 8), as is a visit without a creation record.
+- **Distinct reasons:** `source_blocked` (package in review, before and after publication), `no_snapshot`, `snapshot_expired`, and `held` (a dispute: no action, queued as held, ready again when released), each in the payment state and the queue item.
+- **Obligation identity:** the recurring queue's `obligation_id` is the visit's obligation, equal to the quote queue's for the same failure/unknown item, with the same kind, clock and detail.
 - **Queue timing:**
-  - Absent at 24 h + 1 min before the appointment; present at exactly 24 h as `review_missing`, since the threshold; `aged` after the appointment.
+  - Absent at 24 h + 1 min before the appointment; present at exactly 24 h as `review_missing` (reason `no_snapshot`), since the threshold; `aged` after the appointment.
   - `ready_unpaid` after publication.
   - `snapshot_expired` after expiry.
   - Late acceptance: a manual visit 10 h away appears at once, since its acceptance.
@@ -145,32 +154,26 @@ Migration `20261027001000_phase6_recurring_payments.sql` (additive: new private 
 **Unit** `recurring-payments.test.ts` (payment line per role and state, checkout link only for `pay`/`continue`, queue labels reusing the G6 wording).
 
 **Browser** `recurring-visits.spec.ts`:
-- Homeowner at 320 px: ready, processing, unknown, review and paid states. Links appear only for ready and processing; no operations text.
-- Operations: the queue with all four kinds, "Appointment passed" and the recovery text; no charge, cancel or publish control.
+- Homeowner at 320 px (full-page axe at 320 and 1440 px): ready, processing, unknown, review and paid states. Links appear only for ready and processing; no operations text.
+- Operations: the queue with blocked, missing, expired and held reviews, ready, failed and unknown; "Appointment passed" and the recovery text; no charge, cancel or publish control.
 - The provider gets null payment.
 
-## 8. Evidence (2026-10-27, synthetic data only)
+## 8. Evidence (2026-10-27, synthetic data only; final round after the Codex pre-push items)
 
 | Check | Result |
 |---|---|
-| SQL 097 | 117/117, 5 consecutive runs |
+| Clean replay of 202 migrations on the isolated stack (ports 5552x, `phase5-db.sh reset`) | Pass; history ends at `20261027001000` |
+| Full SQL suite after the clean replay | 88 files, 5,228 assertions, PASS |
+| SQL 097 | 132/132 (3 consecutive runs before the last assertion was added, then 1) |
 | SQL 028, 086, 087, 090, 095, 096 with the migration | PASS |
-| Full SQL suite (main local stack, migration applied incrementally) | 88 files, 5,213 assertions. The first run failed 5 of 097's assertions (same-instant attempt ordering), fixed by the tie-break in §5; 097 then passed 5/5. Clean replay and full suite: §8a. |
-| `scripts/recurring-payment-concurrency.mjs` | 5/5 PASS after the lock-order change. The first runs found deadlocks between publication and tier edits (F12). |
-| `scripts/recurring-visit-concurrency.mjs`, `scripts/recurring-cadence-concurrency.mjs` against the new schema | PASS |
-| Money fingerprint | `44 \| f845be9c1a9505d03a2b21854e7bc937` |
-| Unit `recurring-payments`, `recurring-visits`, `recurring-cadence` under TZ America/New_York and UTC | 29/29 each |
-| Full unit suite | 45 files, 538/538 |
+| Money fingerprint (main local stack and clean replay) | `45 \| 34c51131e2ca18f65d3b29afd8d12e11` |
+| `recurring-payment-concurrency`, `recurring-visit-concurrency`, `recurring-cadence-concurrency` on the isolated stack | PASS each. The payment script also passed 5/5 on the main stack in the first round; its first runs had found the publication/tier-edit deadlock (F12). |
+| Full unit suite | 45 files, 539/539 |
 | Typecheck, `eslint .`, secret scan, `git diff --check` (new files included) | Clean |
 | Regenerated `database.types.ts` | Additive only (`admin_recurring_payment_queue`) |
 | Synthetic build (fixture Supabase URL and anon key set explicitly, 1 worker) | Pass |
-| Browser `recurring-visits.spec.ts` | 14/14. The 6.6a visit test (both widths) was updated for the changed help text, and the 320 px payment test scans the dialog (F13). |
-| Browser regression `appointments`, `phase4`, `matching`, `quote-proposals`, `homeowner`, `portals`, `promotion-selection` | 72/73. The failure (`homeowner dark 1440px: service and payment screens`) passed 7/7 when `homeowner.spec.ts` was re-run alone. |
-
-| Clean replay of 202 migrations on the isolated stack (ports 5552x, `phase5-db.sh reset`) | Pass; history ends at `20261027001000` |
-| Full SQL suite after the clean replay | 88 files, 5,213 assertions, PASS |
-| Fingerprint after the clean replay | `44 \| f845be9c1a9505d03a2b21854e7bc937` (equal to the main local stack) |
-| `recurring-payment-concurrency`, `recurring-visit-concurrency`, `recurring-cadence-concurrency` on the isolated stack | PASS each |
+| Browser `recurring-visits.spec.ts` + `homeowner.spec.ts` | 21/21. Full-page axe at 320 px and 1440 px for the homeowner payment test; the 6.6a visit test (both widths) was updated for the changed help text. |
+| Browser regression `appointments`, `phase4`, `matching`, `quote-proposals`, `portals`, `promotion-selection` | 61/66 in one run while the isolated stack replayed (16 min). The 5 failures were all `quote-proposals`; that spec then passed 12/12 alone on a quiet machine. |
 
 **Not performed:**
 - **Not run:** `@visual`, a human screen reader, real devices, the full non-visual browser suite.

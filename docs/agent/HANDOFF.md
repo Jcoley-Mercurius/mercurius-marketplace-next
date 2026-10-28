@@ -9,13 +9,12 @@
   - shared G6 classification `money_payment_exceptions` (quote queue restated onto it);
   - `recurring_visit_payment`, `admin_recurring_payment_queue`, `recurring_series` restated.
 - UI: homeowner "Review and pay" link to `/checkout/{snapshot}`; `AdminRecurringPaymentQueue` on `/admin/requests`.
-- Evidence: brief §8 (clean replay 202 migrations; SQL 5,213 PASS; SQL 097 117/117; concurrency; browser 14/14). Fingerprint `44 | f845be9c…`.
+- Evidence: brief §8. Fingerprint `45 | 34c51131…`. Draft PR opened with Codex review items (distinct review reasons, shared obligation identity, tie-break §5a, header contrast fixed).
 - Open:
   - **two-person finance review before merge, reviewers not named**;
   - hosted push and merge (separate authorization);
   - TRACE-126 one-time accepted-price exposure (separate slice);
-  - F11 add-on visit acceptance after a price change;
-  - F13 dashboard header contrast at 320 px.
+  - TRACE-127 add-on visit acceptance after a price change (characterized, unchanged).
 - Next: owner names the finance reviewers; Codex reviews the diff.
 
 ## Phase 6.6b recurring cadence and plan controls (TRACE-124), 2026-10-27

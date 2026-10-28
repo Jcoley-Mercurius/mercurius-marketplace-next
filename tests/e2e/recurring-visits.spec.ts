@@ -414,35 +414,42 @@ test("homeowner 320px: pays a ready visit through the reviewed checkout; no pay 
   for (const n of [2, 3, 4]) await expect(items.nth(n).getByRole("link")).toHaveCount(0);
   await expect(dialog).not.toContainText("Package Reviews");
   expect(await page.locator("[role=dialog]").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  // At 320px the dashboard header behind the dialog has a pre-existing 4.49:1 subtitle (recorded,
-  // outside this slice), so this width scans the dialog; the full page is scanned at 1440px.
-  expect((await new AxeBuilder({ page }).include("[role=dialog]").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  // The full page is scanned at 320px (the homeowner header is opaque, so its subtitle keeps 4.5:1
+  // over scrolled content) and again at 1440px.
+  expect(await axe(page)).toEqual([]);
   await page.setViewportSize({ width: 1440, height: 1000 });
   expect(await axe(page)).toEqual([]);
 });
 
-test("admin: the payment queue separates review missing, ready, failed and unknown; a blocked visit names its recovery", async ({ page }) => {
+test("admin: the payment queue separates blocked, missing, expired and held reviews, ready, failed and unknown; a blocked visit names its recovery", async ({ page }) => {
   test.slow();
   const problem = { code: "package_in_review", message: "The plan’s package is held in Package Reviews.", recovery: "Approve or correct it in Package Reviews. The visit keeps its accepted price." };
-  const item = (kind: string, detail: Row, aged = false): Row => ({ kind, request_id: crypto.randomUUID(), series_id: planId, service_type: "Synthetic Lawn Service",
+  const item = (kind: string, detail: Row, aged = false): Row => ({ kind, reason: kind === "review_missing" ? detail.reason : null, request_id: crypto.randomUUID(),
+    series_id: planId, obligation_id: null, service_type: "Synthetic Lawn Service",
     since: "2030-11-04T14:00:00Z", due_at: "2030-11-05T14:00:00Z", aged, exception_id: null, detail: { starts_at: "2030-11-05T14:00:00Z", amount_cents: 4500, ...detail } });
   const state: State = { calls: [], history: [], visits: [accepted("2030-11-05T14:00:00Z", "2030-11-05T09:00:00",
-      pay({ state: "review_pending", reason: "no_snapshot", action: null, snapshot_id: null, problem }))],
-    queue: [item("review_missing", { state: "review_pending", reason: "no_snapshot", problem }, true), item("ready_unpaid", { state: "ready" }),
+      pay({ state: "review_pending", reason: "source_blocked", action: null, snapshot_id: null, problem }))],
+    queue: [item("review_missing", { state: "review_pending", reason: "source_blocked", problem }, true),
+      item("review_missing", { state: "review_pending", reason: "no_snapshot" }), item("review_missing", { state: "review_pending", reason: "snapshot_expired" }),
+      item("review_missing", { state: "review_pending", reason: "held" }), item("ready_unpaid", { state: "ready" }),
       item("payment_failed", { state: "failed" }), item("payment_unresolved", { state: "unknown" })] };
   const dialog = await open(page, "admin", state);
-  await expect(dialog.getByTestId("visit-payment")).toHaveText("Payment: Waiting for commercial review · $45.00");
+  await expect(dialog.getByTestId("visit-payment")).toHaveText("Payment: Terms blocked · resolve the exception below before review · $45.00");
   await expect(dialog.getByTestId("visit-payment-problem")).toContainText("The visit keeps its accepted price.");
   await expect(dialog.getByRole("link", { name: /pay/i })).toHaveCount(0);
   await page.keyboard.press("Escape");
   const queue = page.getByRole("list", { name: "Recurring visit payments" });
-  await expect(queue.getByRole("listitem")).toHaveCount(4);
-  await expect(queue.getByRole("listitem").nth(0)).toContainText("Visit needs commercial review");
-  await expect(queue.getByRole("listitem").nth(0)).toContainText("Appointment passed");
-  await expect(queue.getByRole("listitem").nth(0)).toContainText("Approve or correct it in Package Reviews.");
-  await expect(queue.getByRole("listitem").nth(1)).toContainText("Visit ready but unpaid");
-  await expect(queue.getByRole("listitem").nth(2)).toContainText("Payment not completed");
-  await expect(queue.getByRole("listitem").nth(3)).toContainText("Payment outcome unknown");
+  const rows = queue.getByRole("listitem");
+  await expect(rows).toHaveCount(7);
+  await expect(rows.nth(0)).toContainText("Visit terms blocked");
+  await expect(rows.nth(0)).toContainText("Appointment passed");
+  await expect(rows.nth(0)).toContainText("Approve or correct it in Package Reviews.");
+  await expect(rows.nth(1)).toContainText("Visit needs commercial review");
+  await expect(rows.nth(2)).toContainText("Visit price review expired");
+  await expect(rows.nth(3)).toContainText("Visit payment held");
+  await expect(rows.nth(4)).toContainText("Visit ready but unpaid");
+  await expect(rows.nth(5)).toContainText("Payment not completed");
+  await expect(rows.nth(6)).toContainText("Payment outcome unknown");
   await expect(page.getByRole("region", { name: "Recurring visit payments" }).getByRole("button", { name: /charge|cancel|publish/i })).toHaveCount(0);
   expect(await axe(page)).toEqual([]);
 });

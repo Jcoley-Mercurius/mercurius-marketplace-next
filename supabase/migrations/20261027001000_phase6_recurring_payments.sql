@@ -327,8 +327,8 @@ language sql stable security definer set search_path = '' as $$
       else least(a.expires_at, a.created_at) end,
     case when a.status = 'expired' then coalesce((select min(e.received_at) from public.money_webhook_events e
         where e.event_type = 'checkout_expired' and e.payload ->> 'attempt_id' = a.id::text), a.expires_at) + interval '24 hours' end,
-    jsonb_build_object('attempt_id', a.id, 'attempt_status', a.status, 'failure_code', a.failure_code, 'amount_cents', a.amount,
-      'reconciliation_open', o.reconciliation_open)
+    jsonb_build_object('obligation_id', o.id, 'attempt_id', a.id, 'attempt_status', a.status, 'failure_code', a.failure_code,
+      'amount_cents', a.amount, 'reconciliation_open', o.reconciliation_open)
   from public.money_obligations o
   join lateral (select * from public.money_checkout_attempts x where x.obligation_id = o.id
     order by x.created_at desc, x.attempt_number desc, x.id desc limit 1) a on true
@@ -368,12 +368,15 @@ begin
   elsif x_kind = 'payment_unresolved' then state := 'unknown';
   elsif o.captured > 0 then state := 'unknown'; reason := 'partial_capture';
   elsif a.status in ('prepared', 'session_created') and a.expires_at > p_at then state := 'processing';
-  elsif s.id is null then state := 'review_pending'; reason := 'no_snapshot';
-  elsif s.expires_at <= p_at + interval '31 minutes' then state := 'review_pending'; reason := 'snapshot_expired';
-  elsif o.dispute_open or o.refunded_service + o.refunded_tax + o.refunded_tip > 0 then state := 'review_pending'; reason := 'held';
+  -- Waiting for review, with one reason in this order: a dispute or refund holds the obligation;
+  -- the visit's terms are blocked now (whatever its snapshot); no snapshot yet; the snapshot expired.
+  elsif coalesce(o.dispute_open, false) or coalesce(o.refunded_service + o.refunded_tax + o.refunded_tip, 0) > 0 then
+    state := 'review_pending'; reason := 'held';
   else
     source_check := private.recurring_visit_source_check(v);
     if not (source_check->>'ok')::boolean then state := 'review_pending'; reason := 'source_blocked';
+    elsif s.id is null then state := 'review_pending'; reason := 'no_snapshot';
+    elsif s.expires_at <= p_at + interval '31 minutes' then state := 'review_pending'; reason := 'snapshot_expired';
     elsif x_kind = 'payment_failed' then state := 'failed';
     else state := 'ready';
     end if;
@@ -383,7 +386,7 @@ begin
   end if;
   -- A visit still waiting for review also names any exception its source has now.
   if state = 'review_pending' and source_check is null then source_check := private.recurring_visit_source_check(v); end if;
-  return jsonb_build_object('state', state, 'reason', reason, 'action', action,
+  return jsonb_build_object('state', state, 'reason', reason, 'action', action, 'obligation_id', o.id,
     'snapshot_id', case when s.id is not null and state in ('ready', 'failed', 'processing', 'paid', 'unknown') then s.id end,
     'amount_cents', coalesce(s.total, case when t.visit_total > 0 and t.visit_total * 100 = trunc(t.visit_total * 100)
       then private.money_minor_units(t.visit_total) end),
@@ -396,9 +399,10 @@ revoke all on function private.recurring_visit_payment(public.service_requests, 
 -- 6. Operations queue -------------------------------------------------------------------------------
 
 -- DEC-2026-049 item 5 (owner decision 2026-10-27): an accepted, unpaid visit appears at its
--- appointment minus 24 hours, or at its acceptance when that is later; `review_missing` (no
--- current, unexpired snapshot, or its source no longer checks out, with the exception and recovery)
--- and `ready_unpaid` (payable or in checkout). Confirmed failures and unresolved outcomes are the
+-- appointment minus 24 hours, or at its acceptance when that is later; `review_missing` with a
+-- distinct `reason` (`held`: a dispute or refund; `source_blocked`: the terms fail the source check
+-- now, with the exception and recovery; `no_snapshot`; `snapshot_expired`) and `ready_unpaid`
+-- (payable or in checkout). Confirmed failures and unresolved outcomes are the
 -- shared G6 items and appear at once. Read-only: nothing publishes, charges, cancels or notifies.
 -- `aged` on a review or ready item means the appointment time has passed.
 create function private.recurring_payment_queue(p_at timestamptz) returns jsonb
@@ -422,7 +426,8 @@ language sql stable security definer set search_path = '' as $$
     from visits x where x.pay->>'state' = 'unknown' and x.pay->>'reason' = 'partial_capture'
   )
   select jsonb_build_object('checked_at', p_at, 'items', coalesce(jsonb_agg(jsonb_build_object(
-      'kind', i.kind, 'request_id', i.id, 'series_id', i.recurrence_parent_id, 'service_type', i.service_type,
+      'kind', i.kind, 'reason', case when i.kind = 'review_missing' then i.pay->>'reason' end,
+      'request_id', i.id, 'series_id', i.recurrence_parent_id, 'obligation_id', i.pay->'obligation_id', 'service_type', i.service_type,
       'since', i.since, 'due_at', i.due_at, 'aged', i.due_at is not null and p_at >= i.due_at, 'exception_id', null,
       'detail', jsonb_build_object('starts_at', i.scheduled_start_at, 'state', i.pay->>'state', 'reason', i.pay->>'reason',
         'accepted_at', i.pay->'accepted_at', 'snapshot_id', i.pay->'snapshot_id', 'amount_cents', i.pay->'amount_cents',

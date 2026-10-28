@@ -55,6 +55,13 @@ describe("homeowner checkout link", () => {
 });
 
 describe("recurring payment queue labels", () => {
+  it("keeps a distinct operator reason for expired, held and blocked reviews", () => {
+    const titles = (["no_snapshot", "snapshot_expired", "held", "source_blocked"] as const)
+      .map(reason => recurringQueueLabel({ kind: "review_missing", reason, detail: {} }).title);
+    expect(titles).toEqual(["Visit needs commercial review", "Visit price review expired", "Visit payment held", "Visit terms blocked"]);
+    expect(visitPaymentLine(payment({ state: "review_pending", reason: "held", action: null }), "admin")).toMatch(/held/);
+    expect(visitPaymentLine(payment({ state: "review_pending", reason: "source_blocked", action: null }), "admin")).toMatch(/Terms blocked/);
+  });
   it("names the two visit states", () => {
     expect(recurringQueueLabel({ kind: "review_missing", detail: { reason: "no_snapshot" } }).title).toBe("Visit needs commercial review");
     expect(recurringQueueLabel({ kind: "review_missing", detail: { reason: "snapshot_expired" } }).title).toBe("Visit price review expired");
