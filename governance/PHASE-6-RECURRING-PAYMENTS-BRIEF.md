@@ -1,6 +1,6 @@
 # Phase 6.6c — recurring visit payment timing, accepted-price integrity and payment exceptions
 
-**Status:** IMPLEMENTED FOR REVIEW, 2026-10-27 (America/New_York), on branch `claude/phase6-6c-recurring-payments` from `main` `5e6d6ce` (PR #112 merge; main CI run `40515529609` green). **Not releasable yet:** the two-person finance review must finish before merge, and its reviewers are not yet named (§6). Nothing here activates payments, provisions finance authority, publishes a snapshot, pushes a migration or merges.
+**Status:** IMPLEMENTED FOR REVIEW, 2026-10-27 (America/New_York), on branch `claude/phase6-6c-recurring-payments` from `main` `5e6d6ce` (PR #112 merge; main CI run `40515529609` green). **Not releasable yet:** the two-person finance review must finish before merge, and its reviewers are not yet named (§6). Nothing here activates payments, provisions finance authority, publishes a snapshot or merges. The migration was pushed to hosted on 2026-10-28 at the owner's instruction (§6).
 **Governing decision:** DEC-2026-049 items 5 and 6 (existing visits), owner decision 2026-10-27; items 7 and 8 kept blocked, their proposed rules not approved. **Trace:** TRACE-125; follow-ups: TRACE-126 (one-time accepted-price exposure) and TRACE-127 (add-on visit acceptance after a price change). Parent record: [PHASE-6-RECURRING-VISITS.md](PHASE-6-RECURRING-VISITS.md) §8.
 
 ## 1. Outcome
@@ -105,6 +105,17 @@ Tests: SQL 097 "the two attempts tie on created_at; the retry is attempt 2", "wh
    - Read back: grants (private functions not callable by clients, the queue not callable by anon), the fingerprint equal to the reviewed value, and the counts unchanged.
 4. **Merge** (release; Vercel deploys `main`), with separate authorization.
 5. **Not authorized here and not part of 6.6c:** finance-authority provisioning, a snapshot publication UI or trusted publisher (F4), payment activation (`MERCURIUS_MONEY_MODE`/Stripe), notification delivery, hosted writes, production transactions, and opening the promotions gate.
+
+**Hosted push, 2026-10-28, at the owner's instruction:**
+- **Before the push** (read-only): hosted history ended at `20261026002000`, with 0 visits, snapshots, checkout attempts, obligations and `money_authorities`, and 0 open money gates. Nothing needed characterizing first.
+- **Push:** the dry run listed only `20261027001000_phase6_recurring_payments.sql`, and `supabase db push --linked` applied it.
+- **Read back:**
+  - History ends at `20261027001000`.
+  - Money fingerprint `45 | 34c51131e2ca18f65d3b29afd8d12e11`, equal to the branch and clean-replay value.
+  - `admin_recurring_payment_queue` is executable by authenticated, not by anon. `recurring_visit_terms`, `recurring_visit_source_check`, `recurring_visit_payment`, `money_payment_exceptions` and `recurring_payment_queue` are not executable by authenticated. `recurring_series` is not anon. `admin_quote_queue` is authenticated-only and uses the shared classification. `money_source` contains the visit branch.
+  - Counts are unchanged (all 0).
+  - The dry run now reports up to date.
+- **Still open:** the finance review before merge (reviewers unnamed) and the merge itself. No payment is activated; the promotions gate stays closed.
 
 **Compatibility:** the deployed PR #112 client works on the new schema, because `payment` keeps its values and `payment_state` is additive. Between push and deploy, the visible difference is that the live `admin_quote_queue` payment items are computed by the shared function, with identical output. **Rollback:** promote the previous deployment and keep the database forward; restoring the old `money_source` would reopen F1/F3.
 

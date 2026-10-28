@@ -198,7 +198,7 @@ Additive: three private tables, three nullable/defaulted columns and a widened c
 
 ## 8. Phase 6.6c — payment timing, accepted price and payment exceptions (TRACE-125)
 
-**Brief, implementation and evidence:** [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](PHASE-6-RECURRING-PAYMENTS-BRIEF.md). **Governing:** DEC-2026-049 items 5–6 (owner decision 2026-10-27); items 7–8 kept blocked. **Migration:** `20261027001000` (not pushed).
+**Brief, implementation and evidence:** [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](PHASE-6-RECURRING-PAYMENTS-BRIEF.md). **Governing:** DEC-2026-049 items 5–6 (owner decision 2026-10-27); items 7–8 kept blocked. **Migration:** `20261027001000`, pushed to hosted 2026-10-28 at the owner's instruction (readback in the brief §6).
 
 **Summary:**
 - A visit's commercial source is the plan terms bound to its creation, checked against its accepted offer. Later catalog edits change neither its amount nor its source hash, so a published visit snapshot stays payable. Live eligibility refusals are named and carry a recovery.
@@ -209,5 +209,5 @@ The §4 "known gap" (the `money_source` current-tier price) is closed for visits
 
 **Open gates:**
 - Two-person finance review before merge; reviewers not yet named.
-- Hosted push and merge, each with separate owner authorization.
+- Merge, with separate owner authorization (the hosted push was done 2026-10-28).
 - Activation (finance authorities, a publication path, money mode) is outside this slice.

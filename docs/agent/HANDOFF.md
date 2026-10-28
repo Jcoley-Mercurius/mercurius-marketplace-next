@@ -4,7 +4,7 @@
 
 - Branch `claude/phase6-6c-recurring-payments` from `main` `5e6d6ce` (PR #112 merge; main CI 40515529609 green). Record: [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](../../governance/PHASE-6-RECURRING-PAYMENTS-BRIEF.md).
 - Owner decision 2026-10-27 recorded in DEC-2026-049: items 5–6 approved; items 7–8 kept blocked (proposed rules not approved). MPS §6.4 updated; 6.7 acceptance item for unpaid start added to PHASE-6-SCOPE.
-- Migration `20261027001000` (additive, **not pushed**):
+- Migration `20261027001000` (additive; **pushed to hosted 2026-10-28** at the owner's instruction: the dry run listed only it, the readback shows fingerprint `45 | 34c51131…`, client grants as designed, all money counts 0, and the dry run is now up to date):
   - a visit priced from its bound plan terms (`recurring_visit_terms`, `recurring_visit_source_check`) with catalog-stable evidence (`money_source` restated, one-time path byte-identical);
   - shared G6 classification `money_payment_exceptions` (quote queue restated onto it);
   - `recurring_visit_payment`, `admin_recurring_payment_queue`, `recurring_series` restated.
@@ -12,7 +12,7 @@
 - Evidence: brief §8. Fingerprint `45 | 34c51131…`. Draft PR opened with Codex review items (distinct review reasons, shared obligation identity, tie-break §5a, header contrast fixed).
 - Open:
   - **two-person finance review before merge, reviewers not named**;
-  - hosted push and merge (separate authorization);
+  - merge (separate authorization; hosted push done);
   - TRACE-126 one-time accepted-price exposure (separate slice);
   - TRACE-127 add-on visit acceptance after a price change (characterized, unchanged).
 - Next: owner names the finance reviewers; Codex reviews the diff.
