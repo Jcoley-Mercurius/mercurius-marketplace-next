@@ -14,7 +14,7 @@
 
 - Branch `claude/phase6-7-fulfillment` from `main` `7502342` (the PR #113 merge; head `0ebc9ef` CI green). Record: [PHASE-6-FULFILLMENT.md](../../governance/PHASE-6-FULFILLMENT.md).
 - **PR #113 was merged without a recorded two-person finance sign-off** (PRICING-FINANCE-REVIEW §10 still says none is recorded). This is flagged for the owner, not resolved.
-- Migration `20261029001000` (additive, **not pushed**):
+- Migration `20261029001000` (additive; **pushed to hosted 2026-10-29 after PR #114 had merged**, at the owner's instruction, with `--include-all` because `20261030001000` was already applied; the dry run listed only it; read back 10 functions and the trigger present, `start_job` not executable by anon, fingerprint `45 | 34c51131…` unchanged, dry run now up to date; hosted had 11 requests, all cancelled, so the start guard affected no live job):
   - trigger `guard_fulfillment_start`: work starts only on an accepted assignment, on every path;
   - `start_job` (keyed, stale-safe; records the payment state at start);
   - `homeowner_confirm_completion` / `homeowner_dispute_completion` bound to the reviewed completion;
