@@ -1,5 +1,15 @@
 # Agent handoff — 2026-10-01
 
+## Vendor-based pricing and service onboarding (TRACE-129, DEC-2026-051), 2026-10-29
+
+- Branch `claude/vendor-service-pricing` from `main` `7502342`, independent of `claude/phase6-7-fulfillment` (TRACE-128, unmerged; DEC-2026-050 is taken there).
+- Characterized: vendor prices are per-vendor packages; catalog mode/prices never price a vendor (reference for the guardrail band and vendor guidance only); a request with no fixed offering is a quote.
+- Migration `20261030001000` (additive, **not pushed**): four Specialty Custom Quote services; `admin_publish_package_draft` restated with one addition (quote entry in the price history, so a zero-level quote can be published). Not in the money fingerprint.
+- UI: vendor record "Save services" (services + ZIPs only), "Offer as Custom Quote" (explicit, reason required, no approval request or email), "Add to catalog" in the application banner; catalog copy marks prices as reference.
+- Evidence: clean replay of 203 migrations; full SQL 89 files 5,240 PASS (099 12/12; 081 still pins the ten "every two months" services); unit 549/549; lint, typecheck, `git diff --check` clean. Not run: browser, `@visual`, screen reader, CI, hosted push.
+- Open: DEC-2026-051 items 6–8 (twice-a-year cadence, catalog cadence limit, guardrail band). Walter Salazar Pest Control (hidden, Marketing off, 0 services, 0 packages) is unchanged.
+- Next: Codex review; owner authorizes the hosted push (dry run first), then merge.
+
 ## Phase 6.6c recurring visit payments (TRACE-125), 2026-10-27
 
 - Branch `claude/phase6-6c-recurring-payments` from `main` `5e6d6ce` (PR #112 merge; main CI 40515529609 green). Record: [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](../../governance/PHASE-6-RECURRING-PAYMENTS-BRIEF.md).

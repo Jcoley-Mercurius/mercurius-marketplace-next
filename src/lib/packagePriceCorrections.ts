@@ -94,7 +94,9 @@ export type CorrectionRequest = {
 export type PriceCorrectionChange =
   | { kind: "tier" | "addon" | "deposit"; name: string; frequency: string | null; from: number | null; to: number }
   /** DEC-2026-041 item 4: an operator suspended the listing while approval is obtained. */
-  | { kind: "suspended" };
+  | { kind: "suspended" }
+  /** TRACE-129: a quote published with no price levels; the homeowner requests a quote. */
+  | { kind: "quote"; pricingMode: "custom_quote" | "deposit_quote"; deposit: number | null };
 
 export type PriceCorrection = {
   id: number;
@@ -163,6 +165,11 @@ export function parseCorrections(value: unknown): PriceCorrection[] {
       if (!change || typeof change !== "object") return [];
       const entry = change as Record<string, unknown>;
       if (entry.kind === "suspended") return [{ kind: "suspended" } satisfies PriceCorrectionChange];
+      if (entry.kind === "quote") {
+        const deposit = entry.deposit === null || entry.deposit === undefined ? null : Number(entry.deposit);
+        return [{ kind: "quote", pricingMode: entry.pricing_mode === "deposit_quote" ? "deposit_quote" : "custom_quote",
+          deposit: deposit !== null && Number.isFinite(deposit) ? deposit : null } satisfies PriceCorrectionChange];
+      }
       if (entry.kind !== "tier" && entry.kind !== "addon" && entry.kind !== "deposit") return [];
       const to = Number(entry.to);
       if (!Number.isFinite(to)) return [];
@@ -188,6 +195,8 @@ export function parseCorrections(value: unknown): PriceCorrection[] {
 
 export function describeChange(change: PriceCorrectionChange) {
   if (change.kind === "suspended") return "Listing suspended by Mercurius";
+  if (change.kind === "quote") return change.pricingMode === "deposit_quote" && change.deposit !== null
+    ? `Offered as a quote with a ${formatPrice(change.deposit)} deposit` : "Offered as Custom Quote: homeowners request a quote";
   const label = change.frequency && change.frequency !== "one-time" && change.name !== frequencyLabel(change.frequency)
     ? `${change.name} (${frequencyLabel(change.frequency)})` : change.name;
   return `${label}: ${change.from === null ? "not set" : formatPrice(change.from)} → ${formatPrice(change.to)}`;
