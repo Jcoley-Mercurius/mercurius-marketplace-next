@@ -1,15 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Loader2, Repeat, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { EasternDateTimeField, easternInstant, type EasternDateTimeValue } from "@/components/ui/eastern-date-time-field";
 import { formatAppointment, localStartParam } from "@/lib/appointments";
 import { anchorLine, formatCadenceDate, planStateLabel } from "@/lib/recurringCadence";
-import { blockMessage, cadenceLabel, historyLine, paymentLabel, recordedAttempt, seriesErrorMessage, termsLine, visitState, type CreateResult, type SeriesReadback, type SeriesViewer } from "@/lib/recurringVisits";
+import { blockMessage, cadenceLabel, historyLine, paymentLabel, recordedAttempt, seriesErrorMessage, termsLine, visitCheckoutHref, visitPaymentLine, visitState, type CreateResult, type SeriesReadback, type SeriesViewer } from "@/lib/recurringVisits";
 import { RecurringCadenceControls } from "@/components/dashboard/RecurringCadenceControls";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 const emptyEntry: EasternDateTimeValue = { date: "", time: "", choice: "" };
 type Load = { state: "loading" } | { state: "error"; permission: boolean } | { state: "ready"; series: SeriesReadback };
@@ -126,7 +128,14 @@ export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: 
         : <ol className="space-y-3">{upcoming.map(visit => <li key={visit.id} className="border-l-2 border-border pl-3 text-sm">
           <p className="font-medium">{formatAppointment(visit.starts_at)}</p>
           <p className="text-muted-foreground">{visitState(visit)}</p>
-          {paymentLabel(visit.payment) && <p className="text-muted-foreground">Payment: {paymentLabel(visit.payment)}</p>}
+          {visit.payment_state !== undefined
+            ? visitPaymentLine(visit.payment_state, role) && <p className="text-muted-foreground" data-testid="visit-payment">Payment: {visitPaymentLine(visit.payment_state, role)}</p>
+            : paymentLabel(visit.payment) && <p className="text-muted-foreground">Payment: {paymentLabel(visit.payment)}</p>}
+          {role === "homeowner" && visitCheckoutHref(visit.payment_state) && <Link href={visitCheckoutHref(visit.payment_state)!}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1")}>
+            {visit.payment_state?.action === "continue" ? "Continue payment" : "Review and pay"}</Link>}
+          {role === "admin" && visit.payment_state?.problem && <p className="text-status-danger" data-testid="visit-payment-problem">
+            {visit.payment_state.problem.message} {visit.payment_state.problem.recovery}</p>}
           {role === "admin" && visit.replaces && <p className="text-muted-foreground">Replaces the cadence date {formatCadenceDate(visit.replaces.cadence_date)}{visit.replaces.current_anchor ? "" : " (earlier anchor)"}</p>}
           {role === "admin" && !visit.replaces && visit.on_cadence === false && <p className="text-muted-foreground">Off-cadence visit</p>}
         </li>)}</ol>}
@@ -136,7 +145,7 @@ export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: 
 
     {role === "admin" && <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
       <h4 className="text-sm font-semibold">Add a visit manually</h4>
-      <p className="text-sm text-muted-foreground">For an off-cadence or make-up visit at any future time; the 60-day and 24-hour proposal limits don’t apply. If it stands in for a cadence date, link it under Off-cadence visits. Nothing is scheduled automatically, and when each visit is charged isn’t set up yet.</p>
+      <p className="text-sm text-muted-foreground">For an off-cadence or make-up visit at any future time; the 60-day and 24-hour proposal limits don’t apply. If it stands in for a cadence date, link it under Off-cadence visits. Nothing is scheduled automatically. Each visit becomes payable only after its provider accepts it and Mercurius reviews its price.</p>
       {canAdd ? <>
         <EasternDateTimeField legend="Visit time" value={entry} onChange={setEntry} />
         <ConfirmAction requireReason triggerLabel="Review visit" disabled={!entryInstant} confirmationTone="commitment"

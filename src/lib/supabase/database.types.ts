@@ -6669,6 +6669,7 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_recurring_payment_queue: { Args: never; Returns: Json }
       admin_request_draft_email: {
         Args: {
           p_confirm_unknown?: boolean

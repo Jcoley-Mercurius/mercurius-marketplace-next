@@ -1,7 +1,7 @@
 # Phase 6.6 — recurring visits: identities, duplicate-safe creation, cadence and charge timing
 
 **Slice:** 6.6 (PHASE-6-SCOPE): 6.6a / TRACE-123 (merged, PR #111) and 6.6b / TRACE-124 (§7). **Date:** 2026-10-25, 6.6b 2026-10-26/27 (America/New_York).
-**Branch:** `claude/phase6-6-recurring-visits` from `main` `0138080`. **Status:** 6.6a merged (`61f0601`); 6.6b implemented for review on `claude/phase6-6b-recurring-cadence` (DEC-2026-049 items 1–4 and 9 approved 2026-10-26). 6.6 is **not** complete: charge timing (6.6c) and DEC-2026-049 items 5–8 are open.
+**Branch:** `claude/phase6-6-recurring-visits` from `main` `0138080`. **Status:** 6.6a merged (`61f0601`); 6.6b implemented for review on `claude/phase6-6b-recurring-cadence` (DEC-2026-049 items 1–4 and 9 approved 2026-10-26). 6.6c (TRACE-125, DEC-2026-049 items 5–6 approved 2026-10-27) implemented for review on `claude/phase6-6c-recurring-payments` (§8); items 7–8 stay blocked. 6.6 is **not** complete until 6.6c passes the two-person finance review and merges.
 
 ## 1. Brief
 
@@ -36,7 +36,7 @@ Phase 4 occurrence foundation (`20260904004000`), TRACE-059 identities (`2026090
 |---|---|---|
 | **6.6a (this)** | Accepted plan terms; visit identity from plan + Eastern date; operator-created visits on the plan terms only; append-only attempt history with blocked reasons; plan never worked on itself; legacy shadow visits stopped; readback and UI for all roles | Codex review |
 | **6.6b (§7)** | Cadence: recorded anchor, proposed visits (horizon, capacity, lead time, month-end, explicit DST choice), skipped/replaced dates, pause/resume/stop future visits | DEC-2026-049 items 1–4, 9 (approved 2026-10-26); Codex review |
-| 6.6c | Charge timing: when each visit's snapshot/invoice is issued and when payment is due; payment-due queue; no automatic charge | DEC-2026-049 item 5; finance review |
+| 6.6c (§8) | Payment timing per visit, accepted-price integrity from the bound terms, payment-exception queue; no automatic charge | DEC-2026-049 items 5–6 (approved 2026-10-27); finance review before merge |
 | 6.6d | Scheduled generation (Cron) | Scheduler activation approval (Phase 7/8) |
 | Prepaid | DEC-2026-048 | After 6.6a is merged; own finance review |
 
@@ -195,3 +195,19 @@ Not performed: hosted migration (needs owner authorization), CI (pending push), 
 Additive: three private tables, three nullable/defaulted columns and a widened check on `recurring_visit_generations` (hosted has 0 rows), private functions, four new public commands, `admin_create_recurring_visit` and `recurring_series` restated with unchanged signatures and grants. Order under DEC-2026-037, with the owner's authorization: `supabase db push --linked --dry-run` (expect only `20261026002000`), push, read back (tables without client access, commands not executable by anon, `admin_create_recurring_visit` delegating to the core, fingerprint `42 | 1fe362b…`), then merge. The deployed 6.6a client keeps working on the new schema: its readback ignores the added fields and its manual command is unchanged except for pause/stop, which no one can set before the new client deploys. Rollback: promote the previous deployment; keep the database forward (the 6.6a client is compatible). Do not drop the history tables once rows exist.
 
 **Hosted push, 2026-10-27, at the owner's instruction:** the dry run listed only `20261026002000`; `supabase db push --linked` applied it. Read back: history ends at `20261026002000`; the three new private tables have no anon/authenticated grants and each has its append-only trigger; the four new commands are executable by authenticated and not by anon; `private.create_recurring_visit_core` is not executable by authenticated; `admin_create_recurring_visit` delegates to the core; money fingerprint `42 | 1fe362b252a565ffe58d3f0ad36e1ee4` (equal to the branch value); 0 anchors, lifecycle rows, resolutions, visit attempts and plan terms; the dry run now reports up to date. Until PR #112 deploys, the live 6.6a client is unchanged (no one can set an anchor, pause or stop).
+
+## 8. Phase 6.6c — payment timing, accepted price and payment exceptions (TRACE-125)
+
+**Brief, implementation and evidence:** [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](PHASE-6-RECURRING-PAYMENTS-BRIEF.md). **Governing:** DEC-2026-049 items 5–6 (owner decision 2026-10-27); items 7–8 kept blocked. **Migration:** `20261027001000`, pushed to hosted 2026-10-28 at the owner's instruction (readback in the brief §6).
+
+**Summary:**
+- A visit's commercial source is the plan terms bound to its creation, checked against its accepted offer. Later catalog edits change neither its amount nor its source hash, so a published visit snapshot stays payable. Live eligibility refusals are named and carry a recovery.
+- The homeowner pays through the existing reviewed checkout ("Review and pay").
+- Operations sees review missing / ready but unpaid from appointment − 24 h (or a later acceptance), plus the shared G6 failure and unknown items.
+
+The §4 "known gap" (the `money_source` current-tier price) is closed for visits. The same exposure on one-time requests is TRACE-126.
+
+**Open gates:**
+- Two-person finance review before merge; reviewers not yet named.
+- Merge, with separate owner authorization (the hosted push was done 2026-10-28).
+- Activation (finance authorities, a publication path, money mode) is outside this slice.

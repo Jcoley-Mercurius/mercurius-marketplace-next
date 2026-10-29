@@ -1,4 +1,5 @@
 import { formatAppointment } from "@/lib/offerStatus";
+import { queueKindLabel, type QueueItem } from "@/lib/quoteProposals";
 import type { AnchorEntry, CadencePreview, CadenceResolution, LifecycleEntry, PlanState } from "@/lib/recurringCadence";
 
 // TRACE-123 (Phase 6.6): a recurring request accepted by a provider is the plan; each visit is a
@@ -23,9 +24,24 @@ export type SeriesVisit = {
   provider_completed_at: string | null;
   homeowner_confirmed_at: string | null;
   payment: "none" | "awaiting_payment" | "paid" | null;
+  /** TRACE-125: the visit's own payment state; null for the provider. Operations also get `problem` and `exception`. */
+  payment_state?: VisitPayment | null;
   /** Operations only (TRACE-124): on a cadence date of the current anchor, and the cadence date it replaces. */
   on_cadence?: boolean | null;
   replaces?: { cadence_date: string; anchor_id: string; current_anchor: boolean } | null;
+};
+export type PaymentProblem = { code: string; message: string; recovery: string };
+export type VisitPayment = {
+  state: "not_accepted" | "review_pending" | "ready" | "processing" | "paid" | "failed" | "unknown" | "cancelled";
+  reason: "no_snapshot" | "snapshot_expired" | "held" | "source_blocked" | "partial_capture" | null;
+  /** "pay" for a current, unpaid, payable snapshot; "continue" for this visit's own open checkout. */
+  action: "pay" | "continue" | null;
+  snapshot_id: string | null;
+  amount_cents: number | null;
+  accepted_at: string | null;
+  attempt_status: string | null;
+  problem?: PaymentProblem | null;
+  exception?: { kind: string; since: string | null; due_at: string | null } | null;
 };
 export type SeriesHistoryEntry = {
   id: string;
@@ -102,6 +118,39 @@ export function visitState(visit: SeriesVisit) {
   return visit.status.replaceAll("_", " ");
 }
 
+const cents = (value: number) => money(value / 100);
+
+/**
+ * TRACE-125 (DEC-2026-049 item 5): one line for the visit's payment, from its canonical
+ * obligation, snapshot and checkout state. A browser return is never "Paid"; only a recorded
+ * capture is. The provider sees no payment.
+ */
+export function visitPaymentLine(payment: VisitPayment | null | undefined, role: SeriesViewer) {
+  if (!payment || role === "vendor") return null;
+  const amount = payment.amount_cents === null ? "" : ` · ${cents(payment.amount_cents)}`;
+  switch (payment.state) {
+    case "not_accepted": return null;
+    case "cancelled": return null;
+    case "review_pending":
+      if (role === "homeowner") return `Payment opens after Mercurius reviews this visit’s price${amount}`;
+      if (payment.reason === "snapshot_expired") return `Reviewed price expired · needs a new commercial review${amount}`;
+      if (payment.reason === "held") return "Payment held (dispute or refund) · finance must resolve it before any review";
+      if (payment.reason === "source_blocked") return `Terms blocked · resolve the exception below before review${amount}`;
+      return `Waiting for commercial review${amount}`;
+    case "ready": return `Ready to pay${amount}`;
+    case "processing": return role === "homeowner" ? `Payment in progress${amount}` : `Checkout open · not paid yet${amount}`;
+    case "paid": return `Paid${amount}`;
+    case "failed": return role === "homeowner" ? `The last payment didn’t go through. You can try again${amount}` : `Payment failed · homeowner can retry${amount}`;
+    case "unknown": return role === "homeowner" ? "Mercurius is confirming this payment. Don’t pay again." : "Payment outcome unknown · reconcile before anything else";
+  }
+}
+
+/** The homeowner's link into the existing reviewed checkout for this visit's current snapshot. */
+export function visitCheckoutHref(payment: VisitPayment | null | undefined) {
+  if (!payment?.snapshot_id || !payment.action) return null;
+  return `/checkout/${payment.snapshot_id}?mode=full`;
+}
+
 export function paymentLabel(payment: SeriesVisit["payment"]) {
   if (payment === "paid") return "Paid";
   if (payment === "awaiting_payment") return "Payment requested";
@@ -146,4 +195,41 @@ export function seriesErrorMessage(error: unknown) {
   if (message.includes("Recurring plan required")) return "This service isn’t a recurring plan.";
   if (code === "42501" || message.includes("Admin access") || message.includes("Not a participant")) return "You don’t have permission to do this.";
   return "We couldn’t confirm whether the visit was added. The latest visits are shown; check them before trying again.";
+}
+
+/** TRACE-125: the recurring payment queue (admin_recurring_payment_queue). */
+export type RecurringPaymentQueueItem = QueueItem & {
+  series_id: string;
+  obligation_id: string | null;
+  /** review_missing only: why the review is missing. */
+  reason?: VisitPayment["reason"];
+  detail: {
+    starts_at?: string; state?: VisitPayment["state"]; reason?: VisitPayment["reason"]; snapshot_id?: string | null;
+    amount_cents?: number | null; attempt_status?: string | null; problem?: PaymentProblem | null;
+  };
+};
+
+/** Failure and unknown outcomes keep the shared G6 wording; the two visit states are added. */
+export function recurringQueueLabel(item: Pick<RecurringPaymentQueueItem, "kind" | "detail"> & { reason?: VisitPayment["reason"] }) {
+  if (item.kind === "review_missing") {
+    switch (item.reason ?? item.detail.reason) {
+      case "snapshot_expired": return { title: "Visit price review expired",
+        action: "The reviewed price expired unpaid. Two finance operators review and publish it again at the accepted plan price." };
+      case "held": return { title: "Visit payment held",
+        action: "A dispute or refund holds this visit's obligation. Finance resolves it first; no new checkout is offered." };
+      case "source_blocked": return { title: "Visit terms blocked",
+        action: "The visit can't be reviewed or paid until the exception below is resolved. Nothing is substituted or repriced." };
+      default: return { title: "Visit needs commercial review",
+        action: "Accepted by the provider and unpaid. Two finance operators review and publish its price; nothing is published automatically." };
+    }
+  }
+  if (item.kind === "ready_unpaid") {
+    return {
+      title: "Visit ready but unpaid",
+      action: item.detail.state === "processing"
+        ? "The homeowner has a checkout open. Nothing is charged or cancelled automatically."
+        : "The homeowner can pay through the reviewed checkout. Contact them if needed; nothing is charged or cancelled automatically.",
+    };
+  }
+  return queueKindLabel[item.kind] ?? { title: item.kind, action: "" };
 }

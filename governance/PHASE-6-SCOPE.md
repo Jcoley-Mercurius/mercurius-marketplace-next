@@ -29,6 +29,10 @@ pause/end and per-visit charge timing wait on DEC-2026-049 (proposed); 6.6 is no
 pause/resume/stop future visits; DEC-2026-049 items 1–4 and 9 approved 2026-10-26) implemented for review. 6.6c charge
 timing and DEC-2026-049 items 5–8 remain open; 6.6 is not complete.
 
+2026-10-27 checkpoint (later): 6.6b merged (PR #112). 6.6c / TRACE-125 (per-visit payment timing, accepted price from the
+bound plan terms, payment-exception queue; DEC-2026-049 items 5–6 approved 2026-10-27, items 7–8 kept blocked) implemented
+for review; the two-person finance review must finish before merge. 6.6 is not complete.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed
@@ -44,7 +48,7 @@ for later slices follow before their implementation.
 | 6.4 | Quotes and scheduling | Quote creation/revision/expiry and acceptance/decline with immutable commercial review and payment/deposit failure recovery |
 | 6.5 | Quotes and scheduling | One-time appointment confirmation, shared timezone and schedule history |
 | 6.6 | Quotes and scheduling | Recurring occurrence generation and charge timing after an owner operating decision; auditable visit identities and duplicate-safe generation |
-| 6.7 | Fulfillment and review | Vendor start/evidence/completion; homeowner confirmation and exception next actions; assigned-actor and payout guards |
+| 6.7 | Fulfillment and review | Vendor start/evidence/completion; homeowner confirmation and exception next actions; assigned-actor and payout guards; **acceptance item (DEC-2026-049 item 5, 2026-10-27): decide and test whether work may start on an unpaid visit — 6.6c leaves unpaid-start unchanged and sets no permanent rule** |
 | 6.8 | Fulfillment and review | Canonical verified reviews/private feedback and moderation/edit/appeal history; resolve reviews versus quality_feedback |
 | 6.9 | Exceptions | Cancellation/rescheduling, provider cancellation/no-show, rematch/refund and emergency waivers under CFG-006/007 |
 | 6.10 | Exceptions | Support-ticket intake and dispute/evidence/resolution/appeal with role-appropriate refund status and payout holds |

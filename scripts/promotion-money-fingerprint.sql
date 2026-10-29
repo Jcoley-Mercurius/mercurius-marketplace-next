@@ -24,4 +24,8 @@ where (n.nspname, p.proname) in (
   -- TRACE-123: carries the priced add-on selection into recurring visits (replaces create_service_occurrence).
   ('public','admin_create_recurring_visit'),
   -- TRACE-124: the 6.6a body moved into the shared core; the cadence path also reaches it.
-  ('private','create_recurring_visit_core'), ('public','admin_create_cadence_visit'));
+  ('private','create_recurring_visit_core'), ('public','admin_create_cadence_visit'),
+  -- TRACE-125: a visit's commercial source is its bound plan terms, checked by one shared rule whose
+  -- refusal text comes from the problem helper (money_source, already listed, is restated with the
+  -- visit branch). The read-only payment state and queue functions are listed in the finance review.
+  ('private','recurring_visit_terms'), ('private','recurring_visit_source_check'), ('private','recurring_visit_payment_problem'));

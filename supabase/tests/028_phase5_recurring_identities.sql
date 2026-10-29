@@ -44,6 +44,23 @@ select 'a1000000-0000-4000-8000-000000000001','00009',service_id,
  'a1000000-0000-4000-8000-000000000001'
 from public.vendor_packages where id='a3000000-0000-4000-8000-000000000001';
 
+-- TRACE-125: a visit is priced from the plan terms bound to its creation and checked against its own
+-- accepted offer. These visits are inserted directly, so the acceptance and binding are recorded here.
+insert into public.job_match_attempts(id,service_request_id,contractor_id,outcome,package_id,package_tier_id,frequency,base_price,effective_price,accepted_at)
+ select ('a7000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,('a5000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'a2000000-0000-4000-8000-000000000001','accepted','a3000000-0000-4000-8000-000000000001','a4000000-0000-4000-8000-000000000001',
+ 'weekly',100,100,now() from generate_series(1,3) n;
+insert into private.recurring_series_terms(id,series_id,accepted_offer_id,customer_id,contractor_id,service_catalog_id,frequency,
+ pricing_mode,package_id,package_tier_id,package_revision,visit_price,visit_total,pricing_inputs,address,city,state,zip_code,
+ package_question_answers,accepted_at)
+ select 'a8000000-0000-4000-8000-000000000001',id,'a7000000-0000-4000-8000-000000000001',customer_id,contractor_id,service_catalog_id,
+ frequency,'fixed',package_id,package_tier_id,private.package_revision_hash(package_id),100,100,null,address,city,state,zip_code,
+ package_question_answers,now() from public.service_requests where id='a5000000-0000-4000-8000-000000000001';
+insert into private.recurring_visit_generations(series_id,terms_id,operation_key,actor_id,reason,starts_at,local_start,visit_key,outcome,occurrence_id)
+ select recurrence_parent_id,'a8000000-0000-4000-8000-000000000001',gen_random_uuid(),'a1000000-0000-4000-8000-000000000002',
+ 'Synthetic fixture visit',scheduled_start_at,scheduled_start_at at time zone 'America/New_York',occurrence_key,'created',id
+ from public.service_requests where recurrence_parent_id='a5000000-0000-4000-8000-000000000001';
+
 create temp table f(key text primary key,id uuid,terms jsonb);
 grant select,insert,update on f to authenticated;
 create function pg_temp.terms(request uuid) returns jsonb language sql as $$ select jsonb_build_object(

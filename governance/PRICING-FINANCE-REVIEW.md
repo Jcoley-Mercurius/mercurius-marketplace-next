@@ -192,6 +192,14 @@ TRACE-123 (2026-10-25, `20261026001000`): `create_service_occurrence` now refuse
 
 TRACE-124 (2026-10-27, `20261026002000`): the `admin_create_recurring_visit` body moves into `private.create_recurring_visit_core` (adds the recorded paused/stopped refusals and the cadence source; the pricing, offer and terms checks are unchanged) and `public.admin_create_cadence_visit` reaches the same core. Both join the list (42 functions); the local value on this branch is `42 | 1fe362b252a565ffe58d3f0ad36e1ee4`. Recurring visit charge timing (6.6c) is not built.
 
+TRACE-125 (2026-10-27, `20261027001000`, **review required before merge**; owner decision DEC-2026-049 items 5–6):
+- **The change.** `private.money_source` is restated with a branch for recurring visits only. A visit is priced from the plan terms bound to its creation (`private.recurring_visit_terms`), checked against its accepted offer by one rule (`private.recurring_visit_source_check`). Its evidence holds those immutable terms instead of the current package and tier rows, so catalog edits change neither the amount nor the source hash. Live eligibility still refuses; nothing is substituted.
+- **Unchanged.** The one-time and quote paths are byte-identical (the one-time exposure is TRACE-126). Publication, checkout, capture, refunds and payout are unchanged.
+- **Fingerprint.** The changed commercial-source helpers join the list: `recurring_visit_terms`, `recurring_visit_source_check` and `recurring_visit_payment_problem` (45 functions). The value is `45 | 34c51131e2ca18f65d3b29afd8d12e11`.
+- **Read-only, outside the fingerprint.** These classify and display and write nothing: `money_payment_exceptions` (the G6 classification moved out of `admin_quote_queue`, with an `attempt_number` tie-break), `recurring_visit_payment`, `recurring_payment_queue`, `admin_recurring_payment_queue`, the restated `admin_quote_queue` and `recurring_series`. Reviewers should read them because they decide when a homeowner is offered a pay link.
+- **Evidence.** [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](PHASE-6-RECURRING-PAYMENTS-BRIEF.md) §7–§8.
+- **Reviewers.** Two people, not yet named by the owner; neither may be the implementer. No sign-off is recorded.
+
 | Reviewer (name) | Role | Date | Commit SHA | File hashes match | Decision | Findings |
 |---|---|---|---|---|---|---|
 | | | | | | | |
