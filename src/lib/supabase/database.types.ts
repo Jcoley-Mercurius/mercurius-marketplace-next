@@ -6599,6 +6599,7 @@ export type Database = {
         Args: { p_contractor: string; p_frequency?: string; p_template: string }
         Returns: Json
       }
+      admin_fulfillment_queue: { Args: never; Returns: Json }
       admin_get_contractor_linked_email: {
         Args: { _contractor_id: string }
         Returns: string
@@ -6650,6 +6651,15 @@ export type Database = {
           _operation_key: string
           _reason?: string
           _starts_at: string
+        }
+        Returns: Json
+      }
+      admin_record_fulfillment_follow_up: {
+        Args: {
+          _item: string
+          _job_id: string
+          _operation_key: string
+          _reason: string
         }
         Returns: Json
       }
@@ -6950,7 +6960,15 @@ export type Database = {
         }
         Returns: Json
       }
+      homeowner_confirm_completion: {
+        Args: { _completed_at: string; _job_id: string }
+        Returns: Json
+      }
       homeowner_confirm_job: { Args: { _job_id: string }; Returns: undefined }
+      homeowner_dispute_completion: {
+        Args: { _completed_at: string; _job_id: string; _reason: string }
+        Returns: Json
+      }
       homeowner_promotion_options: { Args: { p_payload: Json }; Returns: Json }
       homeowner_raise_dispute: {
         Args: { _job_id: string; _reason: string }
@@ -6972,6 +6990,7 @@ export type Database = {
         Args: { p_bucket: string; p_name: string }
         Returns: boolean
       }
+      job_fulfillment: { Args: { _job_id: string }; Returns: Json }
       job_photo_delete_allowed: {
         Args: { p_bucket: string; p_name: string }
         Returns: boolean
@@ -7939,6 +7958,10 @@ export type Database = {
       set_completion_evidence_rule: {
         Args: { _minimum_photos: number; _reason: string; _service_id: string }
         Returns: undefined
+      }
+      start_job: {
+        Args: { _job_id: string; _operation_key: string; _reason?: string }
+        Returns: Json
       }
       start_request_matching: { Args: { _request_id: string }; Returns: string }
       submit_job_review: {

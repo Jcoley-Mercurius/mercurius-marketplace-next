@@ -31,6 +31,7 @@ const job = (suffix, service, status) => ({
   match_attempt_count: 1, declined_contractor_ids: [], matching_status: "offered",
   preferred_contractor_id: null, package_question_answers: {},
   service_catalog_id: suffix === "11" ? "synthetic-pool-service" : null,
+  vendor_completed_at: status === "vendor_completed" ? new Date(now.getTime() - 3600000).toISOString() : null,
 });
 const jobs = [job("10", "Synthetic Lawn Service", "matched"), job("11", "Synthetic Pool Service", "in_progress")];
 const requestRows = role => role === "homeowner" ? [...jobs, job("12", "Synthetic Quote Service", "quoted"), job("13", "Synthetic Pending Service", "pending"), job("14", "Synthetic Review Service", "review_requested"), job("15", "Synthetic Completed Service", "vendor_completed")] : jobs;
@@ -190,6 +191,11 @@ const server = createServer(async (request, response) => {
   // TRACE-122: no archived packages by default; specs override per case.
   if (/\/rpc\/vendor_package_archives$/.test(url.pathname)) return send([]);
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
+  // TRACE-128 fulfillment readback and queue: nothing recorded by default; specs override per case.
+  if (url.pathname === "/rest/v1/rpc/job_fulfillment") return send({ role: user.testRole === "vendor" ? "vendor" : user.testRole, status: "scheduled", plan: false,
+    visit: false, started: null, completion: null, confirmation: null, dispute: null, dispute_window_ends_at: null, review_at: null, operations: [],
+    payout: user.testRole === "homeowner" ? null : { state: "no_payment_record", eligible_at: null } });
+  if (url.pathname === "/rest/v1/rpc/admin_fulfillment_queue") return send(user.testRole === "admin" ? { items: [] } : { message: "Only admins can read the fulfillment queue" }, user.testRole === "admin" ? 200 : 403);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {
     const table = url.pathname.split("/").pop();

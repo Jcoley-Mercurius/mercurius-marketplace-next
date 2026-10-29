@@ -39,8 +39,9 @@ do $$ declare kind text; begin
   end loop;
 end $$;
 select public.vendor_decide_onboarding('52000000-0000-4000-8000-000000000001',1,'activate','Synthetic review','activate');
-insert into public.service_requests(id,customer_id,contractor_id,service_type,address)
-select ('54000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'51000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','house-cleaning','Synthetic address' from generate_series(2,5) n;
+-- TRACE-128: accepted by their provider (rework below restarts work, which needs an accepted assignment).
+insert into public.service_requests(id,customer_id,contractor_id,service_type,address,matching_status)
+select ('54000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'51000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','house-cleaning','Synthetic address','matched' from generate_series(2,5) n;
 create function pg_temp.ob(n integer) returns uuid language sql as $$ select id from public.money_obligations where service_request_id=('54000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid $$;
 -- Ledger setup supports the independently reviewed PR #7 private intake kernel.
 create function pg_temp.publish(request uuid) returns void language plpgsql as $$ begin
@@ -114,6 +115,8 @@ select pg_temp.approve(jsonb_build_object('operation','ach_retry','item',(select
 select throws_ok($$select public.money_retry_ach((select id from f where key='item'),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004')$$,'P0001','Lifecycle dispute or completion hold','Returned transfer cannot retry under live lifecycle hold');
 update public.service_requests set disputed=false where id='54000000-0000-4000-8000-000000000002';
 select lives_ok($$select public.money_retry_ach((select id from f where key='item'),'51000000-0000-4000-8000-000000000003','51000000-0000-4000-8000-000000000004')$$,'Resolved hold permits evidenced return retry');
+-- Rework follows the lifecycle path: a completed job returns to work through a dispute (TRACE-128).
+update public.service_requests set status='disputed' where id='54000000-0000-4000-8000-000000000002';
 update public.service_requests set status='in_progress' where id='54000000-0000-4000-8000-000000000002';
 select throws_ok($$select public.money_payable(pg_temp.ob(2))$$,'P0001','Lifecycle dispute or completion hold','Rework cannot reuse old confirmation for payout');
 update public.service_requests set status='completed',homeowner_confirmed_at=now() where id='54000000-0000-4000-8000-000000000002';
