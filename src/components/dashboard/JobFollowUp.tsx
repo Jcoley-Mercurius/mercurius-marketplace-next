@@ -6,6 +6,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
+import { formatAppointment } from "@/lib/appointments";
 
 type Dispute = { id: string; status: string; resolution_notes: string | null; ticket_id: string | null };
 type Review = { id: string; rating: number; comment: string | null; moderation_state: string };
@@ -16,6 +17,7 @@ export function JobFollowUp({ jobId, status, vendorCompletedAt }: { jobId: strin
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [error, setError] = useState("");
+  const [now, setNow] = useState(0);
   const load = useCallback(async () => {
     const client = createClient();
     const [d, r] = await Promise.all([
@@ -23,15 +25,17 @@ export function JobFollowUp({ jobId, status, vendorCompletedAt }: { jobId: strin
       client.from("reviews").select("id,rating,comment,moderation_state").eq("service_request_id", jobId).maybeSingle(),
     ]);
     if (d.error || r.error) { setError("Follow-up history could not be loaded. Reopen the service to retry."); return; }
-    setError(""); setDispute(d.data); setReview(r.data);
+    setError(""); setDispute(d.data); setReview(r.data); setNow(Date.now());
     if (r.data) { setRating(r.data.rating); setComment(r.data.comment ?? ""); }
   }, [jobId]);
   useEffect(() => { const timer = setTimeout(() => { void load(); }, 0); return () => clearTimeout(timer); }, [load]);
 
   return <section className="space-y-3">
     {error && <p role="alert">{error}</p>}
-    {!dispute && ["completed", "review_requested", "reviewed"].includes(status) && vendorCompletedAt && <>
-      <p className="text-sm">Disputes may be filed within 48 hours of the provider marking this visit complete. Contact support for other concerns.</p>
+    {!dispute && ["completed", "review_requested", "reviewed"].includes(status) && vendorCompletedAt && now > 0 && now >= disputeEnds(vendorCompletedAt) &&
+      <p className="text-sm">The 48-hour window to report an issue ended {formatAppointment(disputeEnds(vendorCompletedAt))}. Contact support about a problem.</p>}
+    {!dispute && ["completed", "review_requested", "reviewed"].includes(status) && vendorCompletedAt && now > 0 && now < disputeEnds(vendorCompletedAt) && <>
+      <p className="text-sm">You can report an issue with this service until {formatAppointment(disputeEnds(vendorCompletedAt))}. Contact support for other concerns.</p>
       <ConfirmAction requireReason triggerLabel="Dispute completed service" title="Open a service dispute?" entity="Completed service" consequence="Mercurius will create a dispute ticket and review your reason and evidence." confirmLabel="Open dispute" onConfirm={async reason => {
         const result = await createClient().rpc("homeowner_raise_dispute", { _job_id: jobId, _reason: reason });
         if (result.error) throw result.error; await load();
@@ -63,3 +67,6 @@ export function JobFollowUp({ jobId, status, vendorCompletedAt }: { jobId: strin
     </div>}
   </section>;
 }
+
+// The Phase 4 dispute window: 48 hours from the provider's completion. The server enforces it.
+function disputeEnds(vendorCompletedAt: string) { return Date.parse(vendorCompletedAt) + 48 * 3_600_000; }

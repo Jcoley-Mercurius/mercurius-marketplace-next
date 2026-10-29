@@ -1,5 +1,23 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.7 fulfillment, completion evidence and homeowner confirmation (TRACE-128), 2026-10-29
+
+- Branch `claude/phase6-7-fulfillment` from `main` `7502342` (the PR #113 merge; head `0ebc9ef` CI green). Record: [PHASE-6-FULFILLMENT.md](../../governance/PHASE-6-FULFILLMENT.md).
+- **PR #113 was merged without a recorded two-person finance sign-off** (PRICING-FINANCE-REVIEW §10 still says none is recorded). This is flagged for the owner, not resolved.
+- Migration `20261029001000` (additive, **not pushed**):
+  - trigger `guard_fulfillment_start`: work starts only on an accepted assignment, on every path;
+  - `start_job` (keyed, stale-safe; records the payment state at start);
+  - `homeowner_confirm_completion` / `homeowner_dispute_completion` bound to the reviewed completion;
+  - `job_fulfillment` readback;
+  - `admin_fulfillment_queue` and `admin_record_fulfillment_follow_up`.
+  - No money function changed (fingerprint `45 | 34c51131…`).
+- UI: `FulfillmentPanel` (all roles), `AdminFulfillmentQueue`, keyed vendor start, confirmation dialog, issue deadline, abandoned-upload cleanup.
+- Fixtures: SQL 003, 024 and 062 now record the provider acceptance they assumed.
+- **Open decision DEC-2026-050 (PROPOSED): may work start unpaid?** Recommendation A: paid only, with an audited admin exception (never for held or terms-blocked); recurring visits now, one-time after TRACE-126. Start is unchanged until it's answered.
+- Characterized, unchanged: F9 (admin no-show or provider cancel on a visit re-offers it to other providers; 6.9); F10 (payout doesn't re-verify evidence; legacy only, 0 hosted); F11 (`support_tickets` client grants; 6.10). TRACE-126 and TRACE-127 stay open.
+- Evidence: SQL 098 159/159 (6/6 mutations killed); clean replay of 203 migrations, full SQL 89 files 5,387 PASS; concurrency 6 scenarios ×4; unit 552/552; lint, typecheck, secret scan clean; synthetic build; browser `fulfillment` 8/8, regression 65/65. Record §10. Not run: full non-visual suite, `@visual`, screen reader, real devices, CI, hosted push.
+- Next: Codex review; owner answers DEC-2026-050 and records the 6.6c finance sign-off; then the hosted push (dry run first) and merge, both with owner authorization.
+
 ## Phase 6.6c recurring visit payments (TRACE-125), 2026-10-27
 
 - Branch `claude/phase6-6c-recurring-payments` from `main` `5e6d6ce` (PR #112 merge; main CI 40515529609 green). Record: [PHASE-6-RECURRING-PAYMENTS-BRIEF.md](../../governance/PHASE-6-RECURRING-PAYMENTS-BRIEF.md).
