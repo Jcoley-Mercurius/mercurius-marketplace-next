@@ -13,7 +13,7 @@ insert into public.user_roles(user_id, role) values
 insert into public.contractors(id,user_id,name,is_active) values
  ('42000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000003','Synthetic provider',false);
 insert into public.service_requests(id,customer_id,contractor_id,service_type,address,status,
- vendor_completed_at,confirmation_sent_at,confirmation_deadline_at,confirmation_due_at,photo_proof_urls)
+ vendor_completed_at,confirmation_sent_at,confirmation_deadline_at,confirmation_due_at,photo_proof_urls,matching_status)
 select ('43000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
  '41000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000001',
  'house-cleaning','Synthetic fixture', 'vendor_completed', now()-interval '4 days',
@@ -24,7 +24,9 @@ select ('43000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
  -- Deliberately misleading legacy deadline: the approved notice clock wins.
  now()-interval '10 days',
  case n when 4 then now()+interval '1 hour' when 6 then now() else null end,
- array['synthetic-proof']
+ array['synthetic-proof'],
+ -- TRACE-128: these completed jobs were accepted by their provider.
+ 'matched'
 from generate_series(1,7) n;
 update public.service_requests set status='cancelled' where id='43000000-0000-4000-8000-000000000005';
 

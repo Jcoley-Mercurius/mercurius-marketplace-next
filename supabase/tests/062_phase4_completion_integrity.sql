@@ -37,10 +37,11 @@ insert into public.contractors(id, user_id, name) values
  ('97200000-0000-4000-8000-000000000001', pg_temp.u(2), 'Synthetic completion provider'),
  ('97200000-0000-4000-8000-000000000002', pg_temp.u(3), 'Synthetic other provider');
 -- Jobs 1 and 2 use a two-photo category; job 4 uses a category without a rule (baseline one).
-insert into public.service_requests(id, customer_id, contractor_id, service_type, address, status, service_catalog_id) values
- (pg_temp.j(1), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic completion', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id limit 1)),
- (pg_temp.j(2), pg_temp.u(5), '97200000-0000-4000-8000-000000000001', 'Synthetic other job', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id limit 1)),
- (pg_temp.j(4), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic baseline job', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id offset 1 limit 1));
+-- All are accepted by the provider (TRACE-128: rework restarts work only on an accepted assignment).
+insert into public.service_requests(id, customer_id, contractor_id, service_type, address, status, service_catalog_id, matching_status) values
+ (pg_temp.j(1), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic completion', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id limit 1), 'matched'),
+ (pg_temp.j(2), pg_temp.u(5), '97200000-0000-4000-8000-000000000001', 'Synthetic other job', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id limit 1), 'matched'),
+ (pg_temp.j(4), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic baseline job', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id offset 1 limit 1), 'matched');
 -- Legacy completion from before verification: a reference that names no stored object.
 insert into public.service_requests(id, customer_id, contractor_id, service_type, address, status, service_catalog_id, vendor_completed_at, confirmation_sent_at, photo_proof_urls) values
  (pg_temp.j(3), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic legacy job', 'Synthetic fixture', 'vendor_completed', (select id from public.services_catalog order by id limit 1), now() - interval '1 day', now() - interval '1 day', array['synthetic-legacy-proof']);

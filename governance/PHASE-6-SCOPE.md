@@ -33,6 +33,12 @@ timing and DEC-2026-049 items 5–8 remain open; 6.6 is not complete.
 bound plan terms, payment-exception queue; DEC-2026-049 items 5–6 approved 2026-10-27, items 7–8 kept blocked) implemented
 for review; the two-person finance review must finish before merge. 6.6 is not complete.
 
+2026-10-29 checkpoint: 6.6c merged (PR #113, `7502342`; CI green; **no two-person finance sign-off is recorded**). 6.7 / TRACE-128
+(fulfillment: start only on an accepted assignment, keyed start, homeowner confirmation and issue report bound to the reviewed
+completion, who-acted-when readback, payout readiness, operations follow-up queue) implemented for review
+([record](PHASE-6-FULFILLMENT.md)). The unpaid-start acceptance item is the open owner decision DEC-2026-050 (PROPOSED);
+start stays ungated until it is answered. 6.7 is not complete.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { JobOperations } from "@/components/dashboard/JobOperations";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
+import { FulfillmentPanel } from "@/components/dashboard/FulfillmentPanel";
+import { isStaleRefusal } from "@/lib/fulfillment";
 import { isRecurringPlan } from "@/lib/recurringVisits";
 import Link from "next/link";
 import {
@@ -102,6 +104,8 @@ export default function VendorJobsPage() {
   const [staleRefresh, setStaleRefresh] = useState(false);
   const noticeRef = useRef<HTMLDivElement>(null);
   const actionRef = useRef(false);
+  // One start key per job, kept across retries so a lost response replays instead of failing (TRACE-128).
+  const startKeys = useRef(new Map<string, string>());
   useEffect(() => { if (notice) noticeRef.current?.focus(); }, [notice]);
 
   useEffect(() => {
@@ -251,13 +255,22 @@ export default function VendorJobsPage() {
 
   async function start(job: Job) {
     setAction({ id: job.id, kind: "start" });
+    let key = startKeys.current.get(job.id);
+    if (!key) { key = crypto.randomUUID(); startKeys.current.set(job.id, key); }
     try {
-      const result = await createClient().rpc("transition_job_status", { _job_id: job.id, _to_status: "in_progress" });
+      const result = await createClient().rpc("start_job", { _job_id: job.id, _operation_key: key });
       if (result.error) throw result.error;
       replaceStatus(job.id, "in_progress");
-      toast.success("Job started");
+      toast.success("Job started", { description: "The homeowner can see when you started." });
     } catch (reason) {
-      toast.error("Unable to update this job", { description: reason instanceof Error ? reason.message : "Please try again." });
+      const message = reason instanceof Error ? reason.message : (reason as { message?: string })?.message;
+      if (isStaleRefusal(message)) {
+        startKeys.current.delete(job.id);
+        await load({ silent: true });
+        toast.warning("This job changed", { description: "It isn’t waiting to start any more. Its current status is shown." });
+      } else {
+        toast.error("Unable to start this job", { description: message || "Please try again." });
+      }
     } finally {
       setAction(null);
     }
@@ -433,6 +446,7 @@ function Details({ job, close, saved, refreshQuote }: { job: Job | null; close: 
     <div className="rounded-lg border bg-muted/35 p-4"><p className="mb-2 flex items-center gap-2 text-sm font-medium"><FileText className="h-4 w-4 text-accent" />Customer notes</p><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{note || "No additional notes were provided."}</p></div>
     {!isIncoming(job) && isRecurringPlan(job) && <RecurringVisitsPanel key={`visits-${job.id}-${job.status}`} seriesId={job.id} role="vendor" />}
     {!isIncoming(job) && <AppointmentPanel key={`appointment-${job.id}-${job.status}`} jobId={job.id} role="vendor" onChanged={refreshQuote} />}
+    {!isIncoming(job) && !isRecurringPlan(job) && <FulfillmentPanel key={`fulfillment-${job.id}-${job.status}`} jobId={job.id} />}
     {!isIncoming(job) && <VendorQuotePanel key={`quote-${job.id}`} job={job} onChanged={refreshQuote} />}
     {["scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="vendor" onSaved={saved} />}
     <QuestionAnswers job={job} />
@@ -471,7 +485,14 @@ function Complete({ job, close, done }: { job: Job | null; close: () => void; do
   const ruleError = Boolean(loaded && loaded.required === null);
   const photoWord = (count: number) => (count === 1 ? "photo" : "photos");
   const enough = required !== null && photos.length >= required;
-  const reset = () => { if (!uploading && !saving) { setPhotoError(""); setPhotos([]); close(); } };
+  // Uploads that were never submitted are private to the provider and never count; remove them
+  // when the dialog is cancelled so an abandoned attempt leaves nothing behind (best effort).
+  const reset = () => {
+    if (uploading || saving) return;
+    const unsubmitted = photos.map((photo) => photo.path);
+    if (unsubmitted.length) void createClient().storage.from("job-photos").remove(unsubmitted);
+    setPhotoError(""); setPhotos([]); close();
+  };
   async function add(files: FileList | null) {
     if (!files?.length || !user || !job) return;
     setPhotoError("");

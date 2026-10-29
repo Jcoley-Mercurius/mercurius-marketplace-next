@@ -4,6 +4,8 @@ import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
 import { JobOperations } from "@/components/dashboard/JobOperations";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
+import { FulfillmentPanel } from "@/components/dashboard/FulfillmentPanel";
+import { formatAppointment } from "@/lib/appointments";
 import { isRecurringPlan } from "@/lib/recurringVisits";
 import { RequestPromotionPanel } from "@/components/dashboard/RequestPromotionPanel";
 import { useEffect, useRef, useState } from "react";
@@ -272,6 +274,13 @@ export function HomeownerJobDetailDialog({
   const needsConfirmation = ["vendor_completed"].includes(
     job.status,
   );
+  // The server keeps the 48-hour dispute window (Phase 4); this only says when it ends. Without a
+  // completion time the server decides, so the action stays offered.
+  const disputeEnds = job.vendor_completed_at ? Date.parse(job.vendor_completed_at) + 48 * 3_600_000 : null;
+  const disputeOpen = disputeEnds === null || now === 0 || now < disputeEnds;
+  const disputeBy = disputeEnds !== null ? formatAppointment(disputeEnds) : null;
+  const showFulfillment = !isRecurringPlan(job) && Boolean(job.contractor_id)
+    && !["pending", "matched", "quoted", "cancelled"].includes(job.status);
   const needsReview = job.status === "review_requested" || (job.status === "completed" && !!job.homeowner_confirmed_at);
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
   const providerState = providerStatus(job);
@@ -418,16 +427,20 @@ export function HomeownerJobDetailDialog({
     );
   }
 
+  // TRACE-128: the decision is bound to the completion shown here (its submission time); if the
+  // provider resubmitted proof meanwhile, the server refuses it and the refreshed proof is shown.
   function respondToCompletion(confirm: boolean, reason = "") {
     const supabase = createClient();
+    const completedAt = currentJob.vendor_completed_at ?? "";
     return runAction(
       confirm ? "confirm-done" : "needs-rework",
       confirm ? "homeowner_confirmed" : currentJob.status,
       () =>
         confirm
-          ? supabase.rpc("homeowner_confirm_job", { _job_id: currentJob.id })
-          : supabase.rpc("homeowner_raise_dispute", {
+          ? supabase.rpc("homeowner_confirm_completion", { _job_id: currentJob.id, _completed_at: completedAt })
+          : supabase.rpc("homeowner_dispute_completion", {
               _job_id: currentJob.id,
+              _completed_at: completedAt,
               _reason: reason,
             }),
       confirm ? "Service confirmed" : "Issue reported",
@@ -493,6 +506,7 @@ export function HomeownerJobDetailDialog({
         </section>
 
         {isRecurringPlan(job) && <RecurringVisitsPanel key={`visits-${job.id}-${job.status}`} seriesId={job.id} role="homeowner" />}
+        {showFulfillment && <FulfillmentPanel key={`fulfillment-${job.id}-${job.status}`} jobId={job.id} />}
         {job.recurrence_parent_id && <p className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">This is one visit of your recurring plan. The provider accepts and completes each visit separately, and each visit is paid on its own.</p>}
 
         <AppointmentPanel key={`appointment-${job.id}-${job.status}`} jobId={job.id} role="homeowner" readOnly={!actionsEnabled} onChanged={() => {
@@ -560,8 +574,10 @@ export function HomeownerJobDetailDialog({
                 Confirm the completed work
               </p>
               <p className="mt-1 text-sm leading-5 text-status-warning text-status-warning">
-                Confirm only after you’ve reviewed the result, or report an issue for review.
-                Disputes must be filed within 48 hours of provider completion. Unanswered completion notices go to Mercurius for review after 72 hours; silence does not confirm the work.
+                The provider marked this work complete. Confirm only after you’ve reviewed the result.
+                {!disputeOpen ? " The 48-hour window to report an issue has ended; contact support about a problem."
+                  : disputeBy ? ` You can report an issue until ${disputeBy}.` : " You can report an issue within 48 hours of the provider’s completion."}
+                {" "}Unanswered completions go to Mercurius for review after 72 hours; silence doesn’t confirm the work.
               </p>
             </div>
 
@@ -586,22 +602,15 @@ export function HomeownerJobDetailDialog({
             )}
 
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <ConfirmAction triggerLabel="Report an issue" title="Report an issue with this service?"
-                entity={currentJob.service_type} consequence="Mercurius will review your concern with you and the provider. This does not confirm completion."
+              {disputeOpen && <ConfirmAction triggerLabel="Report an issue" title="Report an issue with this service?"
+                entity={currentJob.service_type} consequence="Mercurius opens a support ticket and reviews your concern with you and the provider. This doesn’t confirm the work, and the provider’s payout stays on hold while it’s open."
                 confirmLabel="Report issue" requireReason disabled={!actionsEnabled || Boolean(busyAction)}
-                onConfirm={async reason => { const saved = await respondToCompletion(false, reason); if (!saved) throw new Error("Issue was not saved"); }} />
-              <Button
-                disabled={!actionsEnabled || Boolean(busyAction)}
-                className="bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active"
-                onClick={() => void respondToCompletion(true)}
-              >
-                {busyAction === "confirm-done" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <CheckCircle2 />
-                )}
-                Confirm done
-              </Button>
+                onConfirm={async reason => { const saved = await respondToCompletion(false, reason); if (!saved) { void onRefresh().catch(() => undefined); throw new Error("Issue was not saved"); } }} />}
+              <ConfirmAction triggerLabel="Confirm done" triggerVariant="commitment" confirmationTone="commitment" title="Confirm the work is done?"
+                entity={currentJob.service_type}
+                consequence={`This tells Mercurius and the provider you accept the completed work. The provider’s payout can begin 48 hours after you confirm unless an issue or hold applies.${disputeOpen && disputeBy ? ` You can still report an issue until ${disputeBy}.` : ""}`}
+                confirmLabel="Confirm done" disabled={!actionsEnabled || Boolean(busyAction)}
+                onConfirm={async () => { const saved = await respondToCompletion(true); if (!saved) { void onRefresh().catch(() => undefined); throw new Error("Confirmation was not saved"); } }} />
             </div>
           </div>
         )}

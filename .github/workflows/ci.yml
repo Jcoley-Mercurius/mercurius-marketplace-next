@@ -114,6 +114,8 @@ jobs:
         run: node scripts/recurring-cadence-concurrency.mjs
       - name: Concurrent recurring visit publication, checkout and capture
         run: node scripts/recurring-payment-concurrency.mjs
+      - name: Concurrent fulfillment start, confirmation, dispute and follow-up
+        run: node scripts/fulfillment-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay

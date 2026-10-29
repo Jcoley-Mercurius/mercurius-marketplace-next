@@ -285,6 +285,34 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 099, 081; unit `vendor-services`, `package-price-corrections`.
 
+### DEC-2026-050 — May work start before payment?
+
+**Status:** **PROPOSED** (2026-10-29, America/New_York). This is the 6.7 acceptance item recorded by DEC-2026-049 item 5. No rule is approved, and nothing dependent on it is implemented. Current behavior is unchanged: any payment state permits starting work. SQL 098 characterizes this as current, not approved. 6.7 / TRACE-128 records the payment state in each start event as an audit fact. **Date:** 2026-10-29.
+
+**Questions for the owner:**
+
+1. Which payment states permit starting work: paid; processing; review missing (no or expired snapshot, terms blocked); ready but unpaid; confirmed failure; unknown outcome or partial capture; held by a dispute or refund.
+2. How each blocked state behaves for the provider and operations.
+3. Whether an operator exception is allowed, and what it records.
+4. Whether the rule covers one-time jobs now, or only once TRACE-126 is fixed.
+
+**Recommendation (A, phased):**
+
+- **Start only when paid**, meaning captured ≥ the reviewed snapshot total.
+- **Block** the other states, each with its existing queue reason. **Block** processing, telling the provider to wait for the outcome. **Block** unknown until it's reconciled, and never collect again.
+- **Allow an admin exception, with a reason,** for ready, processing, failed and unknown only, never for held or terms-blocked. It records actor, time, payment state and reason in the start event, and payout still requires full capture.
+- **Enforce it in the start guard trigger,** so every path is covered.
+- **Apply it to recurring visits now and to one-time jobs once TRACE-126 is fixed.**
+
+Alternatives:
+
+- **B:** no payment prerequisite. Payout's capture check and the 6.6c unpaid-visit queue remain.
+- **C:** gate recurring visits only.
+
+**Consequence of A:** payments aren't activated, so no job could start in production until payment activation. R1 isn't open, so nothing live is affected now. See [PHASE-6-FULFILLMENT.md](PHASE-6-FULFILLMENT.md) §5.
+
+**MPS impact:** §6.4 gains the start rule. **MDS impact:** blocked-start wording for the provider and operations. **MTS impact:** start guard. **Data/payment/security impact:** none on money amounts. The rule reads the existing payment state.
+
 ### DEC-2026-049 — Recurring visit operating rules and charge timing
 
 **Status:** Items 1–4 and 9 **APPROVED** owner decision with clarifications (Josh, 2026-10-26; recorded below and implemented by 6.6b / TRACE-124). Items 5 and 6 (existing visits) **APPROVED** owner decision (Josh, 2026-10-27; recorded below and implemented by 6.6c / TRACE-125, not released: the two-person finance review must finish before merge). Items 7 and 8 stay **PROPOSED**: the owner confirmed only that quote-priced, promotional and replacement-provider visits stay unpayable; the proposed first-visit promotion, per-plan quote and replacement rules are not approved. 6.6a (TRACE-123) builds only what does not depend on these rules: visit identities, operator-created visits on the accepted plan terms, history and guards. **Date:** 2026-10-25, amended 2026-10-26 and 2026-10-27 (America/New_York).
