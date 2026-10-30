@@ -195,6 +195,13 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/job_fulfillment") return send({ role: user.testRole === "vendor" ? "vendor" : user.testRole, status: "scheduled", plan: false,
     visit: false, started: null, completion: null, confirmation: null, dispute: null, dispute_window_ends_at: null, review_at: null, operations: [],
     payout: user.testRole === "homeowner" ? null : { state: "no_payment_record", eligible_at: null } });
+  // TRACE-130: review readbacks. The synthetic review job is eligible; nothing else has a review.
+  if (url.pathname === "/rest/v1/rpc/service_review") return send({ role: user.testRole, job_id: body._job_id, requested: body._job_id?.endsWith("14") ?? false,
+    eligibility: body._job_id?.endsWith("14") ? "eligible" : "not_confirmed", review: null, history: [] });
+  if (url.pathname === "/rest/v1/rpc/public_review_summaries") return send([]);
+  if (url.pathname === "/rest/v1/rpc/public_provider_reviews") return send({ summary: { count: 0, average: null }, reviews: [] });
+  if (url.pathname === "/rest/v1/rpc/admin_reviews") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [],
+    counts: { public: 0, held_for_moderation: 0, rejected: 0, appealed: 0, private: 0, public_average: null, quality_feedback: 0 } } : { message: "Admin access required" }, user.testRole === "admin" ? 200 : 403);
   if (url.pathname === "/rest/v1/rpc/admin_fulfillment_queue") return send(user.testRole === "admin" ? { items: [] } : { message: "Only admins can read the fulfillment queue" }, user.testRole === "admin" ? 200 : 403);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {
@@ -232,7 +239,7 @@ const server = createServer(async (request, response) => {
       const rows = [{ id: contractor, user_id: users.vendor, name: "Synthetic Vendor", services: [], is_active: true }];
       return send(url.searchParams.has("user_id") ? rows[0] : rows);
     }
-    if (["disputes", "job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications", "request_quote_proposals", "request_quote_exceptions"].includes(table)) return send([]);
+    if (["disputes", "job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications", "request_quote_proposals", "request_quote_exceptions", "quality_feedback"].includes(table)) return send([]);
     // DEC-2026-045: the homeowner quote fixture is a complete final quote, so approval reaches the (failing) command.
     if (table === "request_quote_terms") return send(url.searchParams.get("quote_id") === "eq.00000000-0000-4000-8000-000000000099" ? { quote_id: "00000000-0000-4000-8000-000000000099",
       items: [{ kind: "service", description: "Synthetic quote service", quantity: 1, unit_cents: 11200, amount_cents: 11200 }], scope: "Synthetic scope",

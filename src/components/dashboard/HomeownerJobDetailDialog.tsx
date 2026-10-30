@@ -1,6 +1,8 @@
 "use client";
 
 import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
+import { ServiceReviewPanel } from "@/components/reviews/ServiceReviewPanel";
+import { summariesById } from "@/lib/reviews/serviceReview";
 import { JobOperations } from "@/components/dashboard/JobOperations";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
@@ -36,8 +38,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FormField } from "@/components/ui/form-field";
-import { Textarea } from "@/components/ui/textarea";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
 import { providerStatus } from "@/lib/offerStatus";
@@ -87,8 +87,7 @@ type JobAction =
   | "cancel-request"
   | "decline-quote"
   | "confirm-done"
-  | "needs-rework"
-  | "submit-review";
+  | "needs-rework";
 
 type Props = {
   job: HomeownerDashboardJob | null;
@@ -110,8 +109,6 @@ type ProviderSummary = {
 
 type ProviderMode = "idle" | "loading" | "ready" | "missing" | "error";
 
-const ratingLabels = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
-
 export function HomeownerJobDetailDialog({
   job,
   open,
@@ -122,9 +119,6 @@ export function HomeownerJobDetailDialog({
   onRefresh,
 }: Props) {
   const [busyAction, setBusyAction] = useState<JobAction | null>(null);
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
-  const [comment, setComment] = useState("");
   const [signedPhotos, setSignedPhotos] = useState<string[]>([]);
   const [actionError, setActionError] = useState("");
   const [now, setNow] = useState(0);
@@ -214,11 +208,8 @@ export function HomeownerJobDetailDialog({
             .select("id, name, logo_url, location")
             .eq("id", contractorId)
             .maybeSingle(),
-          supabase
-            .from("reviews")
-            .select("rating")
-            .eq("contractor_id", contractorId)
-            .eq("visibility", "eligible_for_google"),
+          // TRACE-130: the same public summary the provider profile shows.
+          supabase.rpc("public_review_summaries", { _contractor_ids: [contractorId] }),
         ]);
 
         if (!active) return;
@@ -228,11 +219,7 @@ export function HomeownerJobDetailDialog({
           return;
         }
 
-        const ratings = reviewsResult.error
-          ? []
-          : (reviewsResult.data ?? [])
-              .map((review) => Number(review.rating))
-              .filter((rating) => Number.isFinite(rating) && rating >= 1 && rating <= 5);
+        const summary = reviewsResult.error ? undefined : summariesById(reviewsResult.data).get(contractorId);
         if (reviewsResult.error) {
           console.warn("Assigned provider public reviews are unavailable", reviewsResult.error);
         }
@@ -241,13 +228,8 @@ export function HomeownerJobDetailDialog({
         if (!active) return;
 
         setProvider(contractorResult.data as ProviderSummary);
-        setPublicReviewCount(ratings.length);
-        setPublicRating(
-          ratings.length
-            ? ratings.reduce((total, rating) => total + rating, 0) /
-                ratings.length
-            : null,
-        );
+        setPublicReviewCount(summary?.count ?? 0);
+        setPublicRating(summary?.average ?? null);
         setCompletedJobCount(completedJobs);
         setProviderMode("ready");
       } catch (reason) {
@@ -282,15 +264,14 @@ export function HomeownerJobDetailDialog({
   const showFulfillment = !isRecurringPlan(job) && Boolean(job.contractor_id)
     && !["pending", "matched", "quoted", "cancelled"].includes(job.status);
   const needsReview = job.status === "review_requested" || (job.status === "completed" && !!job.homeowner_confirmed_at);
+  // TRACE-130: the review panel reads its own eligibility; it shows once the work is confirmed or settled.
+  const showReview = !isRecurringPlan(job) && Boolean(job.contractor_id)
+    && ["completed", "review_requested", "reviewed", "closed", "disputed", "resolved"].includes(job.status);
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
   const providerState = providerStatus(job);
-  const displayRating = hoveredRating || rating;
 
   function close() {
     if (busyAction) return;
-    setRating(0);
-    setHoveredRating(0);
-    setComment("");
     setSignedPhotos([]);
     setActionError("");
     onOpenChange(false);
@@ -352,9 +333,6 @@ export function HomeownerJobDetailDialog({
       if (error) throw new Error(error.message);
 
       toast.success(successTitle, { description: successDescription });
-      setRating(0);
-      setHoveredRating(0);
-      setComment("");
       onOpenChange(false);
 
       try {
@@ -447,27 +425,6 @@ export function HomeownerJobDetailDialog({
       confirm
         ? "Thanks—Mercurius will move this service into the review workflow."
         : "Mercurius will review the issue with you and the provider.",
-    );
-  }
-
-  function submitReview() {
-    if (rating < 1 || rating > 5) {
-      toast.error("Choose a star rating before submitting");
-      return;
-    }
-
-    const supabase = createClient();
-    return runAction(
-      "submit-review",
-      "reviewed",
-      () =>
-        supabase.rpc("submit_job_review", {
-          _job_id: currentJob.id,
-          _rating: rating,
-          _comment: comment.trim(),
-        }),
-      "Review submitted",
-      "Thank you for sharing feedback about your service.",
     );
   }
 
@@ -667,78 +624,11 @@ export function HomeownerJobDetailDialog({
           </div>
         )}
 
-        {needsReview && (
-          <div className="space-y-5 rounded-xl border border-accent-border bg-accent-subtle p-4">
-            <div>
-              <p className="font-medium">How did the service go?</p>
-              <p className="mt-1 text-sm text-foreground">
-                Your review is public regardless of its star rating. Spam, personal information, threats or abuse, and unrelated content may be moderated; you may appeal a moderation decision.
-              </p>
-            </div>
+        {showReview && <ServiceReviewPanel key={`review-${job.id}`} jobId={job.id} enabled={actionsEnabled} onChanged={() => {
+          void onRefresh().catch(() => toast.warning("Saved, but the dashboard could not refresh", { description: "Refresh the page to see the latest status." }));
+        }} />}
 
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex flex-wrap justify-center gap-0">
-                {[1, 2, 3, 4, 5].map((stars) => (
-                  <button
-                    key={stars}
-                    type="button"
-                    aria-label={`${stars} star${stars === 1 ? "" : "s"}`}
-                    aria-pressed={rating === stars}
-                    disabled={Boolean(busyAction)}
-                    onClick={() => setRating(stars)}
-                    onMouseEnter={() => setHoveredRating(stars)}
-                    onMouseLeave={() => setHoveredRating(0)}
-                    className="flex size-11 items-center justify-center rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-not-allowed"
-                  >
-                    <Star
-                      className={cn(
-                        "h-9 w-9 transition-colors",
-                        stars <= displayRating
-                          ? "fill-status-warning text-status-warning"
-                          : "text-muted-foreground",
-                      )}
-                    />
-                  </button>
-                ))}
-              </div>
-              {displayRating > 0 && (
-                <p className="text-sm font-medium">
-                  {ratingLabels[displayRating]}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <FormField id="job-review-comment" label="Comments (optional)">{control => <Textarea
-                {...control}
-                rows={4}
-                maxLength={1000}
-                value={comment}
-                disabled={Boolean(busyAction)}
-                onChange={(event) => setComment(event.target.value)}
-                placeholder="Tell us about your experience..."
-                className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-focus-ring focus-visible:ring-2 focus-visible:ring-focus-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
-              />}</FormField>
-            </div>
-
-            <div className="flex justify-end">
-              <Button
-                disabled={!actionsEnabled || rating === 0 || Boolean(busyAction)}
-                className="w-full bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-active sm:w-auto"
-                onClick={() => void submitReview()}
-              >
-                {busyAction === "submit-review" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <Star />
-                )}
-                Submit review
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {!isPending && !isQuoted && !needsConfirmation && !needsReview && (
+        {!isPending && !isQuoted && !needsConfirmation && !needsReview && !showReview && (
           <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
             No homeowner action is required for this service right now.
           </div>

@@ -4511,27 +4511,48 @@ export type Database = {
           actor_id: string
           before_value: Json
           created_at: string
+          criterion: string | null
+          from_state: string | null
           id: string
+          moderation_version: number | null
           reason: string
           review_id: string
+          revision: number | null
+          seq: number
+          ticket_id: string | null
+          to_state: string | null
         }
         Insert: {
           action: string
           actor_id: string
           before_value: Json
           created_at?: string
+          criterion?: string | null
+          from_state?: string | null
           id?: string
+          moderation_version?: number | null
           reason: string
           review_id: string
+          revision?: number | null
+          seq?: never
+          ticket_id?: string | null
+          to_state?: string | null
         }
         Update: {
           action?: string
           actor_id?: string
           before_value?: Json
           created_at?: string
+          criterion?: string | null
+          from_state?: string | null
           id?: string
+          moderation_version?: number | null
           reason?: string
           review_id?: string
+          revision?: number | null
+          seq?: never
+          ticket_id?: string | null
+          to_state?: string | null
         }
         Relationships: [
           {
@@ -4549,11 +4570,16 @@ export type Database = {
           contractor_id: string
           created_at: string
           customer_id: string
+          edited_at: string | null
           google_prompt_clicked: boolean
           google_prompt_shown: boolean
           id: string
+          moderated_at: string | null
+          moderation_criterion: string | null
           moderation_state: string
+          moderation_version: number
           rating: number
+          revision: number
           service_request_id: string
           vendor_acknowledged_at: string | null
           visibility: Database["public"]["Enums"]["review_visibility"]
@@ -4563,11 +4589,16 @@ export type Database = {
           contractor_id: string
           created_at?: string
           customer_id: string
+          edited_at?: string | null
           google_prompt_clicked?: boolean
           google_prompt_shown?: boolean
           id?: string
+          moderated_at?: string | null
+          moderation_criterion?: string | null
           moderation_state?: string
+          moderation_version?: number
           rating: number
+          revision?: number
           service_request_id: string
           vendor_acknowledged_at?: string | null
           visibility?: Database["public"]["Enums"]["review_visibility"]
@@ -4577,11 +4608,16 @@ export type Database = {
           contractor_id?: string
           created_at?: string
           customer_id?: string
+          edited_at?: string | null
           google_prompt_clicked?: boolean
           google_prompt_shown?: boolean
           id?: string
+          moderated_at?: string | null
+          moderation_criterion?: string | null
           moderation_state?: string
+          moderation_version?: number
           rating?: number
+          revision?: number
           service_request_id?: string
           vendor_acknowledged_at?: string | null
           visibility?: Database["public"]["Enums"]["review_visibility"]
@@ -6720,6 +6756,7 @@ export type Database = {
         Args: { _proposal_id: string; _reason: string }
         Returns: undefined
       }
+      admin_reviews: { Args: never; Returns: Json }
       admin_save_package_draft: {
         Args: {
           p_contractor: string
@@ -6807,7 +6844,7 @@ export type Database = {
       }
       appeal_job_review: {
         Args: { _reason: string; _review_id: string }
-        Returns: undefined
+        Returns: string
       }
       award_points: {
         Args: {
@@ -7030,8 +7067,14 @@ export type Database = {
         Returns: undefined
       }
       moderate_job_review: {
-        Args: { _reason: string; _review_id: string; _state: string }
-        Returns: undefined
+        Args: {
+          _criterion?: string
+          _expected_version?: number
+          _reason: string
+          _review_id: string
+          _state: string
+        }
+        Returns: Json
       }
       money_approve_review: {
         Args: { p_command: Json; p_reason: string; p_requested_by: string }
@@ -7694,6 +7737,18 @@ export type Database = {
         Args: { p_attempt: string; p_key_hash: string; p_source: string }
         Returns: undefined
       }
+      public_provider_reviews: {
+        Args: { _contractor_id: string; _limit?: number }
+        Returns: Json
+      }
+      public_review_summaries: {
+        Args: { _contractor_ids: string[] }
+        Returns: {
+          average_rating: number
+          contractor_id: string
+          review_count: number
+        }[]
+      }
       r0_accept_provider_access: { Args: { p_attempt: string }; Returns: Json }
       r0_acknowledge_application_notification: {
         Args: { p_application: string; p_reason: string }
@@ -7945,16 +8000,18 @@ export type Database = {
       revise_job_review: {
         Args: {
           _comment: string
+          _expected_revision?: number
           _rating: number
           _reason: string
           _review_id: string
         }
-        Returns: undefined
+        Returns: Json
       }
       run_lifecycle_batch: {
         Args: { _actor_id?: string; _run_id: string }
         Returns: Json
       }
+      service_review: { Args: { _job_id: string }; Returns: Json }
       set_completion_evidence_rule: {
         Args: { _minimum_photos: number; _reason: string; _service_id: string }
         Returns: undefined

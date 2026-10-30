@@ -210,6 +210,9 @@ charge timing remain open pending DEC-2026-049 (proposed).
 2026-10-27: 6.6a merged (PR #111). 6.6b (TRACE-124) implements the approved cadence rules (DEC-2026-049 items 1–4, 9):
 recorded anchor, operator-confirmed proposals, skipped/replaced dates, pause/resume/stop future visits. Charge timing
 (6.6c, items 5–8) remains open; recurring payments are not activated.
+2026-10-29: 6.6c (PR #113) and 6.7 fulfillment (PR #114) merged; 6.7 acceptance stays open on DEC-2026-050 and human checks.
+6.8 (TRACE-130) resolves `reviews` versus `quality_feedback` for implementation: `reviews` is canonical and `quality_feedback`
+is read-only history, pending the owner's DEC-2026-052 answers ([record](../governance/PHASE-6-REVIEWS.md)).
 
 **Outcome:** each role can complete its core job using the approved lifecycle and design patterns.
 

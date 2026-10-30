@@ -39,6 +39,13 @@ completion, who-acted-when readback, payout readiness, operations follow-up queu
 ([record](PHASE-6-FULFILLMENT.md)). The unpaid-start acceptance item is the open owner decision DEC-2026-050 (PROPOSED);
 start stays ungated until it is answered. 6.7 is not complete.
 
+2026-10-29 checkpoint (later): 6.7 merged (PR #114, `afb7c83`; hosted `20261029001000` pushed after the merge at the owner's instruction).
+6.7 stays **incomplete**: DEC-2026-050 (unpaid start) is still PROPOSED, and the screen-reader, `@visual` and real-device checks were not
+performed. The 6.6c two-person finance sign-off is still not recorded. TRACE-126 and TRACE-127 remain separate open corrective issues.
+Vendor-based pricing (TRACE-129, PR #115, `ef1cc33`) merged. 6.8 / TRACE-130 (canonical verified reviews, private feedback and review
+history) implemented for review ([record](PHASE-6-REVIEWS.md)); review window, edits, `quality_feedback`, provider response and related
+questions are the open owner decision DEC-2026-052 (PROPOSED). These notes record status only; they approve no policy.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

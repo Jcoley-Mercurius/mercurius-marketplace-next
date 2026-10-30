@@ -1,5 +1,15 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.8 canonical verified reviews, private feedback and review history (TRACE-130), 2026-10-29
+
+- Branch `claude/phase6-8-reviews` from `main` `ef1cc33` (PR #115 merge; its `main` CI run 40989215953 finished green). Record: [PHASE-6-REVIEWS.md](../../governance/PHASE-6-REVIEWS.md).
+- Checkpoint reconciled (status only, no policy approved): 6.7 merged (PR #114) with acceptance incomplete; DEC-2026-050 still PROPOSED; 6.6c two-person finance sign-off still not recorded; TRACE-126 and TRACE-127 open and separate; PR #114/#115 "then merge" instructions below marked done.
+- Characterized: `reviews` is canonical; `quality_feedback` has no writer and 0 hosted rows but kept open client writes (any provider could be named); signed-in users read authors' `customer_id`; aggregates differed by viewer; `contractors.rating` is a hand-set 4.5 on all 29 hosted providers (admin-only display). Hosted: 0 reviews, 0 history, 0 appeal tickets.
+- Migration `20261031001000` (additive; **pushed to hosted 2026-10-30** at the owner's instruction (dry run listed only it; read back: history ends at `20261031001000`, 5 review and 7 history columns, append-only trigger, public summary/list executable by anon, readback/admin/commands not, `quality_feedback` no client writes, `review_history` no client read, anon-only public policy, 0 reviews / 0 history / 0 quality reports; dry run now up to date)): eligibility function; submit replay; correction/moderation stale guards; criterion-required moderation (DEC-2026-010); one appeal per decision; append-only history; public summary/list, participant and operations readbacks; RLS/grant tightening; `quality_feedback` writes closed.
+- UI: `ServiceReviewPanel` (homeowner), provider profile and provider card on the server summary, `/admin/reviews` rebuilt, `/admin/quality` labels.
+- Open decision **DEC-2026-052 (PROPOSED)**: review window, edits, `quality_feedback` role, provider response, legacy rating display, appeals, author-visible reason, loyalty points for reviews.
+- Next: Codex review; owner answers DEC-2026-052; PR #116 CI green; then merge (owner authorization). Hosted push done.
+
 ## Vendor-based pricing and service onboarding (TRACE-129, DEC-2026-051), 2026-10-29
 
 - Branch `claude/vendor-service-pricing` from `main` `7502342`, independent of TRACE-128; `main` with PR #114 (TRACE-128, DEC-2026-050) merged in to resolve the shared governance files.
@@ -8,7 +18,7 @@
 - UI: vendor record "Save services" (services + ZIPs only), "Offer as Custom Quote" (explicit, reason required, no approval request or email), "Add to catalog" in the application banner; catalog copy marks prices as reference.
 - Evidence: clean replay of 203 migrations; full SQL 89 files 5,240 PASS (099 12/12; 081 still pins the ten "every two months" services); unit 549/549; lint, typecheck, `git diff --check` clean. Not run: browser, `@visual`, screen reader, CI, hosted push.
 - Open: DEC-2026-051 items 6–8 (twice-a-year cadence, catalog cadence limit, guardrail band). Walter Salazar Pest Control (hidden, Marketing off, 0 services, 0 packages) is unchanged.
-- PR #115. Next: Codex review, then merge (production deploy).
+- PR #115 **merged** as `ef1cc33` (2026-10-29; production deploy). The earlier "Next: Codex review, then merge" is superseded; Codex review of the merged diff remains open.
 
 ## Phase 6.7 fulfillment, completion evidence and homeowner confirmation (TRACE-128), 2026-10-29
 
@@ -26,7 +36,7 @@
 - **Open decision DEC-2026-050 (PROPOSED): may work start unpaid?** Recommendation A: paid only, with an audited admin exception (never for held or terms-blocked); recurring visits now, one-time after TRACE-126. Start is unchanged until it's answered.
 - Characterized, unchanged: F9 (admin no-show or provider cancel on a visit re-offers it to other providers; 6.9); F10 (payout doesn't re-verify evidence; legacy only, 0 hosted); F11 (`support_tickets` client grants; 6.10). TRACE-126 and TRACE-127 stay open.
 - Evidence: SQL 098 159/159 (6/6 mutations killed); clean replay of 203 migrations, full SQL 89 files 5,387 PASS; concurrency 6 scenarios ×4; unit 552/552; lint, typecheck, secret scan clean; synthetic build; browser `fulfillment` 8/8, regression 65/65. Record §10. Not run: full non-visual suite, `@visual`, screen reader, real devices, CI, hosted push.
-- Next: Codex review; owner answers DEC-2026-050 and records the 6.6c finance sign-off; then the hosted push (dry run first) and merge, both with owner authorization.
+- **Merged** as PR #114 (`afb7c83`, CI green) and `20261029001000` pushed after the merge; the earlier "then the hosted push and merge" step is done. Still open: Codex review of the merged diff, owner answer to DEC-2026-050 (PROPOSED), the 6.6c finance sign-off, human checks. 6.7 acceptance is incomplete.
 
 ## Phase 6.6c recurring visit payments (TRACE-125), 2026-10-27
 
