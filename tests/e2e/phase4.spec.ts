@@ -15,7 +15,8 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: /Review Synthetic Lawn/ }).click();
     const dialog = page.getByRole("dialog", { name: "Synthetic Lawn Service" });
     await dialog.getByLabel("Change", { exact: false }).selectOption("customer_cancel");
-    await expect(dialog.getByText(/Cancellation applies to this visit only/)).toBeVisible();
+    // TRACE-131: the consequence is the server preview of the assessed command.
+    await expect(dialog.getByText(/Refund under the policy: 50%/)).toBeVisible();
     await dialog.getByRole("button", { name: "Review service change" }).click();
     const confirm = page.getByRole("alertdialog", { name: "Record this service change?" });
     await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
@@ -24,7 +25,7 @@ for (const theme of ["light", "dark"]) {
     const first = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/record_job_operation"));
     await confirm.getByRole("button", { name: "Record change" }).click();
     const payload = (await first).postDataJSON();
-    expect(payload).toMatchObject({ _kind: "customer_cancel", _reason: "Synthetic cancellation reason", _waived: false });
+    expect(payload).toMatchObject({ _kind: "customer_cancel", _reason: "Synthetic cancellation reason", _waived: false, _expected: { status: "matched" } });
     await expect(confirm.getByRole("alert")).toBeFocused();
     const retry = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/record_job_operation"));
     await confirm.getByRole("button", { name: "Record change" }).click();

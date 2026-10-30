@@ -48,9 +48,9 @@ insert into public.service_requests(customer_id,service_type,address,service_cat
  from public.service_requests where id='53000000-0000-4000-8000-000000000003';
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000003"}',true);
-select lives_ok($$select public.record_job_operation('53000000-0000-4000-8000-000000000003','56000000-0000-4000-8000-000000000004','customer_cancel','Cancel this visit only')$$,'admin can cancel one visit with recorded policy');
+select throws_ok($$select public.record_job_operation('53000000-0000-4000-8000-000000000003','56000000-0000-4000-8000-000000000004','customer_cancel','Cancel this visit only')$$,'22023','Changes are made on each visit. Mercurius can stop future visits on the plan.','TRACE-131: an accepted plan refuses cancellation; visits are handled one by one');
 reset role;
 select is((select count(*) from public.service_requests where recurrence_parent_id='53000000-0000-4000-8000-000000000003'),1::bigint,'one auditable child occurrence');
-select is((select status::text from public.service_requests where recurrence_parent_id='53000000-0000-4000-8000-000000000003'),'matched','child remains independently offered when parent cancelled');
+select is((select status::text from public.service_requests where recurrence_parent_id='53000000-0000-4000-8000-000000000003'),'matched','child remains independently offered; the plan is unchanged');
 select * from finish();
 rollback;

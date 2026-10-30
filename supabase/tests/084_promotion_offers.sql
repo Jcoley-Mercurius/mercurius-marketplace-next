@@ -230,7 +230,10 @@ select throws_ok($$insert into private.promotion_redemptions(offer_id, offer_rev
    funding, eligible_cents, discount_cents, homeowner_service_cents, commission_rate_bps, commission_base_cents, commission_cents,
    vendor_proceeds_cents, platform_subsidy_cents, true from private.promotion_redemptions where idempotency_key='synthetic-key-0013'$$,
  '23505', null, 'the database refuses a concurrent second first-booking redemption');
+-- TRACE-131: fixture state written as owner maintenance (no cancellation command exists for it).
+set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status='cancelled' where id='b8450000-0000-4000-8000-000000000009';
+set local mercurius.owner_maintenance = 'off';
 select is((select status from private.promotion_redemptions where idempotency_key='synthetic-key-0013'), 'released',
  'cancelling the unpaid request releases its reservation');
 select is(private.promotion_reserve((select id from ids where name='coded'),'b8450000-0000-4000-8000-000000000010','WELCOME-24','synthetic-key-0018')->>'status',

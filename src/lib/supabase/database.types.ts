@@ -6583,6 +6583,7 @@ export type Database = {
         Args: { p_fingerprint: string; p_offer: string; p_reason: string }
         Returns: Json
       }
+      admin_cancellation_queue: { Args: never; Returns: Json }
       admin_close_quote_exception: {
         Args: { _exception_id: string; _resolution: string }
         Returns: undefined
@@ -6670,6 +6671,10 @@ export type Database = {
       admin_promotion_offer_events: { Args: { p_offer: string }; Returns: Json }
       admin_promotion_offers: { Args: never; Returns: Json }
       admin_promotion_reservation_health: { Args: never; Returns: Json }
+      admin_provider_quality_events: {
+        Args: { _contractor_id?: string }
+        Returns: Json
+      }
       admin_publish_package_draft: {
         Args: {
           p_draft: string
@@ -7022,6 +7027,11 @@ export type Database = {
       intake_record_submission: {
         Args: { p_email_hash: string; p_form: string; p_ip_hash: string }
         Returns: string
+      }
+      job_cancellation_outcome: { Args: { _job_id: string }; Returns: Json }
+      job_cancellation_preview: {
+        Args: { _job_id: string; _kind?: string; _waived?: boolean }
+        Returns: Json
       }
       job_completion_evidence_visible: {
         Args: { p_bucket: string; p_name: string }
@@ -7950,6 +7960,7 @@ export type Database = {
       r0_zip_in_lee: { Args: { p_zip: string }; Returns: boolean }
       record_job_operation: {
         Args: {
+          _expected?: Json
           _job_id: string
           _kind: string
           _operation_key: string
