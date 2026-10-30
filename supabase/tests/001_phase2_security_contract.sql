@@ -120,7 +120,10 @@ select is(
        'preview_service_request_selections',
        -- TRACE-104: read-only public listing rule and projection; no contact or operator data.
        'r0_provider_listable',
-       'r0_public_providers'
+       'r0_public_providers',
+       -- TRACE-130: read-only published review summaries and list; no author or operator identities.
+       'public_review_summaries',
+       'public_provider_reviews'
      )),
   0::bigint,
   'anonymous can execute only the approved public RPC surface'
