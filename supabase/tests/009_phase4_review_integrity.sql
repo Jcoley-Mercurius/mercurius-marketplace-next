@@ -34,7 +34,7 @@ select is((select before_value->>'comment' from public.review_history limit 1),'
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000003"}',true);
 select throws_ok($$delete from public.reviews$$,'42501',null,'admin cannot delete review history');
-select lives_ok($$select public.moderate_job_review((select id from public.reviews where service_request_id='53000000-0000-4000-8000-000000000001'),'rejected','Unrelated content')$$,'reason-bearing moderation preserves original');
+select lives_ok($$select public.moderate_job_review((select id from public.reviews where service_request_id='53000000-0000-4000-8000-000000000001'),'rejected','Unrelated content','unrelated_to_service')$$,'reason-bearing moderation preserves original');
 reset role;
 set local role anon;
 select is((select count(*) from public.reviews),1::bigint,'moderated content no longer public');

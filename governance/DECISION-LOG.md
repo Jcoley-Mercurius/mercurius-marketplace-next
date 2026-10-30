@@ -269,6 +269,26 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-052 — Review eligibility, edits, private feedback and provider response
+
+**Status:** **PROPOSED** (2026-10-29, America/New_York). Decision sheet for 6.8 / TRACE-130 (MPS checklist G5, G6, I3). No item is approved. Where an answer is missing, current behavior is kept and recorded in [PHASE-6-REVIEWS.md](PHASE-6-REVIEWS.md) §5. **Date:** 2026-10-29.
+
+**Already approved and implemented (not reopened):** one review per completed, homeowner-confirmed service, published on submission whatever the rating (DEC-2026-009, Phase 4 accepted under DEC-2026-019); moderation only for spam, personal information, threats or abuse, or content unrelated to the service, never a low rating alone (DEC-2026-010); legacy private feedback never published (DEC-2026-009); appeal through a support ticket with no deadline (DEC-2026-009).
+
+**Questions and recommendations:**
+
+1. **Review window.** How long after confirmation may a homeowner review? *Current:* no deadline; a closed service can't be reviewed. *Recommend:* no deadline during beta.
+2. **Corrections.** May the author correct a review indefinitely, and does a correction change its moderation state? *Current (kept):* any time, with a reason; the state is unchanged (a hidden review stays hidden until an operator decides); a public correction updates the average at once and now shows "Edited". *Recommend:* keep.
+3. **`quality_feedback` (I3).** *Current:* no writer; 0 hosted rows; client writes now closed. *Recommend:* mark it DEPRECATED as a write path and keep historical rows read-only under CFG-011. Any future private-feedback field belongs on the canonical review record after its own decision.
+4. **Provider visibility and response (G6).** *Implemented as the restrictive default:* a provider sees only its public reviews, as the public does. *Recommend:* keep, with no public provider reply during beta; a provider asks support to check a review against the criteria.
+5. **Review after an issue report.** *Current (kept):* paused while `disputed` or `resolved`; reviewable again once the job returns to `completed`. *Recommend:* keep.
+6. **`contractors.rating`.** A hand-edited number (hosted: 4.5 on all 29 providers) shown on admin vendor lists, pickers, Smart Picks and Featured Providers; never public. *Recommend:* show the verified public summary there instead and leave the column unchanged; no data change.
+7. **Appeals.** *Implemented:* one appeal per moderation decision (as dispute appeals are per resolution version); a retry returns the same ticket. *Recommend:* confirm, with no deadline.
+8. **What the author is told.** *Implemented:* the criterion and the operator's reason (the reason was already sent before this slice), never the operator's identity. *Recommend:* confirm, and train operators that the reason is author-visible.
+9. **Loyalty points for reviews.** `award_review_points` grants 50 points for a comment of 40+ characters. *Unchanged.* *Recommend:* owner/legal decide incentive and disclosure before Credits activate.
+
+**MPS impact:** answers G5/G6/I3 once approved. **MDS impact:** review panel, provider profile and admin decision wording. **MTS impact:** migration `20261031001000`. **Data/payment/security impact:** none on money; tighter review reads and closed `quality_feedback` writes.
+
 ### DEC-2026-051 — Vendor-based pricing; catalog prices are reference defaults; services saved without publishing
 
 **Status:** Items 1–5 APPROVED owner task instruction (2026-10-29, vendor onboarding of pest and other service vendors); items 6–8 PROPOSED, need the owner's decision. **Date:** 2026-10-29 (America/New_York).

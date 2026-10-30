@@ -1,6 +1,6 @@
 # Phase 6.7: provider fulfillment, completion evidence and homeowner confirmation
 
-**Status:** IMPLEMENTED FOR REVIEW, 2026-10-29 (America/New_York), on branch `claude/phase6-7-fulfillment` from `main` `7502342` (the PR #113 merge). **Not released.** The unpaid-start rule is an open owner decision (DEC-2026-050, §5). This slice does not make a payment a condition of starting work. It pushes no hosted migration, activates nothing and merges nothing.
+**Status:** IMPLEMENTED; **merged** as PR #114 (`afb7c83`, 2026-10-29); hosted `20261029001000` pushed after the merge at the owner's instruction. **Acceptance incomplete:** DEC-2026-050 is still PROPOSED and the human checks in §10 were not performed. Originally implemented on branch `claude/phase6-7-fulfillment` from `main` `7502342` (the PR #113 merge). The unpaid-start rule is an open owner decision (DEC-2026-050, §5). This slice does not make a payment a condition of starting work. It pushes no hosted migration, activates nothing and merges nothing.
 **Trace:** TRACE-128. **Builds on:** the accepted Phase 4 lifecycle (DEC-2026-019, TRACE-097 completion evidence), the Phase 5 confirmation receipt and payout boundary ([PHASE-5-COMPLETION-PAYOUT.md](PHASE-5-COMPLETION-PAYOUT.md)), and the 6.6 visit identities and payment state (TRACE-123–125).
 
 **Base verification.** PR #113 (6.6c) merged into `main` as `7502342` on 2026-10-29 11:33 UTC, at head `0ebc9ef`. Its CI on that head is green (backend, lifecycle, application). **No finance sign-off is recorded.** PRICING-FINANCE-REVIEW §10 still reads "Reviewers. Two people, not yet named by the owner … No sign-off is recorded", and PHASE-6-RECURRING-PAYMENTS-BRIEF §6 item 2 is still open. The merge does not change that record, and this slice does not treat it as a sign-off (§9).
@@ -159,7 +159,7 @@ Both stay open and are not changed here.
 
 1. Codex review of this diff.
 2. **Owner decision DEC-2026-050** (§5), then the guard and matrix change in a follow-up.
-3. Hosted push of `20261029001000` (dry run first) with owner authorization, then merge (release).
+3. ~~Hosted push of `20261029001000`, then merge~~ — done: merged as PR #114; pushed after the merge (owner instruction, 2026-10-29).
 4. **6.6c finance sign-off:** PR #113 is merged without a recorded two-person finance sign-off. The owner should record the reviewers and sign-off, or the decision to proceed without one. This slice touches no fingerprinted function.
 5. Not in scope: reviews (6.8), cancellation and replacement economics (6.9, F9), dispute resolution and support (6.10, F11), Cron, notification delivery, saved cards, payment activation and prepaid bundles.
 

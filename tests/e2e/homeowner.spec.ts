@@ -69,14 +69,17 @@ test("service dialog failures, cancellation confirmation and keyboard review", a
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Open Synthetic Review Service details" }).click();
   const review = page.getByRole("dialog", { name: "Synthetic Review Service" });
-  const stars = review.getByRole("button", { name: "4 stars", exact: true });
-  await stars.focus();
+  // TRACE-130: the rating is a native radio group; arrow keys move the choice.
+  const three = review.getByRole("radio", { name: /^3 stars/ });
+  await three.focus();
   await page.keyboard.press("Space");
-  await expect(stars).toHaveAttribute("aria-pressed", "true");
-  const box = await stars.boundingBox();
+  await page.keyboard.press("ArrowRight");
+  const stars = review.getByRole("radio", { name: /^4 stars/ });
+  await expect(stars).toBeChecked();
+  const box = await stars.locator("xpath=..").boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(44);
   expect(box!.height).toBeGreaterThanOrEqual(44);
-  await review.getByLabel("Comments (optional)").fill("Synthetic review fixture.");
+  await review.getByLabel("Review (optional)").fill("Synthetic review fixture.");
   await review.getByRole("button", { name: "Submit review" }).click();
   await expect(review.getByRole("alert")).toBeFocused();
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
