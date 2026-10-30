@@ -7,11 +7,13 @@ import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
 
 /** UI duplicate guard only. The caller still owns server authorization/idempotency. */
-export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, reasonLabel = "Reason", reasonHelp = "Explain why this change is needed.", disabled = false, confirmationTone = "destructive", triggerVariant = "outline", onConfirm }: {
+export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, reasonLabel = "Reason", reasonHelp = "Explain why this change is needed.", disabled = false, confirmationTone = "destructive", triggerVariant = "outline", describeError, onConfirm }: {
   triggerLabel: string; title: string; consequence: string; entity: string;
   confirmLabel: string; requireReason?: boolean; disabled?: boolean;
   reasonLabel?: string; reasonHelp?: string;
   onConfirm: (reason: string) => Promise<void>;
+  /** Optional wording for a refusal the caller has already made human-readable. */
+  describeError?: (error: unknown) => string | undefined;
   confirmationTone?: "destructive" | "commitment";
   triggerVariant?: "outline" | "commitment";
 }) {
@@ -35,8 +37,8 @@ export function ConfirmAction({ triggerLabel, title, consequence, entity, confir
       await onConfirm(reason.trim());
       setOpen(false);
       setResult(`${confirmLabel}: ${entity}. Done.`);
-    } catch {
-      setError("The action could not be confirmed. Review the current state before trying again.");
+    } catch (caught) {
+      setError(describeError?.(caught) || "The action could not be confirmed. Review the current state before trying again.");
     } finally {
       inFlight.current = false;
       setPending(false);

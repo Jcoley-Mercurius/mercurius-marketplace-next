@@ -9,7 +9,11 @@ import { syntheticSession } from "../fixtures/browser-session";
 type Row = Record<string, unknown>;
 const reviewJob = "00000000-0000-4000-8000-000000000014";
 const reviewId = "00000000-0000-4000-8000-000000000140";
-const axe = async (page: Page) => (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations;
+// Toasts and dialogs fade; scan once finite transitions end (spinners loop) so axe reads final colors.
+const axe = async (page: Page) => {
+  await page.waitForFunction(() => document.getAnimations().every(animation => animation.playState !== "running" || animation.effect?.getTiming().iterations === Infinity));
+  return (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations;
+};
 const at = "2026-11-03T15:00:00Z";
 
 const ownReview = (overrides: Row = {}): Row => ({ id: reviewId, rating: 4, comment: "Synthetic review text", created_at: at, edited_at: null,
@@ -48,7 +52,7 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     await expect(panel.getByRole("alert")).toHaveText("Choose a star rating before you submit.");
     await panel.getByRole("radio", { name: /^2 stars/ }).check();
     await panel.getByLabel("Review (optional)").fill("  Late but tidy  ");
-    await expect(panel).toContainText("14 of 2,000 characters");
+    await expect(panel).toContainText("13 of 2,000 characters");
     expect(await axe(page)).toEqual([]);
     const sent = page.waitForRequest(request => request.url().includes("/rpc/submit_job_review"));
     await panel.getByRole("button", { name: "Submit review" }).click();

@@ -44,7 +44,7 @@ export function ServiceReviewPanel({ jobId, enabled, onChanged }: { jobId: strin
   const data = state.mode === "ready" ? state.data : null;
   if (data && !data.review && data.eligibility === "plan") return null;
 
-  return <section aria-labelledby={headingId} className="space-y-3 rounded-xl border border-accent-border bg-accent-subtle p-4">
+  return <section aria-labelledby={headingId} className="space-y-3 rounded-xl border border-accent-border bg-card p-4">
     <div className="flex flex-wrap items-center gap-2">
       <h3 id={headingId} className="font-semibold">{data?.review ? "Your review" : "How did the service go?"}</h3>
       {state.mode === "error" && <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={() => void load()}><RefreshCw />Try again</Button>}
@@ -132,7 +132,7 @@ function ExistingReview({ review, history, enabled, onChanged, onStale }: {
       {review.can_appeal && <ConfirmAction requireReason reasonLabel="Why should Mercurius reconsider?" reasonHelp="Mercurius reviews your original review, the decision and your reason."
         triggerLabel="Appeal decision" title="Appeal this moderation decision?" entity="Your service review"
         consequence="Mercurius opens a support ticket for your appeal. Your review stays hidden until the appeal is decided, and the decision stays in history."
-        confirmLabel="Submit appeal" confirmationTone="commitment"
+        confirmLabel="Submit appeal" confirmationTone="commitment" describeError={describeRefusal}
         onConfirm={reason => run(() => createClient().rpc("appeal_job_review", { _review_id: review.id, _reason: reason }),
           "Appeal submitted. Mercurius will review it.", "Your appeal wasn't submitted. Please try again.")} />}
     </div>}
@@ -145,7 +145,7 @@ function ExistingReview({ review, history, enabled, onChanged, onStale }: {
         <Button type="button" variant="ghost" onClick={() => setEditing(false)}>Keep current review</Button>
         <ConfirmAction requireReason reasonLabel="Reason for the correction" reasonHelp="For example, the provider came back to fix the issue."
           disabled={unchanged || Boolean(tooLong) || rating < 1} triggerLabel="Save correction" title="Save this correction?" entity="Your service review"
-          consequence="Your corrected review replaces the current one. The original and your reason stay in its history." confirmLabel="Save correction" confirmationTone="commitment"
+          consequence="Your corrected review replaces the current one. The original and your reason stay in its history." confirmLabel="Save correction" confirmationTone="commitment" describeError={describeRefusal}
           onConfirm={reason => run(() => createClient().rpc("revise_job_review", { _review_id: review.id, _rating: rating, _comment: comment.trim(), _reason: reason, _expected_revision: review.revision }),
             "Correction saved.", "Your correction wasn't saved. Please try again.")} />
       </div>
@@ -165,6 +165,9 @@ function ExistingReview({ review, history, enabled, onChanged, onStale }: {
   </div>;
 }
 
+// run() throws the server refusal already worded by reviewErrorMessage.
+const describeRefusal = (error: unknown) => error instanceof Error ? error.message : undefined;
+
 // Native radios: arrow keys move the choice and the group reads as one question.
 function StarInput({ value, onChange, disabled = false, legend }: { value: number; onChange: (value: number) => void; disabled?: boolean; legend: string }) {
   const name = useId();
@@ -174,10 +177,11 @@ function StarInput({ value, onChange, disabled = false, legend }: { value: numbe
     <legend className="text-sm font-medium">{legend} (required)</legend>
     <div className="flex flex-wrap items-center gap-0" onMouseLeave={() => setHovered(0)}>
       {[1, 2, 3, 4, 5].map((stars) => <label key={stars} onMouseEnter={() => setHovered(stars)}
-        className="flex size-11 cursor-pointer items-center justify-center rounded-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:disabled]:cursor-not-allowed">
-        <input type="radio" name={name} value={stars} checked={value === stars} onChange={() => onChange(stars)} className="sr-only"
+        className="relative flex size-11 cursor-pointer items-center justify-center rounded-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:disabled]:cursor-not-allowed">
+        <input type="radio" name={name} value={stars} checked={value === stars} onChange={() => onChange(stars)}
+          className="absolute inset-0 m-0 size-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
           aria-label={`${stars} star${stars === 1 ? "" : "s"}, ${RATING_LABELS[stars].toLowerCase()}`} />
-        <Star aria-hidden="true" className={cn("h-8 w-8 transition-colors", stars <= shown ? "fill-status-warning text-status-warning" : "text-muted-foreground")} />
+        <Star aria-hidden="true" className={cn("pointer-events-none h-8 w-8 transition-colors", stars <= shown ? "fill-status-warning text-status-warning" : "text-muted-foreground")} />
       </label>)}
       <span className="ml-2 text-sm font-medium" aria-hidden="true">{shown ? RATING_LABELS[shown] : ""}</span>
     </div>

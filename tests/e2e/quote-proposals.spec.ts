@@ -244,6 +244,8 @@ test("admin: accepted terms are final; a change opens an exception", async ({ pa
   await expect.poll(() => state.calls.at(-1)).toEqual({ name: "admin_open_quote_exception", body: { _job_id: jobId, _reason: "Homeowner asked to add a third stump" } });
   // Scan the settled panel: while it re-reads, the trigger is inactive (exempt from contrast).
   await expect(dialog.getByRole("button", { name: "Open change exception" })).toBeEnabled();
+  // The success toast fades in; scan once finite transitions end (spinners loop) so axe reads final colors.
+  await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running" || animation.effect?.getTiming().iterations === Infinity));
   expect(await axe(page)).toEqual([]);
 });
 

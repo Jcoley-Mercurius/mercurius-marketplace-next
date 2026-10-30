@@ -239,7 +239,7 @@ const server = createServer(async (request, response) => {
       const rows = [{ id: contractor, user_id: users.vendor, name: "Synthetic Vendor", services: [], is_active: true }];
       return send(url.searchParams.has("user_id") ? rows[0] : rows);
     }
-    if (["disputes", "job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications", "request_quote_proposals", "request_quote_exceptions"].includes(table)) return send([]);
+    if (["disputes", "job_match_attempts", "request_match_attempts", "messages", "job_messages", "notifications", "request_quote_proposals", "request_quote_exceptions", "quality_feedback"].includes(table)) return send([]);
     // DEC-2026-045: the homeowner quote fixture is a complete final quote, so approval reaches the (failing) command.
     if (table === "request_quote_terms") return send(url.searchParams.get("quote_id") === "eq.00000000-0000-4000-8000-000000000099" ? { quote_id: "00000000-0000-4000-8000-000000000099",
       items: [{ kind: "service", description: "Synthetic quote service", quantity: 1, unit_cents: 11200, amount_cents: 11200 }], scope: "Synthetic scope",
