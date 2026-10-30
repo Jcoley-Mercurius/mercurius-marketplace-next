@@ -1,10 +1,20 @@
 # Agent handoff — 2026-10-01
 
+## Vendor-based pricing and service onboarding (TRACE-129, DEC-2026-051), 2026-10-29
+
+- Branch `claude/vendor-service-pricing` from `main` `7502342`, independent of TRACE-128; `main` with PR #114 (TRACE-128, DEC-2026-050) merged in to resolve the shared governance files.
+- Characterized: vendor prices are per-vendor packages; catalog mode/prices never price a vendor (reference for the guardrail band and vendor guidance only); a request with no fixed offering is a quote.
+- Migration `20261030001000` (additive; **pushed to hosted 2026-10-29** at the owner's instruction: the dry run listed only it; read back 65 services with the four added as Custom Quote, Pest Control unchanged, 17 active packages, Walter unchanged, publish fix present, fingerprint `45 | 34c51131…`, dry run now up to date): four Specialty Custom Quote services; `admin_publish_package_draft` restated with one addition (quote entry in the price history, so a zero-level quote can be published). Not in the money fingerprint.
+- UI: vendor record "Save services" (services + ZIPs only), "Offer as Custom Quote" (explicit, reason required, no approval request or email), "Add to catalog" in the application banner; catalog copy marks prices as reference.
+- Evidence: clean replay of 203 migrations; full SQL 89 files 5,240 PASS (099 12/12; 081 still pins the ten "every two months" services); unit 549/549; lint, typecheck, `git diff --check` clean. Not run: browser, `@visual`, screen reader, CI, hosted push.
+- Open: DEC-2026-051 items 6–8 (twice-a-year cadence, catalog cadence limit, guardrail band). Walter Salazar Pest Control (hidden, Marketing off, 0 services, 0 packages) is unchanged.
+- PR #115. Next: Codex review, then merge (production deploy).
+
 ## Phase 6.7 fulfillment, completion evidence and homeowner confirmation (TRACE-128), 2026-10-29
 
 - Branch `claude/phase6-7-fulfillment` from `main` `7502342` (the PR #113 merge; head `0ebc9ef` CI green). Record: [PHASE-6-FULFILLMENT.md](../../governance/PHASE-6-FULFILLMENT.md).
 - **PR #113 was merged without a recorded two-person finance sign-off** (PRICING-FINANCE-REVIEW §10 still says none is recorded). This is flagged for the owner, not resolved.
-- Migration `20261029001000` (additive, **not pushed**):
+- Migration `20261029001000` (additive; **pushed to hosted 2026-10-29 after PR #114 had merged**, at the owner's instruction, with `--include-all` because `20261030001000` was already applied; the dry run listed only it; read back 10 functions and the trigger present, `start_job` not executable by anon, fingerprint `45 | 34c51131…` unchanged, dry run now up to date; hosted had 11 requests, all cancelled, so the start guard affected no live job):
   - trigger `guard_fulfillment_start`: work starts only on an accepted assignment, on every path;
   - `start_job` (keyed, stale-safe; records the payment state at start);
   - `homeowner_confirm_completion` / `homeowner_dispute_completion` bound to the reviewed completion;

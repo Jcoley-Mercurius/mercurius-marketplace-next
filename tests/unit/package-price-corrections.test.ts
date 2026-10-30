@@ -73,6 +73,13 @@ describe("history", () => {
     expect(rows[0].changes.map(describeChange)).toEqual(["Basic (Weekly): $100 → $120.50", "Deposit: not set → $40"]);
     expect(parseCorrections({})).toEqual([]);
   });
+  it("describes a quote published with no price levels (TRACE-129)", () => {
+    const rows = parseCorrections([
+      { id: 3, package_id: "pkg-2", package_name: "Termite Control", reason: "Priced per job", created_at: "2026-10-29T12:00:00Z",
+        changes: [{ kind: "quote", pricing_mode: "custom_quote", deposit: null }, { kind: "quote", pricing_mode: "deposit_quote", deposit: 50 }] },
+    ]);
+    expect(rows[0].changes.map(describeChange)).toEqual(["Offered as Custom Quote: homeowners request a quote", "Offered as a quote with a $50 deposit"]);
+  });
   it("words a stale read for the operator", () => {
     expect(correctionErrorMessage({ code: "40001", message: "raw" })).toMatch(/changed since you opened it/);
     expect(correctionErrorMessage({ code: "P0001", message: "No price changed" })).toBe("No price changed");
