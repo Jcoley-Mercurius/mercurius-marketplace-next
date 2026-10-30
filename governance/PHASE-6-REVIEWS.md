@@ -1,6 +1,6 @@
 # Phase 6.8: canonical verified reviews, private feedback and review history
 
-**Status:** IMPLEMENTED FOR REVIEW, 2026-10-29 (America/New_York), on branch `claude/phase6-8-reviews` from `main` `ef1cc33` (the PR #115 merge). **Not released.** No hosted migration is pushed and nothing is merged. The open owner questions are DEC-2026-052 (PROPOSED, §5). Nothing that depends on them is built.
+**Status:** IMPLEMENTED FOR REVIEW, 2026-10-29 (America/New_York), on branch `claude/phase6-8-reviews` from `main` `ef1cc33` (the PR #115 merge). **Not released.** Migration `20261031001000` **pushed to hosted 2026-10-30** at the owner's instruction (dry run listed only it; read back: history ends at `20261031001000`, 5 review and 7 history columns, append-only trigger, public summary/list executable by anon, readback/admin/commands not, `quality_feedback` no client writes, `review_history` no client read, anon-only public policy, 0 reviews / 0 history / 0 quality reports; dry run now up to date). Nothing is merged. The open owner questions are DEC-2026-052 (PROPOSED, §5). Nothing that depends on them is built.
 **Trace:** TRACE-130. **Builds on:** the accepted Phase 4 review contract (TRACE-015, `20260904003000`; DEC-2026-009/010; accepted with Phase 4 under DEC-2026-019), the 6.6 visit identities (TRACE-123) and the 6.7 confirmation (TRACE-128).
 
 **Base verification.** `origin/main` is `ef1cc33`: PR #114 (6.7, TRACE-128) merged as `afb7c83` with CI green, and PR #115 (TRACE-129) merged as `ef1cc33`. The `main` CI run for `ef1cc33` (40989215953) was in progress when this slice began and finished green (26 m 35 s). The checkpoint reconciliation (6.7 merged with open acceptance items; DEC-2026-050 PROPOSED; 6.6c finance sign-off missing; TRACE-126/127 open) is recorded in HANDOFF and PHASE-6-SCOPE. It is documentation only and approves no policy.
@@ -89,7 +89,7 @@ UI:
 1. Codex review of this diff.
 2. Owner answers DEC-2026-052 (items 1–9); dependent behavior follows in its own change.
 3. PR CI green (`main` CI on `ef1cc33` is green).
-4. Hosted push (dry run first) with owner authorization, then merge.
+4. ~~Hosted push~~ — done 2026-10-30 (owner instruction). Then merge after review and CI.
 5. Carried, unchanged: DEC-2026-050 (unpaid start) PROPOSED; 6.6c two-person finance sign-off not recorded; TRACE-126 and TRACE-127 open.
 6. Not in scope: notification delivery and review requests (Phase 7; `review_requested` is set only by the inactive worker), support-ticket handling of appeals (6.10), provider reply, Cron, payments, pricing, cancellation/refund economics.
 
