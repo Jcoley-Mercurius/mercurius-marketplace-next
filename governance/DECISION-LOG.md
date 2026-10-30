@@ -269,6 +269,16 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-053 — Exceptions not covered by CFG-006/007
+
+**Status:** **PROPOSED** (2026-10-30, America/New_York). Decision sheet for 6.9 (MPS §6.6). No item is approved. Questions E1–E12 with recommendations and dependencies are in [PHASE-6-EXCEPTIONS-BRIEF.md](PHASE-6-EXCEPTIONS-BRIEF.md) §9. Until answered, current behavior is kept and 6.9A (TRACE-131) implements only repairs that approved rules already require. **Date:** 2026-10-30.
+
+**Already approved and not reopened:** CFG-006 cancellation windows, reschedule fee windows and weather/emergency waivers; CFG-007 rematch-first, full refund without an acceptable replacement and quality event unless excused; CFG-008 payout timing and holds; DEC-2026-049 item 4 (plan stop/pause/resume, operations-only); DEC-2026-049 item 8 stays PROPOSED and blocked.
+
+**Questions (short form):** E1 windows with no appointment and cancelling started work; E2 $25 collection and <24 h handling; E3 provider-initiated rescheduling; E4 provider share of retained cancellation amounts; E5 acceptable replacement; E6 replacement price; E7 replacement provider for a recurring visit (= DEC-2026-049 item 8); E8 whole-plan cancellation; E9 homeowner unavailable and partial completion; E10 quality-event consequences; E11 waivers after the original assessment; E12 homeowner cancellation during an open provider withdrawal.
+
+**MPS impact:** answers MPS §6.6 "either party", no-show, partial work and recurring coverage once approved. **MDS impact:** cancellation preview/outcome wording, policy page. **MTS impact:** 6.9B commands after answers. **Data/payment/security impact:** E2, E4, E6, E11 move money and need the two-person finance review and payment activation.
+
 ### DEC-2026-052 — Review eligibility, edits, private feedback and provider response
 
 **Status:** **PROPOSED** (2026-10-29, America/New_York). Decision sheet for 6.8 / TRACE-130 (MPS checklist G5, G6, I3). No item is approved. Where an answer is missing, current behavior is kept and recorded in [PHASE-6-REVIEWS.md](PHASE-6-REVIEWS.md) §5. **Date:** 2026-10-29.
