@@ -1,6 +1,6 @@
 # Phase 6.8: canonical verified reviews, private feedback and review history
 
-**Status:** IMPLEMENTED FOR REVIEW, 2026-10-29 (America/New_York), on branch `claude/phase6-8-reviews` from `main` `ef1cc33` (the PR #115 merge). **Not released.** Migration `20261031001000` **pushed to hosted 2026-10-30** at the owner's instruction (dry run listed only it; read back: history ends at `20261031001000`, 5 review and 7 history columns, append-only trigger, public summary/list executable by anon, readback/admin/commands not, `quality_feedback` no client writes, `review_history` no client read, anon-only public policy, 0 reviews / 0 history / 0 quality reports; dry run now up to date). Nothing is merged. The open owner questions are DEC-2026-052 (PROPOSED, §5). Nothing that depends on them is built.
+**Status:** MERGED AND DEPLOYED 2026-10-30 (owner merge of PR #116 at head `8ca8f93` as `de8e802`, 14:47 UTC; Vercel production deployment success 14:48 UTC). Implemented 2026-10-29 on `claude/phase6-8-reviews` from `main` `ef1cc33`. Migration `20261031001000` pushed to hosted 2026-10-30 at the owner's instruction before merge (read-back in §7 and HANDOFF). **Not accepted:** Codex review is not recorded on the PR, and DEC-2026-052 stays PROPOSED (§5); nothing that depends on it is built.
 **Trace:** TRACE-130. **Builds on:** the accepted Phase 4 review contract (TRACE-015, `20260904003000`; DEC-2026-009/010; accepted with Phase 4 under DEC-2026-019), the 6.6 visit identities (TRACE-123) and the 6.7 confirmation (TRACE-128).
 
 **Base verification.** `origin/main` is `ef1cc33`: PR #114 (6.7, TRACE-128) merged as `afb7c83` with CI green, and PR #115 (TRACE-129) merged as `ef1cc33`. The `main` CI run for `ef1cc33` (40989215953) was in progress when this slice began and finished green (26 m 35 s). The checkpoint reconciliation (6.7 merged with open acceptance items; DEC-2026-050 PROPOSED; 6.6c finance sign-off missing; TRACE-126/127 open) is recorded in HANDOFF and PHASE-6-SCOPE. It is documentation only and approves no policy.
@@ -86,10 +86,10 @@ UI:
 
 ## 8. Gates (open)
 
-1. Codex review of this diff.
+1. Codex review of the merged diff (`ef1cc33..8ca8f93`); none recorded on PR #116.
 2. Owner answers DEC-2026-052 (items 1–9); dependent behavior follows in its own change.
-3. PR CI green (`main` CI on `ef1cc33` is green).
-4. ~~Hosted push~~ — done 2026-10-30 (owner instruction). Then merge after review and CI.
+3. ~~PR CI green~~ — PR run 41065935141 green at `8ca8f93`; `main` run 41074732742 for `de8e802` (see HANDOFF).
+4. ~~Hosted push~~ — done 2026-10-30 (owner instruction). ~~Merge~~ — owner merged 2026-10-30 before Codex review; production deployed.
 5. Carried, unchanged: DEC-2026-050 (unpaid start) PROPOSED; 6.6c two-person finance sign-off not recorded; TRACE-126 and TRACE-127 open.
 6. Not in scope: notification delivery and review requests (Phase 7; `review_requested` is set only by the inactive worker), support-ticket handling of appeals (6.10), provider reply, Cron, payments, pricing, cancellation/refund economics.
 
@@ -101,3 +101,5 @@ See the PR description for exact commands and results; summary:
 - SQL 009 12/12 with the moderation call naming its criterion.
 - `scripts/review-concurrency.mjs` 6 scenarios, 3 consecutive passes.
 - Unit `service-review` 7/7. Browser `reviews` and the updated `homeowner` keyboard review test (see PR).
+- **Checkpoint 2026-10-30 at `8ca8f93`.** PR CI run 41065935141: unit 48 files / 569 tests; backend SQL 91 files / 5,515 tests PASS before and after a clean `db reset` replay (100 and 001/009 ok), all concurrency steps; lifecycle job green; application lint, secret scan, typecheck, audit (0 vulnerabilities), build, browser 601 passed / 0 failed / 0 flaky, including `reviews` (7), `homeowner` (7) and `fulfillment` (8). Earlier failures were deterministic and fixed: run 41053197383 SQL 001 test 17 (anon RPC allowlist, `d0e48bc`); run 41058468670 nine browser failures (star icon intercepting clicks, 4.34:1 contrast on the accent tint, missing `quality_feedback` fixture, review count expectation, `8ca8f93`).
+- `scripts/review-concurrency.mjs` is not a CI step. Rerun locally at `8ca8f93` after `phase5-db.sh reset`: 6 scenarios, 3/3 passes. (A first attempt against a persisted local volume at `20261027001000` failed because the 6.8 migration was not applied; not a product defect.)
