@@ -36,7 +36,10 @@ select is((select status::text from public.service_requests where id='53000000-0
 select throws_ok($$select public.vendor_accept_job('53000000-0000-4000-8000-000000000001')$$,'P0001','No open offer is available to accept','duplicate acceptance rejected');
 reset role;
 
+-- TRACE-131: fixture state written as owner maintenance (no cancellation command exists for it).
+set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status='cancelled' where id='53000000-0000-4000-8000-000000000002';
+set local mercurius.owner_maintenance = 'off';
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000002"}',true);
 select throws_ok($$select public.vendor_accept_job('53000000-0000-4000-8000-000000000002')$$,'22023','Offer is no longer actionable','stale offer cannot resurrect cancellation on acceptance');

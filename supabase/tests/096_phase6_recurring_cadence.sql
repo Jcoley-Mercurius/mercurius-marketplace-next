@@ -457,8 +457,12 @@ select is((select jsonb_agg(x->>'action' order by x->>'at', x->>'id') from jsonb
 select is(pg_temp.money_rows()::text, current_setting('t.money'), 'no obligation, snapshot, invoice, checkout, charge, refund or payout row was written by proposals, anchors, skips, links or lifecycle actions');
 
 -- Resuming never reactivates a cancelled plan.
-select lives_ok($$select pg_temp.call(1, format('select public.record_job_operation(%L,%L,''customer_cancel'',''Synthetic plan ended'')', pg_temp.id('m'), pg_temp.k(70)))$$,
-  'homeowner A cancels plan M');
+select throws_ok($$select pg_temp.call(1, format('select public.record_job_operation(%L,%L,''customer_cancel'',''Synthetic plan ended'')', pg_temp.id('m'), pg_temp.k(70)))$$,
+  '22023', 'Changes are made on each visit. Mercurius can stop future visits on the plan.', 'TRACE-131: homeowner A cannot cancel accepted plan M; plans use Stop future visits');
+-- A plan cancelled before TRACE-131 (owner maintenance stands in for the old path).
+set local mercurius.owner_maintenance = 'on';
+update public.service_requests set status = 'cancelled' where id = pg_temp.id('m');
+set local mercurius.owner_maintenance = 'off';
 select pg_temp.lifecycle(5, pg_temp.id('m'), 71, 'pause', 'active');
 select pg_temp.lifecycle(5, pg_temp.id('m'), 72, 'resume', 'paused');
 select is(pg_temp.manual(5, pg_temp.id('m'), 73, pg_temp.day(40))->>'code', 'series_not_active', 'a resumed but cancelled plan still gets no visit');

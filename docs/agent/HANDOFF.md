@@ -1,5 +1,14 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.9A exception repairs (TRACE-131, DEC-2026-053), 2026-10-30
+
+- Branch `claude/phase6-9a-exceptions` from `4b96710` (brief) on `main` `de8e802`. Record: [PHASE-6-EXCEPTIONS-BRIEF.md](../../governance/PHASE-6-EXCEPTIONS-BRIEF.md) §6–§10.
+- Owner approved DEC-2026-053 with Codex's recommendations: E1, E2, E4, E6, E9, E10, E12 recorded; **E3, E5, E7, E8, E11 amended wording not received** — record it before 6.9B.
+- Migration `20261101001000` (additive, **not pushed to hosted**): same-transaction cancellation evidence for every writer; `record_job_operation(_expected)` with shared assessment/refusal and stale guard; E1/E12; accepted plans refuse exception commands; plan visits not re-offered, no replacement reconciliation; preview, outcome (entitlement/authorization/movement), operations queue, quality events. Money fingerprint unchanged `45 | 34c51131…`.
+- UI: pending cancel and `JobOperations` previewed and stale-guarded; no cancel in admin status menu; refund status panel; cancellation follow-up on `/admin/requests`; provider cancellations tab on `/admin/quality`; `/reschedule-policy` copy.
+- Separate finance-reviewed scopes not built: already-open session/late capture (P-K1/P-K2), $25 collection, supplemental refunds, retained proceeds.
+- Next: Codex review; amended E-wording; owner authorization for the hosted push; merge only after both.
+
 ## Phase 6.8 checkpoint and 6.9 brief, 2026-10-30
 
 - PR #116 merged by the owner at head `8ca8f93` as `de8e802` (14:47 UTC) and deployed to production (14:48 UTC). PR CI 41065935141 green; evidence in [PHASE-6-REVIEWS.md](../../governance/PHASE-6-REVIEWS.md) §9. `review-concurrency.mjs` (not in CI) 3/3 locally after a clean reset.

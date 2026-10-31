@@ -271,13 +271,22 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 ### DEC-2026-053 — Exceptions not covered by CFG-006/007
 
-**Status:** **PROPOSED** (2026-10-30, America/New_York). Decision sheet for 6.9 (MPS §6.6). No item is approved. Questions E1–E12 with recommendations and dependencies are in [PHASE-6-EXCEPTIONS-BRIEF.md](PHASE-6-EXCEPTIONS-BRIEF.md) §9. Until answered, current behavior is kept and 6.9A (TRACE-131) implements only repairs that approved rules already require. **Date:** 2026-10-30.
+**Status:** E1, E2, E4, E6, E9, E10, E12 **APPROVED** (owner, 2026-10-30, adopting Codex's recommendations). E3, E5, E7, E8, E11 **APPROVED WITH CODEX AMENDMENTS — final wording not yet recorded here**; the earlier recommendations for those five are withdrawn. **Date:** 2026-10-30 (America/New_York).
 
-**Already approved and not reopened:** CFG-006 cancellation windows, reschedule fee windows and weather/emergency waivers; CFG-007 rematch-first, full refund without an acceptable replacement and quality event unless excused; CFG-008 payout timing and holds; DEC-2026-049 item 4 (plan stop/pause/resume, operations-only); DEC-2026-049 item 8 stays PROPOSED and blocked.
+**Approved wording:**
+- **E1.** With no recorded appointment, a customer cancellation refunds 100% (no provider time was reserved). Once work has started there is no self-serve cancellation: the homeowner reports an issue and operations decides (partial work, 6.10).
+- **E2.** The $25 reschedule fee is assessed when requested and collected only as a separate, operations-confirmed, two-person-reviewed charge after the new time is recorded; never deducted from a refund. Until collection is active the fee is shown as assessed, not charged. Under 24 hours, operations decides with a reason; no fee unless the owner sets one.
+- **E4.** Cancellation-retained amounts are not payable to providers during beta until finance approves a rule.
+- **E6.** The homeowner never pays more without accepting new reviewed terms; a replacement works for the original agreed amount; if none will, there is no acceptable replacement and the homeowner gets a full refund.
+- **E9.** Homeowner unavailable and partial completion are recorded only in 6.9; consequences are decided in 6.10; no automatic fee.
+- **E10.** Provider cancellation/no-show quality events are recorded and displayed only during beta; any matching or suspension effect needs its own decision.
+- **E12.** A homeowner who cancels while a provider withdrawal awaits a replacement decision gets a full refund (no acceptable replacement); no homeowner penalty.
 
-**Questions (short form):** E1 windows with no appointment and cancelling started work; E2 $25 collection and <24 h handling; E3 provider-initiated rescheduling; E4 provider share of retained cancellation amounts; E5 acceptable replacement; E6 replacement price; E7 replacement provider for a recurring visit (= DEC-2026-049 item 8); E8 whole-plan cancellation; E9 homeowner unavailable and partial completion; E10 quality-event consequences; E11 waivers after the original assessment; E12 homeowner cancellation during an open provider withdrawal.
+**Architectural corrections given with the approval (bind 6.9A and the amended items):** (1) cancellation during open or uncertain checkout is kept and creates an actionable reconciliation state; payment-kernel changes are a separate finance-reviewed scope; (2) cancellation evidence is atomic and bound to request, actor and record; (3) no cancellation in generic admin status editing; (4) recurring plans use the existing lifecycle controls, visits stay individually accountable (E8); (5) recurring replacement-provider paths stay blocked and no accepted snapshot moves to another provider (E7); (6) later waivers append an adjustment, existing assessments and refunds unchanged, additional refunds separately authorized with duplicate protection (E11); (7) readbacks keep entitlement, authorization and money movement distinct.
 
-**MPS impact:** answers MPS §6.6 "either party", no-show, partial work and recurring coverage once approved. **MDS impact:** cancellation preview/outcome wording, policy page. **MTS impact:** 6.9B commands after answers. **Data/payment/security impact:** E2, E4, E6, E11 move money and need the two-person finance review and payment activation.
+**Implementation:** 6.9A / TRACE-131 (E1, E10, E12 and corrections 1–5, 7); E2, E4, E6 and correction 6 need the separately reviewed money scopes in [PHASE-6-EXCEPTIONS-BRIEF.md](PHASE-6-EXCEPTIONS-BRIEF.md) §7. Questions and status: §9.
+
+**MPS impact:** §6.6 "either party", no-show, partial work and recurring coverage. **MDS impact:** cancellation preview and refund-status wording; policy page. **MTS impact:** migration `20261101001000`. **Data/payment/security impact:** no money moves in 6.9A; E2, E4, E6, E11 execution needs the two-person finance review and payment activation.
 
 ### DEC-2026-052 — Review eligibility, edits, private feedback and provider response
 
