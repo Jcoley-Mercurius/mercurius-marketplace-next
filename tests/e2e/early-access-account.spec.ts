@@ -95,7 +95,8 @@ test.describe("waiting home", () => {
     await expect(page.locator('a[href^="/request"]')).toHaveCount(0);
     await expect(page.getByText(/Upcoming Services|Recent Invoices|Pay Securely/)).toHaveCount(0);
     await expect(page.locator("main")).not.toContainText(/queue|position|place in line|credit/i);
-    await expect(nav(page).getByRole("link")).toHaveText(["Overview", "Notifications", "Account Settings"]);
+    // TRACE-133: support is an account action a waiting account keeps (HOMEOWNER-EARLY-ACCESS-RECONCILIATION).
+    await expect(nav(page).getByRole("link")).toHaveText(["Overview", "Notifications", "Support", "Account Settings"]);
   });
 
   test("a missing interest is a recovery prompt, and saving reads back the stored interest", async ({ page }) => {

@@ -69,6 +69,9 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     await page.getByRole("button", { name: "Send reply" }).click();
     await expect.poll(() => commands.post_support_message?.length ?? 0).toBe(1);
     expect(commands.post_support_message[0]).toMatchObject({ _ticket_id: "00000000-0000-4000-8000-0000000000a1", _body: "Thanks" });
+    // The reply reloads the list; check contrast once Refresh is re-enabled and its fade has finished.
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeEnabled();
+    await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running"));
     await axe(page);
     await noHorizontalScroll(page);
   });

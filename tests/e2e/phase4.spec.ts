@@ -59,16 +59,24 @@ test("Phase 4: homeowner fallback requires explicit confirmation", async ({ page
 
 test("Phase 4: resolution remains visible while homeowner appeals", async ({ page }) => {
   await syntheticSession(page.context(), "homeowner");
-  await page.route("**/rest/v1/disputes?**", route => route.fulfill({ json: [{ id: "00000000-0000-4000-8000-000000000080", status: "resolved", resolution_notes: "Synthetic original decision", ticket_id: "00000000-0000-4000-8000-000000000081" }] }));
+  await page.route("**/rest/v1/disputes?**", route => route.fulfill({ json: [{ id: "00000000-0000-4000-8000-000000000080" }] }));
+  // TRACE-133: the decision, its version and the appeal right come from dispute_detail.
+  await page.route("**/rest/v1/rpc/dispute_detail", route => route.fulfill({ json: {
+    job_id: "00000000-0000-4000-8000-000000000010", viewer: "homeowner", status: "completed", checked_at: "2030-11-01T15:00:00Z", vendor_completed_at: "2030-10-30T15:00:00Z",
+    disputes: [{ dispute_id: "00000000-0000-4000-8000-000000000080", status: "resolved", raised_at: "2030-10-31T15:00:00Z", reason: "Synthetic issue",
+      completion_at: "2030-10-30T15:00:00Z", window_ends_at: "2030-11-01T15:00:00Z", resolution_version: 2, resolution_notes: "Synthetic original decision",
+      resolved_at: "2030-11-01T14:00:00Z", ticket_number: "TKT-080", decisions: [], appeals: [], can_appeal: true, can_submit: false, submissions: [] }],
+    refund: { payment_record: true, authorization: "none", movement: "none" }, payout: { state: "dispute_hold" } } }));
   await page.goto("/dashboard?tab=upcoming");
   await page.getByRole("button", { name: "Open Synthetic Lawn Service details" }).click();
   await expect(page.getByText("Synthetic original decision")).toBeVisible();
-  await page.getByRole("button", { name: "Appeal resolution" }).click();
-  const confirm = page.getByRole("alertdialog", { name: "Appeal this resolution?" });
+  await expect(page.getByText("No refund has been authorized.")).toBeVisible();
+  await page.getByRole("button", { name: "Appeal this decision" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Appeal this decision?" });
   await confirm.getByLabel("Reason (required)").fill("Synthetic appeal evidence");
   const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/appeal_dispute_resolution"));
   await confirm.getByRole("button", { name: "Submit appeal", exact: true }).click();
-  expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic appeal evidence" });
+  expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic appeal evidence", _expected_version: 2 });
   await expect(confirm.getByRole("alert")).toBeFocused();
 });
 
