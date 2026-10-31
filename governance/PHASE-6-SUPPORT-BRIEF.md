@@ -1,7 +1,7 @@
 # Phase 6.10 — support tickets, disputes, evidence, resolution and appeals
 
 **Status:** characterization complete and first implementation for review, 2026-10-31 (America/New_York), on `claude/phase6-10-support`.
-**Base (stacked):** 6.9B head `c2318f5` (PR #119). 6.9A (`a864df5`) and 6.9B are **not on `main`**: PR #117 merged to `main` (`737474f`), but PR #118 merged afterwards into the already-merged brief branch (`fee2811`), and PR #119 targets `claude/phase6-9a-exceptions`. 6.10 depends on 6.9 ticket kinds (`schedule_exception`, `plan_stop_request`), so it stacks on `c2318f5`; its own diff is `c2318f5..HEAD`. Rebase onto `main` once 6.9A/6.9B land there.
+**Base (stacked):** 6.9B head `c2318f5` (PR #119). 6.9A (`a864df5`) and 6.9B are **not on `main`**: PR #117 merged to `main` (`737474f`), but PR #118 merged afterwards into the already-merged brief branch (`fee2811`), and PR #119 merged into `claude/phase6-9a-exceptions` (`a1855f2`, tree identical to `c2318f5`); PR #120 targets that branch. 6.10 depends on 6.9 ticket kinds (`schedule_exception`, `plan_stop_request`), so it stacks on `c2318f5`; its own diff is `c2318f5..HEAD`. Rebase onto `main` once 6.9A/6.9B land there.
 **Trace:** TRACE-133. **Decisions:** DEC-2026-054 (PROPOSED, §7). **Hosted:** both 6.9 migrations confirmed applied (history re-read 2026-10-31 ends at `20261102001000`). Hosted aggregates 2026-10-31: 0 support tickets, 0 disputes, 0 appeals, 0 `job_photos`, 0 `job-photos` objects.
 
 ## 1. Approved rules
