@@ -269,6 +269,27 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-054 — Dispute categories, outcomes, timing and support reopening
+
+**Status:** **PROPOSED** (2026-10-31, America/New_York). Decision sheet for 6.10 / TRACE-133 (MPS §6.6). No item is approved; current behavior is kept and recorded in [PHASE-6-SUPPORT-BRIEF.md](PHASE-6-SUPPORT-BRIEF.md) §7. **Date:** 2026-10-31.
+
+**Already approved and implemented (not reopened):** 48-hour dispute window from the provider's completion and appeals through tickets with no deadline (DEC-2026-009); the separate 72-hour completion review (DEC-2026-006); disputed work held until resolution (CFG-008); support hours and response target (CFG-010); 3-year ticket and message retention (CFG-011).
+
+**Questions and recommendations:**
+
+1. **Reason categories.** *Now:* free text. *Recommend:* work not done / not as agreed / quality / damage / no-show / other, for reporting only.
+2. **Resolution types and money.** *Now:* free-text decision; no refund is recorded or executed; only the dispute's own hold clears. *Recommend:* no change / rework / partial refund / full refund / provider excused, where a refund type opens the existing two-person refund authorization and never executes it.
+3. **Dispute response time.** *Now:* the dispute ticket uses CFG-010. *Recommend:* keep for acknowledgement; set a resolution target after pilot data.
+4. **Provider response window.** *Now:* statements and photos until the decision; no deadline. *Recommend:* no deadline in beta.
+5. **After 48 hours.** *Now:* general support only. *Recommend:* operations may open a formal dispute for the homeowner with a recorded reason.
+6. **Provider appeals.** *Now:* none (DEC-2026-009 names homeowners). *Recommend:* general support only in beta.
+7. **Reopening.** *Now:* requester cannot reply to a resolved/closed request; operations reopens with a reason. *Recommend:* keep.
+8. **Support categories.** *Now:* one general kind. *Recommend:* keep.
+9. **Partial work and no-show penalties in outcomes.** *Now:* none. Needs an owner policy with finance review; not recommended for beta.
+10. **Provider visibility of homeowner tickets on its jobs.** *Now:* none. *Recommend:* keep.
+
+**MPS impact:** answers the open §6.6 dispute items once approved. **MDS impact:** dispute panel and support wording. **MTS impact:** migration `20261103001000`. **Data/payment/security impact:** none until items 2 or 9 are approved; both need the finance review.
+
 ### DEC-2026-053 — Exceptions not covered by CFG-006/007
 
 **Status:** E1–E12 **APPROVED** (owner, 2026-10-30). E1, E2, E4, E6, E9, E10, E12 adopt Codex's recommendations; E3, E5, E7, E8, E11 adopt Codex's **amended** recommendations (the earlier recommendations for those five are withdrawn). The amended wording below was recorded on 2026-10-31 to reconcile the record with the owner's existing approval; it is not a new approval request. **Date:** 2026-10-30 (America/New_York); amended wording recorded 2026-10-31.

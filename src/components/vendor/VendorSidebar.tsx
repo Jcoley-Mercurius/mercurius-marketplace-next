@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BadgePercent, Briefcase, DollarSign, FileCheck, Home, LayoutDashboard, Loader2, LogOut, Megaphone, MessageSquare, User } from "lucide-react";
+import { BadgePercent, Briefcase, DollarSign, FileCheck, Home, LayoutDashboard, LifeBuoy, Loader2, LogOut, Megaphone, MessageSquare, User } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ const navigation = [
   { label: "Plans", href: "/vendor/plan", icon: BadgePercent, note: "Free" },
   { label: "Compliance Documents", href: "/vendor/compliance", icon: FileCheck },
   { label: "Profile", href: "/vendor/profile", icon: User },
+  { label: "Support", href: "/vendor/support", icon: LifeBuoy },
 ];
 
 export function VendorSidebar({ onNavigate }: { onNavigate?: () => void }) {

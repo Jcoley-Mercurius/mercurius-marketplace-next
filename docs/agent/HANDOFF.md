@@ -1,4 +1,12 @@
-# Agent handoff — 2026-10-01
+# Agent handoff — 2026-10-31
+
+## Phase 6.10 support, disputes, evidence and appeals (TRACE-133, DEC-2026-054 proposed), 2026-10-31
+
+- **Status reconciled first:** hosted history re-read: `20261101001000` and `20261102001000` applied (brief and PR #118/#119 bodies corrected from "not pushed"). PR #117 merged to `main` (`737474f`); PR #118 merged at 13:00 UTC into the already-merged brief branch (`fee2811`), so **6.9A/6.9B are not on `main`**; #119 targets `claude/phase6-9a-exceptions`. Route to `main` is an owner decision. 6.9 is not accepted (F-1/F-2/F-3/P-K1/P-K2 open).
+- Branch `claude/phase6-10-support` stacked on 6.9B head `c2318f5`; own diff `c2318f5..HEAD`. Record: [PHASE-6-SUPPORT-BRIEF.md](../../governance/PHASE-6-SUPPORT-BRIEF.md).
+- F11 proven (forged ticket kind/status/link, requester rewrite, operator direct status write; DELETE inert) plus a storage finding (any participant could read a known foreign `job-photos` object). Migration `20261103001000` (additive; **not pushed to hosted**) closes them and adds keyed support intake, replies/internal notes, versioned triage with history, dispute completion binding, decision history, stale-guarded decisions and appeals, own-job evidence, separate money reads.
+- Evidence: SQL 103 142/142; full SQL 94/5,897 PASS on clean reset; 8/8 mutations killed; `support-concurrency.mjs` 3/3 (CI step); unit 7/7; browser `support` 7/7; fingerprint unchanged `45 / 34c51131…`. Not performed: screen reader, real devices, `@visual`, hosted push, CI.
+- Next: Codex review; owner answers DEC-2026-054; owner decides the 6.9 route to `main`; then hosted push of `20261103001000` before merge (DEC-2026-037).
 
 ## Phase 6.9B exception resolutions (TRACE-132, DEC-2026-053), 2026-10-31
 

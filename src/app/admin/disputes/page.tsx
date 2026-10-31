@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Calendar, CheckCircle2, Eye, ImageIcon, Loader2, MapPin, Pause, Play, RefreshCw, Search, User } from "lucide-react";
 import { toast } from "sonner";
 import { AdminEmpty, AdminError, AdminLoading } from "@/components/admin/AdminPageState";
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
+import { DisputePanel } from "@/components/support/DisputePanel";
+import { describeSupportError } from "@/lib/support";
 
 type Dispute = { id: string; service_type: string; address: string; city: string; state: string; zip_code: string | null; status: string; customer_id: string; contractor_id: string | null; total_amount: number | null; dispute_reason: string | null; disputed_at: string | null; dispute_resolved_at: string | null; dispute_resolution: string | null; disputed: boolean; created_at: string };
 type Photo = { id: string; service_request_id: string; photo_url: string; caption: string | null; uploader_role: string; photo_type: string; visit_date: string; created_at: string };
@@ -37,6 +39,7 @@ export default function AdminDisputesPage() {
     } catch (reason) { console.error("Unable to load disputes", reason); setError(reason instanceof Error ? reason.message : "Disputes could not be loaded."); setMode("error"); }
   }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void load(true); }, 0); return () => window.clearTimeout(timer); }, [load]);
+  const decisionKey = useRef(crypto.randomUUID());
   const resolve = async (markResolved: boolean) => {
     if (!selected) return;
     const notes = resolution.trim();
@@ -50,7 +53,7 @@ export default function AdminDisputesPage() {
       const supabase = createClient();
       const disputeResult = await supabase
         .from("disputes")
-        .select("id")
+        .select("id, status, resolution_version")
         .eq("job_id", selected.id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -60,12 +63,18 @@ export default function AdminDisputesPage() {
         throw new Error("This legacy flag has no canonical dispute record. It was not changed; review the request before attempting a state transition.");
       }
 
-      const result = await supabase.rpc("admin_resolve_dispute", {
+      // Stale-guarded and keyed (TRACE-133): the decision applies to the version just read, and a
+      // retry after a lost response returns the same decision instead of recording a second one.
+      const result = await supabase.rpc("admin_decide_dispute", {
         _dispute_id: disputeResult.data.id,
+        _request_key: decisionKey.current,
+        _expected_status: disputeResult.data.status,
+        _expected_version: disputeResult.data.resolution_version,
         _status: markResolved ? "resolved" : "vendor_contacted",
         _notes: notes,
       });
       if (result.error) throw result.error;
+      decisionKey.current = crypto.randomUUID();
 
       toast.success(markResolved ? "Dispute resolved" : "Dispute follow-up saved", {
         description: markResolved
@@ -77,7 +86,7 @@ export default function AdminDisputesPage() {
       await load(false);
     } catch (reason) {
       toast.error("Dispute could not be updated", {
-        description: reason instanceof Error ? reason.message : "The canonical dispute workflow failed. No UI-only resolution was applied.",
+        description: reason instanceof Error ? reason.message : describeSupportError(reason),
       });
     } finally {
       setSaving(false);
@@ -88,7 +97,7 @@ export default function AdminDisputesPage() {
   if (mode === "loading") return <AdminLoading label="Loading disputes and payout holds..." />; if (mode === "error") return <AdminError title="Disputes could not be loaded" message={error} retry={() => void load(true)} />;
   const activeCount = disputes.length; const pausedCount = vendors.filter((vendor) => vendor.payouts_paused).length;
   return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8"><header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">State-machine backed queue</p><h1 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-tight"><AlertTriangle className="text-amber-500" />Disputes Queue</h1><p className="mt-2 text-sm text-muted-foreground">Review flagged requests through the canonical dispute workflow and manage vendor payout holds.</p></div><div className="flex gap-3"><Stat label="Active disputes" value={activeCount} /><Stat label="Paused vendors" value={pausedCount} /><Button variant="outline" onClick={() => void load(false)}><RefreshCw /></Button></div></header><Tabs defaultValue="disputes"><TabsList><TabsTrigger value="disputes">Flagged Jobs ({activeCount})</TabsTrigger><TabsTrigger value="vendors">Vendor Payouts ({vendors.length})</TabsTrigger></TabsList><TabsContent value="disputes" className="mt-5 space-y-4"><div className="relative max-w-xl"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search service, address, city, or homeowner..." className="pl-9" /></div>{filtered.length === 0 ? <Card><CardContent className="p-0"><AdminEmpty icon={CheckCircle2} title="No disputes to review" description="All flagged service requests have been resolved." /></CardContent></Card> : <div className="space-y-3">{filtered.map((item) => { const stateMismatch = item.status === "disputed" && Boolean(item.dispute_resolved_at); return <Card key={item.id} className={stateMismatch ? "border-red-300" : ""}><CardContent className="p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{item.service_type}</h2><Badge variant="outline">{label(item.status)}</Badge><Badge className={stateMismatch ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}>{stateMismatch ? "State mismatch — still disputed" : "Open dispute"}</Badge>{photos[item.id]?.length > 0 && <Badge variant="secondary"><ImageIcon />{photos[item.id].length} photos</Badge>}</div><div className="mt-3 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2"><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />{profiles[item.customer_id] ?? "Unknown homeowner"}</span><span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{item.address}, {item.city}</span>{item.disputed_at && <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />Flagged {formatDate(item.disputed_at)}</span>}{item.total_amount !== null && <span>Job total: {money(item.total_amount)}</span>}</div>{item.dispute_reason && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="mb-1 font-medium text-amber-900">Homeowner&apos;s reason</p>{item.dispute_reason}</div>}</div><Button variant="outline" onClick={() => { setSelected(item); setResolution(item.dispute_resolution ?? ""); }}><Eye />Review</Button></div></CardContent></Card>; })}</div>}</TabsContent><TabsContent value="vendors" className="mt-5 space-y-3"><p className="text-sm text-muted-foreground">Pause future payouts for vendors under investigation. Existing held funds are unaffected.</p>{vendors.length === 0 ? <Card><CardContent className="p-0"><AdminEmpty icon={Play} title="No vendors available" /></CardContent></Card> : vendors.map((vendor) => <Card key={vendor.id}><CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{vendor.name}</p><Badge className={vendor.payouts_paused ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}>{vendor.payouts_paused ? <><Pause />Payouts paused</> : <><Play />Active</>}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{vendor.jobs_completed ?? 0} completed jobs{vendor.payouts_paused_at ? ` · paused ${formatDate(vendor.payouts_paused_at)}` : ""}</p>{vendor.payouts_paused_reason && <p className="mt-1 text-xs italic text-muted-foreground">“{vendor.payouts_paused_reason}”</p>}</div>{vendor.payouts_paused ? <Button variant="outline" disabled={saving} onClick={() => void togglePayouts(vendor, false)}><Play />Resume</Button> : <Button variant="outline" disabled={saving} onClick={() => setPauseTarget(vendor)}><Pause />Pause</Button>}</CardContent></Card>)}</TabsContent></Tabs>
-    <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open && !saving) setSelected(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>Review dispute</DialogTitle><DialogDescription>{selected?.service_type} · {selected?.address}, {selected?.city}</DialogDescription></DialogHeader>{selected && <div className="space-y-5">{selected.dispute_reason && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="mb-1 font-medium text-amber-900">Homeowner&apos;s complaint</p>{selected.dispute_reason}</div>}<section><h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><ImageIcon className="h-4 w-4" />Job photos ({photos[selected.id]?.length ?? 0})</h3>{photos[selected.id]?.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{photos[selected.id].map((photo) => <a key={photo.id} href={photo.photo_url} target="_blank" rel="noreferrer" className="group"><div className="aspect-square overflow-hidden rounded-lg border bg-muted"><img src={photo.photo_url} alt={photo.caption || "Job evidence"} className="h-full w-full object-cover transition-transform group-hover:scale-105" /></div><p className="mt-1 truncate text-xs text-muted-foreground">{photo.uploader_role} · {formatDate(photo.visit_date)}</p>{photo.caption && <p className="truncate text-xs">{photo.caption}</p>}</a>)}</div> : <p className="text-sm italic text-muted-foreground">No photos uploaded for this request.</p>}</section><label className="block space-y-2 text-sm font-medium">Resolution notes (required to resolve)<textarea rows={4} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Document the decision, refund, warning, or follow-up..." className={textareaClass} /></label></div>}<DialogFooter><Button variant="outline" disabled={saving} onClick={() => setSelected(null)}>Cancel</Button><Button variant="secondary" disabled={saving} onClick={() => void resolve(false)}>Save Follow-Up — Keep Open</Button><Button disabled={saving || !resolution.trim()} onClick={() => void resolve(true)}>{saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Resolve Through Workflow</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open && !saving) setSelected(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>Review dispute</DialogTitle><DialogDescription>{selected?.service_type} · {selected?.address}, {selected?.city}</DialogDescription></DialogHeader>{selected && <div className="space-y-5"><DisputePanel key={selected.id} jobId={selected.id} />{selected.dispute_reason && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><p className="mb-1 font-medium text-amber-900">Homeowner&apos;s complaint</p>{selected.dispute_reason}</div>}<section><h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><ImageIcon className="h-4 w-4" />Job photos ({photos[selected.id]?.length ?? 0})</h3>{photos[selected.id]?.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{photos[selected.id].map((photo) => <a key={photo.id} href={photo.photo_url} target="_blank" rel="noreferrer" className="group"><div className="aspect-square overflow-hidden rounded-lg border bg-muted"><img src={photo.photo_url} alt={photo.caption || "Job evidence"} className="h-full w-full object-cover transition-transform group-hover:scale-105" /></div><p className="mt-1 truncate text-xs text-muted-foreground">{photo.uploader_role} · {formatDate(photo.visit_date)}</p>{photo.caption && <p className="truncate text-xs">{photo.caption}</p>}</a>)}</div> : <p className="text-sm italic text-muted-foreground">No photos uploaded for this request.</p>}</section><label className="block space-y-2 text-sm font-medium">Resolution notes (required to resolve)<textarea rows={4} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Document the decision, refund, warning, or follow-up..." className={textareaClass} /></label></div>}<DialogFooter><Button variant="outline" disabled={saving} onClick={() => setSelected(null)}>Cancel</Button><Button variant="secondary" disabled={saving} onClick={() => void resolve(false)}>Save Follow-Up — Keep Open</Button><Button disabled={saving || !resolution.trim()} onClick={() => void resolve(true)}>{saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Resolve Through Workflow</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={Boolean(pauseTarget)} onOpenChange={(open) => { if (!open && !saving) { setPauseTarget(null); setPauseReason(""); } }}><DialogContent><DialogHeader><DialogTitle>Pause payouts for {pauseTarget?.name}?</DialogTitle><DialogDescription>Future payouts will remain held until an administrator resumes them.</DialogDescription></DialogHeader><label className="block space-y-2 text-sm font-medium">Internal reason<textarea rows={4} value={pauseReason} onChange={(event) => setPauseReason(event.target.value)} placeholder="Why payouts are being paused..." className={textareaClass} /></label><DialogFooter><Button variant="outline" disabled={saving} onClick={() => setPauseTarget(null)}>Cancel</Button><Button disabled={saving || !pauseReason.trim()} onClick={() => pauseTarget && void togglePayouts(pauseTarget, true)}><Pause />Pause Payouts</Button></DialogFooter></DialogContent></Dialog>
   </div>;
 }
