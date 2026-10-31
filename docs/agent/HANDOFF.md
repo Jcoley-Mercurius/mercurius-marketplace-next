@@ -1,5 +1,13 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.8 checkpoint and 6.9 brief, 2026-10-30
+
+- PR #116 merged by the owner at head `8ca8f93` as `de8e802` (14:47 UTC) and deployed to production (14:48 UTC). PR CI 41065935141 green; evidence in [PHASE-6-REVIEWS.md](../../governance/PHASE-6-REVIEWS.md) §9. `review-concurrency.mjs` (not in CI) 3/3 locally after a clean reset.
+- Open: Codex review of `ef1cc33..8ca8f93` (none on the PR); DEC-2026-052 items 1–9 PROPOSED; DEC-2026-050 unpaid start PROPOSED; 6.6c two-person finance sign-off not recorded; TRACE-126/127 open.
+- 6.9 characterization brief (no implementation): [PHASE-6-EXCEPTIONS-BRIEF.md](../../governance/PHASE-6-EXCEPTIONS-BRIEF.md), owner questions E1–E11.
+- Branch `claude/phase6-9-exceptions-brief` from `de8e802`, documentation only. Revision 2 of the brief: probes P1–P5 (paid request returned to pending cancelled with no assessment; plan row cancelled and rematched; provider reschedule assessed the customer fee), bypass inventory B1–B10, split 6.9A (TRACE-131, planned) / 6.9B (DEC-2026-053 PROPOSED, E1–E12), 6.9A design, C1–C8 concurrency plan and acceptance criteria.
+- Next: Codex review of the brief and its §10 design points; owner answers DEC-2026-053; then 6.9A implementation only. No hosted change, refund or collection.
+
 ## Phase 6.8 canonical verified reviews, private feedback and review history (TRACE-130), 2026-10-29
 
 - Branch `claude/phase6-8-reviews` from `main` `ef1cc33` (PR #115 merge; its `main` CI run 40989215953 finished green). Record: [PHASE-6-REVIEWS.md](../../governance/PHASE-6-REVIEWS.md).
