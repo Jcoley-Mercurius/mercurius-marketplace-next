@@ -222,7 +222,8 @@ export default function VendorJobsPage() {
         setNotice({ tone: "success", title: kind === "accept" ? "Offer accepted" : "This offer was already accepted", text: [
           `${job.service_type} is now in Active Jobs.`,
           outcome.quote ? "This is quote work, so the price isn’t set yet." : null,
-          outcome.appointment ? `Appointment: ${outcome.appointment}.` : "No appointment time is recorded yet.",
+          outcome.awaitingHomeowner ? "You’re the replacement provider. The homeowner accepts you and an appointment time before anything is scheduled."
+            : outcome.appointment ? `Appointment: ${outcome.appointment}.` : "No appointment time is recorded yet.",
         ].filter(Boolean).join(" ") });
         return true;
       }
@@ -411,7 +412,7 @@ function JobCard({ job, busy, view, start, complete }: {
         <div className="mb-4 flex flex-wrap items-center gap-3"><h3 className="font-heading text-lg font-semibold">{job.service_type}</h3><Status status={job.status} /></div>
         <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
           <span className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.address}, {job.city}, {job.state}</span>
-          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.scheduled_start_at ? `Appointment: ${formatAppointment(job.scheduled_start_at)}` : job.status === "scheduled" ? "No appointment time recorded yet" : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}${job.preferred_time ? " · " + job.preferred_time : ""}` : "No preferred date"}</span>
+          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.matching_status === "awaiting_homeowner" ? "Waiting for the homeowner to accept you and a time" : job.scheduled_start_at ? `Appointment: ${formatAppointment(job.scheduled_start_at)}` : job.status === "scheduled" ? "No appointment time recorded yet" : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}${job.preferred_time ? " · " + job.preferred_time : ""}` : "No preferred date"}</span>
           <span className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.homeowner_name ?? "Homeowner"}</span>
         </div>
       </div>

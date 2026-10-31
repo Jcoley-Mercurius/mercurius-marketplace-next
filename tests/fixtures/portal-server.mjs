@@ -196,6 +196,10 @@ const server = createServer(async (request, response) => {
       expected: { status: row.status, contractor_id: row.contractor_id, scheduled_start_at: null, operation_seq: null }, assessment,
       payment: user.testRole === "vendor" ? null : { captured: 0, total: null, open_checkout: false } });
   }
+  // TRACE-132 plan stop preview: no request and nothing in place by default; specs override per case.
+  if (url.pathname === "/rest/v1/rpc/recurring_plan_stop_preview") return user.testRole === "vendor"
+    ? send({ message: "Not a participant in this service", code: "42501" }, 403)
+    : send({ series_id: body._series_id, plan_state: "active", expected_state: "active", accepted: true, request: null, visits: [] });
   if (url.pathname === "/rest/v1/rpc/job_cancellation_outcome") return send({ job_id: body._job_id, status: "pending", cancelled: false,
     entitlement: { state: "not_cancelled", refund_percent: null, basis: null }, authorization: { state: "none" }, movement: { state: "none" }, follow_up: [] });
   if (/\/rpc\/(admin_cancellation_queue|admin_provider_quality_events)$/.test(url.pathname)) return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [] } : { message: "Admin access required" }, user.testRole === "admin" ? 200 : 403);

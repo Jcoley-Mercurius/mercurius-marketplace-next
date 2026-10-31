@@ -12,6 +12,9 @@ export type Assessment = {
   refund_percent?: number | null; basis?: string | null; fee?: number | null; waived?: boolean;
   requires_operations?: boolean; next_action?: string; replacement_providers?: boolean; quality_event?: boolean;
   appointment?: string | null; hours_before?: number | null;
+  // TRACE-132: who asked for a new time, who bears any fee, and the replacement search deadline.
+  initiator?: "homeowner" | "provider"; fee_responsibility?: string | null; requires_homeowner_acceptance?: boolean;
+  search_deadline?: string | null; inside_search_deadline?: boolean;
 };
 
 export type OperationPreview = {
@@ -27,6 +30,11 @@ export type CancellationOutcome = {
   authorization?: { state: string; amount?: number; released?: number };
   movement?: { state: string; settled?: number; in_flight?: number; failed?: number; unknown?: number; not_sent?: number };
   follow_up?: { code: string; message: string }[];
+  // TRACE-132 (E11): a later waiver beside the original assessment, and what remains to be authorized.
+  adjustment?: { id: string; kind: "waiver"; at: string; reason: string; original_percent: number | null; original_basis: string | null;
+    operation_id: string; original_amount?: number } | null;
+  remaining?: { state: "none" | "original_unauthorized" | "supplemental_review" | "original_and_supplemental"; amount?: number };
+  cancel_operation_id?: string | null;
 };
 
 export const operationLabels: Record<OperationKind, string> = {
@@ -46,6 +54,7 @@ const basisLabels: Record<string, string> = {
   no_appointment: "no appointment time had been set",
   provider_withdrawal_open: "the provider withdrew and no replacement is in place",
   exception_accepted: "Mercurius accepted a weather or emergency exception",
+  exception_accepted_later: "Mercurius later accepted a weather or emergency exception",
   no_acceptable_replacement: "no acceptable replacement provider was found",
   cancellation_policy: "the cancellation policy",
 };
@@ -62,6 +71,9 @@ export function describeAssessment(kind: OperationKind, assessment: Assessment |
       + "A refund is reviewed by Mercurius before it is sent; this action doesn't send money.";
   }
   if (kind === "reschedule_request") {
+    if (assessment.initiator === "provider") {
+      return "The provider is asking, so no rescheduling fee applies to the homeowner. The homeowner accepts or declines the time; the appointment stays until a new time is agreed and Mercurius records it.";
+    }
     const fee = assessment.fee === null || assessment.fee === undefined
       ? "Less than 24 hours' notice: Mercurius decides case by case and can't guarantee a new time."
       : assessment.fee === 0 ? "No rescheduling fee applies." : `A $${assessment.fee} rescheduling fee applies under the policy; it isn't charged by this request.`;
@@ -69,8 +81,10 @@ export function describeAssessment(kind: OperationKind, assessment: Assessment |
   }
   if (kind === "provider_cancel" || kind === "no_show") {
     return assessment.replacement_providers === false
-      ? "This is a plan visit, so it isn't offered to another provider. Mercurius will refund it in full or arrange a new visit with the plan's provider."
-      : "Mercurius looks for an acceptable replacement first. If there isn't one, the homeowner gets a full refund.";
+      ? "This is a plan visit, so it isn't offered to another provider. Mercurius refunds it in full or asks the plan's provider to recommit to it."
+      : assessment.inside_search_deadline
+        ? "This is within 24 hours of the appointment, so Mercurius decides right away: a replacement the homeowner accepts, or a full refund."
+        : "Mercurius looks for an acceptable replacement first; the homeowner accepts the provider and the time. If there isn't one, the homeowner gets a full refund.";
   }
   return "Mercurius reviews what happened and follows up.";
 }

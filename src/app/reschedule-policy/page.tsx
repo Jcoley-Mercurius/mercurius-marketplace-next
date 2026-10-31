@@ -10,7 +10,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { buttonVariants } from "@/components/ui/button";
 
-const LAST_UPDATED = "October 30, 2026";
+const LAST_UPDATED = "October 31, 2026";
 
 export default function ReschedulePolicyPage() {
   return (
@@ -63,6 +63,9 @@ export default function ReschedulePolicyPage() {
                   <PolicyRow icon={AlertTriangle} tone="warning" title="Less Than 24 Hours">
                     Handled case by case and not guaranteed. Contact us as soon as you can.
                   </PolicyRow>
+                  <PolicyRow icon={CheckCircle2} tone="positive" title="If Your Provider Asks">
+                    No fee for you. Your appointment stays until you accept a new time; a proposed time isn&apos;t an appointment.
+                  </PolicyRow>
                 </div>
               </div>
 
@@ -98,8 +101,8 @@ export default function ReschedulePolicyPage() {
                 </div>
                 <p className="mt-6 text-sm text-muted-foreground">
                   Refunds are reviewed by Mercurius before they are sent, and your dashboard shows each step until the payment
-                  provider confirms the refund. For a recurring plan, each visit follows these rules on its own; to stop future
-                  visits, contact us.
+                  provider confirms the refund. For a recurring plan, each visit follows these rules on its own. To stop future
+                  visits, ask from your plan&apos;s details; visits already in place stay until each one is handled.
                 </p>
               </div>
 
@@ -111,8 +114,9 @@ export default function ReschedulePolicyPage() {
                     another event outside your control prevented the service.
                   </PolicyRow>
                   <PolicyRow icon={CheckCircle2} tone="positive" title="If Your Provider Cancels or Doesn&apos;t Arrive">
-                    Mercurius looks for an acceptable replacement first. If there isn&apos;t one, you get a full refund. If you cancel
-                    while we&apos;re still finding a replacement, you also get a full refund.
+                    Mercurius looks for an acceptable replacement first: you accept both the replacement provider and the appointment
+                    time before anything is scheduled. If there isn&apos;t one, you get a full refund. If you cancel while we&apos;re
+                    still finding a replacement, you also get a full refund.
                   </PolicyRow>
                 </div>
               </div>

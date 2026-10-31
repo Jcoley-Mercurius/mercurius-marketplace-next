@@ -571,7 +571,9 @@ function EmptyState({ icon: Icon, title, description, actionHref, actionLabel, c
 }
 
 function ServiceRow({ job, compact = false, onOpen }: { job: ServiceRequest; compact?: boolean; onOpen?: () => void }) {
-  const displayDate = job.scheduled_start_at ? `Appointment: ${formatAppointment(job.scheduled_start_at)}` : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}` : "No appointment yet";
+  // TRACE-132: a time kept while no provider is committed (withdrawal, replacement awaiting you) is on hold.
+  const onHold = ["pending", "matched", "quoted"].includes(job.status);
+  const displayDate = job.scheduled_start_at ? `${onHold ? "On hold" : "Appointment"}: ${formatAppointment(job.scheduled_start_at)}` : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}` : "No appointment yet";
   const location = [job.address, job.city, job.state].filter(Boolean).join(", ");
   const className = cn("flex w-full flex-col justify-between gap-4 rounded-xl bg-muted p-4 text-left sm:flex-row sm:items-center", !compact && "border border-border bg-card p-5", onOpen && "cursor-pointer transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring");
   const isPast = isPastServiceRequestStatus(job.status);

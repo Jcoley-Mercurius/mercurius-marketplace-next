@@ -27,7 +27,7 @@ export function JobOperations({ jobId, role, onSaved }: {
       <h3 className="font-semibold">Service changes</h3>
       <p className="text-sm text-muted-foreground">{role === "admin"
         ? "This is a recurring plan. Change it with Stop future visits or pause; cancel or replace each visit on its own."
-        : "This is a recurring plan. Changes are made on each visit. To stop future visits, contact Mercurius."}</p>
+        : "This is a recurring plan. Changes are made on each visit. To stop future visits, use Ask to stop future visits in the plan’s visits."}</p>
     </section>;
   }
 

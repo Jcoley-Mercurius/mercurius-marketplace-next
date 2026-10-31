@@ -6584,6 +6584,10 @@ export type Database = {
         Returns: Json
       }
       admin_cancellation_queue: { Args: never; Returns: Json }
+      admin_close_plan_stop_request: {
+        Args: { _request_id: string; _resolution: string }
+        Returns: Json
+      }
       admin_close_quote_exception: {
         Args: { _exception_id: string; _resolution: string }
         Returns: undefined
@@ -6671,6 +6675,17 @@ export type Database = {
       admin_promotion_offer_events: { Args: { p_offer: string }; Returns: Json }
       admin_promotion_offers: { Args: never; Returns: Json }
       admin_promotion_reservation_health: { Args: never; Returns: Json }
+      admin_propose_replacement: {
+        Args: {
+          _expected: Json
+          _job_id: string
+          _local_start: string
+          _proposal_key: string
+          _reason: string
+          _starts_at: string
+        }
+        Returns: Json
+      }
       admin_provider_quality_events: {
         Args: { _contractor_id?: string }
         Returns: Json
@@ -6717,6 +6732,15 @@ export type Database = {
           _reason: string
           _series_id: string
           _starts_at: string
+        }
+        Returns: Json
+      }
+      admin_record_waiver_adjustment: {
+        Args: {
+          _adjustment_key: string
+          _expected: Json
+          _operation_id: string
+          _reason: string
         }
         Returns: Json
       }
@@ -6843,6 +6867,7 @@ export type Database = {
         Args: { _contractor_id: string }
         Returns: undefined
       }
+      admin_waiver_preview: { Args: { _operation_id: string }; Returns: Json }
       appeal_dispute_resolution: {
         Args: { _dispute_id: string; _reason: string }
         Returns: string
@@ -7016,8 +7041,22 @@ export type Database = {
         Args: { _job_id: string; _reason: string }
         Returns: string
       }
+      homeowner_request_plan_stop: {
+        Args: { _reason: string; _request_key: string; _series_id: string }
+        Returns: Json
+      }
       homeowner_request_promotion: {
         Args: { p_code?: string; p_request: string }
+        Returns: Json
+      }
+      homeowner_respond_replacement: {
+        Args: {
+          _accept: boolean
+          _expected: Json
+          _proposal_id: string
+          _reason?: string
+          _response_key: string
+        }
         Returns: Json
       }
       homeowner_respond_to_quote: {
@@ -7030,7 +7069,7 @@ export type Database = {
       }
       job_cancellation_outcome: { Args: { _job_id: string }; Returns: Json }
       job_cancellation_preview: {
-        Args: { _job_id: string; _kind?: string; _waived?: boolean }
+        Args: { _initiator?: string; _job_id: string; _kind?: string; _waived?: boolean }
         Returns: Json
       }
       job_completion_evidence_visible: {
@@ -7961,6 +8000,7 @@ export type Database = {
       record_job_operation: {
         Args: {
           _expected?: Json
+          _initiator?: string
           _job_id: string
           _kind: string
           _operation_key: string
@@ -7989,6 +8029,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      recurring_plan_stop_preview: { Args: { _series_id: string }; Returns: Json }
       recurring_series: { Args: { _series_id: string }; Returns: Json }
       release_job_match: {
         Args: {
@@ -8007,6 +8048,17 @@ export type Database = {
           promotion_id: string
           promotion_label: string
         }[]
+      }
+      respond_to_reschedule_request: {
+        Args: {
+          _accept: boolean
+          _expected: Json
+          _job_id: string
+          _reason?: string
+          _request_id: string
+          _response_key: string
+        }
+        Returns: Json
       }
       revise_job_review: {
         Args: {

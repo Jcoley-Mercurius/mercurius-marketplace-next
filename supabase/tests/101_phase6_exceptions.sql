@@ -110,14 +110,14 @@ create temp table money_before as
     where j.obligation_id::text like 'e5%';
 
 -- Surface --------------------------------------------------------------------------------------------
-select ok(not has_function_privilege('anon', 'public.job_cancellation_preview(uuid,text,boolean)', 'execute')
+select ok(not has_function_privilege('anon', 'public.job_cancellation_preview(uuid,text,boolean,text)', 'execute')
   and not has_function_privilege('anon', 'public.job_cancellation_outcome(uuid)', 'execute')
   and not has_function_privilege('anon', 'public.admin_cancellation_queue()', 'execute')
   and not has_function_privilege('anon', 'public.admin_provider_quality_events(uuid)', 'execute')
-  and not has_function_privilege('anon', 'public.record_job_operation(uuid,uuid,text,text,timestamptz,boolean,jsonb)', 'execute'),
+  and not has_function_privilege('anon', 'public.record_job_operation(uuid,uuid,text,text,timestamptz,boolean,jsonb,text)', 'execute'),
   'anonymous visitors reach no exception command or read');
-select ok(has_function_privilege('authenticated', 'public.record_job_operation(uuid,uuid,text,text,timestamptz,boolean,jsonb)', 'execute')
-  and has_function_privilege('authenticated', 'public.job_cancellation_preview(uuid,text,boolean)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.record_job_operation(uuid,uuid,text,text,timestamptz,boolean,jsonb,text)', 'execute')
+  and has_function_privilege('authenticated', 'public.job_cancellation_preview(uuid,text,boolean,text)', 'execute'),
   'signed-in users reach the command and the preview');
 select ok(not exists(select 1 from pg_proc where proname = 'record_job_operation' and pronargs = 6),
   'the six-argument command is replaced, not overloaded');

@@ -1,5 +1,13 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.9B exception resolutions (TRACE-132, DEC-2026-053), 2026-10-31
+
+- Branch `claude/phase6-9b-exceptions` stacked on 6.9A head `a864df5` (PR #118 → #117 → `main` `de8e802`; none merged). Record: [PHASE-6-EXCEPTIONS-BRIEF.md](../../governance/PHASE-6-EXCEPTIONS-BRIEF.md) §11.
+- Amended wording of E3, E5, E7, E8, E11 recorded in DEC-2026-053 and brief §9 (reconciling the owner's existing approval).
+- Migration `20261102001000` (additive, requires `20261101001000`, **not pushed to hosted**): reschedule initiator/fee responsibility and homeowner answers; replacement consent (`awaiting_homeowner`, proposal + explicit acceptance, 24 h deadline); plan visits plan-provider-only on plan terms (recommitment through the existing offer path); plan stop requests with preview; append-only later waivers. Fingerprint unchanged `45 | 34c51131…`.
+- Separate, not built: F-1, F-2 (supplemental refund), F-3, P-K1/P-K2; money-path dependencies listed in §11.
+- Next: Codex review; owner authorization for pushing `20261101001000` then `20261102001000`; merge #117 → #118 → 6.9B.
+
 ## Phase 6.9A exception repairs (TRACE-131, DEC-2026-053), 2026-10-30
 
 - Branch `claude/phase6-9a-exceptions` from `4b96710` (brief) on `main` `de8e802`. Record: [PHASE-6-EXCEPTIONS-BRIEF.md](../../governance/PHASE-6-EXCEPTIONS-BRIEF.md) §6–§10.
