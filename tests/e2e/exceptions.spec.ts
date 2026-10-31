@@ -136,7 +136,7 @@ for (const theme of ["light", "dark"]) {
     for (const text of ["72+ Hours Before", "24-72 Hours Before", "No Appointment Time Yet", "After Work Has Started",
       "A $25 rescheduling fee applies.", "Handled case by case and not guaranteed."]) await expect(page.getByText(text, { exact: false }).first()).toBeVisible();
     await expect(page.getByText(/Mercurius waives rescheduling fees and cancellation penalties/)).toBeVisible();
-    await expect(page.getByText(/looks for an acceptable replacement first. If there isn.t one, you get a full refund/)).toBeVisible();
+    await expect(page.getByText(/looks for an acceptable replacement first[^]*If there isn.t one, you get a full refund/)).toBeVisible();
     await expect(page.getByText(/compensate/i)).toHaveCount(0);
     await expect(page.getByText(/instantly/i)).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);

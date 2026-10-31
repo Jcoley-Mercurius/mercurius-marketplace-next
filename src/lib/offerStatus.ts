@@ -33,6 +33,7 @@ export type ProviderStatusKind =
   | "finding_provider"
   | "offer_pending"
   | "consent_needed"
+  | "replacement_answer_needed"
   | "unavailable"
   | "quote_follow_up"
   | "accepted"
@@ -90,6 +91,16 @@ export function providerStatus(input: ProviderStatusInput): ProviderStatus {
         line: "Your choice is needed",
         explanation: "Your preferred provider can’t take this request. It won’t be offered to anyone else unless you allow it.",
         nextAction: "Allow another eligible provider, or cancel the request.",
+        assigned: false,
+      };
+    }
+    // TRACE-132 (DEC-2026-053 E5): a replacement accepted; nothing is scheduled until the homeowner accepts.
+    if (matching === "awaiting_homeowner") {
+      return {
+        kind: "replacement_answer_needed",
+        line: "Replacement provider found",
+        explanation: "Your provider withdrew and a replacement accepted. Mercurius proposes the provider and an appointment time; nothing is scheduled until you accept both.",
+        nextAction: "Accept or decline the proposed replacement in the appointment details.",
         assigned: false,
       };
     }
@@ -175,7 +186,7 @@ export type VendorOfferRow = {
 };
 
 export type VendorOfferOutcome =
-  | { kind: "accepted"; quote: boolean; appointment: string | null }
+  | { kind: "accepted"; quote: boolean; appointment: string | null; awaitingHomeowner?: boolean }
   | { kind: "still_open" }
   | { kind: "gone" }
   | { kind: "unknown" };
@@ -191,6 +202,8 @@ export function vendorOfferOutcome(row: VendorOfferRow | null, contractorId: str
   if (row.matching_status === "matched") {
     return { kind: "accepted", quote: isQuoteWork(row), appointment: formatAppointment(row.scheduled_start_at) };
   }
+  // TRACE-132 (E5): a replacement's acceptance waits for the homeowner; the earlier time isn't inherited.
+  if (row.matching_status === "awaiting_homeowner") return { kind: "accepted", quote: isQuoteWork(row), appointment: null, awaitingHomeowner: true };
   if (row.matching_status === "offered" && ["matched", "quoted"].includes(row.status)) return { kind: "still_open" };
   return { kind: "gone" };
 }

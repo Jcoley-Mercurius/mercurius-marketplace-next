@@ -79,6 +79,9 @@ select public.record_job_operation('83000000-0000-4000-8000-000000000002','87000
 insert into provider_fixture select 'final-noshow',id from public.job_operations where operation_key='87000000-0000-4000-8000-000000000013';
 select is((public.record_provider_replacement_decision((select id from provider_fixture where key='final-noshow'),'88000000-0000-4000-8000-000000000003','Synthetic no-show exhaustion')).outcome,
  'no_replacement','Operations-confirmed no-show uses canonical rematch exhaustion');
+-- TRACE-132 (DEC-2026-053 E5): inside 24 hours a withdrawal goes straight to operations, so the consent
+-- case is placed outside that window.
+update public.service_requests set scheduled_start_at=now()+interval '30 hours' where id='83000000-0000-4000-8000-000000000003';
 select public.record_job_operation('83000000-0000-4000-8000-000000000003','87000000-0000-4000-8000-000000000014','provider_cancel','Synthetic consent case');
 insert into provider_fixture select 'consent',id from public.job_operations where operation_key='87000000-0000-4000-8000-000000000014';
 select is((public.record_provider_replacement_decision((select id from provider_fixture where key='consent'),'88000000-0000-4000-8000-000000000004','Synthetic consent pending')).outcome,

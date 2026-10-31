@@ -1,5 +1,14 @@
 # Agent handoff — 2026-10-01
 
+## Phase 6.9B exception resolutions (TRACE-132, DEC-2026-053), 2026-10-31
+
+- Branch `claude/phase6-9b-exceptions` stacked on 6.9A head `a864df5` (PR #118 → #117 → `main` `de8e802`; none merged). Record: [PHASE-6-EXCEPTIONS-BRIEF.md](../../governance/PHASE-6-EXCEPTIONS-BRIEF.md) §11.
+- Amended wording of E3, E5, E7, E8, E11 recorded in DEC-2026-053 and brief §9 (reconciling the owner's existing approval).
+- Migration `20261102001000` (additive, requires `20261101001000`; **both pushed to hosted 2026-10-31** at the owner's instruction: dry run listed only those two, read back history, fingerprint `45 | 34c51131…` unchanged, grants, triggers, empty new tables, all 11 hosted requests already cancelled, dry run now up to date): reschedule initiator/fee responsibility and homeowner answers; replacement consent (`awaiting_homeowner`, proposal + explicit acceptance, 24 h deadline); plan visits plan-provider-only on plan terms (recommitment through the existing offer path); plan stop requests with preview; append-only later waivers. Fingerprint unchanged `45 | 34c51131…`.
+- Separate, not built: F-1, F-2 (supplemental refund), F-3, P-K1/P-K2; money-path dependencies listed in §11.
+- PR #119 (base `claude/phase6-9a-exceptions`). Until #118/#119 deploy, the live homeowner "Cancel request" is refused safely (no open hosted requests).
+- Next: Codex review; merge #117 → #118 → #119 (owner authorization).
+
 ## Phase 6.9A exception repairs (TRACE-131, DEC-2026-053), 2026-10-30
 
 - Branch `claude/phase6-9a-exceptions` from `4b96710` (brief) on `main` `de8e802`. Record: [PHASE-6-EXCEPTIONS-BRIEF.md](../../governance/PHASE-6-EXCEPTIONS-BRIEF.md) §6–§10.
@@ -7,7 +16,7 @@
 - Migration `20261101001000` (additive, **not pushed to hosted**): same-transaction cancellation evidence for every writer; `record_job_operation(_expected)` with shared assessment/refusal and stale guard; E1/E12; accepted plans refuse exception commands; plan visits not re-offered, no replacement reconciliation; preview, outcome (entitlement/authorization/movement), operations queue, quality events. Money fingerprint unchanged `45 | 34c51131…`.
 - UI: pending cancel and `JobOperations` previewed and stale-guarded; no cancel in admin status menu; refund status panel; cancellation follow-up on `/admin/requests`; provider cancellations tab on `/admin/quality`; `/reschedule-policy` copy.
 - Separate finance-reviewed scopes not built: already-open session/late capture (P-K1/P-K2), $25 collection, supplemental refunds, retained proceeds.
-- Next: Codex review; amended E-wording; owner authorization for the hosted push; merge only after both.
+- Next: Codex review; amended E-wording recorded and hosted push done 2026-10-31 (see 6.9B entry); merge after review.
 
 ## Phase 6.8 checkpoint and 6.9 brief, 2026-10-30
 
