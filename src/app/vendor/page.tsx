@@ -31,7 +31,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { COMPLETED_JOB_STATUSES, completionRateFromStatuses } from "@/lib/completedJobs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { calculateVendorProfileStrength } from "@/lib/vendorProfileStrength";
+import { calculateVendorProfileStrength, VENDOR_PROFILE_STRENGTH_MAX } from "@/lib/vendorProfileStrength";
 import { isPubliclyEligibleFixedPackage, isPubliclyEligibleQuotePackage } from "@/lib/vendorPricing";
 
 type Contractor = {
@@ -43,7 +43,6 @@ type Contractor = {
   bio: string | null;
   location: string | null;
   services: string[] | null;
-  special_offer: string | null;
   our_promise: string | null;
   years_experience: number | null;
   verified_specialty: string | null;
@@ -161,7 +160,7 @@ export default function VendorOverviewPage() {
       const supabase = createClient();
       const contractorResult = await supabase
         .from("contractors")
-        .select("id, name, logo_url, is_active, marketing_enabled, bio, location, services, special_offer, our_promise, years_experience, verified_specialty")
+        .select("id, name, logo_url, is_active, marketing_enabled, bio, location, services, our_promise, years_experience, verified_specialty")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -298,7 +297,7 @@ export default function VendorOverviewPage() {
     const isActive = contractor.is_active !== false;
     const isPublic = listing?.linked === true && listing.listed;
     const readyForJobs = isActive && profileComplete && hasLivePrice;
-    const profileStrength = strength.score;
+    const profileStrength = Math.round((strength.score / VENDOR_PROFILE_STRENGTH_MAX) * 100);
     const thirtyDaysAgo = loadedAt - 30 * 24 * 60 * 60 * 1000;
     const requestsLast30Days = requests.filter((request) => Date.parse(request.created_at) >= thirtyDaysAgo).length;
 

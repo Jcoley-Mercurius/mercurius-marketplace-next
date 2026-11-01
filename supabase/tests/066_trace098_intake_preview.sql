@@ -156,8 +156,12 @@ select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"shrub-hedge-trim
 select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"lawn-mowing","frequency":"one-time"}]','availability'))#>>'{outcomes,0,total}','100','availability without rule tiers is exact');
 
 -- Promotions (DEC-2026-015): reported so the intake can fail safely.
+-- TRACE-134 (6.11B): legacy package promotions cannot be enabled on any path; this fixture keeps
+-- characterizing an existing overlay under owner maintenance (the closing trigger disabled for it).
+alter table public.package_promotions disable trigger trg_package_promotion_legacy_closed;
 insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
  values ('d6640000-0000-4000-8000-000000000006','percent_off',50,'Synthetic promotion',now()-interval '1 day',now()+interval '1 day',true);
+alter table public.package_promotions enable trigger trg_package_promotion_legacy_closed;
 select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"pest-control","frequency":"one-time"}]'))#>>'{outcomes,0,promotion}','true','an effective promotion is flagged');
 select is(pg_temp.preview(pg_temp.plan('00060','[{"service_id":"lawn-mowing","frequency":"one-time"}]'))#>>'{outcomes,0,promotion}','false','unpromoted supply is not flagged');
 

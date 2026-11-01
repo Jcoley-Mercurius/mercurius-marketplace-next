@@ -10,7 +10,6 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  Award,
   BadgeCheck,
   Briefcase,
   Check,
@@ -58,7 +57,6 @@ type Contractor = {
   badges: string[] | null;
   services: string[] | null;
   years_experience: number | null;
-  special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
   video_url: string | null;
@@ -247,12 +245,8 @@ export default function ProviderStorefrontPage() {
           .eq("is_offered", true)
           .order("sort_order")
           : Promise.resolve({ data: [] as PackageAddon[], error: null }),
-        packageIds.length ? supabase
-          .from("package_promotions")
-          .select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at")
-          .in("package_id", packageIds)
-          .eq("is_enabled", true)
-          : Promise.resolve({ data: [] as PackagePromotion[], error: null }),
+        // TRACE-134 (6.11B): legacy package promotions are closed; prices shown are the published prices.
+        Promise.resolve({ data: [] as PackagePromotion[], error: null }),
         supabase.rpc("pricing_server_now"),
         supabase.from("contractor_service_zips").select("zip_code").eq("contractor_id", contractorId),
         supabase.from("coverage_areas").select("zip_code, city").eq("is_active", true),
@@ -338,7 +332,6 @@ export default function ProviderStorefrontPage() {
       .channel(`public-provider-${contractorId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "contractors", filter: `id=eq.${contractorId}` }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "vendor_packages", filter: `contractor_id=eq.${contractorId}` }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "package_promotions" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "contractor_gallery", filter: `contractor_id=eq.${contractorId}` }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "reviews", filter: `contractor_id=eq.${contractorId}` }, refresh)
       .subscribe();
@@ -489,11 +482,10 @@ export default function ProviderStorefrontPage() {
               <div className="space-y-8">
                 {contractor.bio && <SectionCard title="About"><p className="whitespace-pre-line leading-7 text-muted-foreground">{contractor.bio}</p></SectionCard>}
 
+                {/* TRACE-134: the services this provider currently offers through a live, reviewed price or quote. */}
                 <SectionCard title="Services Offered">
-                  {(contractor.services?.length ?? 0) > 0 ? <div className="flex flex-wrap gap-2">{contractor.services?.map((service) => <Badge key={service} variant="secondary" className="h-7 px-3">{displayService(service, serviceNames)}</Badge>)}</div> : <p className="text-sm text-muted-foreground">This provider has not published a service list yet.</p>}
+                  {(contractor.services?.length ?? 0) > 0 ? <div className="flex flex-wrap gap-2">{contractor.services?.map((service) => <Badge key={service} variant="secondary" className="h-7 px-3">{displayService(service, serviceNames)}</Badge>)}</div> : <p className="text-sm text-muted-foreground">This provider has no live prices or quotes yet.</p>}
                 </SectionCard>
-
-                {contractor.special_offer && <Card className="border-accent/25 bg-accent/5"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Award className="text-accent" />Current Offer</CardTitle></CardHeader><CardContent><p className="leading-7 text-muted-foreground">{contractor.special_offer}</p></CardContent></Card>}
 
                 {fixedPackages.length > 0 && <SectionCard title="Fixed-Price Services">
                   <div className="grid gap-3">

@@ -51,7 +51,6 @@ type Contractor = {
   badges: string[] | null;
   services: string[] | null;
   years_experience: number | null;
-  special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
 };

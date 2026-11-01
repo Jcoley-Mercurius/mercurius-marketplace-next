@@ -34,6 +34,7 @@ update public.job_match_attempts set expires_at=now() where outcome='pending';
 select private.offer_next_for_request_internal('93000000-0000-4000-8000-000000000001');
 select is((select contractor_id from public.job_match_attempts where outcome='pending'),'92000000-0000-4000-8000-000000000002'::uuid,'expired fixed offer advances to remaining quote provider');
 select is((select count(*) from public.job_match_attempts where outcome='pending'),1::bigint,'pool advancement remains exclusive');
-select ok((select bool_and(metadata->>'ranking_version'='balanced-v1') from public.job_events where event_type='match_offered' and job_id='93000000-0000-4000-8000-000000000001'),'offers retain ranking version');
+-- TRACE-134 (DEC-2026-055 item 1): Special Offer no longer scores; new offers record balanced-v2.
+select ok((select bool_and(metadata->>'ranking_version'='balanced-v2') from public.job_events where event_type='match_offered' and job_id='93000000-0000-4000-8000-000000000001'),'offers record the ranking version (balanced-v2)');
 select * from finish();
 rollback;
