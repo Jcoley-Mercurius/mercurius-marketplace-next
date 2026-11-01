@@ -296,8 +296,12 @@ select is(pg_temp.visit(5, pg_temp.id('s1'), pg_temp.k(36), pg_temp.day(24), 'Re
   'operations recovers with a new attempt once the cause is fixed');
 
 -- A cancelled plan, a plan never accepted, a quote plan.
-select lives_ok($$select pg_temp.call(2, format('select public.record_job_operation(%L,%L,''customer_cancel'',''Synthetic plan ended'')', pg_temp.id('s3'), pg_temp.k(90)))$$,
-  'homeowner B cancels plan S3');
+select throws_ok($$select pg_temp.call(2, format('select public.record_job_operation(%L,%L,''customer_cancel'',''Synthetic plan ended'')', pg_temp.id('s3'), pg_temp.k(90)))$$,
+  '22023', 'Changes are made on each visit. Mercurius can stop future visits on the plan.', 'TRACE-131: homeowner B cannot cancel accepted plan S3; plans use Stop future visits');
+-- A plan cancelled before TRACE-131 (owner maintenance stands in for the old path).
+set local mercurius.owner_maintenance = 'on';
+update public.service_requests set status = 'cancelled' where id = pg_temp.id('s3');
+set local mercurius.owner_maintenance = 'off';
 select is(pg_temp.blocked(pg_temp.id('s3'), 37, 12), 'series_not_active', 'a cancelled plan gets no new visit');
 insert into public.service_requests(id,customer_id,contractor_id,service_type,service_catalog_id,address,city,state,zip_code,frequency,status,matching_status,pricing_mode,package_id,package_tier_id)
   values ('95300000-0000-4000-8000-000000000001',pg_temp.u(1),'95200000-0000-4000-8000-000000000001','Synthetic','synthetic-rv-lawn','1 Synthetic Way','Synthetic','FL','00095',

@@ -269,15 +269,50 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-054 — Dispute categories, outcomes, timing and support reopening
+
+**Status:** **PROPOSED** (2026-10-31, America/New_York). Decision sheet for 6.10 / TRACE-133 (MPS §6.6). No item is approved; current behavior is kept and recorded in [PHASE-6-SUPPORT-BRIEF.md](PHASE-6-SUPPORT-BRIEF.md) §7. **Date:** 2026-10-31.
+
+**Already approved and implemented (not reopened):** 48-hour dispute window from the provider's completion and appeals through tickets with no deadline (DEC-2026-009); the separate 72-hour completion review (DEC-2026-006); disputed work held until resolution (CFG-008); support hours and response target (CFG-010); 3-year ticket and message retention (CFG-011).
+
+**Questions and recommendations:**
+
+1. **Reason categories.** *Now:* free text. *Recommend:* work not done / not as agreed / quality / damage / no-show / other, for reporting only.
+2. **Resolution types and money.** *Now:* free-text decision; no refund is recorded or executed; only the dispute's own hold clears. *Recommend:* no change / rework / partial refund / full refund / provider excused, where a refund type opens the existing two-person refund authorization and never executes it.
+3. **Dispute response time.** *Now:* the dispute ticket uses CFG-010. *Recommend:* keep for acknowledgement; set a resolution target after pilot data.
+4. **Provider response window.** *Now:* statements and photos until the decision; no deadline. *Recommend:* no deadline in beta.
+5. **After 48 hours.** *Now:* general support only. *Recommend:* operations may open a formal dispute for the homeowner with a recorded reason.
+6. **Provider appeals.** *Now:* none (DEC-2026-009 names homeowners). *Recommend:* general support only in beta.
+7. **Reopening.** *Now:* requester cannot reply to a resolved/closed request; operations reopens with a reason. *Recommend:* keep.
+8. **Support categories.** *Now:* one general kind. *Recommend:* keep.
+9. **Partial work and no-show penalties in outcomes.** *Now:* none. Needs an owner policy with finance review; not recommended for beta.
+10. **Provider visibility of homeowner tickets on its jobs.** *Now:* none. *Recommend:* keep.
+
+**MPS impact:** answers the open §6.6 dispute items once approved. **MDS impact:** dispute panel and support wording. **MTS impact:** migration `20261103001000`. **Data/payment/security impact:** none until items 2 or 9 are approved; both need the finance review.
+
 ### DEC-2026-053 — Exceptions not covered by CFG-006/007
 
-**Status:** **PROPOSED** (2026-10-30, America/New_York). Decision sheet for 6.9 (MPS §6.6). No item is approved. Questions E1–E12 with recommendations and dependencies are in [PHASE-6-EXCEPTIONS-BRIEF.md](PHASE-6-EXCEPTIONS-BRIEF.md) §9. Until answered, current behavior is kept and 6.9A (TRACE-131) implements only repairs that approved rules already require. **Date:** 2026-10-30.
+**Status:** E1–E12 **APPROVED** (owner, 2026-10-30). E1, E2, E4, E6, E9, E10, E12 adopt Codex's recommendations; E3, E5, E7, E8, E11 adopt Codex's **amended** recommendations (the earlier recommendations for those five are withdrawn). The amended wording below was recorded on 2026-10-31 to reconcile the record with the owner's existing approval; it is not a new approval request. **Date:** 2026-10-30 (America/New_York); amended wording recorded 2026-10-31.
 
-**Already approved and not reopened:** CFG-006 cancellation windows, reschedule fee windows and weather/emergency waivers; CFG-007 rematch-first, full refund without an acceptable replacement and quality event unless excused; CFG-008 payout timing and holds; DEC-2026-049 item 4 (plan stop/pause/resume, operations-only); DEC-2026-049 item 8 stays PROPOSED and blocked.
+**Approved wording:**
+- **E1.** With no recorded appointment, a customer cancellation refunds 100% (no provider time was reserved). Once work has started there is no self-serve cancellation: the homeowner reports an issue and operations decides (partial work, 6.10).
+- **E2.** The $25 reschedule fee is assessed when requested and collected only as a separate, operations-confirmed, two-person-reviewed charge after the new time is recorded; never deducted from a refund. Until collection is active the fee is shown as assessed, not charged. Under 24 hours, operations decides with a reason; no fee unless the owner sets one.
+- **E3 (amended).** Provider-requested rescheduling carries no homeowner fee. The existing appointment stays until an alternative is agreed. If the provider cannot honor it and no alternative is accepted, CFG-007 applies. A proposed time is not a confirmed replacement appointment.
+- **E4.** Cancellation-retained amounts are not payable to providers during beta until finance approves a rule.
+- **E5 (amended).** An acceptable replacement is one where the homeowner explicitly accepts both the replacement provider and the appointment time. Appointment minus 24 hours is the normal search deadline; a withdrawal inside that window goes immediately to operations. An appointment is never silently extended or inherited. No attempt limit and no automatic substitute acceptance are introduced.
+- **E6.** The homeowner never pays more without accepting new reviewed terms; a replacement works for the original agreed amount; if none will, there is no acceptable replacement and the homeowner gets a full refund.
+- **E7 (amended).** Replacement-provider paths for recurring visits stay blocked. A provider who withdrew is not automatically re-offered the visit. Operations may arrange an explicit recommitment; otherwise the no-replacement / full-refund-entitlement path applies. Any recommitment preserves the applicable eligibility, accepted terms and identity checks; if the existing contracts cannot support it safely, that gap is returned before any new acceptance mechanism is built.
+- **E8 (amended).** For a non-prepaid plan the homeowner requests stopping future visits, and operations uses the existing "Stop future visits" control. Existing visits and offers remain until each is individually assessed and handled, with a preview of the consequences. Nothing is bulk-cancelled, and the request is never presented as a completed cancellation.
+- **E9.** Homeowner unavailable and partial completion are recorded only in 6.9; consequences are decided in 6.10; no automatic fee.
+- **E10.** Provider cancellation/no-show quality events are recorded and displayed only during beta; any matching or suspension effect needs its own decision.
+- **E11 (amended).** Operations may accept a later waiver through an append-only adjustment, including after an earlier refund completed. The original assessment and refund records are preserved. Any additional refund requires separate authorization and duplicate protection.
+- **E12.** A homeowner who cancels while a provider withdrawal awaits a replacement decision gets a full refund (no acceptable replacement); no homeowner penalty.
 
-**Questions (short form):** E1 windows with no appointment and cancelling started work; E2 $25 collection and <24 h handling; E3 provider-initiated rescheduling; E4 provider share of retained cancellation amounts; E5 acceptable replacement; E6 replacement price; E7 replacement provider for a recurring visit (= DEC-2026-049 item 8); E8 whole-plan cancellation; E9 homeowner unavailable and partial completion; E10 quality-event consequences; E11 waivers after the original assessment; E12 homeowner cancellation during an open provider withdrawal.
+**Architectural corrections given with the approval (bind 6.9A and the amended items):** (1) cancellation during open or uncertain checkout is kept and creates an actionable reconciliation state; payment-kernel changes are a separate finance-reviewed scope; (2) cancellation evidence is atomic and bound to request, actor and record; (3) no cancellation in generic admin status editing; (4) recurring plans use the existing lifecycle controls, visits stay individually accountable (E8); (5) recurring replacement-provider paths stay blocked and no accepted snapshot moves to another provider (E7); (6) later waivers append an adjustment, existing assessments and refunds unchanged, additional refunds separately authorized with duplicate protection (E11); (7) readbacks keep entitlement, authorization and money movement distinct.
 
-**MPS impact:** answers MPS §6.6 "either party", no-show, partial work and recurring coverage once approved. **MDS impact:** cancellation preview/outcome wording, policy page. **MTS impact:** 6.9B commands after answers. **Data/payment/security impact:** E2, E4, E6, E11 move money and need the two-person finance review and payment activation.
+**Implementation:** 6.9A / TRACE-131 (E1, E10, E12 and corrections 1–5, 7); 6.9B / TRACE-132 (E3, E5, E7, E8, E11 and the non-money part of E6 and correction 6). E2 collection (F-1), E11 supplemental refund execution (F-2), E4 retained proceeds (F-3) and the payment-kernel repairs (P-K1/P-K2) remain the separately reviewed scopes in [PHASE-6-EXCEPTIONS-BRIEF.md](PHASE-6-EXCEPTIONS-BRIEF.md) §7. Questions and status: §9.
+
+**MPS impact:** §6.6 "either party", no-show, partial work and recurring coverage. **MDS impact:** cancellation preview and refund-status wording; policy page. **MTS impact:** migration `20261101001000`. **Data/payment/security impact:** no money moves in 6.9A; E2, E4, E6, E11 execution needs the two-person finance review and payment activation.
 
 ### DEC-2026-052 — Review eligibility, edits, private feedback and provider response
 

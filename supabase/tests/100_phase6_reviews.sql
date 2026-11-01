@@ -41,7 +41,10 @@ update public.service_requests set status = 'completed', homeowner_confirmed_at 
     'a3000000-0000-4000-8000-000000000010', 'a3000000-0000-4000-8000-000000000011');
 update public.service_requests set status = 'disputed' where id = 'a3000000-0000-4000-8000-000000000009';
 update public.service_requests set status = 'closed' where id = 'a3000000-0000-4000-8000-000000000010';
+-- TRACE-131: fixture state written as owner maintenance (no cancellation command exists for it).
+set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status = 'cancelled' where id = 'a3000000-0000-4000-8000-000000000012';
+set local mercurius.owner_maintenance = 'off';
 
 -- Legacy rows written before this slice: B's private feedback (Phase 4 kept it held) and a
 -- quality_feedback report.

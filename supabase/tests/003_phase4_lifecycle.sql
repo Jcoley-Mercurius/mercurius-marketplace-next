@@ -28,7 +28,10 @@ select ('43000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
  -- TRACE-128: these completed jobs were accepted by their provider.
  'matched'
 from generate_series(1,7) n;
+-- TRACE-131: fixture state written as owner maintenance (no cancellation command exists for it).
+set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status='cancelled' where id='43000000-0000-4000-8000-000000000005';
+set local mercurius.owner_maintenance = 'off';
 
 set local role anon;
 select set_config('request.jwt.claims','{"role":"anon"}',true);
@@ -110,7 +113,8 @@ insert into public.service_requests(id,customer_id,service_type,address) values
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"41000000-0000-4000-8000-000000000001"}',true);
 select throws_ok($$delete from public.service_requests where id='43000000-0000-4000-8000-000000000008'$$,'42501',null,'cancellation cannot delete request history');
-select lives_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000008','cancelled','Homeowner cancelled pending request')$$,'homeowner can cancel through audited transition');
+select throws_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000008','cancelled','Homeowner cancelled pending request')$$,'42501','Cancel this service through its cancellation command','TRACE-131: a direct transition cannot cancel, even from pending');
+select lives_ok($$select public.record_job_operation('43000000-0000-4000-8000-000000000008','43100000-0000-4000-8000-000000000008','customer_cancel','Homeowner cancelled pending request')$$,'homeowner cancels through the assessed cancellation command');
 select is((select status::text from public.service_requests where id='43000000-0000-4000-8000-000000000008'),'cancelled','cancelled row is retained');
 reset role;
 

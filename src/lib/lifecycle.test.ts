@@ -14,6 +14,7 @@ describe("lifecycle compatibility and policy contract", () => {
   it("never offers admin impersonation or resurrection actions", () => {
     for (const status of Constants.public.Enums.request_status) expect(adminTransitionTargets(status)).not.toContain("homeowner_confirmed");
     expect(adminTransitionTargets("cancelled")).toEqual([]);
+    for (const status of Constants.public.Enums.request_status) expect(adminTransitionTargets(status)).not.toContain("cancelled");
     expect(adminTransitionTargets("closed")).toEqual([]);
     expect(adminTransitionTargets("unknown")).toEqual([]);
   });

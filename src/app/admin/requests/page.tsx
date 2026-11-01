@@ -1,6 +1,8 @@
 "use client";
 
 import { JobOperations } from "@/components/dashboard/JobOperations";
+import { CancellationOutcome } from "@/components/dashboard/CancellationOutcome";
+import { AdminCancellationQueue } from "@/components/admin/AdminCancellationQueue";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
 import { isRecurringPlan } from "@/lib/recurringVisits";
@@ -354,6 +356,7 @@ export default function AdminRequestsPage() {
     <AdminQuoteQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
     <AdminRecurringPaymentQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
     <AdminFulfillmentQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
+    <AdminCancellationQueue />
 
     {overdueCount > 0 && <div className="flex flex-col gap-3 rounded-xl border border-status-danger bg-status-danger-bg p-4 text-status-danger sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0" /><div><p className="text-sm font-medium">{overdueCount} matched request{overdueCount === 1 ? " is" : "s are"} overdue</p><p className="mt-0.5 text-xs text-status-danger">Release the match for reassignment or coordinate directly with the vendor.</p></div><Button size="sm" variant="outline" className="sm:ml-auto" onClick={() => setStatusFilter("matched")}>View matched</Button></div>}
 
@@ -364,7 +367,7 @@ export default function AdminRequestsPage() {
       { key: "homeowner", label: "Homeowner", render: request => profiles[request.customer_id] ?? "Unknown" },
       { key: "vendor", label: "Vendor", render: request => request.contractor_id ? contractorNames[request.contractor_id] ?? "Unknown vendor" : "Unassigned" },
       { key: "location", label: "Location", render: request => `${request.city}, ${request.state}` },
-      { key: "date", label: "Appointment", render: request => request.scheduled_start_at ? formatAppointment(request.scheduled_start_at) : request.preferred_date ? `Not recorded · preferred ${formatDate(request.preferred_date)}` : "Not recorded" },
+      { key: "date", label: "Appointment", render: request => request.scheduled_start_at ? `${formatAppointment(request.scheduled_start_at)}${["pending", "matched", "quoted"].includes(request.status) ? " (on hold)" : ""}` : request.preferred_date ? `Not recorded · preferred ${formatDate(request.preferred_date)}` : "Not recorded" },
       { key: "match", label: "Match", render: request => <><p className={cn(isOverdue(request) && "font-medium text-status-danger")}>{waitingLabel(request)}</p>{request.match_attempt_count > 1 && <p>{request.match_attempt_count} vendor attempts</p>}</> },
       { key: "status", label: "Status", render: request => <div className="flex flex-wrap gap-2"><Status status={request.status} matchingStatus={request.matching_status} />{(isOverdue(request) || request.needs_admin_review) && <Badge variant="destructive">{isOverdue(request) ? "Overdue" : "Review"}</Badge>}</div> },
       { key: "actions", label: "Actions", render: request => <Button variant="outline" size="sm" aria-label={`Review ${request.service_type} ${request.id.slice(0, 10)}`} onClick={() => openDetail(request)}><Eye />Review</Button> },
@@ -419,6 +422,7 @@ function RequestDialog(props: {
     <AppointmentPanel key={`appointment-${request.id}-${request.status}`} jobId={request.id} role="admin" onChanged={props.saved} />
     {!isRecurringPlan(request) && <FulfillmentPanel key={`fulfillment-${request.id}-${request.status}`} jobId={request.id} />}
     {["pending", "matched", "quoted", "scheduled", "in_progress"].includes(request.status) && <JobOperations key={request.id} jobId={request.id} role="admin" onSaved={props.saved} />}
+    {["pending", "cancelled"].includes(request.status) && <CancellationOutcome key={`refund-${request.id}-${request.status}`} jobId={request.id} role="admin" />}
     <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).filter(status => !isRecurringPlan(request) || !planWorkStatuses.has(status)).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
 
     <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><AdminQuotePanel key={`${request.id}:${request.quote_revision ?? 0}:${request.quote_status ?? ""}`} request={request} providerName={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "The provider" : "The provider"} onChanged={props.saved} /></section>

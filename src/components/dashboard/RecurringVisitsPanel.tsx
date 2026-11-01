@@ -10,6 +10,7 @@ import { formatAppointment, localStartParam } from "@/lib/appointments";
 import { anchorLine, formatCadenceDate, planStateLabel } from "@/lib/recurringCadence";
 import { blockMessage, cadenceLabel, historyLine, paymentLabel, recordedAttempt, seriesErrorMessage, termsLine, visitCheckoutHref, visitPaymentLine, visitState, type CreateResult, type SeriesReadback, type SeriesViewer } from "@/lib/recurringVisits";
 import { RecurringCadenceControls } from "@/components/dashboard/RecurringCadenceControls";
+import { PlanStopRequest } from "@/components/dashboard/PlanStopRequest";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -141,6 +142,7 @@ export function RecurringVisitsPanel({ seriesId, role, onChanged }: { seriesId: 
         </li>)}</ol>}
     </div>
 
+    {role !== "vendor" && series.status !== "cancelled" && <PlanStopRequest key={`stop-${series.plan_state}`} seriesId={seriesId} role={role} onChanged={onChanged} />}
     {role === "admin" && <RecurringCadenceControls seriesId={seriesId} series={series} reread={read} onChanged={onChanged} />}
 
     {role === "admin" && <div className="space-y-3 rounded-lg border bg-muted/30 p-3">

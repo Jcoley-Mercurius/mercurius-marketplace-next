@@ -38,9 +38,11 @@ const transitions: Record<StoredStatus, readonly StoredStatus[]> = {
   disputed: ["resolved", "in_progress"], resolved: ["completed", "closed"], cancelled: [], closed: [],
 };
 
+// TRACE-131: cancellation is never a generic status edit; operators use the assessed cancellation
+// command (JobOperations), which previews the policy and refuses stale reads.
 export function adminTransitionTargets(status: string): readonly StoredStatus[] {
   if (!Object.hasOwn(transitions, status)) return [];
-  return transitions[status as StoredStatus].filter(target => !["homeowner_confirmed", "quoted", "pending_review", "disputed", "resolved", "reviewed"].includes(target) && (target !== "cancelled" || status === "pending"));
+  return transitions[status as StoredStatus].filter(target => !["homeowner_confirmed", "quoted", "pending_review", "disputed", "resolved", "reviewed", "cancelled"].includes(target));
 }
 
 /** CFG-006: classify intent only. No refund, fee, ledger or payout operation. */

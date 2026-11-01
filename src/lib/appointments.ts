@@ -1,4 +1,5 @@
 import { formatAppointment, offerTimeZone } from "@/lib/offerStatus";
+import type { OpenRescheduleRequest, ReplacementState } from "@/lib/exceptionResolutions";
 
 export { formatAppointment };
 
@@ -13,8 +14,9 @@ export const appointmentTimeZone = offerTimeZone;
 export type ScheduleActor = "homeowner" | "provider" | "previous_provider" | "operations";
 export type ScheduleEntry = {
   id: string;
-  kind: "appointment" | "reschedule_request";
-  outcome: "recorded" | "changed" | "kept" | "requested";
+  // TRACE-132: the homeowner's answer to a provider's time, and replacement proposals and answers.
+  kind: "appointment" | "reschedule_request" | "reschedule_response" | "replacement_proposal" | "replacement_response";
+  outcome: "recorded" | "changed" | "kept" | "requested" | "accepted" | "declined" | "proposed";
   actor: ScheduleActor;
   at: string;
   reason: string;
@@ -22,6 +24,10 @@ export type ScheduleEntry = {
   new_start: string | null;
   requested_start: string | null;
   operation_key: string | null;
+  initiator?: "homeowner" | "provider" | null;
+  fee?: number | null;
+  fee_waived_later?: boolean;
+  provider_name?: string | null;
 };
 export type ScheduleReadback = {
   timezone: string;
@@ -30,8 +36,9 @@ export type ScheduleReadback = {
   has_provider: boolean;
   recurring: boolean;
   appointment: string | null;
-  open_request: { id: string; actor: ScheduleActor; at: string; reason: string; requested_start: string } | null;
+  open_request: (OpenRescheduleRequest & { actor: ScheduleActor }) | null;
   history: ScheduleEntry[];
+  replacement?: ReplacementState | null;
 };
 export type ScheduleViewer = "admin" | "vendor" | "homeowner";
 
@@ -97,7 +104,7 @@ export function deviceTimeNote(instant: Date, deviceZone = Intl.DateTimeFormat()
   return `This device uses a different timezone; there it is ${device.format(instant)}. The appointment is kept in Eastern Time.`;
 }
 
-export type AppointmentStateKind = "not_accepted" | "accepted_no_time" | "recorded" | "changed" | "reschedule_requested" | "provider_released" | "closed";
+export type AppointmentStateKind = "not_accepted" | "accepted_no_time" | "recorded" | "changed" | "reschedule_requested" | "provider_released" | "replacement_pending" | "closed";
 export type AppointmentState = { kind: AppointmentStateKind; heading: string; detail: string };
 
 const closedStatuses = new Set(["cancelled", "closed"]);
@@ -108,6 +115,12 @@ export function appointmentState(schedule: Pick<ScheduleReadback, "status" | "ma
   const requested = formatAppointment(schedule.open_request?.requested_start);
   if (closedStatuses.has(schedule.status)) {
     return { kind: "closed", heading: "No upcoming appointment", detail: appointment ? `This service is ${schedule.status}. It was scheduled for ${appointment}.` : `This service is ${schedule.status}.` };
+  }
+  // TRACE-132 (E5): a replacement provider who accepted is not committed to any time until the homeowner accepts.
+  if (schedule.matching_status === "awaiting_homeowner") {
+    return { kind: "replacement_pending", heading: "Replacement waiting for the homeowner",
+      detail: appointment ? `No appointment is set. The earlier time (${appointment}) isn't carried over; the homeowner accepts the replacement and a time first.`
+        : "No appointment is set. The homeowner accepts the replacement and a time first." };
   }
   if (!schedule.has_provider) {
     return appointment
@@ -144,7 +157,11 @@ export function actorLabel(actor: ScheduleActor, viewer: ScheduleViewer) {
 
 export function historyLine(entry: ScheduleEntry) {
   const next = formatAppointment(entry.new_start);
-  if (entry.outcome === "requested") return `Different time requested: ${formatAppointment(entry.requested_start) ?? "time unavailable"}`;
+  if (entry.kind === "reschedule_response") return `${entry.outcome === "accepted" ? "Accepted" : "Declined"} the provider’s proposed time: ${formatAppointment(entry.requested_start) ?? "time unavailable"}`;
+  if (entry.kind === "replacement_proposal") return `Replacement proposed: ${entry.provider_name ?? "provider"} on ${next}`;
+  if (entry.kind === "replacement_response") return entry.outcome === "accepted"
+    ? `Replacement accepted: ${entry.provider_name ?? "provider"} on ${next}` : `Replacement declined: ${entry.provider_name ?? "provider"}`;
+  if (entry.outcome === "requested") return `Different time requested${entry.initiator === "provider" ? " by the provider" : ""}: ${formatAppointment(entry.requested_start) ?? "time unavailable"}`;
   if (entry.outcome === "kept") return `Appointment kept at ${next}; reschedule request answered`;
   if (entry.outcome === "changed") return `Appointment changed from ${formatAppointment(entry.previous_start) ?? "no time"} to ${next}`;
   return `Appointment recorded: ${next}`;
@@ -166,6 +183,12 @@ export function scheduleErrorMessage(error: unknown) {
   if (message.includes("Recurring visits")) return "Recurring visits are scheduled separately.";
   if (message.includes("reused with different intent")) return "This save conflicts with an earlier attempt. Review the latest appointment and try again.";
   if (message.includes("no longer accepts")) return "This service no longer accepts schedule changes.";
+  if (message.includes("hasn't accepted this time") || message.includes("hasn’t accepted this time")) return "The homeowner hasn’t accepted this time. Keep the current appointment, or ask the provider to propose a time the homeowner accepts.";
+  if (message.includes("price or terms differ")) return "The replacement’s price or terms differ from what the homeowner agreed. A replacement works for the agreed amount; otherwise record no replacement.";
+  if (message.includes("changed since you opened it") || message.includes("answered or replaced")) return "This changed while you were looking at it. The latest details are shown; review them before answering.";
+  if (message.includes("already answered")) return "This was already answered. The latest details are shown.";
+  if (message.includes("time has passed")) return "That time has passed. The latest details are shown.";
+  if (message.includes("only for yourself") || message.includes("Say whether")) return "Choose who asked for the new time.";
   if (code === "42501" || message.includes("Admin access") || message.includes("Not a participant") || message.includes("cannot perform")) return "You don’t have permission to make this change.";
   return "We couldn’t confirm whether this was saved. The latest schedule is shown; check it before trying again.";
 }

@@ -225,11 +225,14 @@ update public.vendor_packages set description = null where id = '97400000-0000-4
 insert into fx values ('v3', pg_temp.visit(pg_temp.id('s2'), 3, pg_temp.day(17)));
 select pg_temp.accept(pg_temp.id('v3'));
 update public.package_tiers set price = 50 where id = '97500000-0000-4000-8000-000000000001';
+-- TRACE-131: an accepted plan's status changes only as owner maintenance; this simulates re-acceptance.
+set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status = 'matched' where id = pg_temp.id('s2');
 insert into public.job_match_attempts(service_request_id,contractor_id,attempt_number,outcome,package_id,package_tier_id,frequency,base_price,effective_price,accepted_at,responded_at)
   values (pg_temp.id('s2'),'97200000-0000-4000-8000-000000000001',9,'accepted','97400000-0000-4000-8000-000000000001','97500000-0000-4000-8000-000000000001',
     'weekly',50,50,now()+interval '1 second',now()+interval '1 second');
 update public.service_requests set status = 'scheduled' where id = pg_temp.id('s2');
+set local mercurius.owner_maintenance = 'off';
 select is((select count(*) from private.recurring_series_terms where series_id = pg_temp.id('s2')), 2::bigint, 'the plan has a second acceptance');
 select is((select visit_total from private.recurring_series_terms where series_id = pg_temp.id('s2') order by seq desc limit 1)::numeric(12,2), 50.00,
   'whose terms are $50 a visit');

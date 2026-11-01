@@ -51,7 +51,7 @@ select is(((current_setting('t.spring')::date + time '01:59') at time zone 'Amer
 -- Scheduled without an appointment, readable only by the job's participants.
 set local role authenticated;
 select pg_temp.as_user('92100000-0000-4000-8000-000000000001');
-select is(public.job_schedule('92300000-0000-4000-8000-000000000001') - 'history','{"timezone":"America/New_York","status":"scheduled","matching_status":"matched","has_provider":true,"recurring":false,"appointment":null,"open_request":null}'::jsonb,'homeowner reads a scheduled job with no appointment recorded');
+select is(public.job_schedule('92300000-0000-4000-8000-000000000001') - 'history','{"timezone":"America/New_York","status":"scheduled","matching_status":"matched","has_provider":true,"recurring":false,"appointment":null,"open_request":null,"replacement":null}'::jsonb,'homeowner reads a scheduled job with no appointment recorded');
 select is(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history','[]'::jsonb,'no schedule history yet');
 select pg_temp.as_user('92100000-0000-4000-8000-000000000003');
 select is(public.job_schedule('92300000-0000-4000-8000-000000000001') ->> 'status','scheduled','assigned provider reads the schedule');
@@ -125,13 +125,18 @@ select is(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'open_r
 select is((select scheduled_start_at from public.service_requests where id='92300000-0000-4000-8000-000000000001'),pg_temp.et('t.local2'),'kept appointment unchanged');
 select pg_temp.as_user('92100000-0000-4000-8000-000000000003');
 select lives_ok($$select public.record_job_operation('92300000-0000-4000-8000-000000000001','92400000-0000-4000-8000-000000000016','reschedule_request','Crew unavailable',pg_temp.et('t.request'))$$,'provider requests a different time');
+-- TRACE-132 (DEC-2026-053 E3): a provider's proposed time moves the appointment only after the homeowner accepts it.
+select pg_temp.as_user('92100000-0000-4000-8000-000000000001');
+select lives_ok($$select public.respond_to_reschedule_request('92300000-0000-4000-8000-000000000001',
+  (public.job_schedule('92300000-0000-4000-8000-000000000001')->'open_request'->>'id')::uuid,'92400000-0000-4000-8000-000000000018',true,
+  public.job_schedule('92300000-0000-4000-8000-000000000001')->'open_request'->'expected')$$,'homeowner accepts the provider''s time');
 select pg_temp.as_user('92100000-0000-4000-8000-000000000005');
 select is(public.admin_record_appointment('92300000-0000-4000-8000-000000000001','92400000-0000-4000-8000-000000000017',pg_temp.et('t.request'),pg_temp.lt('t.request'),pg_temp.et('t.local2'),'Moved at the provider''s request') ->> 'answers_request',
   (select id::text from public.job_operations where operation_key='92400000-0000-4000-8000-000000000016'),'change answers the provider request');
 
 -- The same history for every role, in order, with old and new values and the actor as a role.
-select is(jsonb_path_query_array(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history','$[*].outcome'),'["recorded","changed","requested","kept","requested","changed"]'::jsonb,'history in order');
-select is(jsonb_path_query_array(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history','$[*].actor'),'["operations","operations","homeowner","operations","provider","operations"]'::jsonb,'actors shown as roles');
+select is(jsonb_path_query_array(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history','$[*].outcome'),'["recorded","changed","requested","kept","requested","accepted","changed"]'::jsonb,'history in order');
+select is(jsonb_path_query_array(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history','$[*].actor'),'["operations","operations","homeowner","operations","provider","homeowner","operations"]'::jsonb,'actors shown as roles');
 select is(((public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history' -> 1 ->> 'previous_start')::timestamptz,(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history' -> 1 ->> 'new_start')::timestamptz),(pg_temp.et('t.local1'),pg_temp.et('t.local2')),'change keeps old and new values');
 select is(public.job_schedule('92300000-0000-4000-8000-000000000001') -> 'history' -> 2 ->> 'operation_key',null,'other actors'' operation keys are not exposed');
 select set_config('t.history',pg_temp.history('92300000-0000-4000-8000-000000000001')::text,true);
@@ -164,7 +169,9 @@ select lives_ok($$select public.record_job_operation('92300000-0000-4000-8000-00
 select lives_ok($$select public.record_job_operation('92300000-0000-4000-8000-000000000006','92400000-0000-4000-8000-000000000033','provider_cancel','Synthetic withdrawal')$$,'provider withdraws');
 select throws_ok($$select public.job_schedule('92300000-0000-4000-8000-000000000006')$$,'42501','Not a participant in this service','withdrawn provider no longer reads the schedule');
 select pg_temp.as_user('92100000-0000-4000-8000-000000000001');
-select is(public.job_schedule('92300000-0000-4000-8000-000000000006') -> 'open_request' ->> 'actor','previous_provider','earlier provider labelled as previous');
+-- TRACE-132 (DEC-2026-053 E3): the withdrawal closes the provider's proposal; it stays in the history.
+select is(public.job_schedule('92300000-0000-4000-8000-000000000006') -> 'open_request','null'::jsonb,'a withdrawn provider''s proposal is no longer open');
+select ok((public.job_schedule('92300000-0000-4000-8000-000000000006') -> 'history') @> '[{"kind":"reschedule_request","actor":"previous_provider"}]','earlier provider labelled as previous');
 select is(public.job_schedule('92300000-0000-4000-8000-000000000006') ->> 'has_provider','false','no provider attached after withdrawal');
 reset role;
 

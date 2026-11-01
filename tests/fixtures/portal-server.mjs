@@ -184,6 +184,25 @@ const server = createServer(async (request, response) => {
     return row ? send({ timezone: "America/New_York", status: row.status, matching_status: row.matching_status, has_provider: Boolean(row.contractor_id),
       recurring: false, appointment: null, open_request: null, history: [] }) : send({ message: "Not a participant in this service", code: "42501" }, 403);
   }
+  // TRACE-131 exception preview and cancellation outcome: an allowed change and nothing cancelled by
+  // default; specs override per case. record_job_operation stays unmocked (failure UI).
+  if (url.pathname === "/rest/v1/rpc/job_cancellation_preview") {
+    const row = requestRows(user.testRole).find(item => item.id === body._job_id);
+    if (!row) return send({ message: "Not a participant in this service", code: "42501" }, 403);
+    const kind = body._kind ?? "customer_cancel";
+    const assessment = kind === "customer_cancel" ? { policy: "CFG-006/007", refund_percent: body._waived ? 100 : 50, basis: body._waived ? "exception_accepted" : "notice_24_to_72_hours", waived: Boolean(body._waived) }
+      : kind === "provider_cancel" || kind === "no_show" ? { policy: "CFG-006/007", next_action: "rematch_first", replacement_providers: true } : { policy: "CFG-006/007" };
+    return send({ job_id: row.id, kind, allowed: true, plan: false, visit: false, refusal: null,
+      expected: { status: row.status, contractor_id: row.contractor_id, scheduled_start_at: null, operation_seq: null }, assessment,
+      payment: user.testRole === "vendor" ? null : { captured: 0, total: null, open_checkout: false } });
+  }
+  // TRACE-132 plan stop preview: no request and nothing in place by default; specs override per case.
+  if (url.pathname === "/rest/v1/rpc/recurring_plan_stop_preview") return user.testRole === "vendor"
+    ? send({ message: "Not a participant in this service", code: "42501" }, 403)
+    : send({ series_id: body._series_id, plan_state: "active", expected_state: "active", accepted: true, request: null, visits: [] });
+  if (url.pathname === "/rest/v1/rpc/job_cancellation_outcome") return send({ job_id: body._job_id, status: "pending", cancelled: false,
+    entitlement: { state: "not_cancelled", refund_percent: null, basis: null }, authorization: { state: "none" }, movement: { state: "none" }, follow_up: [] });
+  if (/\/rpc\/(admin_cancellation_queue|admin_provider_quality_events)$/.test(url.pathname)) return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [] } : { message: "Admin access required" }, user.testRole === "admin" ? 200 : 403);
   // TRACE-109 price corrections: none by default; specs override per case.
   if (/\/rpc\/(admin_package_price_corrections|vendor_my_package_price_corrections)$/.test(url.pathname)) return send([]);
   // TRACE-110 operator draft prices: none by default; specs override per case.

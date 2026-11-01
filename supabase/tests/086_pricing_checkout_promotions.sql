@@ -171,7 +171,10 @@ select throws_ok($$select private.money_source(pg_temp.req(3))$$, '40001', 'Prom
 update public.service_requests set status='scheduled' where id=pg_temp.req(4);
 
 -- Cancellation of an unpaid request releases its reservation.
+-- TRACE-131: fixture state written as owner maintenance (no cancellation command exists for it).
+set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status='cancelled' where id=pg_temp.req(3);
+set local mercurius.owner_maintenance = 'off';
 select is(pg_temp.redemption(pg_temp.req(3)), 'released', 'a cancelled unpaid request releases the reservation');
 
 -- A checkout in progress keeps the reservation even if the request is cancelled meanwhile.
@@ -184,7 +187,10 @@ insert into fx(key,id) values ('c-snapshot', pg_temp.publish(pg_temp.req(5), pg_
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"b8610000-0000-4000-8000-000000000001"}',true);
 select lives_ok($$select public.money_prepare_checkout((select id from fx where key='c-snapshot'),'full')$$, 'the homeowner starts paying');
 select set_config('request.jwt.claims','',true);
+-- TRACE-131: fixture state written as owner maintenance (no cancellation command exists for it).
+set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status='cancelled' where id=pg_temp.req(5);
+set local mercurius.owner_maintenance = 'off';
 select is(pg_temp.redemption(pg_temp.req(5)), 'reserved', 'a cancellation during checkout does not release the promotion the payment carries');
 select is(private.promotion_release_unpaid(), 0, 'the unpaid sweep releases nothing while terms are current');
 

@@ -70,6 +70,7 @@ export function isPastServiceRequestStatus(status: string) {
 
 export function serviceRequestStatusLabel(status: string, matchingStatus?: string | null) {
   if (["pending", "matched"].includes(status) && matchingStatus === "awaiting_consent") return "Provider choice needed";
+  if (["matched", "quoted"].includes(status) && matchingStatus === "awaiting_homeowner") return "Replacement needs your answer";
   if (status === "pending" && ["exhausted", "sourcing"].includes(matchingStatus ?? "")) return "Not available yet in your area";
   return status in serviceRequestStatusLabels
     ? serviceRequestStatusLabels[status as ServiceRequestStatus]

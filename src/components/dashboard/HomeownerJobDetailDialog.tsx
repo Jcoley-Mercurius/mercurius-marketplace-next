@@ -4,6 +4,9 @@ import { JobFollowUp } from "@/components/dashboard/JobFollowUp";
 import { ServiceReviewPanel } from "@/components/reviews/ServiceReviewPanel";
 import { summariesById } from "@/lib/reviews/serviceReview";
 import { JobOperations } from "@/components/dashboard/JobOperations";
+import { CancelPendingRequest } from "@/components/dashboard/CancelPendingRequest";
+import { CancellationOutcome } from "@/components/dashboard/CancellationOutcome";
+import { describeAssessment, type Assessment } from "@/lib/cancellation";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
 import { FulfillmentPanel } from "@/components/dashboard/FulfillmentPanel";
@@ -277,40 +280,24 @@ export function HomeownerJobDetailDialog({
     onOpenChange(false);
   }
 
-  async function cancelPendingRequest() {
-    if (!actionsEnabled || busyAction || !isPending) return;
-
+  // TRACE-131: CancelPendingRequest records the assessed cancellation; this updates the dashboard.
+  async function afterCancellation(assessment: Assessment) {
+    onRemoveJob(currentJob.id);
+    requestAnimationFrame(() => document.getElementById("homeowner-dashboard-heading")?.focus());
     setActionError("");
-    setBusyAction("cancel-request");
+    onOpenChange(false);
+    toast.success("Request cancelled", {
+      description: `${describeAssessment("customer_cancel", assessment)} Its history is retained.`,
+    });
     try {
-      const { error } = await createClient().rpc("transition_job_status", {
-        _job_id: currentJob.id, _to_status: "cancelled", _reason: "Homeowner cancelled pending request",
-      });
-      if (error) throw new Error(error.message);
-
-      onRemoveJob(currentJob.id);
-      requestAnimationFrame(() => document.getElementById("homeowner-dashboard-heading")?.focus());
-      setActionError("");
-      onOpenChange(false);
-      toast.success("Request cancelled", {
-        description: "Your request is cancelled and its history is retained.",
-      });
-
-      try {
-        await onRefresh();
-      } catch (error) {
-        toast.warning("Request cancelled, but the dashboard could not refresh", {
-          description:
-            error instanceof Error
-              ? error.message
-              : "Refresh the page to confirm the latest list.",
-        });
-      }
+      await onRefresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "We couldn’t cancel this request. Please try again.");
-      throw error;
-    } finally {
-      setBusyAction(null);
+      toast.warning("Request cancelled, but the dashboard could not refresh", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "Refresh the page to confirm the latest list.",
+      });
     }
   }
 
@@ -496,6 +483,7 @@ export function HomeownerJobDetailDialog({
             });
           });
         }} />}
+        {(job.status === "cancelled" || job.status === "pending") && <CancellationOutcome key={`refund-${job.id}-${job.status}`} jobId={job.id} role="homeowner" />}
         {actionsEnabled && <JobFollowUp key={`follow-${job.id}`} jobId={job.id} status={job.status} vendorCompletedAt={job.vendor_completed_at} />}
         {job.description && (
           <div className="rounded-xl border border-border p-4">
@@ -521,7 +509,7 @@ export function HomeownerJobDetailDialog({
         )}
 
         {isPending && <div className="rounded-xl border border-border p-4">
-          <ConfirmAction triggerLabel="Cancel request" title="Cancel this pending request?" entity={`${job.service_type} · ${job.id.slice(0, 8)}`} consequence="This removes the request before a provider is matched. You can submit a new request later, but this action can’t be undone." confirmLabel="Yes, cancel request" disabled={!actionsEnabled || Boolean(busyAction)} onConfirm={cancelPendingRequest} />
+          <CancelPendingRequest jobId={job.id} entity={`${job.service_type} · ${job.id.slice(0, 8)}`} disabled={!actionsEnabled || Boolean(busyAction)} onCancelled={afterCancellation} />
         </div>}
 
         {needsConfirmation && (

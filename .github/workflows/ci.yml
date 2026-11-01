@@ -116,6 +116,12 @@ jobs:
         run: node scripts/recurring-payment-concurrency.mjs
       - name: Concurrent fulfillment start, confirmation, dispute and follow-up
         run: node scripts/fulfillment-concurrency.mjs
+      - name: Concurrent cancellation, checkout, capture, refund, withdrawal and plan commands
+        run: node scripts/exceptions-concurrency.mjs
+      - name: Concurrent reschedule answers, replacement consent, waivers and plan stop requests
+        run: node scripts/exception-resolutions-concurrency.mjs
+      - name: Concurrent support requests, triage, dispute decisions, appeals and evidence
+        run: node scripts/support-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay
