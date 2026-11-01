@@ -1142,7 +1142,7 @@ export function VendorPackagesManager() {
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Each profile service needs at least one active, review-cleared fixed price to count as complete. Existing drafts and quote-only options are shown so you can take the right next step without creating duplicates.</p>
           </div>
-          {incompleteCoverage.length === 0 && profileCoverage.length > 0 && <Badge className="w-fit border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 />Pricing complete</Badge>}
+          {incompleteCoverage.length === 0 && profileCoverage.length > 0 && <Badge className="w-fit border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Pricing complete</Badge>}
         </div>
 
         {profileCoverage.length > 0 && <div className="space-y-2">
@@ -1541,7 +1541,7 @@ function coverageDetails(row: ServiceCoverage) {
 }
 
 function CoverageBadge({ state }: { state: CoverageState }) {
-  if (state === "live_fixed") return <Badge className="border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 />Live fixed price</Badge>;
+  if (state === "live_fixed") return <Badge className="border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Live fixed price</Badge>;
   if (state === "needs_review") return <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs review</Badge>;
   if (state === "paused_valid") return <Badge variant="outline"><PauseCircle />Paused · ready</Badge>;
   if (state === "draft") return <Badge variant="outline">Draft exists</Badge>;
@@ -1611,7 +1611,7 @@ function formatArchivedDate(value: string | null | undefined) {
 function PackageStatus({ item }: { item: PackageRow }) {
   if (item.archived_at) return <Badge variant="outline"><Archive />Archived</Badge>;
   const status = isLiveFixedPackage(item)
-    ? <Badge className="border border-accent-border bg-accent-soft text-sage-dark"><CheckCircle2 />Live / Active</Badge>
+    ? <Badge className="border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Live / Active</Badge>
     : item.needs_review
       ? <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Review blocked</Badge>
       : !item.is_active

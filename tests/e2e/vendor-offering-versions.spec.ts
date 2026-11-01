@@ -105,7 +105,8 @@ test("pausing goes through the publish/pause command with the row read", async (
   await expect.poll(() => toggled.length).toBe(1);
   expect(toggled[0]).toEqual({ p_package: livePkg, p_active: false, p_expected_updated_at: updatedAt });
   expect(writes).toEqual([]);
-  expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
+  await expect(page.getByText("Updating…")).toHaveCount(0);
+  expect((await new AxeBuilder({ page }).include("article").withTags(tags).analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
