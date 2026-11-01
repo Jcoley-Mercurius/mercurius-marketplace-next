@@ -126,7 +126,7 @@ try {
   // TRACE-134 (6.11A): the plan's version is in use, so an in-place edit is refused on every application
   // path. The race below keeps characterizing what such an edit would do, as owner maintenance from a
   // direct session (row locks and every other trigger still apply); TRACE-126/127 stay open.
-  await assert.rejects(sql(`update public.package_tiers set price = 47 where id = '${tier}'`), /Requests use this price version/);
+  await assert.rejects(sql(`update public.package_tiers set price = 47 where id = '${tier}'`), /Requests use this price version|This price is live/);
   const maintenance = "set mercurius.package_maintenance = 'on'; ";
   const edits = [`update public.package_tiers set price = 47 where id = '${tier}'`, `update public.vendor_packages set description = 'Edited' where id = '${pkg}'`,
     `update public.package_tiers set name = 'Weekly edited' where id = '${tier}'`, `update public.package_tiers set price = 52 where id = '${tier}'`];
