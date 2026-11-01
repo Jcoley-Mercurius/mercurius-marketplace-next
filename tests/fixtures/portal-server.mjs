@@ -209,6 +209,8 @@ const server = createServer(async (request, response) => {
   if (/\/rpc\/admin_package_drafts$/.test(url.pathname)) return send([]);
   // TRACE-122: no archived packages by default; specs override per case.
   if (/\/rpc\/vendor_package_archives$/.test(url.pathname)) return send([]);
+  // TRACE-134: every listed version is the newest and unused unless a spec says otherwise.
+  if (/\/rpc\/vendor_package_revisions$/.test(url.pathname)) return send((body?.p_packages ?? []).map(id => ({ package_id: id, package_revision: "0".repeat(64), in_use: false, is_head: true })));
   if (/\/rpc\/(find_eligible_packages)/.test(url.pathname)) return send([]);
   // TRACE-128 fulfillment readback and queue: nothing recorded by default; specs override per case.
   if (url.pathname === "/rest/v1/rpc/job_fulfillment") return send({ role: user.testRole === "vendor" ? "vendor" : user.testRole, status: "scheduled", plan: false,

@@ -108,8 +108,10 @@ await sql(`
   insert into public.contractors(id, user_id, name, is_active, marketing_enabled) values ('${contractor}', '${vendorUser}', 'Synthetic payment provider', true, true);
   insert into public.contractor_service_zips(contractor_id, zip_code) values ('${contractor}', '${zip}');
   insert into public.vendor_packages(id, contractor_id, service_id, name, pricing_mode, default_frequency, is_active, needs_review)
-    values ('${pkg}', '${contractor}', '${service}', 'Synthetic payment package', 'fixed', 'weekly', true, false);
+    values ('${pkg}', '${contractor}', '${service}', 'Synthetic payment package', 'fixed', 'weekly', false, false);
   insert into public.package_tiers(id, package_id, name, price, frequency, sort_order, rule_conditions) values ('${tier}', '${pkg}', 'Weekly', 40, 'weekly', 0, '[]');
+  -- TRACE-134: a version's levels are written while it is paused, then it is published.
+  update public.vendor_packages set is_active = true where id = '${pkg}';
   insert into public.service_requests(id, customer_id, service_type, service_catalog_id, address, city, state, zip_code, frequency, status, matching_status, preferred_contractor_id)
     values ('${plan}', '${homeowner}', 'Synthetic payment lawn', '${service}', '1 Synthetic Way', 'Synthetic', 'FL', '${zip}', 'weekly', 'pending', 'awaiting_match', '${contractor}');
   select private.offer_next_for_request_internal('${plan}');`);
@@ -121,9 +123,14 @@ try {
   // 1. The same approved publication sent eight times at once, racing tier, add-on and package edits:
   // one snapshot at the agreed $40, whatever the catalog says.
   const termsA = await approvedTerms(a);
+  // TRACE-134 (6.11A): the plan's version is in use, so an in-place edit is refused on every application
+  // path. The race below keeps characterizing what such an edit would do, as owner maintenance from a
+  // direct session (row locks and every other trigger still apply); TRACE-126/127 stay open.
+  await assert.rejects(sql(`update public.package_tiers set price = 47 where id = '${tier}'`), /Requests use this price version|This price is live/);
+  const maintenance = "set mercurius.package_maintenance = 'on'; ";
   const edits = [`update public.package_tiers set price = 47 where id = '${tier}'`, `update public.vendor_packages set description = 'Edited' where id = '${pkg}'`,
     `update public.package_tiers set name = 'Weekly edited' where id = '${tier}'`, `update public.package_tiers set price = 52 where id = '${tier}'`];
-  const raced = await Promise.allSettled([...Array.from({ length: 8 }, () => publish(a, termsA)), ...edits.map((edit) => sql(edit))]);
+  const raced = await Promise.allSettled([...Array.from({ length: 8 }, () => publish(a, termsA)), ...edits.map((edit) => sql(maintenance + edit))]);
   for (const r of raced) if (r.status === 'rejected') console.error('RACER', r.reason.message.slice(0, 300));
   assert.equal(raced.filter((result) => result.status === 'fulfilled').length, 12, 'every publication and every edit succeeds');
   assert.equal(new Set(raced.slice(0, 8).map((result) => result.value)).size, 1, 'all publications return one snapshot');
