@@ -54,6 +54,8 @@ already-merged brief branch, so 6.9A/6.9B are not on `main` (route to `main` is 
 2026-10-31 checkpoint (later): integration PR #121 (`claude/phase6-9a-exceptions` → `main`, head `a1855f2`) carries the reviewed 6.9A/6.9B commits; merge with a merge commit, then retarget #120 to `main`.
 6.11 / TRACE-134 characterized, no implementation ([brief](PHASE-6-VENDOR-OFFERINGS-BRIEF.md)); Special Offer and vendor self-published prices are DEC-2026-055 (PROPOSED). These notes approve no policy.
 
+2026-11-01 checkpoint: DEC-2026-055 items 1–2 approved (2026-10-31). 6.11A / TRACE-134 (immutable offering versions, keyed vendor saves, closed vendor promotion/ZIP writes; PR #123) and 6.11B (Special Offer removed, listing honesty, explicit price states, coverage readback) implemented for review, stacked on #122 → #120 → #121; migrations `20261104001000`/`20261105001000` not pushed. TRACE-126/127 stay open. These notes approve no policy.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

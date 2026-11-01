@@ -19,10 +19,14 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
    'Synthetic','Synthetic beta address','scheduled',(select service_id from public.vendor_packages where id='d5900000-0000-4000-8000-000000000021'),
    'one-time','00000','fixed','d5900000-0000-4000-8000-000000000021','d5900000-0000-4000-8000-000000000031');
 
+-- TRACE-134 (6.11B): legacy package promotions cannot be enabled on any path; this fixture keeps
+-- characterizing an existing overlay under owner maintenance (the closing trigger disabled for it).
 create function pg_temp.promotion(p_enabled boolean,p_starts interval,p_ends interval) returns void language sql as $$
  delete from public.package_promotions where package_id='d5900000-0000-4000-8000-000000000021';
+ alter table public.package_promotions disable trigger trg_package_promotion_legacy_closed;
  insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
-   values('d5900000-0000-4000-8000-000000000021','percent_off',10,'Synthetic offer',now()+p_starts,now()+p_ends,p_enabled) $$;
+   values('d5900000-0000-4000-8000-000000000021','percent_off',10,'Synthetic offer',now()+p_starts,now()+p_ends,p_enabled);
+ alter table public.package_promotions enable trigger trg_package_promotion_legacy_closed; $$;
 create function pg_temp.source() returns jsonb language sql as $$ select private.money_source('d5900000-0000-4000-8000-000000000041') $$;
 
 -- Baseline: with no promotion the offering is a valid source at its full price.

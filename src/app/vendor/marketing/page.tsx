@@ -4,20 +4,15 @@ import { useCallback, useEffect, useState, type ComponentType, type ReactNode } 
 import Link from "next/link";
 import {
   AlertCircle,
-  BarChart3,
   CheckCircle2,
-  Clock3,
   Copy,
   ListChecks,
   Loader2,
-  Lock,
-  Megaphone,
   MessageSquareQuote,
   RefreshCw,
   Share2,
   Sparkles,
   Star,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -33,12 +28,6 @@ type Contractor = {
 };
 
 type Mode = "loading" | "ready" | "unlinked" | "error";
-
-const deferredFeatures = [
-  { icon: BarChart3, title: "Marketing performance insights", description: "Reliable listing, campaign, and conversion reporting once the required event tracking is in place." },
-  { icon: Users, title: "Expanded audience tools", description: "Additional ways to promote services beyond the free public listing and sharing tools." },
-  { icon: Megaphone, title: "Managed marketing support", description: "Optional hands-on campaign support with scope and pricing confirmed before activation." },
-];
 
 export default function VendorMarketingPage() {
   const { user } = useAuth();
@@ -86,7 +75,7 @@ export default function VendorMarketingPage() {
       <header>
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Free vendor tools</p>
         <h1 className="font-heading text-2xl font-semibold sm:text-3xl">Marketing</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Use the practical tools available today to strengthen and share your Mercurius presence. No paid upgrade is required during soft launch.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Use these free tools to strengthen and share your Mercurius presence.</p>
       </header>
 
       <div className="flex flex-col gap-3 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
@@ -95,7 +84,6 @@ export default function VendorMarketingPage() {
       </div>
 
       <FreeTools contractor={contractor} />
-      <DeferredMarketing />
     </div>
   );
 }
@@ -138,13 +126,6 @@ function IconBox({ icon: Icon }: { icon: ComponentType<{ className?: string }> }
 
 function ChecklistItem({ href, children }: { href: string; children: ReactNode }) {
   return <li><Link href={href} className="group flex items-start gap-2 text-sm leading-5 text-foreground/80 hover:text-foreground"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sage" /><span className="flex-1 group-hover:underline group-hover:underline-offset-2">{children}</span></Link></li>;
-}
-
-function DeferredMarketing() {
-  return <section className="space-y-4">
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-heading text-xl font-semibold">Coming after soft launch</h2><p className="mt-1 text-sm text-muted-foreground">Paid Growth and full-service marketing tools are intentionally deferred while core matching and operations mature.</p></div><Badge variant="outline" className="w-fit gap-1.5 text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />Not available yet</Badge></div>
-    <Card className="overflow-hidden rounded-2xl border-border bg-muted/15 shadow-none"><CardContent className="p-5 sm:p-6"><div className="grid gap-4 md:grid-cols-3">{deferredFeatures.map((feature) => <div key={feature.title} className="rounded-xl border bg-card p-4"><div className="mb-3 flex items-center justify-between gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground"><feature.icon className="h-4 w-4" /></span><Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground"><Lock className="h-3 w-3" />Deferred</Badge></div><p className="text-sm font-medium">{feature.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{feature.description}</p></div>)}</div><div className="mt-5 flex items-start gap-3 border-t pt-5"><Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><p className="text-sm leading-6 text-muted-foreground">These tools cannot be activated or purchased in the portal today. Mercurius will share availability, scope, and pricing before paid marketing options launch.</p></div></CardContent></Card>
-  </section>;
 }
 
 function Loading() { return <div className="flex min-h-[520px] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-6 w-6 animate-spin text-accent" />Loading marketing tools…</div>; }

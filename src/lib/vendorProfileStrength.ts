@@ -8,9 +8,11 @@ export type VendorProfileStrengthInput = {
   verified_specialty: string | null;
   logo_url: string | null;
   bio: string | null;
-  special_offer: string | null;
   our_promise: string | null;
 };
+
+/** DEC-2026-055 item 1: Special Offer earns no points (matching balanced-v2), so the maximum is 95. */
+export const VENDOR_PROFILE_STRENGTH_MAX = 95;
 
 export type VendorProfileStrengthBreakdown = {
   score: number;
@@ -34,7 +36,6 @@ export function calculateVendorProfileStrength(
     + (profile.verified_specialty?.trim() ? 10 : 0);
   const visual = (profile.logo_url ? 8 : 0) + galleryPhotos * 4;
   const differentiation = vendorBioPoints(profile.bio)
-    + (profile.special_offer?.trim() ? 5 : 0)
     + (profile.our_promise?.trim() ? 5 : 0);
 
   return {
