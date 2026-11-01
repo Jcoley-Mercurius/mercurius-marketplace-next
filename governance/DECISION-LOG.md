@@ -269,6 +269,14 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-055 — Vendor Special Offer and vendor self-published prices
+
+**Status:** **PROPOSED** (2026-10-31, America/New_York). Decision sheet for 6.11 / TRACE-134. No item is approved; current behavior is kept. Record: [PHASE-6-VENDOR-OFFERINGS-BRIEF.md](PHASE-6-VENDOR-OFFERINGS-BRIEF.md) §4, §6. **Date:** 2026-10-31.
+
+**Questions:** (1) **Special Offer.** `contractors.special_offer` is vendor-written promotion copy shown publicly as "Current Offer" (8 hosted vendors), prompted by the profile score and worth 5 profile-strength ranking points; no checkout path honors it. Recommended: stop showing it publicly and in the vendor editor and prompts (data kept), and drop its ranking points with a recorded matching-version note. Alternative: show it only after operator review, with no ranking weight. (2) **Vendor self-published prices.** DEC-2026-046 says "only operators publish", while DEC-2026-034, DEC-2026-040(a), MPS §4 ("configure provider offerings: own") and the code let a vendor publish and pause its own fixed prices inside the guardrail band. Recommended: confirm that status quo (DEC-2026-046 covers operator-prepared drafts), with a vendor change to a package already bound to a request saved as a new lineage revision (DEC-2026-039 item 2), never in place. Alternative: vendor changes become drafts that an operator publishes (rebuilds both vendor price editors).
+
+**Context:** 6.11 characterization (TRACE-134) probes P1–P13, Q1–Q2 and hosted read-only counts. **MPS impact:** none until answered; item 1 changes a ranking factor (§6.2). **MDS impact:** profile and public profile copy. **MTS impact:** item 1 restates the profile-strength calculation in matching. **Data/payment/security impact:** none; no money function changes.
+
 ### DEC-2026-054 — Dispute categories, outcomes, timing and support reopening
 
 **Status:** **PROPOSED** (2026-10-31, America/New_York). Decision sheet for 6.10 / TRACE-133 (MPS §6.6). No item is approved; current behavior is kept and recorded in [PHASE-6-SUPPORT-BRIEF.md](PHASE-6-SUPPORT-BRIEF.md) §7. **Date:** 2026-10-31.
