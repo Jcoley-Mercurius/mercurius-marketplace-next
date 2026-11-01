@@ -1,5 +1,12 @@
 # Agent handoff — 2026-10-31
 
+## Phase 6.11 characterization and 6.9 integration path (TRACE-134, DEC-2026-055 proposed), 2026-10-31
+
+- **Integration:** `main` `737474f` lacks 6.9A/6.9B. PR #121 (`claude/phase6-9a-exceptions` → `main`, head `a1855f2`, clean merge, CI push run 41219306645 green, migrations already on hosted) carries the reviewed #118/#119 commits unchanged. Merge it with **a merge commit**, then `gh pr edit 120 --base main`; #120's own diff is `a1855f2..f226669`. Nothing merged, rewritten or duplicated.
+- Branch `claude/phase6-11-vendor-offerings` from 6.10 head `f226669`; documentation only. Record: [PHASE-6-VENDOR-OFFERINGS-BRIEF.md](../../governance/PHASE-6-VENDOR-OFFERINGS-BRIEF.md).
+- Probes (rolled back, synthetic): vendor editor save or package delete nulls a scheduled request's package/tier binding (F611-1); vendor-enabled legacy promotion lowers the matched price 100 → 50 and checkout would refuse it (F611-2); vendor inserts arbitrary service ZIPs (F611-3). Isolation, activation/Marketing/badge guards and anonymous refusals hold. Hosted read-only counts: 0 legacy promotions, 8 Special Offers, 23 vendors list unpriced services, 0 out-of-coverage ZIPs, 0 open requests.
+- Next: Codex review of the brief; owner answers DEC-2026-055; then 6.11A (DB) and 6.11B (UI) on a separate stacked branch. No hosted change.
+
 ## Phase 6.10 support, disputes, evidence and appeals (TRACE-133, DEC-2026-054 proposed), 2026-10-31
 
 - **Status reconciled first:** hosted history re-read: `20261101001000` and `20261102001000` applied (brief and PR #118/#119 bodies corrected from "not pushed"). PR #117 merged to `main` (`737474f`); PR #118 merged at 13:00 UTC into the already-merged brief branch (`fee2811`), so **6.9A/6.9B are not on `main`**; #119 merged at 16:21 UTC into `claude/phase6-9a-exceptions` (`a1855f2`, tree identical to `c2318f5`). Route to `main` is an owner decision. 6.9 is not accepted (F-1/F-2/F-3/P-K1/P-K2 open).
