@@ -6,6 +6,7 @@ import { JobOperations } from "@/components/dashboard/JobOperations";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
 import { FulfillmentPanel } from "@/components/dashboard/FulfillmentPanel";
+import { DisputePanel } from "@/components/support/DisputePanel";
 import { isStaleRefusal } from "@/lib/fulfillment";
 import { isRecurringPlan } from "@/lib/recurringVisits";
 import Link from "next/link";
@@ -448,6 +449,7 @@ function Details({ job, close, saved, refreshQuote }: { job: Job | null; close: 
     {!isIncoming(job) && isRecurringPlan(job) && <RecurringVisitsPanel key={`visits-${job.id}-${job.status}`} seriesId={job.id} role="vendor" />}
     {!isIncoming(job) && <AppointmentPanel key={`appointment-${job.id}-${job.status}`} jobId={job.id} role="vendor" onChanged={refreshQuote} />}
     {!isIncoming(job) && !isRecurringPlan(job) && <FulfillmentPanel key={`fulfillment-${job.id}-${job.status}`} jobId={job.id} />}
+    {!isIncoming(job) && !isRecurringPlan(job) && <DisputePanel key={`dispute-${job.id}-${job.status}`} jobId={job.id} />}
     {!isIncoming(job) && <VendorQuotePanel key={`quote-${job.id}`} job={job} onChanged={refreshQuote} />}
     {["scheduled", "in_progress"].includes(job.status) && <JobOperations key={job.id} jobId={job.id} role="vendor" onSaved={saved} />}
     <QuestionAnswers job={job} />

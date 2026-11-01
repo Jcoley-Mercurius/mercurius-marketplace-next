@@ -120,6 +120,8 @@ jobs:
         run: node scripts/exceptions-concurrency.mjs
       - name: Concurrent reschedule answers, replacement consent, waivers and plan stop requests
         run: node scripts/exception-resolutions-concurrency.mjs
+      - name: Concurrent support requests, triage, dispute decisions, appeals and evidence
+        run: node scripts/support-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay

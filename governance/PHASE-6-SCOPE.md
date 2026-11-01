@@ -46,6 +46,11 @@ Vendor-based pricing (TRACE-129, PR #115, `ef1cc33`) merged. 6.8 / TRACE-130 (ca
 history) implemented for review ([record](PHASE-6-REVIEWS.md)); review window, edits, `quality_feedback`, provider response and related
 questions are the open owner decision DEC-2026-052 (PROPOSED). These notes record status only; they approve no policy.
 
+2026-10-31 checkpoint: 6.9A/6.9B migrations pushed to hosted (history ends at `20261102001000`); PR #117 merged to `main`, but PR #118 merged into the
+already-merged brief branch, so 6.9A/6.9B are not on `main` (route to `main` is an owner decision). 6.9 stays **not accepted** (F-1/F-2/F-3/P-K1/P-K2).
+6.10 / TRACE-133 (support tickets, disputes, evidence, resolution and appeals; F11 closed) implemented for review, stacked on 6.9B `c2318f5`
+([brief](PHASE-6-SUPPORT-BRIEF.md)); dispute categories, outcomes, timing and reopening are DEC-2026-054 (PROPOSED). These notes approve no policy.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

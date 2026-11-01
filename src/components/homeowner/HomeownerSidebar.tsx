@@ -11,6 +11,7 @@ import {
   History,
   Home,
   LayoutDashboard,
+  LifeBuoy,
   Loader2,
   LogOut,
   MessageSquare,
@@ -43,6 +44,7 @@ const dashboardNavigation: Array<{
 const accountNavigation = [
   { label: "Messages", href: "/messages", icon: MessageSquare },
   { label: "Notifications", href: "/notifications", icon: Bell },
+  { label: "Support", href: "/support", icon: LifeBuoy },
   { label: "Account Settings", href: "/account", icon: Settings },
 ];
 

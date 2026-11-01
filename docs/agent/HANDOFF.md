@@ -1,4 +1,12 @@
-# Agent handoff — 2026-10-01
+# Agent handoff — 2026-10-31
+
+## Phase 6.10 support, disputes, evidence and appeals (TRACE-133, DEC-2026-054 proposed), 2026-10-31
+
+- **Status reconciled first:** hosted history re-read: `20261101001000` and `20261102001000` applied (brief and PR #118/#119 bodies corrected from "not pushed"). PR #117 merged to `main` (`737474f`); PR #118 merged at 13:00 UTC into the already-merged brief branch (`fee2811`), so **6.9A/6.9B are not on `main`**; #119 merged at 16:21 UTC into `claude/phase6-9a-exceptions` (`a1855f2`, tree identical to `c2318f5`). Route to `main` is an owner decision. 6.9 is not accepted (F-1/F-2/F-3/P-K1/P-K2 open).
+- Branch `claude/phase6-10-support` stacked on 6.9B head `c2318f5`; own diff `c2318f5..HEAD`. Record: [PHASE-6-SUPPORT-BRIEF.md](../../governance/PHASE-6-SUPPORT-BRIEF.md).
+- F11 proven (forged ticket kind/status/link, requester rewrite, operator direct status write; DELETE inert) plus a storage finding (any participant could read a known foreign `job-photos` object). Migration `20261103001000` (additive; **pushed to hosted 2026-10-31 with owner authorization**, verified read-only, fingerprint unchanged; PR #120, base `claude/phase6-9a-exceptions` `a1855f2`) closes them and adds keyed support intake, replies/internal notes, versioned triage with history, dispute completion binding, decision history, stale-guarded decisions and appeals, own-job evidence, separate money reads.
+- Evidence: SQL 103 142/142; full SQL 94/5,897 PASS on clean reset; 8/8 mutations killed; `support-concurrency.mjs` 3/3 (CI step); unit 594/594 (7 new); browser `support` 9/9; full non-visual browser suite 631 tests: 499 passed with 2 workers under load and 132 failed; the 18 affected spec files were rerun with 1 worker: 322 passed and 3 failed. Those 3 were real and are fixed, and the three specs rerun at 33/33: the waiting-home navigation expectation now includes Support (HOMEOWNER-EARLY-ACCESS-RECONCILIATION allows support actions); the Phase 4 appeal spec mocks `dispute_detail` and checks `_expected_version`; the support reply axe check waits for Refresh's fade to finish; fingerprint unchanged `45 / 34c51131…`. Not performed: screen reader, real devices, `@visual`, CI.
+- Next: Codex review; owner answers DEC-2026-054; owner decides the 6.9 route to `main`; then hosted push of `20261103001000` before merge (DEC-2026-037).
 
 ## Phase 6.9B exception resolutions (TRACE-132, DEC-2026-053), 2026-10-31
 
