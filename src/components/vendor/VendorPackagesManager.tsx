@@ -1395,7 +1395,7 @@ function CoverageBadge({ row }: { row: ServiceCoverage }) {
   if (row.state === "live_fixed") return <Badge className="border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Fixed price · Live</Badge>;
   if (row.state === "needs_review") return <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs review</Badge>;
   if (row.state === "paused_valid") return <Badge variant="outline"><PauseCircle />Fixed price · Paused</Badge>;
-  if (row.state === "quote_only") return <Badge variant="outline" className={live ? "border-info/30 bg-info/5 text-info" : undefined}>{live ? "Custom Quote · Live" : "Custom Quote · Paused"}</Badge>;
+  if (row.state === "quote_only") return <Badge variant="outline" className={live ? "border-info/30 bg-info/5 text-foreground" : undefined}>{live ? "Custom Quote · Live" : "Custom Quote · Paused"}</Badge>;
   if (row.state === "draft") return <Badge variant="outline">Not priced yet · Draft saved</Badge>;
   return <Badge variant="outline">Not priced yet</Badge>;
 }
