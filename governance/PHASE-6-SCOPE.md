@@ -51,6 +51,9 @@ already-merged brief branch, so 6.9A/6.9B are not on `main` (route to `main` is 
 6.10 / TRACE-133 (support tickets, disputes, evidence, resolution and appeals; F11 closed) implemented for review, stacked on 6.9B `c2318f5`
 ([brief](PHASE-6-SUPPORT-BRIEF.md)); dispute categories, outcomes, timing and reopening are DEC-2026-054 (PROPOSED). These notes approve no policy.
 
+2026-10-31 checkpoint (later): integration PR #121 (`claude/phase6-9a-exceptions` → `main`, head `a1855f2`) carries the reviewed 6.9A/6.9B commits; merge with a merge commit, then retarget #120 to `main`.
+6.11 / TRACE-134 characterized, no implementation ([brief](PHASE-6-VENDOR-OFFERINGS-BRIEF.md)); Special Offer and vendor self-published prices are DEC-2026-055 (PROPOSED). These notes approve no policy.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed
