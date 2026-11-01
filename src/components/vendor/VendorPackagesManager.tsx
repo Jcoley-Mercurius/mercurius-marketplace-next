@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -40,6 +40,14 @@ import { PricingToggle } from "@/components/vendor/PricingToggle";
 import { cn } from "@/lib/utils";
 import { loadPackageArchives } from "@/lib/packageArchives";
 import { createClient } from "@/lib/supabase/client";
+import {
+  loadPackageRevisions,
+  packageSaveKey,
+  PackageVersionError,
+  savePackageVersion,
+  setPackageActive,
+  type PackageRevision,
+} from "@/lib/vendorPackageVersions";
 import { VendorPriceApprovals } from "@/components/vendor/VendorPriceApprovals";
 import { VendorPriceCorrections } from "@/components/vendor/VendorPriceCorrections";
 import {
@@ -103,6 +111,9 @@ type PackageRow = {
   is_active: boolean;
   needs_review: boolean;
   template_id: string | null;
+  /** TRACE-134: the version hash a save is checked against, and when the row last changed. */
+  updated_at?: string;
+  revision?: PackageRevision;
   tiers: TierRow[];
   questions: QuestionRow[];
   addons: AddonRow[];
@@ -179,7 +190,7 @@ export function VendorPackagesManager() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PackageRow | null>(null);
-  const [originalPackage, setOriginalPackage] = useState<PackageRow | null>(null);
+  const pendingSave = useRef<{ payload: string; key: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [nameEditorOpen, setNameEditorOpen] = useState(false);
@@ -203,7 +214,7 @@ export function VendorPackagesManager() {
     const supabase = createClient();
     const { data: packageData, error: packageError } = await supabase
       .from("vendor_packages")
-      .select("id, name, description, service_id, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, template_id, sort_order")
+      .select("id, name, description, service_id, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, template_id, sort_order, updated_at")
       .eq("contractor_id", id)
       .order("sort_order");
     if (packageError) throw packageError;
@@ -214,13 +225,14 @@ export function VendorPackagesManager() {
       return;
     }
     const ids = rows.map((item) => item.id);
-    const [questionsResult, tiersResult, addonsResult, promotionsResult, clockResult, archivedAt] = await Promise.all([
+    const [questionsResult, tiersResult, addonsResult, promotionsResult, clockResult, archivedAt, revisions] = await Promise.all([
       supabase.from("package_qualifying_questions").select("*").in("package_id", ids).order("sort_order"),
       supabase.from("package_tiers").select("*").in("package_id", ids).order("sort_order"),
       supabase.from("package_addons").select("*").in("package_id", ids).order("created_at"),
       supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").in("package_id", ids).order("updated_at", { ascending: false }),
       supabase.rpc("pricing_server_now"),
       loadPackageArchives(supabase, id),
+      loadPackageRevisions(supabase, ids),
     ]);
     if (questionsResult.error) throw questionsResult.error;
     if (tiersResult.error) throw tiersResult.error;
@@ -232,8 +244,10 @@ export function VendorPackagesManager() {
     const tiers = (tiersResult.data ?? []) as (TierRow & { package_id: string })[];
     const addons = (addonsResult.data ?? []) as (AddonRow & { package_id: string })[];
     const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
-    const hydrated = rows.map((item) => ({
+    // TRACE-134: a superseded revision is history; only each price's newest version is listed.
+    const hydrated = rows.filter((item) => revisions.get(item.id)?.isHead !== false).map((item) => ({
       ...item,
+      revision: revisions.get(item.id),
       archived_at: archivedAt.get(item.id) ?? null,
       questions: questions.filter((question) => question.package_id === item.id),
       tiers: tiers
@@ -355,7 +369,6 @@ export function VendorPackagesManager() {
   const closeEditor = () => {
     setOpen(false);
     setEditing(null);
-    setOriginalPackage(null);
     setAdvancedOpen(false);
     setNameEditorOpen(false);
     setNameCustomized(false);
@@ -379,7 +392,6 @@ export function VendorPackagesManager() {
     const isAdvanced = isAdvancedTierStructure(normalizedTiers, item.questions);
     const automaticName = packageName(services.find((service) => service.id === item.service_id)?.name ?? displayService(item.service_id), item.default_frequency);
     setEditing(structuredClone({ ...item, tiers: normalizedTiers }));
-    setOriginalPackage(item.id ? structuredClone(item) : null);
     setCustomerPrice(minimum > 0 ? String(minimum) : "");
     setFrequencyPrices(isAdvanced
       ? { [item.default_frequency]: minimum > 0 ? String(minimum) : "" }
@@ -770,37 +782,49 @@ export function VendorPackagesManager() {
     }
 
     setSaving(true);
-    const supabase = createClient();
-    let packageId = editing.id;
-    const created = !packageId;
     const nextCoverage = nextIncompleteCoverageFor(editing.service_id);
-    const payload = {
-      name,
-      description: editing.description || null,
+    const content = {
       service_id: editing.service_id,
-      pricing_mode: editing.pricing_mode,
-      default_frequency: savedDefaultFrequency,
-      deposit_amount: editing.pricing_mode === "deposit_quote" ? Number(editing.deposit_amount) : null,
-      is_active: false,
-      needs_review: needsReview,
+      package: {
+        name,
+        description: editing.description || null,
+        pricing_mode: editing.pricing_mode,
+        default_frequency: savedDefaultFrequency,
+        deposit_amount: editing.pricing_mode === "deposit_quote" ? Number(editing.deposit_amount) : null,
+      },
+      questions: questions.map((question) => ({
+        question_key: question.question_key,
+        question_label: question.question_label,
+        input_type: question.input_type,
+        unit: question.unit || null,
+        options: question.options ?? null,
+        is_required: question.is_required !== false,
+        sort_order: question.sort_order,
+      })),
+      tiers: tiers.map((tier) => ({
+        name: tier.name,
+        price: tier.price,
+        frequency: tier.frequency,
+        rule_question_key: tier.rule_question_key || null,
+        rule_min: tier.rule_min ?? null,
+        rule_max: tier.rule_max ?? null,
+        includes: tier.includes,
+        sort_order: tier.sort_order,
+      })),
+      addons: addons.map((addon, index) => ({ name: addon.name, description: addon.description, price: addon.price, is_offered: true, sort_order: index })),
     };
+    const request = { packageId: editing.id || null, expectedRevision: editing.id ? editing.revision?.revision ?? null : null, content, publish: editing.is_active };
+    const payload = JSON.stringify(request);
+    const saveKey = packageSaveKey(payload, pendingSave.current);
+    pendingSave.current = { payload, key: saveKey };
     try {
-      if (!packageId) {
-        const result = await supabase.from("vendor_packages").insert({ contractor_id: contractorId, ...payload }).select("id").single();
-        if (result.error || !result.data) throw result.error ?? new Error("The price record was not created.");
-        packageId = (result.data as { id: string }).id;
-      } else {
-        const result = await supabase.from("vendor_packages").update(payload).eq("id", packageId).eq("contractor_id", contractorId);
-        if (result.error) throw result.error;
-      }
-      await replacePackageChildren(supabase, packageId, questions, tiers);
-      await replaceCustomPackageAddons(supabase, packageId, addons);
-      const publishResult = await supabase.from("vendor_packages").update({ is_active: editing.is_active, needs_review: needsReview }).eq("id", packageId).eq("contractor_id", contractorId);
-      if (publishResult.error) throw publishResult.error;
-      const live = editing.is_active && !needsReview;
+      // TRACE-134: one keyed call. A live or in-use version is kept; the change becomes a new version.
+      const result = await savePackageVersion(createClient(), { ...request, saveKey });
+      pendingSave.current = null;
+      const live = result.is_active && !result.needs_review;
       closeEditor();
       await refresh(contractorId);
-      if (needsReview) {
+      if (result.needs_review) {
         const flaggedCadences = priceReviews
           .filter((review) => review.needsReview)
           .map((review) => FREQUENCIES[review.frequency])
@@ -818,28 +842,20 @@ export function VendorPackagesManager() {
         setLiveSuccessOpen(true);
       } else if (live) {
         toast.success("Quote package published", { description: "Homeowners will see that matching and a confirmed quote are required before booking." });
+      } else if (result.new_version && result.replaced_package_id === null && editing.id && editing.is_active === false) {
+        toast.success("Saved as a new draft version", { description: "Requests already made keep the version they were priced from." });
       } else {
         toast.success("Saved as draft", { description: isFixedMode ? "Publish it when the customer price is ready." : "Publish it when you are ready to receive quote requests." });
       }
     } catch (error) {
-      let restored = false;
-      let recoveryMessage = "No public price was changed.";
-      if (packageId) {
-        if (created) {
-          const cleanup = await supabase.from("vendor_packages").delete().eq("id", packageId).eq("contractor_id", contractorId);
-          restored = !cleanup.error;
-          if (restored) recoveryMessage = "The incomplete new package was removed.";
-        } else if (originalPackage) {
-          restored = await restorePackageSnapshot(supabase, contractorId, originalPackage);
-          if (restored) recoveryMessage = "The previous package was restored.";
-        }
-        if (!restored) {
-          await supabase.from("vendor_packages").update({ is_active: false }).eq("id", packageId).eq("contractor_id", contractorId);
-          recoveryMessage = "The incomplete package was kept private.";
-        }
-      }
+      // A refusal is final; only an unknown outcome (no response) keeps the key for a retry.
+      if (error instanceof PackageVersionError) pendingSave.current = null;
       setSaving(false);
-      toast.error("Couldn’t save this price", { description: `${error instanceof Error ? error.message : "Please try again."} ${recoveryMessage}` });
+      if (error instanceof PackageVersionError && error.stale) {
+        toast.error("This price changed", { description: error.message, action: { label: "Reload", onClick: () => { closeEditor(); void refresh(contractorId); } } });
+      } else {
+        toast.error("Couldn’t save this price", { description: `${error instanceof Error ? error.message : "Please try again."} No public price was changed.` });
+      }
     }
   };
 
@@ -855,11 +871,14 @@ export function VendorPackagesManager() {
       return;
     }
     setMutatingId(item.id);
-    const supabase = createClient();
-    const result = await supabase.from("vendor_packages").update({ is_active: !item.is_active }).eq("id", item.id).eq("contractor_id", contractorId);
-    setMutatingId(null);
-    if (result.error) toast.error("Couldn’t update availability", { description: result.error.message });
-    else await refresh(contractorId);
+    try {
+      await setPackageActive(createClient(), item.id, !item.is_active, item.updated_at ?? "");
+      await refresh(contractorId);
+    } catch (error) {
+      toast.error("Couldn’t update availability", { description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setMutatingId(null);
+    }
   };
 
   const deletePackage = async (item: PackageRow) => {
@@ -1371,96 +1390,6 @@ export function VendorPackagesManager() {
       <Dialog open={liveSuccessOpen} onOpenChange={setLiveSuccessOpen}><DialogContent className="max-w-md sm:max-w-md"><DialogHeader><div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-accent/15"><CheckCircle2 className="h-6 w-6 text-accent" /></div><DialogTitle className="text-center text-xl">Your price is live</DialogTitle><DialogDescription className="text-center">Customers can now see this fixed price in Mercurius pricing and use it while requesting service.</DialogDescription></DialogHeader><div className="flex flex-col gap-2 pt-2">{contractorId && <Link href={`/providers/${contractorId}`} className={buttonVariants({ className: "min-h-11 w-full" })} onClick={() => setLiveSuccessOpen(false)}><ExternalLink />View public storefront</Link>}<Button variant="outline" className="min-h-11 w-full" onClick={() => { setLiveSuccessOpen(false); newPackage(); }}><Plus />Add another price</Button></div></DialogContent></Dialog>
     </div>
   );
-}
-
-async function replacePackageChildren(
-  supabase: ReturnType<typeof createClient>,
-  packageId: string,
-  questions: QuestionRow[],
-  tiers: TierRow[],
-) {
-  const clearQuestions = await supabase.from("package_qualifying_questions").delete().eq("package_id", packageId);
-  if (clearQuestions.error) throw clearQuestions.error;
-  const clearTiers = await supabase.from("package_tiers").delete().eq("package_id", packageId);
-  if (clearTiers.error) throw clearTiers.error;
-  if (questions.length) {
-    const result = await supabase.from("package_qualifying_questions").insert(questions.map((question) => ({
-      package_id: packageId,
-      question_key: question.question_key,
-      question_label: question.question_label,
-      input_type: question.input_type,
-      unit: question.unit || null,
-      options: question.options ?? null,
-      is_required: question.is_required !== false,
-      sort_order: question.sort_order,
-    })));
-    if (result.error) throw result.error;
-  }
-  const tierResult = await supabase.from("package_tiers").insert(tiers.map((tier) => ({
-    package_id: packageId,
-    name: tier.name,
-    price: tier.price,
-    frequency: tier.frequency,
-    rule_question_key: tier.rule_question_key || null,
-    rule_min: tier.rule_min ?? null,
-    rule_max: tier.rule_max ?? null,
-    includes: tier.includes,
-    sort_order: tier.sort_order,
-  })));
-  if (tierResult.error) throw tierResult.error;
-}
-
-async function restorePackageSnapshot(
-  supabase: ReturnType<typeof createClient>,
-  contractorId: string,
-  snapshot: PackageRow,
-) {
-  try {
-    const paused = await supabase.from("vendor_packages").update({ is_active: false }).eq("id", snapshot.id).eq("contractor_id", contractorId);
-    if (paused.error) throw paused.error;
-    await replacePackageChildren(supabase, snapshot.id, snapshot.questions, snapshot.tiers);
-    await replaceCustomPackageAddons(supabase, snapshot.id, snapshot.addons);
-    const restored = await supabase.from("vendor_packages").update({
-      name: snapshot.name,
-      description: snapshot.description,
-      service_id: snapshot.service_id,
-      pricing_mode: snapshot.pricing_mode,
-      default_frequency: snapshot.default_frequency,
-      deposit_amount: snapshot.deposit_amount,
-      needs_review: snapshot.needs_review,
-      is_active: snapshot.is_active,
-    }).eq("id", snapshot.id).eq("contractor_id", contractorId);
-    if (restored.error) throw restored.error;
-    return true;
-  } catch {
-    await supabase.from("vendor_packages").update({ is_active: false }).eq("id", snapshot.id).eq("contractor_id", contractorId);
-    return false;
-  }
-}
-
-async function replaceCustomPackageAddons(
-  supabase: ReturnType<typeof createClient>,
-  packageId: string,
-  addons: AddonRow[],
-) {
-  const cleared = await supabase
-    .from("package_addons")
-    .delete()
-    .eq("package_id", packageId)
-    .is("template_addon_id", null);
-  if (cleared.error) throw cleared.error;
-  if (!addons.length) return;
-
-  const inserted = await supabase.from("package_addons").insert(addons.map((addon, index) => ({
-    package_id: packageId,
-    template_addon_id: null,
-    name: addon.name.trim(),
-    description: addon.description?.trim() || null,
-    price: Number(addon.price),
-    is_offered: true,
-    sort_order: index,
-  })));
-  if (inserted.error) throw inserted.error;
 }
 
 function validateTierRanges(tiers: TierRow[]) {

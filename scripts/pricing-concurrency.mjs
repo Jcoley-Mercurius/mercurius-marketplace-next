@@ -83,6 +83,9 @@ await sql(`
   insert into public.coverage_areas(zip_code,city,is_active,has_waitlist) values ('00089','Synthetic',true,false);
   insert into public.vendor_packages(id,contractor_id,service_id,name,pricing_mode,default_frequency,is_active,needs_review)
     values ('${pkg}','${contractor}','synthetic-concurrency-svc','Synthetic concurrency package','fixed','one-time',true,false);
+  -- TRACE-134: a version's levels are written before any request uses it.
+  insert into public.package_tiers(id,package_id,name,price,frequency,sort_order,rule_conditions)
+    values ('b8960000-0000-4000-8000-000000000001','${pkg}','One-time',100,'one-time',0,'[]');
   insert into public.service_requests(id,customer_id,contractor_id,service_type,service_catalog_id,address,city,state,zip_code,frequency,package_id,pricing_mode,total_amount,status)
     select ('b8950000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,('b8930000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
       '${contractor}','Synthetic','synthetic-concurrency-svc','1 Synthetic Way','Synthetic','FL','00089','one-time','${pkg}','fixed',100,'scheduled'
@@ -179,8 +182,6 @@ await sql(`
   update private.money_feature_gates set enabled = true where name = 'promotions_checkout';
   insert into private.r0_lee_zips values ('00089') on conflict do nothing;
   insert into public.contractor_service_zips(contractor_id,zip_code) values ('${contractor}','00089');
-  insert into public.package_tiers(id,package_id,name,price,frequency,sort_order,rule_conditions)
-    values ('b8960000-0000-4000-8000-000000000001','${pkg}','One-time',100,'one-time',0,'[]');
   insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
     select ('b8930000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'00089','synthetic-concurrency-svc','${operator}' from generate_series(1,20) n;`);
 const intake = await offer({ label: 'intake last', funding: 'platform', kind: 'amount', amount_cents: 1000, budget_cents: 100000, max_redemptions: 1 });

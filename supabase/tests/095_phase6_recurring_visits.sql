@@ -6,6 +6,28 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
+-- TRACE-134 (6.11A): a price version that is live or in use is not edited in place on any path.
+-- Edits below that the guard refuses are applied under owner maintenance (version guards disabled for
+-- that statement) so this file keeps characterizing what an in-place change would do (TRACE-126/127).
+create function pg_temp.edit_in_place(p_sql text) returns text language plpgsql as $f$
+begin
+  begin
+    execute p_sql;
+    return 'applied';
+  exception when sqlstate '55000' then null;
+  end;
+  alter table public.vendor_packages disable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers disable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons disable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions disable trigger trg_package_questions_version_guard;
+  execute p_sql;
+  alter table public.vendor_packages enable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers enable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons enable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions enable trigger trg_package_questions_version_guard;
+  return 'refused';
+end $f$;
+
 -- Users: 1 homeowner A, 2 homeowner B, 3 plan provider, 4 other provider, 5–6 operators (also the
 -- two finance actors for one snapshot).
 insert into auth.users(id,email) select ('95100000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'recurring-'||n||'@example.invalid'
@@ -265,12 +287,16 @@ select set_config('t.visits', pg_temp.visits(pg_temp.id('s1'))::text, true);
 select set_config('t.offers', (select count(*) from public.job_match_attempts)::text, true);
 select set_config('t.notices', (select count(*) from public.notifications where user_id = pg_temp.u(1))::text, true);
 
-update public.package_tiers set price = 42 where id = '95500000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 42 where id = '95500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is(pg_temp.blocked(pg_temp.id('s1'), 30, 24), 'terms_changed', 'a price change after acceptance blocks the visit');
-update public.package_tiers set price = 40 where id = '95500000-0000-4000-8000-000000000001';
-update public.package_addons set price = 6 where id = '95600000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 40 where id = '95500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
+select is(pg_temp.edit_in_place($sql$update public.package_addons set price = 6 where id = '95600000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is(pg_temp.blocked(pg_temp.id('s1'), 31, 24), 'terms_changed', 'so does an add-on change (a new package revision)');
-update public.package_addons set price = 5 where id = '95600000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_addons set price = 5 where id = '95600000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 delete from public.contractor_service_zips where contractor_id = '95200000-0000-4000-8000-000000000001';
 select is(pg_temp.blocked(pg_temp.id('s1'), 32, 24), 'provider_ineligible', 'a provider who no longer serves the ZIP is not offered the visit');
 insert into public.contractor_service_zips(contractor_id,zip_code) values ('95200000-0000-4000-8000-000000000001','00095');

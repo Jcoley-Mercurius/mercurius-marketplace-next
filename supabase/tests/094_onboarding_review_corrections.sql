@@ -129,11 +129,15 @@ select lives_ok($$update public.vendor_packages set description = 'Synthetic edi
 select lives_ok($$insert into public.vendor_packages(contractor_id,service_id,name,pricing_mode,default_frequency,is_active)
    values (pg_temp.vendor(),'synthetic-corr-svc','Synthetic new draft','fixed','one-time',false) returning id$$,
  'and adds a package without notes');
--- validate_package_promotion now reads only the columns it checks.
+-- TRACE-134 (6.11A, F611-2): vendors no longer write legacy package promotions.
+select throws_ok($$insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
+   values (pg_temp.live(),'percent_off',10,'Synthetic offer',now() + interval '30 days',now() + interval '37 days',true)$$,
+ '42501', null, 'the vendor can no longer enable a legacy promotion on its live package');
+reset role;
+-- validate_package_promotion now reads only the columns it checks (operator write).
 select lives_ok($$insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
    values (pg_temp.live(),'percent_off',10,'Synthetic offer',now() + interval '30 days',now() + interval '37 days',true)$$,
- 'the vendor still enables a promotion on its live package');
-reset role;
+ 'the promotion validation still accepts a valid owner-side write');
 
 -- 2. RPC responses --------------------------------------------------------------------------
 -- Preview and submission price from the full content and bind to the unchanged hash.

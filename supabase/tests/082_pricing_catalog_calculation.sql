@@ -5,6 +5,28 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
+-- TRACE-134 (6.11A): a price version that is live or in use is not edited in place on any path.
+-- Edits below that the guard refuses are applied under owner maintenance (version guards disabled for
+-- that statement) so this file keeps characterizing what an in-place change would do (TRACE-126/127).
+create function pg_temp.edit_in_place(p_sql text) returns text language plpgsql as $f$
+begin
+  begin
+    execute p_sql;
+    return 'applied';
+  exception when sqlstate '55000' then null;
+  end;
+  alter table public.vendor_packages disable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers disable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons disable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions disable trigger trg_package_questions_version_guard;
+  execute p_sql;
+  alter table public.vendor_packages enable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers enable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons enable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions enable trigger trg_package_questions_version_guard;
+  return 'refused';
+end $f$;
+
 insert into auth.users(id,email,raw_user_meta_data) values
  ('b8210000-0000-4000-8000-000000000001','pricing-homeowner@example.invalid','{"full_name":"Synthetic homeowner"}'),
  ('b8210000-0000-4000-8000-000000000002','pricing-vendor@example.invalid','{"full_name":"Synthetic vendor"}');
@@ -258,7 +280,8 @@ select is((select pricing_inputs->>'package_revision' from public.service_reques
   (select before_hash from revs), 'the request keeps the package revision it was priced from');
 select is((select jsonb_array_length(pricing_inputs->'lines') from public.service_requests where id=(select id from ids where name='req1')),
   2, 'the request keeps the level and add-on lines');
-update public.package_tiers set price=59.95 where id='b8250000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=59.95 where id='b8250000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is((select (pricing_inputs->>'total_cents')::bigint from public.service_requests where id=(select id from ids where name='req1')),
   7995::bigint, 'a later catalog edit does not change the stored breakdown');
 select is((select total_amount from public.service_requests where id=(select id from ids where name='req1')), 79.95, 'nor the agreed amount');
@@ -281,17 +304,20 @@ select is((select pricing_inputs->>'min_cents' || '-' || (pricing_inputs->>'max_
 
 -- DEC-2026-041 item 2: checkout's commercial source carries add-ons it can verify: the
 -- request is priced again from the same package revision and must give the same result.
-update public.package_tiers set price=49.95 where id='b8250000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=49.95 where id='b8250000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 update public.service_requests set status='scheduled', contractor_id='b8220000-0000-4000-8000-000000000001'
  where id=(select id from ids where name='req1');
 select is((select (s->>'service')::bigint || '+' || (s->>'addons') from (select private.money_source((select id from ids where name='req1')) s) x),
   '4995+3000', 'checkout carries the level price and the add-ons the request was priced with');
 select is((select jsonb_array_length(s->'pricing') from (select private.money_source((select id from ids where name='req1')) s) x), 2,
   'the source keeps the accepted breakdown');
-update public.package_addons set price=16 where id='b8260000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_addons set price=16 where id='b8260000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select throws_ok($$select private.money_source((select id from ids where name='req1'))$$,
   'P0001', 'Offering add-ons changed since the request; a new request or quote is required', 'a changed add-on price is never charged silently');
-update public.package_addons set price=15 where id='b8260000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_addons set price=15 where id='b8260000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select lives_ok($$select private.money_source((select id from ids where name='req1'))$$, 'the same revision is accepted again');
 update public.service_requests set pricing_inputs=jsonb_set(pricing_inputs,'{lines,1,quantity}','3')
  where id=(select id from ids where name='req1');
