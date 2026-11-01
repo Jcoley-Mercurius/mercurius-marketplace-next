@@ -79,8 +79,10 @@ await sql(`
   insert into public.contractors(id, user_id, name, is_active, marketing_enabled) values ('${contractor}', '${vendorUser}', 'Synthetic concurrency provider', true, true);
   insert into public.contractor_service_zips(contractor_id, zip_code) values ('${contractor}', '00961');
   insert into public.vendor_packages(id, contractor_id, service_id, name, pricing_mode, default_frequency, is_active, needs_review)
-    values ('${pkg}', '${contractor}', '${service}', 'Synthetic concurrency package', 'fixed', 'weekly', true, false);
+    values ('${pkg}', '${contractor}', '${service}', 'Synthetic concurrency package', 'fixed', 'weekly', false, false);
   insert into public.package_tiers(id, package_id, name, price, frequency, sort_order, rule_conditions) values ('${tier}', '${pkg}', 'Weekly', 40, 'weekly', 0, '[]');
+  -- TRACE-134: a version's levels are written while it is paused, then it is published.
+  update public.vendor_packages set is_active = true where id = '${pkg}';
   insert into public.service_requests(id, customer_id, service_type, service_catalog_id, address, city, state, zip_code, frequency, status, matching_status, preferred_contractor_id)
     values ('${plan}', '${homeowner}', 'Synthetic concurrency lawn', '${service}', '1 Synthetic Way', 'Synthetic', 'FL', '00961', 'weekly', 'pending', 'awaiting_match', '${contractor}');
   select private.offer_next_for_request_internal('${plan}');`);

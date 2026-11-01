@@ -53,10 +53,10 @@ async function cleanup() {
     delete from private.vendor_package_price_corrections where contractor_id = '${contractor}';
     delete from private.operator_package_drafts where contractor_id = '${contractor}';
     delete from public.notifications where user_id = '${vendorUser}';
+    update public.vendor_packages set is_active = false where contractor_id = '${contractor}';
     delete from public.package_tiers where package_id in (select id from public.vendor_packages where contractor_id = '${contractor}');
     delete from public.package_addons where package_id in (select id from public.vendor_packages where contractor_id = '${contractor}');
     delete from public.package_qualifying_questions where package_id in (select id from public.vendor_packages where contractor_id = '${contractor}');
-    update public.vendor_packages set is_active = false where contractor_id = '${contractor}';
     delete from public.vendor_packages where contractor_id = '${contractor}' and lineage_id <> id;
     delete from public.vendor_packages where contractor_id = '${contractor}';
     delete from public.contractors where id = '${contractor}';
@@ -82,10 +82,11 @@ await sql(`
     values ('synthetic-concurrency-svc','Synthetic concurrency service','synthetic-concurrency-cat',100,60,'one-time','{one-time}',true);
   insert into public.coverage_areas(zip_code,city,is_active,has_waitlist) values ('00089','Synthetic',true,false);
   insert into public.vendor_packages(id,contractor_id,service_id,name,pricing_mode,default_frequency,is_active,needs_review)
-    values ('${pkg}','${contractor}','synthetic-concurrency-svc','Synthetic concurrency package','fixed','one-time',true,false);
-  -- TRACE-134: a version's levels are written before any request uses it.
+    values ('${pkg}','${contractor}','synthetic-concurrency-svc','Synthetic concurrency package','fixed','one-time',false,false);
+  -- TRACE-134: a version's levels are written while it is paused, then it is published.
   insert into public.package_tiers(id,package_id,name,price,frequency,sort_order,rule_conditions)
     values ('b8960000-0000-4000-8000-000000000001','${pkg}','One-time',100,'one-time',0,'[]');
+  update public.vendor_packages set is_active = true where id = '${pkg}';
   insert into public.service_requests(id,customer_id,contractor_id,service_type,service_catalog_id,address,city,state,zip_code,frequency,package_id,pricing_mode,total_amount,status)
     select ('b8950000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,('b8930000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
       '${contractor}','Synthetic','synthetic-concurrency-svc','1 Synthetic Way','Synthetic','FL','00089','one-time','${pkg}','fixed',100,'scheduled'

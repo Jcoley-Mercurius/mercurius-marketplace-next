@@ -9,7 +9,8 @@
 --    levels, add-ons and questions refuse INSERT/UPDATE/DELETE, and the package refuses DELETE
 --    (F611-1: an editor save or a delete set request references to NULL). A version created in this
 --    transaction is still being built (operator publication inserts its rows live). Pausing and the
---    review flag stay writable; operator pause/archive commands are unchanged.
+--    review flag stay writable; operator pause/archive commands are unchanged. Owner maintenance
+--    from a direct database session can set mercurius.package_maintenance = 'on' for that session.
 -- 2. vendor_save_package: one keyed, stale-guarded call saves a vendor's offering. A paused version
 --    no one has used is rewritten in place; otherwise the content becomes the next revision of the
 --    lineage, and publishing it pauses the live one. vendor_set_package_active publishes or pauses a
@@ -43,6 +44,18 @@ as $$
 $$;
 revoke all on function private.package_in_use(uuid) from public, anon, authenticated;
 
+-- Owner maintenance only: a direct database session (never PostgREST's authenticator) that sets
+-- mercurius.package_maintenance = 'on' for itself. Row locks and every other trigger still apply.
+create or replace function private.package_maintenance()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select session_user <> 'authenticator' and coalesce(current_setting('mercurius.package_maintenance', true), '') = 'on'
+$$;
+revoke all on function private.package_maintenance() from public, anon, authenticated;
+
 create or replace function private.vendor_package_version_guard()
 returns trigger
 language plpgsql
@@ -52,6 +65,9 @@ as $$
 declare
   building boolean;
 begin
+  if private.package_maintenance() then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
   if tg_op = 'DELETE' then
     if old.is_active then
       raise exception 'Pause this price before deleting it' using errcode = '55000';
@@ -110,6 +126,9 @@ declare
   pkg uuid;
   parent public.vendor_packages;
 begin
+  if private.package_maintenance() then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
   foreach pkg in array array_remove(array[
       case when tg_op <> 'INSERT' then old.package_id end,
       case when tg_op <> 'DELETE' and (tg_op = 'INSERT' or new.package_id is distinct from old.package_id) then new.package_id end], null) loop

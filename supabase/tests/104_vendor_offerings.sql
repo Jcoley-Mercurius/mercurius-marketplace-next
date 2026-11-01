@@ -122,6 +122,12 @@ select throws_ok($$update public.package_tiers set price = 40 where id = (select
 select throws_ok($$delete from public.vendor_packages where id = (select id from ids where name='p')$$, '55000', null, 'operator: a direct delete is refused too');
 reset role;
 select throws_ok($$delete from public.package_tiers where id = (select id from ids where name='tier')$$, '55000', null, 'owner session: deleting an in-use level is refused');
+-- Owner maintenance is an explicit, session-local switch for a direct database session; PostgREST's
+-- authenticator session can never use it (session_user), which pgTAP cannot impersonate.
+select ok(not private.package_maintenance(), 'owner maintenance is off unless the session turns it on');
+set local mercurius.package_maintenance = 'on';
+select lives_ok($$update public.package_tiers set price = 100 where id = (select id from ids where name='tier')$$, 'owner maintenance can write an in-use level from a direct session');
+set local mercurius.package_maintenance = 'off';
 select is(pg_temp.binding(), 'true/true/true/100.00', 'after every refused write the request keeps its version, level, revision and amount');
 select is(pg_temp.rev((select id from ids where name='p')), (select hash from before), 'and the version content is unchanged');
 
