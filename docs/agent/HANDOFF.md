@@ -1,9 +1,27 @@
 # Agent handoff — 2026-11-02
 
+## Phase 6.13 admin operations characterization (TRACE-136, DEC-2026-057 proposed), 2026-11-02
+
+- **Checkpoint (verified):** `main` = `b1a8cc3` (PR #129, 6.12B, merged 2026-11-02 by the owner; before it `8bcbfbe`: 6.11A #126, 6.12A #127, 6.11B #128). This branch merged `main` after #129 landed; #129's decisions and evidence are kept as written. Hosted history ends at `20261107001000`, so the "not pushed" notes for `20261104001000`–`20261106001000` below are superseded.
+- Branch `claude/phase6-13-admin-operations` from `8bcbfbe`; documentation and one evidence script only. Record: [PHASE-6-ADMIN-OPERATIONS-BRIEF.md](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md).
+- Findings, in review priority, reproduced locally (synthetic, rolled back; [script](../../governance/review-evidence/trace-136-admin-bypass.sql)):
+  1. direct `contractors.user_id` reassignment gave a homeowner account the provider's assigned request and address (F613-3);
+  2. "Internal Notes" readable by homeowner and provider (F613-6);
+  3. a homeowner can post as "Mercurius Support" (F613-7);
+  4. an admin without finance authority can forge `invoices` paid/released with any payout (F613-1);
+  5. "Pause payouts" holds nothing (F613-2), and the legacy unguarded dispute path persists (F613-8).
+  Also: coverage and catalog editable without owner authority (F613-4/5). Hosted read-only aggregates: no live record shows the defects.
+- Plan: brief §8.
+  - §8.1 inventories the legitimate callers of every privilege to be removed: definer commands are unaffected; tests 008/024 move off `admin_resolve_dispute`.
+  - 6.13A approved repairs A1–A8 (§8.2) and 6.13B B1–B6 (§8.4) are split from the DEC-2026-057-dependent items (§8.3/§8.5).
+  - 6.13A and 6.13B merge together. Bounded 6.13A acceptance criteria: §9.1.
+- Status reconciled from the hosted readback: the "not pushed" notes for `20261104001000`–`20261106001000` (below) and the TRACE-131–135 rows are annotated, not rewritten.
+- Next: Codex review of the brief; owner answers DEC-2026-057 Q1–Q7; implement from `main` after #129 merges. Phase 6 closure checklist: brief §11 (Phase 6 not complete).
+
 ## Phase 6.12B vendor earnings, payout states and statements (TRACE-135, DEC-2026-056 approved), 2026-11-02
 
 - Owner approved DEC-2026-056 items 1–8 as recommended (2026-11-01); recorded in DECISION-LOG with an MPS §6.5 note. Same branch `claude/phase6-12-vendor-compliance` (base `7b8934f`).
-- Migration `20261107001000` (additive, read-only, **not pushed**): `vendor_own_earnings()` words the reviewed classifier (`money_obligation_reconciliation`, `money_ach_payable`) for the caller's effective-payee jobs and weekly statements; no fingerprinted function changed (`45 | 34c51131…`).
+- Migration `20261107001000` (additive, read-only, **not pushed**; *applied on hosted per the 2026-11-02 readback; merged as #129 `b1a8cc3`*): `vendor_own_earnings()` words the reviewed classifier (`money_obligation_reconciliation`, `money_ach_payable`) for the caller's effective-payee jobs and weekly statements; no fingerprinted function changed (`45 | 34c51131…`).
 - UI: `/vendor/earnings` + sidebar; dashboard "Released earnings" card replaced; "next weekly payout" wording aligned in the fulfillment and dispute panels. Record: brief §11.
 - Evidence: SQL 107 68/68, 6/6 mutations; full SQL 98/6,132 on clean replay; unit 14/14; browser earnings 6/6 + regression 40/40. Not run: CI, `@visual`, screen reader.
 - Next: Codex review (eligibility-moment display, "Removed from this transfer" wording); push `20261104001000` → `20261105001000` → `20261106001000` → `20261107001000` before the merges that carry them; follow-ups: `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` after deploy.
@@ -12,14 +30,14 @@
 
 - **Checkpoint (verified):** `main` = `ad4656b` (PR #125, 6.10), production deployment READY on that SHA; its push CI run 41363559823 failed on a browser flake (F612-9). PR #126 head `26adbd6` = **6.11A only**: #124 (6.11B) merged into the 11a branch after #123 had folded that branch in. #126 CI: push run 41359562001 failed (same flake), pull_request run 41363990097 green. Hosted history ends at `20261103001000`; `20261104001000`, `20261105001000` not pushed. The earlier 6.11B note "#123 and #124 stay stacked" is superseded.
 - Branch `claude/phase6-12-vendor-compliance` stacked on 6.11B head `c3a0668`. Record: [PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md](../../governance/PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md).
-- Live finding F612-1: 2 hosted exceptions appear in the vendor notice as documents being renewed. Migration `20261106001000` (additive, read-only, **not pushed**) adds `vendor_own_compliance_status()` and exception keys on the notice; UI checklist and notice wording; Eastern dates. Fingerprint unchanged.
+- Live finding F612-1: 2 hosted exceptions appear in the vendor notice as documents being renewed. Migration `20261106001000` (additive, read-only, **not pushed**; *applied on hosted per the 2026-11-02 readback*) adds `vendor_own_compliance_status()` and exception keys on the notice; UI checklist and notice wording; Eastern dates. Fingerprint unchanged.
 - 6.12B (earnings/statements/ACH) not built: no vendor money readback exists; hosted has 0 obligations, 0 ACH records, 0 money authorities. Waits on DEC-2026-056.
 - Next: Codex review; owner chooses the 6.11B route to `main`; DEC-2026-056 answers; push `20261104001000` → `20261105001000` → `20261106001000` in order, each before the merge that carries it.
 
 
 ## Phase 6.11B vendor listing honesty and portal states (TRACE-134, DEC-2026-055 item 1), 2026-11-01
 
-- Branch `claude/phase6-11b-vendor-listing` stacked on 6.11A (`dbc8e0e`, PR #123). Migration `20261105001000` (additive, **not pushed**): Special Offer gets no ranking points (new offers record `balanced-v2`), is not returned publicly or readable anonymously, cannot be changed by vendors and is read by operators through `admin_vendor_special_offer`; no path enables legacy package promotions; `r0_public_providers` derives Services Offered from live, review-cleared offerings; `vendor_packages.first_published_at` separates Paused from Draft. Record: brief §9.
+- Branch `claude/phase6-11b-vendor-listing` stacked on 6.11A (`dbc8e0e`, PR #123). Migration `20261105001000` (additive, **not pushed**; *applied on hosted per the 2026-11-02 readback*): Special Offer gets no ranking points (new offers record `balanced-v2`), is not returned publicly or readable anonymously, cannot be changed by vendors and is read by operators through `admin_vendor_special_offer`; no path enables legacy package promotions; `r0_public_providers` derives Services Offered from live, review-cleared offerings; `vendor_packages.first_published_at` separates Paused from Draft. Record: brief §9.
 - UI: Special Offer gone from the vendor editor, prompts (strength out of 95) and public profile; legacy promotion editor removed and overlays no longer read on the profile or intake; Plans link and teasers removed (`/vendor/plan` → `/vendor`); Live/Paused/Draft/Needs review/Archived with price type, and Fixed price/Custom Quote/Not priced yet per listed service; operator-managed coverage readback with a support path.
 - Follow-up: revoke signed-in SELECT on `contractors.special_offer` once no deployed client selects it.
 - Dependency state 2026-11-01: the owner merged #120 (6.10) into `claude/phase6-9a-exceptions` (`9af6834`, 18:39 UTC), so #121 now brings 6.9A, 6.9B and 6.10 to `main` (body updated). After #121 merges with a merge commit, retarget #122 to `main`; #123 (6.11A) and #124 (6.11B) stay stacked.
@@ -28,7 +46,7 @@
 ## Phase 6.11A offering versions and vendor write boundaries (TRACE-134, DEC-2026-055 approved), 2026-11-01
 
 - Owner approved DEC-2026-055 items 1–2 (2026-10-31); recorded with the DEC-2026-046 clarification and an MPS §4 note. Dependency state verified: #121, #120 and #122 open, nothing merged.
-- Branch `claude/phase6-11a-offering-boundaries` stacked on #122 (`4e97ac7`). Migration `20261104001000` (additive, **not pushed**): live or in-use versions immutable on every path, keyed stale-guarded `vendor_save_package` (new lineage revision or in place for an unused draft), `vendor_set_package_active`, server-side Managed Pricing guardrail, vendor promotion/ZIP writes closed, five-digit ZIPs, owner-maintenance switch for direct sessions only. Both vendor price editors use the commands. Record: brief §8.
+- Branch `claude/phase6-11a-offering-boundaries` stacked on #122 (`4e97ac7`). Migration `20261104001000` (additive, **not pushed**; *applied on hosted per the 2026-11-02 readback*): live or in-use versions immutable on every path, keyed stale-guarded `vendor_save_package` (new lineage revision or in place for an unused draft), `vendor_set_package_active`, server-side Managed Pricing guardrail, vendor promotion/ZIP writes closed, five-digit ZIPs, owner-maintenance switch for direct sessions only. Both vendor price editors use the commands. Record: brief §8.
 - Evidence: full SQL 95/5,998 PASS on clean reset; SQL 104 (71); concurrency 34/34 plus the new script; unit 599/599; browser quiet run 47/48 then fixed, loaded runs leave 5 operator-surface timeouts (brief §8). TRACE-126/127 not closed (replacement still refuses an unpaid request's checkout, nothing re-priced).
 - Next: Codex review; owner dry run and push of `20261104001000` before merge (DEC-2026-037); 6.11B (Special Offer, listing honesty, states) stacked on this branch.
 
