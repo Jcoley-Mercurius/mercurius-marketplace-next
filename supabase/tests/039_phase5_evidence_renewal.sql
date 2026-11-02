@@ -150,7 +150,8 @@ select set_config('request.jwt.claims','{"role":"authenticated","sub":"a7100000-
 set local role authenticated;
 select is(jsonb_array_length(public.vendor_own_evidence_renewal()->'items'),1,'A vendor sees only its own renewal notices');
 select is((public.vendor_own_evidence_renewal()->'items'->0)-'expires_at',
- '{"kind":"license","state":"expiring"}'::jsonb,'A vendor notice carries only the item, expiry and state');
+ '{"kind":"license","state":"expiring","exception":false,"follow_up_due":null}'::jsonb,
+ 'A vendor notice carries only the item, expiry, state and (TRACE-135) whether it is an exception and its follow-up date');
 reset role;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"a7100000-0000-4000-8000-000000000005"}',true);
 set local role authenticated;

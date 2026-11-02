@@ -19,12 +19,14 @@ import {
   type RenewalDocumentState,
 } from "@/lib/renewalDocuments";
 import { uploadRenewalDocument } from "@/lib/renewalDocumentUpload";
+import { VendorComplianceStatus } from "@/components/vendor/VendorComplianceStatus";
 import { VENDOR_DOCUMENT_ACCEPT, validateVendorDocument } from "@/lib/vendorApplicationDocuments";
 import { cn } from "@/lib/utils";
 
 // TRACE-073: a provider submits renewed license and insurance documents and follows
 // their review. The server returns only the item, file name, time, state and any decline
 // note. Submitting records a file for review; it changes no status or listing.
+// TRACE-135: the checklist above the upload shows each item's state and next action.
 
 type Submission = {
   id: string;
@@ -65,6 +67,7 @@ export default function VendorCompliancePage() {
   const [fileError, setFileError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState("");
+  const [statusKey, setStatusKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -101,6 +104,7 @@ export default function VendorCompliancePage() {
       }
       const message = `${renewalDocumentKindLabel[kind]} submitted. Mercurius will review it and record the new expiry.`;
       setResult(message);
+      setStatusKey((value) => value + 1);
       toast.success("Document submitted", { description: message });
       setKind("");
       setFile(null);
@@ -118,7 +122,7 @@ export default function VendorCompliancePage() {
     <PageHeader
       eyebrow="Compliance"
       title="Compliance documents"
-      description="Send Mercurius your renewed license or insurance certificate. Mercurius reviews each document and records its new expiry. Uploading a document does not change your status or listing."
+      description="See what Mercurius has recorded for you and what to do next. Send your license or insurance certificate here; Mercurius reviews each document and records its expiry. Uploading a document does not change your status or listing."
     />
   );
 
@@ -126,6 +130,7 @@ export default function VendorCompliancePage() {
     return (
       <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6 md:p-8">
         {header}
+        <VendorComplianceStatus refreshKey={statusKey} />
         {error && !loading ? (
           <PageState
             kind="error"
@@ -147,6 +152,8 @@ export default function VendorCompliancePage() {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6 md:p-8">
       {header}
+
+      <VendorComplianceStatus refreshKey={statusKey} />
 
       {error && (
         <p role="alert" className="text-sm text-destructive">

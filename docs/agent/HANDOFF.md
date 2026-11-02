@@ -1,4 +1,13 @@
-# Agent handoff — 2026-10-31
+# Agent handoff — 2026-11-01
+
+## Phase 6.12A vendor compliance status and checkpoint reconciliation (TRACE-135, DEC-2026-056 proposed), 2026-11-01
+
+- **Checkpoint (verified):** `main` = `ad4656b` (PR #125, 6.10), production deployment READY on that SHA; its push CI run 41363559823 failed on a browser flake (F612-9). PR #126 head `26adbd6` = **6.11A only**: #124 (6.11B) merged into the 11a branch after #123 had folded that branch in. #126 CI: push run 41359562001 failed (same flake), pull_request run 41363990097 green. Hosted history ends at `20261103001000`; `20261104001000`, `20261105001000` not pushed. The earlier 6.11B note "#123 and #124 stay stacked" is superseded.
+- Branch `claude/phase6-12-vendor-compliance` stacked on 6.11B head `c3a0668`. Record: [PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md](../../governance/PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md).
+- Live finding F612-1: 2 hosted exceptions appear in the vendor notice as documents being renewed. Migration `20261106001000` (additive, read-only, **not pushed**) adds `vendor_own_compliance_status()` and exception keys on the notice; UI checklist and notice wording; Eastern dates. Fingerprint unchanged.
+- 6.12B (earnings/statements/ACH) not built: no vendor money readback exists; hosted has 0 obligations, 0 ACH records, 0 money authorities. Waits on DEC-2026-056.
+- Next: Codex review; owner chooses the 6.11B route to `main`; DEC-2026-056 answers; push `20261104001000` → `20261105001000` → `20261106001000` in order, each before the merge that carries it.
+
 
 ## Phase 6.11B vendor listing honesty and portal states (TRACE-134, DEC-2026-055 item 1), 2026-11-01
 
@@ -6,7 +15,7 @@
 - UI: Special Offer gone from the vendor editor, prompts (strength out of 95) and public profile; legacy promotion editor removed and overlays no longer read on the profile or intake; Plans link and teasers removed (`/vendor/plan` → `/vendor`); Live/Paused/Draft/Needs review/Archived with price type, and Fixed price/Custom Quote/Not priced yet per listed service; operator-managed coverage readback with a support path.
 - Follow-up: revoke signed-in SELECT on `contractors.special_offer` once no deployed client selects it.
 - Dependency state 2026-11-01: the owner merged #120 (6.10) into `claude/phase6-9a-exceptions` (`9af6834`, 18:39 UTC), so #121 now brings 6.9A, 6.9B and 6.10 to `main` (body updated). After #121 merges with a merge commit, retarget #122 to `main`; #123 (6.11A) and #124 (6.11B) stay stacked.
-- Next: Codex review; push `20261104001000` then `20261105001000` before their merges, in order (DEC-2026-037).
+- Next: Codex review; push `20261104001000` then `20261105001000` before their merges, in order (DEC-2026-037). *(2026-11-01: #121/#122/#125 merged; #126 carries 6.11A only — see the 6.12A entry.)*
 
 ## Phase 6.11A offering versions and vendor write boundaries (TRACE-134, DEC-2026-055 approved), 2026-11-01
 

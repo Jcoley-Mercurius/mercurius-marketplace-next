@@ -56,6 +56,10 @@ already-merged brief branch, so 6.9A/6.9B are not on `main` (route to `main` is 
 
 2026-11-01 checkpoint: DEC-2026-055 items 1–2 approved (2026-10-31). 6.11A / TRACE-134 (immutable offering versions, keyed vendor saves, closed vendor promotion/ZIP writes; PR #123) and 6.11B (Special Offer removed, listing honesty, explicit price states, coverage readback) implemented for review, stacked on #122 → #120 → #121; migrations `20261104001000`/`20261105001000` not pushed. TRACE-126/127 stay open. These notes approve no policy.
 
+2026-11-01 checkpoint: PR #121 and #125 merged; 6.9A/6.9B and 6.10 are on `main` (`ad4656b`, deployed to production 23:44 UTC; hosted history ends at `20261103001000`).
+6.11A/6.11B implemented and reviewed in PRs #123/#124; integration PR #126 carries **6.11A only** (6.11B merged into the 11a branch after it had been folded into #126); `20261104001000` and `20261105001000` are **not pushed**.
+6.12 / TRACE-135: 6.12A (vendor compliance status and next actions) implemented for review on a branch stacked on the 6.11B head; 6.12B (earnings, statements, ACH exceptions) designed, waiting on DEC-2026-056 (PROPOSED) ([brief](PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md)). 6.9, 6.10 and 6.11 are not accepted; these notes approve no policy.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

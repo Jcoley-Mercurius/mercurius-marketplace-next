@@ -269,6 +269,16 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-056 — Vendor earnings, statements and payout-exception display (Phase 6.12B)
+
+**Status:** PROPOSED (2026-11-01). Nothing below is approved or implemented. **Date:** 2026-11-01 (America/New_York).
+
+**Questions and recommendations:** (1) retire the dashboard "Released earnings" card built on legacy invoices and replace it with a canonical summary — recommended; (2) no expected payout date, since no weekday or cutoff is approved — recommended; (3) holds shown by category only (dispute, payment not complete/under review, refund in progress, payout onboarding, held by Mercurius), never the internal reason — recommended; (4) no amount before capture; amounts only from captured, retained parts — recommended; (5) wording for unknown, failed and returned transfers without retry or recovery promises — recommended; (6) a weekly vendor statement per ACH batch without bank account, reference or approver — recommended; (7) vendors see only the current exception, history stays operator-only — confirm; (8) scoped compliance shown only after cutover requirements exist — recommended.
+
+**Context:** [PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md](PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md) §4, §7, §8. MPS §5.5 forbids an ambiguous `released`; CFG-008 sets weekly ACH and the 48-hour rule but no payout weekday.
+
+**MPS/MDS/MTS impact:** none until approved. **Data/payment/security impact:** read-only display; no payout kernel, bank-detail, authority or transfer change; money fingerprint unchanged.
+
 ### DEC-2026-055 — Vendor Special Offer and vendor self-published prices
 
 **Status:** Items 1 and 2 **APPROVED** owner instruction (Josh, 2026-10-31, America/New_York), as recommended. Implemented by 6.11A (item 2, migration `20261104001000`) and 6.11B (item 1). Record: [PHASE-6-VENDOR-OFFERINGS-BRIEF.md](PHASE-6-VENDOR-OFFERINGS-BRIEF.md) §4, §6, §8. **Date:** 2026-10-31.
