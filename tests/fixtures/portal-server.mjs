@@ -159,6 +159,15 @@ const server = createServer(async (request, response) => {
   });
   if (url.pathname === "/rest/v1/rpc/vendor_renewal_document_queue") return send({ evaluated_at: new Date().toISOString(), entries: [] });
   if (url.pathname === "/rest/v1/rpc/vendor_own_renewal_documents") return send({ accepting: false, open_limit: 5, documents: [] });
+  // TRACE-135 own checklist: every item current by default; specs override per case.
+  if (url.pathname === "/rest/v1/rpc/vendor_own_compliance_status") return send({
+    evaluated_at: new Date().toISOString(), today: new Date().toISOString().slice(0, 10), notice_days: 30, provider_found: true,
+    onboarding_status: "active", checklist_current: true, matching_allowed: true, payout_onboarding_current: true,
+    accepting_uploads: true, open_limit: 5,
+    items: ["identity", "agreement", "coverage", "license", "insurance", "bank_authorization", "profile_pricing", "availability", "test_notification"]
+      .map(kind => ({ kind, state: "current", exception: false, follow_up_due: null, expires_at: null, recorded_at: new Date().toISOString(),
+        awaiting_review: 0, last_submitted_at: null, declined: null })),
+  });
   // TRACE-076/078/079/080/082 finance commands: nothing open by default; specs override per case.
   if (url.pathname === "/rest/v1/rpc/money_finance_operations") return send({ evaluated_at: new Date().toISOString(), requests: [], holds: [], readbacks: [], events: [], refunds: [], refund_releases: [], late_refunds: [], cancellations: [], chargebacks: [],
     ach: { next_period_start: null, ready: [], batches: [] }, recoveries: { owed_total: 0, owed: [], withdrawn: [], late_settlements: [] },

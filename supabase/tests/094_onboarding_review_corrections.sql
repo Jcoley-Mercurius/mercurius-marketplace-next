@@ -132,12 +132,12 @@ select lives_ok($$insert into public.vendor_packages(contractor_id,service_id,na
 -- TRACE-134 (6.11A, F611-2): vendors no longer write legacy package promotions.
 select throws_ok($$insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
    values (pg_temp.live(),'percent_off',10,'Synthetic offer',now() + interval '30 days',now() + interval '37 days',true)$$,
- '42501', null, 'the vendor can no longer enable a legacy promotion on its live package');
+ '55000', null, 'the vendor can no longer enable a legacy promotion on its live package (closed on every path; the vendor RLS refusal is SQL 104)');
 reset role;
--- validate_package_promotion now reads only the columns it checks (operator write).
-select lives_ok($$insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
+-- TRACE-134 (6.11B): no path enables a legacy package promotion, an owner session included.
+select throws_ok($$insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
    values (pg_temp.live(),'percent_off',10,'Synthetic offer',now() + interval '30 days',now() + interval '37 days',true)$$,
- 'the promotion validation still accepts a valid owner-side write');
+ '55000', 'Package promotions are closed; Mercurius offers use reviewed promotion offers', 'an owner-side write cannot enable a legacy promotion either');
 
 -- 2. RPC responses --------------------------------------------------------------------------
 -- Preview and submission price from the full content and bind to the unchanged hash.
