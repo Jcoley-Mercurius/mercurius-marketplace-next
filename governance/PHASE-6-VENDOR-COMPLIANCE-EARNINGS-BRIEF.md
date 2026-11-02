@@ -73,7 +73,7 @@ UI: `/vendor/compliance` "Your checklist" (attention order, state badge, plain d
 Evidence (local, 2026-11-01):
 - Clean replay of all migrations (`supabase db reset --local`) including `20261104001000`, `20261105001000`, `20261106001000`.
 - SQL 106: 47/47 PASS. Mutations killed 5/5 (exception reported as current; any-vendor resolution; evidence reference leaked; notice exception key forced false; exception given a recorded time).
-- Full SQL suite on the clean replay: see PR body.
+- Full SQL suite on the clean replay: **97 files, 6,064 tests, PASS** (first run found SQL 039 #26 pinning the notice's key set; updated to the additive `exception`/`follow_up_due` keys, then the whole suite rerun).
 - Unit: `vendor-compliance` 17/17 (also under `TZ=Pacific/Kiritimati`, `America/Los_Angeles`, `UTC`); full unit 620/620.
 - Browser (1 worker, synthetic build): `vendor-compliance-status` 9/9 plus `renewal-documents`, `evidence-renewal`, `onboarding-checklist` — 54/54. Axe clean at 320 px and 1440 px.
 - Money fingerprint on the replay: `45 | 34c51131e2ca18f65d3b29afd8d12e11` (unchanged).
