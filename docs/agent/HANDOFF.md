@@ -3,7 +3,7 @@
 ## Phase 6.13 admin operations implementation (TRACE-136, DEC-2026-057 approved as amended), 2026-11-02
 
 - Owner approved DEC-2026-057 using Codex's corrections (2026-11-02). The reading of the answers is recorded in DECISION-LOG (Q1/Q2 as recommended; corrections 3–7 amend Q3–Q7; corrections 1–2 amend A4/A6; correction 4 amends DEC-2026-052 item 6).
-- Branch `claude/phase6-13-admin-operations` (merged `main` `b1a8cc3` after #129). PR #130 is a draft. Migration `20261108001000` (additive, **not pushed**) plus the compatible client, as one release. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md).
+- Branch `claude/phase6-13-admin-operations-release` (on `main` `7ec8f9a`, which merged the characterization as PR #132). PR #132 is a draft. Migration `20261108001000` (additive, **not pushed**) plus the compatible client, as one release. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md).
 - Built:
   - every notes disclosure path closed (column grants), with operator-only append-only notes;
   - message sender validation;

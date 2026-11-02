@@ -382,7 +382,7 @@ Phase 6 is **not complete**: integrated acceptance and carried corrective work r
 | 6.11A/6.11B TRACE-134 | yes | yes (#126, #128) | yes | follow-up: revoke signed-in SELECT on `contractors.special_offer` |
 | 6.12A TRACE-135 | yes | yes (#127) | yes | — |
 | 6.12B TRACE-135 | yes | yes (#129, `b1a8cc3`) | yes (local) | Codex review; follow-ups `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` |
-| 6.13 TRACE-136 | yes (§12, one release: migration `20261108001000` + client) | **no** (PR #130, draft) | yes (local; §12.6); CI not run | Codex review; hosted push and merge need owner authorization; gaps §12.4 |
+| 6.13 TRACE-136 | yes (§12, one release: migration `20261108001000` + client) | **no** (PR #132, draft; characterization merged as #130 `7ec8f9a`) | yes (local; §12.6); CI not run | Codex review; hosted push and merge need owner authorization; gaps §12.4 |
 | Prepaid plans (DEC-2026-048) | no | no | no | separate slice with finance review |
 
 Carried across the phase (not closed by any slice):
@@ -458,9 +458,9 @@ UI (6.13B), under MDS §5–§8:
 
 Order (each step needs the owner's separate authorization; none was taken here):
 
-1. **Review:** Codex reviews PR #130 (migration, client, tests, this section), including the payment-adjacent items below.
+1. **Review:** Codex reviews PR #132 (migration, client, tests, this section), including the payment-adjacent items below.
 2. **Hosted dry run:** `supabase db push --linked --dry-run` lists only `20261108001000`.
-3. **Push, then merge, minutes apart:** push the migration, read it back, then merge PR #130 so Vercel deploys the compatible client.
+3. **Push, then merge, minutes apart:** push the migration, read it back, then merge PR #132 so Vercel deploys the compatible client.
 
 Between steps 3a (push) and 3b (merge), the old client runs against the new schema:
 - **Requests page:** the old `/admin/requests` selects `notes` and fails to load (permission denied). Operators should not use it during that window.

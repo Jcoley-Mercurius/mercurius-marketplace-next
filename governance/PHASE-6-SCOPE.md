@@ -60,7 +60,7 @@ already-merged brief branch, so 6.9A/6.9B are not on `main` (route to `main` is 
 6.11A/6.11B implemented and reviewed in PRs #123/#124; integration PR #126 carries **6.11A only** (6.11B merged into the 11a branch after it had been folded into #126); `20261104001000` and `20261105001000` are **not pushed**.
 6.12 / TRACE-135: 6.12A (vendor compliance status and next actions) implemented for review on a branch stacked on the 6.11B head; 6.12B (earnings, statements, ACH exceptions) implemented for review under DEC-2026-056 (approved 2026-11-01) ([brief](PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md)). 6.9, 6.10 and 6.11 are not accepted; these notes approve no policy.
 
-2026-11-02 checkpoint: `main` `8bcbfbe` carries 6.11A, 6.11B and 6.12A (#126–#128); 6.12B is PR #129 (open). Hosted history ends at `20261107001000`. *Update 2026-11-02: #129 merged (`b1a8cc3`).* 6.13 / TRACE-136: DEC-2026-057 approved as amended; 6.13A+6.13B implemented for review as one release (migration `20261108001000`, not pushed; PR #130 draft). Phase 6 is not complete (brief §11).
+2026-11-02 checkpoint: `main` `8bcbfbe` carries 6.11A, 6.11B and 6.12A (#126–#128); 6.12B is PR #129 (open). Hosted history ends at `20261107001000`. *Update 2026-11-02: #129 merged (`b1a8cc3`).* 6.13 / TRACE-136: DEC-2026-057 approved as amended; 6.13A+6.13B implemented for review as one release (migration `20261108001000`, not pushed; PR #132 draft; characterization merged as #130). Phase 6 is not complete (brief §11).
 6.13 / TRACE-136 characterized, no implementation ([brief](PHASE-6-ADMIN-OPERATIONS-BRIEF.md), with the Phase 6 closure checklist in §11); override questions are DEC-2026-057 (PROPOSED). Phase 6 is not complete. These notes approve no policy.
 
 ## Count and order
