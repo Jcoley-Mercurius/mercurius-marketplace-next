@@ -24,6 +24,9 @@ test.beforeEach(async ({ page }) => {
     return ["http://127.0.0.1:3103", "http://127.0.0.1:55831"].includes(origin) ? route.continue() : route.abort();
   });
 });
+// A fetch-and-patch handler can still be awaiting route.fetch() when the test ends; its disposed
+// response must not fail the finished test (CI runs 41359562001, 41363559823).
+test.afterEach(async ({ page }) => page.unrouteAll({ behavior: "ignoreErrors" }));
 
 function own(page: Page, body: () => Record<string, unknown>) {
   return page.route("**/rpc/vendor_own_renewal_documents", route =>
