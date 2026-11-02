@@ -1,4 +1,12 @@
-# Agent handoff — 2026-11-01
+# Agent handoff — 2026-11-02
+
+## Phase 6.12B vendor earnings, payout states and statements (TRACE-135, DEC-2026-056 approved), 2026-11-02
+
+- Owner approved DEC-2026-056 items 1–8 as recommended (2026-11-01); recorded in DECISION-LOG with an MPS §6.5 note. Same branch `claude/phase6-12-vendor-compliance` (base `7b8934f`).
+- Migration `20261107001000` (additive, read-only, **not pushed**): `vendor_own_earnings()` words the reviewed classifier (`money_obligation_reconciliation`, `money_ach_payable`) for the caller's effective-payee jobs and weekly statements; no fingerprinted function changed (`45 | 34c51131…`).
+- UI: `/vendor/earnings` + sidebar; dashboard "Released earnings" card replaced; "next weekly payout" wording aligned in the fulfillment and dispute panels. Record: brief §11.
+- Evidence: SQL 107 68/68, 6/6 mutations; full SQL 98/6,132 on clean replay; unit 14/14; browser earnings 6/6 + regression 40/40. Not run: CI, `@visual`, screen reader.
+- Next: Codex review (eligibility-moment display, "Removed from this transfer" wording); push `20261104001000` → `20261105001000` → `20261106001000` → `20261107001000` before the merges that carry them; follow-ups: `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` after deploy.
 
 ## Phase 6.12A vendor compliance status and checkpoint reconciliation (TRACE-135, DEC-2026-056 proposed), 2026-11-01
 

@@ -111,7 +111,7 @@ export function payoutText(payout: PayoutHoldState | null | undefined) {
     confirmation_window: "Payout becomes eligible 48 hours after confirmation.",
     payment_incomplete: "Payout waits for the full payment.",
     onboarding: "Payout waits for your payout details.",
-    eligible: "Eligible for the next weekly payout.",
+    eligible: "Eligible; paid in a weekly transfer Mercurius prepares.",
     paid: "Paid.",
     nothing_payable: "Nothing is payable for this service.",
     unavailable: "Payout status is unavailable right now.",

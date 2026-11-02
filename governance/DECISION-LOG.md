@@ -271,13 +271,24 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 ### DEC-2026-056 — Vendor earnings, statements and payout-exception display (Phase 6.12B)
 
-**Status:** PROPOSED (2026-11-01). Nothing below is approved or implemented. **Date:** 2026-11-01 (America/New_York).
+**Status:** Items 1–8 **APPROVED** owner instruction (Josh, 2026-11-01, America/New_York), as recommended. Item 7 confirms the 6.12A behavior; item 8 keeps scoped compliance hidden. Items 1–6 are implemented by 6.12B (migration `20261107001000`, [brief](PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md) §11). **Date:** 2026-11-01 (America/New_York).
 
-**Questions and recommendations:** (1) retire the dashboard "Released earnings" card built on legacy invoices and replace it with a canonical summary — recommended; (2) no expected payout date, since no weekday or cutoff is approved — recommended; (3) holds shown by category only (dispute, payment not complete/under review, refund in progress, payout onboarding, held by Mercurius), never the internal reason — recommended; (4) no amount before capture; amounts only from captured, retained parts — recommended; (5) wording for unknown, failed and returned transfers without retry or recovery promises — recommended; (6) a weekly vendor statement per ACH batch without bank account, reference or approver — recommended; (7) vendors see only the current exception, history stays operator-only — confirm; (8) scoped compliance shown only after cutover requirements exist — recommended.
+**Decision:**
+
+1. **Released earnings card retired.** The vendor dashboard no longer shows the legacy-invoice "Released earnings" card; it shows a summary built on the canonical payment records. `get_vendor_earnings_metrics` stays in the database for clients deployed before 6.12B (hosted: 0 released invoices).
+2. **No expected payout date.** No payout weekday or cutoff is approved. An eligible payout reads "Eligible since <date>; paid in a weekly transfer Mercurius prepares." The date a payout becomes eligible (48 hours after homeowner confirmation, CFG-008) may be shown.
+3. **Hold detail by category only:** dispute; payment not complete or under review; refund in progress; payout onboarding; held by Mercurius. Never the internal hold reason or evidence.
+4. **No amount before capture.** Before the homeowner's payment is fully captured the vendor sees "Waiting for payment" with no dollar figure. Amounts come only from captured, retained amounts after refunds and chargeback allocations.
+5. **Transfer problem wording.** Unknown: "Mercurius is confirming this transfer with the bank. It isn't counted as paid." Failed: "Not paid. Mercurius will review a retry." Returned: "Returned by your bank. Mercurius will contact you." No promise of when a retry or recovery happens.
+6. **Statement.** One per weekly ACH batch: the week, each job's service amount, platform fee, tips and payout, and the transfer status. No bank account, bank reference or approver.
+7. **Exceptions.** Vendors see only the current exception (6.12A); exception history stays operator-only.
+8. **Scoped compliance.** Not shown to vendors until real service/ZIP requirements are recorded (hosted: 0), since showing it now would mark every vendor non-compliant.
+
+**Questions as proposed:** (1) retire the dashboard "Released earnings" card built on legacy invoices and replace it with a canonical summary — recommended; (2) no expected payout date, since no weekday or cutoff is approved — recommended; (3) holds shown by category only (dispute, payment not complete/under review, refund in progress, payout onboarding, held by Mercurius), never the internal reason — recommended; (4) no amount before capture; amounts only from captured, retained parts — recommended; (5) wording for unknown, failed and returned transfers without retry or recovery promises — recommended; (6) a weekly vendor statement per ACH batch without bank account, reference or approver — recommended; (7) vendors see only the current exception, history stays operator-only — confirm; (8) scoped compliance shown only after cutover requirements exist — recommended.
 
 **Context:** [PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md](PHASE-6-VENDOR-COMPLIANCE-EARNINGS-BRIEF.md) §4, §7, §8. MPS §5.5 forbids an ambiguous `released`; CFG-008 sets weekly ACH and the 48-hour rule but no payout weekday.
 
-**MPS/MDS/MTS impact:** none until approved. **Data/payment/security impact:** read-only display; no payout kernel, bank-detail, authority or transfer change; money fingerprint unchanged.
+**MPS impact:** answers the vendor side of §6.5 "role-appropriate money states" (note added there). **MDS impact:** `/vendor/earnings` and the dashboard earnings summary. **MTS impact:** migration `20261107001000` (`vendor_own_earnings()`). **Data/payment/security impact:** read-only display; no payout kernel, bank-detail, authority or transfer change; money fingerprint unchanged.
 
 ### DEC-2026-055 — Vendor Special Offer and vendor self-published prices
 

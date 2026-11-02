@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Briefcase, DollarSign, FileCheck, Home, LayoutDashboard, LifeBuoy, Loader2, LogOut, Megaphone, MessageSquare, User } from "lucide-react";
+import { Briefcase, DollarSign, FileCheck, Home, LayoutDashboard, LifeBuoy, Loader2, LogOut, Megaphone, MessageSquare, User, Wallet } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ const navigation = [
   { label: "Overview", href: "/vendor", icon: LayoutDashboard },
   { label: "Jobs & Requests", href: "/vendor/jobs", icon: Briefcase },
   { label: "Messages", href: "/vendor/messages", icon: MessageSquare },
+  { label: "Earnings & Payouts", href: "/vendor/earnings", icon: Wallet },
   { label: "Pricing & Packages", href: "/vendor/packages", icon: DollarSign },
   { label: "Marketing Tools", href: "/vendor/marketing", icon: Megaphone },
   { label: "Compliance Documents", href: "/vendor/compliance", icon: FileCheck },

@@ -168,6 +168,10 @@ const server = createServer(async (request, response) => {
       .map(kind => ({ kind, state: "current", exception: false, follow_up_due: null, expires_at: null, recorded_at: new Date().toISOString(),
         awaiting_review: 0, last_submitted_at: null, declined: null })),
   });
+  // TRACE-135 own earnings (6.12B): no jobs or statements by default; specs override per case.
+  if (url.pathname === "/rest/v1/rpc/vendor_own_earnings") return send({
+    evaluated_at: new Date().toISOString(), provider_found: true, payout_onboarding_current: true, jobs: [], totals: {}, statements: [],
+  });
   // TRACE-076/078/079/080/082 finance commands: nothing open by default; specs override per case.
   if (url.pathname === "/rest/v1/rpc/money_finance_operations") return send({ evaluated_at: new Date().toISOString(), requests: [], holds: [], readbacks: [], events: [], refunds: [], refund_releases: [], late_refunds: [], cancellations: [], chargebacks: [],
     ach: { next_period_start: null, ready: [], batches: [] }, recoveries: { owed_total: 0, owed: [], withdrawn: [], late_settlements: [] },
