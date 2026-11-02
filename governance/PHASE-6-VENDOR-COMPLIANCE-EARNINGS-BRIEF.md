@@ -2,7 +2,7 @@
 
 Date: 2026-11-01 (America/New_York). Branch `claude/phase6-12-vendor-compliance`, stacked on the 6.11B
 head `c3a0668` (`claude/phase6-11a-offering-boundaries`, which carries 6.11A and 6.11B). Main is `ad4656b`
-(6.10, PR #125). These notes approve no policy. Proposed policy is DEC-2026-056 (PROPOSED, §7).
+(6.10, PR #125). These notes approve no policy. DEC-2026-056 (§7) was approved by the owner on 2026-11-01 as recommended; 6.12B is §11.
 
 ## 1. Checkpoint reconciliation (verified 2026-11-01)
 
@@ -81,7 +81,7 @@ Evidence (local, 2026-11-01):
 
 Not performed: screen reader, real devices, `@visual`, the dark-theme screenshot rendered light (axe passed; visual dark evidence not claimed), hosted storage probe, CI.
 
-## 7. Proposed decisions — DEC-2026-056 (PROPOSED; owner answers before 6.12B)
+## 7. Decisions — DEC-2026-056 (APPROVED 2026-11-01, all eight as recommended)
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -94,7 +94,7 @@ Not performed: screen reader, real devices, `@visual`, the dark-theme screenshot
 | 7 | Exception history for the vendor? | Current exception only (implemented); history stays operator-only. Confirm. |
 | 8 | Scoped compliance display | After cutover requirements exist (F612-4). |
 
-## 8. 6.12B — proposed design (not implemented)
+## 8. 6.12B — design as proposed (implemented in §11)
 
 `vendor_own_earnings()` — parameterless, `stable`, vendor-only; rows where `private.money_effective_contractor(o.id)` is the caller's provider. Per obligation: job reference and service date, state from latest ACH attempt first (`prepared/submitted/unknown/settled/failed/returned`), else `money_ach_payable` blocker mapped to MPS §5.5 (reusing 6.7's `job_fulfillment` vocabulary), amounts only when captured. Statements from `money_ach_batches/items`. Totals per state never sum attempts; paid uses `money_payout_received`. Tests: A/B and replacement-payee isolation, every blocker, 48-hour boundary, duplicate attempts, unknown never paid, no bank fields, fingerprint unchanged, read-only. UI: `/vendor/earnings` (sidebar entry) and the dashboard card replaced, with empty state for no transactions.
 
@@ -111,3 +111,32 @@ Owner decision needed for 6.11B's route to `main`: (a) a PR `claude/phase6-11a-o
 - Rollback: promote the previous production deployment; the migration can stay (additive, read-only). A schema rollback is a forward fix: drop `vendor_own_compliance_status()` and restate `vendor_own_evidence_renewal()` from `20260913001000`.
 - Fingerprint impact: none.
 - F612-9 (CI flake): fetch-and-patch route handlers fail when the test ends mid-`route.fetch()`. Fixed with `page.unrouteAll({ behavior: "ignoreErrors" })` in `onboarding-checklist`, `evidence-renewal`, `renewal-documents` and the new spec. Twelve other specs (including `invitation-operations`, which failed `main`) still use the pattern; recommend the same one-line fix as a separate CI PR to `main`.
+
+## 11. 6.12B — implemented for review (earnings, payout states and statements; DEC-2026-056)
+
+Migration `20261107001000_phase6_vendor_earnings.sql` (additive, read-only, **not pushed**; requires the money kernel through `20261018005000` and statement withdrawals `20260921002000`):
+
+- `vendor_own_earnings()`: parameterless, `stable`, vendor-only, resolved from `auth.uid()`. Jobs are those whose effective payee (`private.money_effective_contractor`) is the caller (F612-10). Each job's state comes from the reviewed classifier `private.money_obligation_reconciliation` (funds state, every hold, eligibility time, live statement), with `private.money_ach_payable` as the last word when the classifier says eligible. Nothing is re-derived and no fingerprinted function changes.
+- States (MPS §5.5 vocabulary for the vendor): `waiting_payment` (no amount, item 4), `awaiting_confirmation`, `confirmation_window`, `eligible`, `held` (categories only, item 3: `dispute`, `payment_review` = chargeback/reconciliation/provider event, `refund`, `payout_onboarding`, `mercurius` = payout hold or replacement reconciliation or a kernel blocker), `in_transfer` (prepared), `sent` (submitted), `unknown`, `paid` (settled, or a late settlement of a withdrawn transfer), `failed`, `returned`, `nothing_payable`, `unavailable`. The latest attempt on the live statement decides; attempts are never summed.
+- Amounts only once the payment is fully captured: retained service and tips (`money_retained_parts`), fee, subsidy and proceeds from the classifier's split. `received` = `private.money_payout_received` (settled − returned + late settlements − repayments + reversals). Totals per state; paid totals use `received`.
+- Statements: one per ACH batch holding the caller's items — week (first and last day), each item's recorded service amount, fee, subsidy, tips, payout and latest attempt status (including `withdrawn`), payout total over live items, paid total over settled items. No bank account, bank evidence, bank reference, batch approver, creator, reason, hold reason or internal ids.
+- `get_vendor_earnings_metrics` (legacy invoices) is kept for clients deployed before this change and no longer read (item 1). Revoke it after deploy in a later cleanup.
+
+UI: `/vendor/earnings` (sidebar "Earnings & Payouts"): summary (paid to you, eligible, on the way, on hold; not yet eligible; waiting for payment), jobs with state, approved wording (items 2 and 5), hold categories and amounts, weekly statements; loading, error with retry, empty, unlinked-account and lapsed payout onboarding states. The dashboard "Released earnings" card is replaced by `VendorEarningsSummary`. The fulfillment and dispute panels' "Eligible for the next weekly payout." now reads "Eligible; paid in a weekly transfer Mercurius prepares." (item 2).
+
+Implementation choices for review: the eligibility moment is shown during the 48-hour window ("Becomes eligible <date, time> ET"); it is the approved CFG-008 rule, not a payout date, and 6.7 already shows it. A withdrawn statement item reads "Removed from this transfer" with no promise of a later transfer.
+
+Not covered by fixtures: withdrawn statements, refund-in-progress hold, promotional subsidy (promotions gate closed). Follow-ups: the public `/vendors` page still describes payouts as "released" (marketing copy, outside this slice); scale bound for vendors with many obligations (one classifier call per obligation; hosted has 0).
+
+Evidence (local, 2026-11-01/02, synthetic data):
+- Clean replay of all migrations (`supabase db reset --local`) through `20261107001000`.
+- SQL 107: 68/68 PASS. Mutations killed 6/6 by failing assertions (any-vendor resolution; unknown read as paid; amounts before capture; raw hold reason returned; bank status key returned; statement paid total over every item).
+- Full SQL suite on the clean replay: **98 files, 6,132 tests, PASS**.
+- Money fingerprint on the replay: `45 | 34c51131e2ca18f65d3b29afd8d12e11` (unchanged).
+- Unit: `vendor-earnings` 14/14 (also under `TZ=UTC`, `America/Los_Angeles`, `Pacific/Kiritimati`); full unit 633/634 at load ~30, the one failure a timeout in `vendor-readiness.test.ts` (untouched), which passes 30/30 alone.
+- Browser (1 worker, synthetic build): `vendor-earnings` 6/6 (light 320 px and dark 1440 px, axe clean, no page-level horizontal scroll). The first run found a real axe failure (`scrollable-region-focusable`: the statement table's scroll wrapper at 320 px); fixed with a focusable, labelled wrapper. `fulfillment`, `support`, `vendor-readiness`, `vendor-compliance-status` 40/40 at load ~3; at load 40–60 the same specs had 30 s screenshot/teardown timeouts that do not recur.
+- Typecheck, ESLint on changed files, `git diff --check` clean.
+
+Not performed: screen reader, real devices, `@visual`, CI, hosted push.
+
+Compatibility and release: old client on new schema unaffected (new function unused; the legacy function stays). New client on old schema: the earnings page and dashboard card show their error state with retry; push before merge (DEC-2026-037), after `20261104001000`, `20261105001000`, `20261106001000`. Rollback: promote the previous deployment; the migration can stay. Schema rollback is a forward fix dropping `vendor_own_earnings()`. Fingerprint impact: none.

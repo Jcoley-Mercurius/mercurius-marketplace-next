@@ -22,6 +22,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { VendorEarningsSummary } from "@/components/vendor/VendorEarningsSummary";
 import { VendorPasswordNudge } from "@/components/vendor/VendorPasswordNudge";
 import { VendorListingStatus, VendorRecruitingNotice } from "@/components/vendor/VendorRecruitingStatus";
 import type { MyProviderListing } from "@/lib/recruitingReadiness";
@@ -60,15 +61,6 @@ type OperationalMetrics = {
   win_rate: number | string | null;
   median_response_minutes: number | string | null;
   response_sample_size: number | string;
-};
-
-type EarningsMetrics = {
-  lifetime_earned: number | string;
-  current_month_earned: number | string;
-  released_invoice_count: number | string;
-  current_month_invoice_count: number | string;
-  untracked_release_count: number | string;
-  missing_payout_count: number | string;
 };
 
 type VendorPackage = {
@@ -110,13 +102,6 @@ type OverviewData = {
   operationalMetricsAvailable: boolean;
   medianResponseMinutes: number | null;
   responseSampleSize: number;
-  lifetimeEarned: number | null;
-  currentMonthEarned: number | null;
-  releasedInvoiceCount: number;
-  currentMonthInvoiceCount: number;
-  untrackedReleaseCount: number;
-  missingPayoutCount: number;
-  earningsAvailable: boolean;
   profileComplete: boolean;
   profileStrength: number;
   livePackageCount: number;
@@ -140,7 +125,6 @@ export default function VendorOverviewPage() {
   const [contractor, setContractor] = useState<Contractor | null>(null);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [operationalMetrics, setOperationalMetrics] = useState<OperationalMetrics | null>(null);
-  const [earningsMetrics, setEarningsMetrics] = useState<EarningsMetrics | null>(null);
   const [packages, setPackages] = useState<VendorPackage[]>([]);
   const [catalogServices, setCatalogServices] = useState<CatalogService[]>([]);
   const [contact, setContact] = useState<ContactDetails | null>(null);
@@ -169,7 +153,6 @@ export default function VendorOverviewPage() {
         setContractor(null);
         setRequests([]);
         setOperationalMetrics(null);
-        setEarningsMetrics(null);
         setMode("unlinked");
         return;
       }
@@ -180,14 +163,13 @@ export default function VendorOverviewPage() {
       const listingResult = await supabase.rpc("r0_my_provider_listing");
       setListing(listingResult.error ? null : (listingResult.data as MyProviderListing));
       setListingUnavailable(Boolean(listingResult.error));
-      const [requestsResult, operationalResult, earningsResult, packagesResult, catalogResult, contactResult, galleryResult] = await Promise.all([
+      const [requestsResult, operationalResult, packagesResult, catalogResult, contactResult, galleryResult] = await Promise.all([
         supabase
           .from("service_requests")
           .select("id, status, created_at")
           .eq("contractor_id", contractorData.id)
           .order("created_at", { ascending: false }),
         supabase.rpc("get_vendor_operational_metrics", { _contractor_id: contractorData.id }).maybeSingle(),
-        supabase.rpc("get_vendor_earnings_metrics", { _contractor_id: contractorData.id }).maybeSingle(),
         supabase
           .from("vendor_packages")
           .select("id, service_id, is_active, pricing_mode, needs_review, deposit_amount")
@@ -232,12 +214,6 @@ export default function VendorOverviewPage() {
       } else {
         setOperationalMetrics(operationalResult.data as OperationalMetrics | null);
       }
-      if (earningsResult.error) {
-        console.warn("Vendor earnings metrics are unavailable", earningsResult.error);
-        setEarningsMetrics(null);
-      } else {
-        setEarningsMetrics(earningsResult.data as EarningsMetrics | null);
-      }
       setPackages(packageRows.map((item) => ({
         ...item,
         deposit_amount: item.deposit_amount === null ? null : Number(item.deposit_amount),
@@ -253,7 +229,6 @@ export default function VendorOverviewPage() {
       setContractor(null);
       setRequests([]);
       setOperationalMetrics(null);
-      setEarningsMetrics(null);
       setPackages([]);
       setCatalogServices([]);
       setErrorMessage(error instanceof Error ? error.message : "Your live vendor data could not be loaded.");
@@ -279,12 +254,6 @@ export default function VendorOverviewPage() {
     const winRate = safeNullableNumber(operationalMetrics?.win_rate);
     const medianResponseMinutes = safeNullableNumber(operationalMetrics?.median_response_minutes);
     const responseSampleSize = safeCount(operationalMetrics?.response_sample_size);
-    const lifetimeEarned = safeCurrency(earningsMetrics?.lifetime_earned);
-    const currentMonthEarned = safeCurrency(earningsMetrics?.current_month_earned);
-    const releasedInvoiceCount = safeCount(earningsMetrics?.released_invoice_count);
-    const currentMonthInvoiceCount = safeCount(earningsMetrics?.current_month_invoice_count);
-    const untrackedReleaseCount = safeCount(earningsMetrics?.untracked_release_count);
-    const missingPayoutCount = safeCount(earningsMetrics?.missing_payout_count);
     const serviceCoverage = profileServicePricingCoverage(contractor.services ?? [], catalogServices, packages);
     const strength = calculateVendorProfileStrength({
       ...contractor,
@@ -313,13 +282,6 @@ export default function VendorOverviewPage() {
       operationalMetricsAvailable: operationalMetrics !== null,
       medianResponseMinutes,
       responseSampleSize,
-      lifetimeEarned,
-      currentMonthEarned,
-      releasedInvoiceCount,
-      currentMonthInvoiceCount,
-      untrackedReleaseCount,
-      missingPayoutCount,
-      earningsAvailable: earningsMetrics !== null,
       profileComplete,
       profileStrength,
       livePackageCount,
@@ -335,7 +297,7 @@ export default function VendorOverviewPage() {
         .filter((service) => !service.isCovered)
         .map(({ key, label }) => ({ key, label })),
     };
-  }, [catalogServices, contact, contractor, earningsMetrics, galleryCount, listing, loadedAt, operationalMetrics, packages, requests]);
+  }, [catalogServices, contact, contractor, galleryCount, listing, loadedAt, operationalMetrics, packages, requests]);
 
   if (mode === "loading") return <PageLoading />;
   if (mode === "unlinked") return <UnlinkedState />;
@@ -384,8 +346,6 @@ export default function VendorOverviewPage() {
   const readiness = Math.round((completedSteps / checklist.length) * 100);
 
   const recommendations = buildRecommendations(contractor, overview);
-  const currentMonthLabel = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "America/New_York" }).format(new Date());
-  const earningsPartial = overview.untrackedReleaseCount > 0 || overview.missingPayoutCount > 0;
 
   return (
     <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 md:p-8">
@@ -471,22 +431,7 @@ export default function VendorOverviewPage() {
         <MetricCard icon={Sparkles} label="Profile strength" value={`${overview.profileStrength}%`} note="Based on saved profile fields" href="/vendor/profile" emphasize={overview.profileStrength < 80} />
       </div>
 
-      <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">
-        <CardHeader className="border-b border-accent-border bg-accent-subtle [&_.text-muted-foreground]:text-foreground/75">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div><CardTitle className="flex items-center gap-2 text-base"><DollarSign className="h-4 w-4 text-accent" />Released earnings</CardTitle><CardDescription className="mt-1">Net vendor payouts from invoices that Mercurius has moved to released status.</CardDescription></div>
-            <Badge variant="outline" className={cn("w-fit bg-background", earningsPartial && "border-amber-300 text-amber-700 dark:text-amber-300")}>{!overview.earningsAvailable ? "Unavailable" : earningsPartial ? "Partial history" : "Released invoices only"}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-medium text-muted-foreground">Lifetime earned</p><p className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{overview.earningsAvailable && overview.lifetimeEarned !== null ? formatMoney(overview.lifetimeEarned) : "—"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{!overview.earningsAvailable ? "The released-payout aggregate is not available, so no amount is estimated." : overview.releasedInvoiceCount === 0 ? "No released vendor payouts yet." : `${overview.releasedInvoiceCount} released ${overview.releasedInvoiceCount === 1 ? "invoice" : "invoices"}, net of the recorded platform commission.`}</p></div>
-            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-medium text-muted-foreground">Earned in {currentMonthLabel}</p><p className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{overview.earningsAvailable && overview.currentMonthEarned !== null ? formatMoney(overview.currentMonthEarned) : "—"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{!overview.earningsAvailable ? "Monthly release history is unavailable." : overview.untrackedReleaseCount > 0 ? `${overview.currentMonthInvoiceCount} dated ${overview.currentMonthInvoiceCount === 1 ? "release" : "releases"} this month. ${overview.untrackedReleaseCount} older released ${overview.untrackedReleaseCount === 1 ? "invoice lacks" : "invoices lack"} a release timestamp and are not assigned to a month.` : `${overview.currentMonthInvoiceCount} ${overview.currentMonthInvoiceCount === 1 ? "payout release" : "payout releases"} recorded this month.`}</p></div>
-          </div>
-          {overview.missingPayoutCount > 0 && <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{overview.missingPayoutCount} released {overview.missingPayoutCount === 1 ? "invoice is" : "invoices are"} missing a valid vendor payout amount and are excluded from these totals.</span></div>}
-          <p className="mt-4 text-xs leading-5 text-muted-foreground">Customer payments that are still paid, pending release, disputed, refunded, cancelled, or otherwise unreleased are not counted as earnings.</p>
-        </CardContent>
-      </Card>
+      <VendorEarningsSummary />
 
       <Card className="mb-8 overflow-hidden">
         <CardHeader className="border-b bg-muted/20">
@@ -694,16 +639,6 @@ function safeNullableNumber(value: unknown) {
   if (value === null || value === undefined) return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
-}
-
-function safeCurrency(value: unknown) {
-  if (value === null || value === undefined) return null;
-  const amount = Number(value);
-  return Number.isFinite(amount) && amount >= 0 ? Math.round((amount + Number.EPSILON) * 100) / 100 : null;
-}
-
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
 
 function formatResponseDuration(minutes: number) {
