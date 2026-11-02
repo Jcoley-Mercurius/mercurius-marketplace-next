@@ -214,9 +214,9 @@ select throws_ok($$select pg_temp.run(3, format('select public.transition_job_st
 select throws_ok($$select pg_temp.run(3, format('update public.service_requests set status = ''in_progress'' where id = %L', pg_temp.id('v2')))$$,
   '42501', null, 'the provider cannot start by writing the row');
 select throws_ok($$select pg_temp.run(3, format('update public.service_requests set vendor_completed_at = now(), photo_proof_urls = ''{x}'' where id = %L', pg_temp.id('v1')))$$,
-  '42501', 'Lifecycle fields must be changed through authorized RPCs', 'nor complete by writing the row');
+  '42501', null, 'nor complete by writing the row');
 select throws_ok($$select pg_temp.run(5, format('update public.service_requests set status = ''vendor_completed'' where id = %L', pg_temp.id('v1')))$$,
-  '42501', 'Lifecycle fields must be changed through authorized RPCs', 'operations cannot write the status either');
+  '42501', null, 'operations cannot write the status either');
 select is(pg_temp.st(pg_temp.id('v2')), 'scheduled', 'nothing changed');
 
 -- Completion evidence ---------------------------------------------------------------------------------

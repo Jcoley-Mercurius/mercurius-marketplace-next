@@ -170,7 +170,7 @@ grant select on a_request to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"c1000000-0000-4000-8000-000000000001"}',true);
 select throws_ok($$update public.service_requests set zip_code='00022' where customer_id='c1000000-0000-4000-8000-000000000001'$$,'42501',null,'homeowner cannot move a pending request to another ZIP');
-select lives_ok($$update public.service_requests set address='2 Synthetic Way' where customer_id='c1000000-0000-4000-8000-000000000001'$$,'homeowner may still correct the street address');
+select throws_ok($$update public.service_requests set address='2 Synthetic Way' where customer_id='c1000000-0000-4000-8000-000000000001'$$,'42501',null,'homeowner can no longer rewrite the street address directly (DEC-2026-057 item 5)');
 select lives_ok($$select public.start_request_matching(id) from public.service_requests where service_catalog_id='house-cleaning' and customer_id='c1000000-0000-4000-8000-000000000001'$$,'homeowner can start matching for a submitted quote request');
 select lives_ok($$insert into public.job_photos(service_request_id,uploaded_by,uploader_role,photo_url,photo_type)
   select id,'c1000000-0000-4000-8000-000000000001','homeowner','c1000000-0000-4000-8000-000000000001/'||id||'/intake-synthetic.png','evidence'

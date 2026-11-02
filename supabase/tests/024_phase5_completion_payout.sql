@@ -101,7 +101,7 @@ select throws_ok($$select public.money_payable(pg_temp.ob(2))$$,'P0001','Lifecyc
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"51000000-0000-4000-8000-000000000003"}',true);
 select throws_ok($$select public.money_record_ach((select id from f where key='attempt'),'submitted','synthetic-bank','51000000-0000-4000-8000-000000000003','Synthetic submission','submit')$$,'P0001','Lifecycle dispute or completion hold','New appeal blocks submission of a prepared statement');
 select is((select status from public.money_ach_attempts where id=(select id from f where key='attempt')),'prepared','Rejected submission has no bank state effect');
-select public.admin_resolve_dispute('56000000-0000-4000-8000-000000000001','resolved','Synthetic appeal resolution');
+select public.admin_decide_dispute(d.id,gen_random_uuid(),d.status,d.resolution_version,'resolved','Synthetic appeal resolution') from public.disputes d where d.id='56000000-0000-4000-8000-000000000001';
 select is(public.money_payable(pg_temp.ob(2)),9500::bigint,'Resolution preserves original clock, no new timer');
 update public.support_tickets set status='open' where id in(select ticket_id from public.dispute_appeals);
 select throws_ok($$select public.money_payable(pg_temp.ob(2))$$,'P0001','Lifecycle dispute or completion hold','Open appeal ticket cannot be hidden by resolved dispute');

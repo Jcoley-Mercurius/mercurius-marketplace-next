@@ -60,9 +60,9 @@ select is((select count(*) from public.service_requests where id='e9930000-0000-
 select is((select count(*) from public.profiles where user_id='e9900000-0000-4000-8000-000000000001'),0::bigint,
  'the offered vendor cannot read the homeowner profile');
 select throws_ok($$update public.service_requests set address='Vendor rewrite' where id='e9930000-0000-4000-8000-000000000001'$$,
- '42501','Accept the offer before changing this request','an offered vendor cannot rewrite the homeowner address');
+ '42501',null,'an offered vendor cannot rewrite the homeowner address');
 select throws_ok($$update public.service_requests set notes='Vendor note' where id='e9930000-0000-4000-8000-000000000001'$$,
- '42501','Accept the offer before changing this request','an offered vendor cannot write request notes before accepting');
+ '42501',null,'an offered vendor cannot write request notes before accepting');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"e9900000-0000-4000-8000-000000000004"}',true);
 select is((select count(*) from public.service_requests where id='e9930000-0000-4000-8000-000000000001'),0::bigint,
  'another vendor cannot read the request');
@@ -153,12 +153,12 @@ select set_config('request.jwt.claims','{"role":"authenticated","sub":"e9900000-
 select lives_ok($$select public.vendor_accept_job('e9930000-0000-4000-8000-000000000002')$$,'acceptance immediately before the deadline succeeds');
 select throws_ok($$select public.vendor_accept_job('e9930000-0000-4000-8000-000000000002')$$,'P0001','No open offer is available to accept','a repeated acceptance is refused');
 select throws_ok($$select public.vendor_decline_job('e9930000-0000-4000-8000-000000000002')$$,'P0001','No open offer is available to decline','an accepted offer cannot be declined');
-select lives_ok($$update public.service_requests set notes='Synthetic assigned note' where id='e9930000-0000-4000-8000-000000000002'$$,
- 'the accepted vendor keeps the existing note allowlist');
+select throws_ok($$update public.service_requests set notes='Synthetic assigned note' where id='e9930000-0000-4000-8000-000000000002'$$,
+ '42501',null,'the accepted vendor no longer writes request notes (DEC-2026-057 item 8)');
 select throws_ok($$update public.service_requests set address='Vendor rewrite' where id='e9930000-0000-4000-8000-000000000002'$$,
- '42501','Vendors are not allowed to modify "address" on a service request','the accepted vendor still cannot rewrite the address');
+ '42501',null,'the accepted vendor still cannot rewrite the address');
 select throws_ok($$update public.service_requests set zip_code='00001' where id='e9930000-0000-4000-8000-000000000002'$$,
- '42501','Vendors are not allowed to modify "zip_code" on a service request','the accepted vendor cannot move the request''s ZIP');
+ '42501',null,'the accepted vendor cannot move the request''s ZIP');
 select is((select count(*) from public.profiles where user_id='e9900000-0000-4000-8000-000000000001'),0::bigint,
  'characterization: the assigned vendor still cannot read the homeowner profile');
 reset role;
@@ -181,7 +181,7 @@ select is((select contractor_id from public.job_match_attempts where service_req
 -- Admin notes still use the direct update path.
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"e9900000-0000-4000-8000-000000000006"}',true);
-select lives_ok($$update public.service_requests set notes='Synthetic admin note' where id='e9930000-0000-4000-8000-000000000003'$$,'admin notes are unaffected');
+select throws_ok($$update public.service_requests set notes='Synthetic admin note' where id='e9930000-0000-4000-8000-000000000003'$$,'42501',null,'admin notes go to operator notes, not the shared field (DEC-2026-057 item 8)');
 reset role;
 
 select * from finish();
