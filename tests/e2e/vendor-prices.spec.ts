@@ -402,8 +402,8 @@ test("the vendor sees an archived price as Archived, read-only and outside count
   await expect(page.getByRole("button", { name: "Delete Synthetic archived roof" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Edit Synthetic live lawn" })).toBeVisible();
   // Not counted as paused, and not offered as ready to publish for its service.
-  await expect(page.getByText("Draft or Paused", { exact: true }).locator("xpath=following-sibling::p[1]")).toHaveText("0");
-  await expect(page.getByText("Paused · ready")).toHaveCount(0);
+  await expect(page.getByText("Published before; out of public booking").locator("xpath=preceding-sibling::p[1]")).toHaveText("0");
+  await expect(page.getByText("Fixed price · Paused")).toHaveCount(0);
   await expect(page.getByText("1 service still needs a live fixed price.")).toBeVisible();
   expect((await new AxeBuilder({ page }).include("section[aria-labelledby=archived-prices]").withTags(tags).analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);

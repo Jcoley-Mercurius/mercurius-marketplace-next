@@ -52,7 +52,8 @@ export function useServiceCatalog() {
       supabase.from("services_catalog").select("*").eq("is_active", true).order("sort_order"),
       supabase.from("vendor_packages").select("id, service_id, name, description, default_frequency, pricing_mode, deposit_amount, is_active, needs_review, contractor_id, contractors!inner(id, name, logo_url, marketing_enabled, is_active)").eq("is_active", true).eq("needs_review", false).eq("contractors.is_active", true),
       supabase.from("package_tiers").select("id, package_id, name, price, frequency, includes"),
-      supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").eq("is_enabled", true),
+      // TRACE-134 (6.11B): legacy package promotions are closed; intake shows published prices only.
+      Promise.resolve({ data: [] as PackagePromotion[], error: null }),
       supabase.rpc("pricing_server_now"),
     ]).then(async ([categoryResult, serviceResult, packageResult, tierResult, promotionResult, clockResult]) => {
       if (!active) return;

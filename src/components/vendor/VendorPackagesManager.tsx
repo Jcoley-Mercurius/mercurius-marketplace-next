@@ -19,7 +19,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Tag,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -56,16 +55,9 @@ import {
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
   isPubliclyEligibleQuotePackage,
-  MAX_PROMOTION_PERCENT,
-  promotionForPackage,
-  promotionStatus,
-  resolveEffectiveTierPrice,
   tierPricingFrequency,
-  validatePromotion,
-  type PackagePromotion,
   type PackageQualifyingQuestion,
   type PricingFrequency,
-  type PromotionType,
 } from "@/lib/vendorPricing";
 
 type ServiceOption = {
@@ -113,23 +105,14 @@ type PackageRow = {
   template_id: string | null;
   /** TRACE-134: the version hash a save is checked against, and when the row last changed. */
   updated_at?: string;
+  /** TRACE-134 (6.11B): set the first time a version went live; a draft never has. */
+  first_published_at?: string | null;
   revision?: PackageRevision;
   tiers: TierRow[];
   questions: QuestionRow[];
   addons: AddonRow[];
-  promotions: PackagePromotion[];
   /** TRACE-122: set when Mercurius archived this package; it is read-only history. */
   archived_at?: string | null;
-};
-
-type PromotionDraft = {
-  promotion_type: PromotionType;
-  percent_off: string;
-  fixed_price: string;
-  label: string;
-  starts_at: string;
-  ends_at: string;
-  is_enabled: boolean;
 };
 
 type CoverageState =
@@ -200,12 +183,6 @@ export function VendorPackagesManager() {
   const [saving, setSaving] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [liveSuccessOpen, setLiveSuccessOpen] = useState(false);
-  const [serverNow, setServerNow] = useState<string | null>(null);
-  const [promotionBackendReady, setPromotionBackendReady] = useState(true);
-  const [promotionPackage, setPromotionPackage] = useState<PackageRow | null>(null);
-  const [promotionDraft, setPromotionDraft] = useState<PromotionDraft | null>(null);
-  const [promotionOpen, setPromotionOpen] = useState(false);
-  const [promotionSaving, setPromotionSaving] = useState(false);
   const [copySource, setCopySource] = useState<PackageRow | null>(null);
   const [copyTargetServiceId, setCopyTargetServiceId] = useState("");
   const [copyOpen, setCopyOpen] = useState(false);
@@ -214,36 +191,30 @@ export function VendorPackagesManager() {
     const supabase = createClient();
     const { data: packageData, error: packageError } = await supabase
       .from("vendor_packages")
-      .select("id, name, description, service_id, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, template_id, sort_order, updated_at")
+      .select("id, name, description, service_id, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, template_id, sort_order, updated_at, first_published_at")
       .eq("contractor_id", id)
       .order("sort_order");
     if (packageError) throw packageError;
-    const rows = (packageData ?? []) as Omit<PackageRow, "tiers" | "questions" | "addons" | "promotions">[];
+    const rows = (packageData ?? []) as Omit<PackageRow, "tiers" | "questions" | "addons">[];
     if (!rows.length) {
       setPackages([]);
       setAllPackages([]);
       return;
     }
     const ids = rows.map((item) => item.id);
-    const [questionsResult, tiersResult, addonsResult, promotionsResult, clockResult, archivedAt, revisions] = await Promise.all([
+    const [questionsResult, tiersResult, addonsResult, archivedAt, revisions] = await Promise.all([
       supabase.from("package_qualifying_questions").select("*").in("package_id", ids).order("sort_order"),
       supabase.from("package_tiers").select("*").in("package_id", ids).order("sort_order"),
       supabase.from("package_addons").select("*").in("package_id", ids).order("created_at"),
-      supabase.from("package_promotions").select("id, package_id, promotion_type, percent_off, fixed_price, label, starts_at, ends_at, is_enabled, created_at, updated_at").in("package_id", ids).order("updated_at", { ascending: false }),
-      supabase.rpc("pricing_server_now"),
       loadPackageArchives(supabase, id),
       loadPackageRevisions(supabase, ids),
     ]);
     if (questionsResult.error) throw questionsResult.error;
     if (tiersResult.error) throw tiersResult.error;
     if (addonsResult.error) throw addonsResult.error;
-    const promotionReady = !promotionsResult.error && !clockResult.error && typeof clockResult.data === "string";
-    setPromotionBackendReady(promotionReady);
-    setServerNow(promotionReady ? clockResult.data as string : null);
     const questions = (questionsResult.data ?? []) as (QuestionRow & { package_id: string })[];
     const tiers = (tiersResult.data ?? []) as (TierRow & { package_id: string })[];
     const addons = (addonsResult.data ?? []) as (AddonRow & { package_id: string })[];
-    const promotions = promotionReady ? (promotionsResult.data ?? []) as PackagePromotion[] : [];
     // TRACE-134: a superseded revision is history; only each price's newest version is listed.
     const hydrated = rows.filter((item) => revisions.get(item.id)?.isHead !== false).map((item) => ({
       ...item,
@@ -266,7 +237,6 @@ export function VendorPackagesManager() {
           sort_order: Number.isFinite(Number(addon.sort_order)) ? Number(addon.sort_order) : index,
         }))
         .sort((left, right) => left.sort_order - right.sort_order),
-      promotions: promotions.filter((promotion) => promotion.package_id === item.id),
     }));
     setAllPackages(hydrated);
     setPackages(hydrated.filter((item) => item.template_id === null));
@@ -420,7 +390,6 @@ export function VendorPackagesManager() {
       tiers: [],
       questions: [],
       addons: [],
-      promotions: [],
     });
   };
 
@@ -509,8 +478,6 @@ export function VendorPackagesManager() {
         is_offered: addon.is_offered,
         sort_order: index,
       })),
-      // Promotions are scheduled package-specific overlays and are never copied.
-      promotions: [],
     };
 
     closeCopyDialog();
@@ -892,97 +859,6 @@ export function VendorPackagesManager() {
     else { toast.success("Price deleted"); await refresh(contractorId); }
   };
 
-  const openPromotionEditor = (item: PackageRow) => {
-    if (!promotionBackendReady || !serverNow) {
-      toast.error("Promotion setup is not available", { description: "Deploy the package promotions migration before vendors create scheduled offers." });
-      return;
-    }
-    if (!isPubliclyEligibleFixedPackage(item)) {
-      toast.error("Publish a valid base price first", { description: "Promotions can only overlay active, review-cleared fixed-price packages." });
-      return;
-    }
-    const existing = promotionForPackage(item.promotions, item.id, true);
-    const defaultWindow = defaultPromotionWindow(serverNow);
-    setPromotionPackage(item);
-    setPromotionDraft({
-      promotion_type: existing?.promotion_type ?? "percent_off",
-      percent_off: existing?.percent_off == null ? "" : String(existing.percent_off),
-      fixed_price: existing?.fixed_price == null ? "" : String(existing.fixed_price),
-      label: existing?.label ?? "",
-      starts_at: existing ? toDateTimeLocal(existing.starts_at) : defaultWindow.startsAt,
-      ends_at: existing ? toDateTimeLocal(existing.ends_at) : defaultWindow.endsAt,
-      is_enabled: existing?.is_enabled ?? true,
-    });
-    setPromotionOpen(true);
-  };
-
-  const closePromotionEditor = () => {
-    setPromotionOpen(false);
-    setPromotionPackage(null);
-    setPromotionDraft(null);
-    setPromotionSaving(false);
-  };
-
-  const savePromotion = async () => {
-    if (!contractorId || !promotionPackage || !promotionDraft || promotionSaving) return;
-    const startsAt = dateTimeLocalToIso(promotionDraft.starts_at);
-    const endsAt = dateTimeLocalToIso(promotionDraft.ends_at);
-    if (!startsAt || !endsAt) {
-      toast.error("Choose a valid start and end time.");
-      return;
-    }
-    const validationError = validatePromotion({
-      promotion_type: promotionDraft.promotion_type,
-      percent_off: promotionDraft.promotion_type === "percent_off" ? Number(promotionDraft.percent_off) : null,
-      fixed_price: promotionDraft.promotion_type === "fixed_price" ? Number(promotionDraft.fixed_price) : null,
-      starts_at: startsAt,
-      ends_at: endsAt,
-    }, promotionPackage.tiers.map((tier) => tier.price));
-    if (validationError) {
-      toast.error("Promotion isn’t ready", { description: validationError });
-      return;
-    }
-    if (promotionDraft.label.trim().length > 48) {
-      toast.error("Keep the public label to 48 characters or fewer.");
-      return;
-    }
-
-    setPromotionSaving(true);
-    const existing = promotionForPackage(promotionPackage.promotions, promotionPackage.id, true);
-    const payload = {
-      package_id: promotionPackage.id,
-      promotion_type: promotionDraft.promotion_type,
-      percent_off: promotionDraft.promotion_type === "percent_off" ? Number(promotionDraft.percent_off) : null,
-      fixed_price: promotionDraft.promotion_type === "fixed_price" ? Number(promotionDraft.fixed_price) : null,
-      label: promotionDraft.label.trim() || null,
-      starts_at: startsAt,
-      ends_at: endsAt,
-      is_enabled: promotionDraft.is_enabled,
-    };
-    const supabase = createClient();
-    const result = existing
-      ? await supabase.from("package_promotions").update(payload).eq("id", existing.id).eq("package_id", promotionPackage.id)
-      : await supabase.from("package_promotions").insert(payload);
-    if (result.error) {
-      setPromotionSaving(false);
-      toast.error("Couldn’t save this promotion", { description: result.error.message });
-      return;
-    }
-    closePromotionEditor();
-    await refresh(contractorId);
-    toast.success(promotionDraft.is_enabled ? "Promotion saved" : "Promotion saved as disabled", { description: "The package’s base tier prices were not changed." });
-  };
-
-  const disablePromotion = async (item: PackageRow) => {
-    if (!contractorId) return;
-    const promotion = promotionForPackage(item.promotions, item.id);
-    if (!promotion || !window.confirm("Disable this promotion? Customers will immediately return to the package’s base price.")) return;
-    setMutatingId(item.id);
-    const result = await createClient().from("package_promotions").update({ is_enabled: false }).eq("id", promotion.id).eq("package_id", item.id);
-    setMutatingId(null);
-    if (result.error) toast.error("Couldn’t disable this promotion", { description: result.error.message });
-    else { toast.success("Promotion disabled", { description: "The base price remains active." }); await refresh(contractorId); }
-  };
 
   // TRACE-122: archived packages are read-only history: no counts, coverage or actions.
   const currentPackages = allPackages.filter((item) => !item.archived_at);
@@ -1059,7 +935,8 @@ export function VendorPackagesManager() {
 
   const packageStats = {
     live: currentPackages.filter(isLiveFixedPackage).length,
-    paused: currentPackages.filter((item) => !item.is_active).length,
+    paused: currentPackages.filter((item) => !item.is_active && Boolean(item.first_published_at)).length,
+    drafts: currentPackages.filter((item) => !item.is_active && !item.first_published_at).length,
     review: currentPackages.filter((item) => item.needs_review).length,
     coveredServices: pricedServiceCount,
   };
@@ -1124,9 +1001,10 @@ export function VendorPackagesManager() {
       <VendorPriceCorrections />
       <VendorPriceApprovals />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <SummaryCard icon={PackageCheck} label="Live Fixed Prices" value={packageStats.live} note="Instant-price packages available publicly" tone="live" />
-        <SummaryCard icon={PauseCircle} label="Draft or Paused" value={packageStats.paused} note="Not currently customer-facing" />
+        <SummaryCard icon={PauseCircle} label="Paused" value={packageStats.paused} note="Published before; out of public booking" />
+        <SummaryCard icon={Pencil} label="Drafts" value={packageStats.drafts} note="Never published" />
         <SummaryCard icon={AlertTriangle} label="Needs Review" value={packageStats.review} note="Flagged pricing records" tone={packageStats.review ? "review" : undefined} />
         <SummaryCard icon={DollarSign} label="Profile Coverage" value={profileCoverage.length ? `${packageStats.coveredServices}/${profileCoverage.length}` : "—"} note={profileCoverage.length ? "Listed services with a live price" : "Add services to your profile"} />
       </div>
@@ -1166,7 +1044,7 @@ export function VendorPackagesManager() {
                 <article key={row.key} className={cn("flex flex-col rounded-xl border bg-background p-4", row.state === "live_fixed" ? "border-accent-border/70" : "border-border shadow-sm")}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="font-semibold">{row.label}</h3>
-                    <CoverageBadge state={row.state} />
+                    <CoverageBadge row={row} />
                   </div>
                   <p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">{details.description}</p>
                   {!row.service && services.length > 0 && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">This profile label does not exactly match an active catalog service. Choose the correct service before saving.</p>}
@@ -1212,7 +1090,7 @@ export function VendorPackagesManager() {
                     <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.name}</h3><PackageStatus item={item} /><Badge variant="outline">{FREQUENCIES[item.default_frequency] ?? item.default_frequency} default</Badge>{cadencePrices.length > 1 && <Badge variant="outline">{cadencePrices.length} cadences</Badge>}</div>
                     <p className="mt-1 text-xs text-muted-foreground">{services.find((service) => service.id === item.service_id)?.name ?? "Service"}</p>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1"><PricingToggle checked={item.is_active} disabled={mutatingId === item.id} onCheckedChange={() => void togglePackage(item)} label={`${item.is_active ? "Pause" : "Publish"} ${item.name}`} /><span className="text-[10px] font-medium text-muted-foreground">{mutatingId === item.id ? "Updating…" : live ? "Live price" : liveQuote ? "Quote live" : item.needs_review ? "Review blocked" : item.is_active ? "Invalid" : "Paused"}</span></div>
+                  <div className="flex shrink-0 flex-col items-end gap-1"><PricingToggle checked={item.is_active} disabled={mutatingId === item.id} onCheckedChange={() => void togglePackage(item)} label={`${item.is_active ? "Pause" : "Publish"} ${item.name}`} /><span className="text-[10px] font-medium text-muted-foreground">{mutatingId === item.id ? "Updating…" : item.needs_review ? "Needs review" : live || liveQuote ? "Live" : item.is_active ? "Needs a valid price" : item.first_published_at ? "Paused" : "Draft"}</span></div>
                 </div>
                 {item.pricing_mode === "fixed" && displayPrice !== null ? (
                   <div className="mt-4">
@@ -1223,7 +1101,6 @@ export function VendorPackagesManager() {
                   </div>
                 ) : item.pricing_mode !== "fixed" ? <div className="mt-4 rounded-lg border border-info/30 bg-info/5 p-3 text-sm"><p className="font-medium text-foreground">{item.pricing_mode === "deposit_quote" ? "Quote required + deposit" : "Custom quote required"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{item.pricing_mode === "deposit_quote" && item.deposit_amount ? `${money(item.deposit_amount)} deposit saved. ` : ""}Homeowners submit details first; scope and final pricing are confirmed before booking.</p></div> : <div className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><p className="font-medium">A valid fixed price is required</p><p className="mt-1 text-xs opacity-80">Edit this package and add a customer price greater than $0 before publishing.</p></div>}
                 {item.addons.length > 0 && <div className="mt-4 rounded-lg border bg-muted/20 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Optional add-ons</p><div className="mt-2 space-y-2">{item.addons.map((addon, index) => <div key={addon.id ?? `${addon.name}-${index}`} className="flex items-start justify-between gap-3 text-sm"><div><p className="font-medium text-foreground">{addon.name}</p>{addon.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{addon.description}</p>}</div><span className="shrink-0 font-semibold tabular-nums text-foreground">+{money(addon.price)}</span></div>)}</div></div>}
-                {item.pricing_mode === "fixed" && <PackagePromotionPanel item={item} serverNow={serverNow} backendReady={promotionBackendReady} mutating={mutatingId === item.id} onEdit={() => openPromotionEditor(item)} onDisable={() => void disablePromotion(item)} />}
                 {item.needs_review && <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>This package is hidden from public pricing and booking while its customer price is reviewed. Adjust the price into the expected range or contact Mercurius to resolve the flag.</span></div>}
                 <div className="mt-4 flex items-center justify-between gap-2 border-t pt-3">
                   <span className="text-xs text-muted-foreground">{live ? "Pause to remove this price from public booking." : liveQuote ? "Pause to remove this quote option from public matching." : item.needs_review ? "This package cannot become public until review is resolved." : item.is_active ? "This active record is excluded publicly until its required details are valid." : item.pricing_mode === "fixed" ? "Publish when the price is ready for customers." : "Publish when you are ready to receive quote requests."}</span>
@@ -1284,7 +1161,7 @@ export function VendorPackagesManager() {
                 <option value="" disabled>Choose a target service</option>
                 {services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
               </select>
-              <p className="text-xs leading-5 text-muted-foreground">The pricing mode, relevant prices or deposit, cadence when supported, and optional add-ons will carry over. Scheduled promotions will not.</p>
+              <p className="text-xs leading-5 text-muted-foreground">The pricing mode, relevant prices or deposit, cadence when supported, and optional add-ons will carry over.</p>
             </div>
 
             {copyTargetService && copyTargetPackages.length > 0 && <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", copyTargetHasLivePackage ? "border-amber-300/70 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100" : "bg-muted/30")}>
@@ -1356,34 +1233,6 @@ export function VendorPackagesManager() {
             <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", editing.is_active ? "border-accent-border bg-accent-subtle" : "border-border bg-muted/30")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", editing.is_active ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}>{editing.is_active ? <PackageCheck className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{editing.is_active ? editorPriceReview?.needsReview ? "Save for pricing review" : editing.pricing_mode === "fixed" ? "Publish live price" : "Publish quote package" : "Save as draft"}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{editing.is_active ? editorPriceReview?.needsReview ? "The active setting is preserved, but this package stays hidden until its pricing review is resolved." : editing.pricing_mode === "fixed" ? "After a successful save, this validated price can appear in public pricing and request flows." : "Homeowners will see quote / matching required. No instant price or checkout is presented." : "The package remains private until you publish it."}</p></div><PricingToggle checked={editing.is_active} onCheckedChange={(checked) => updateField("is_active", checked)} label={editing.is_active ? "Save this package as a private draft" : "Publish this package when saved"} /></div>
           </div>}
           <DialogFooter className="sm:grid sm:grid-cols-[auto_1fr_1fr]"><Button variant="ghost" className="min-h-11" disabled={saving} onClick={closeEditor}>Cancel</Button><Button variant="outline" className="min-h-11" disabled={saving} onClick={() => void savePackage(true)}>{saving ? <Loader2 className="animate-spin" /> : <Plus />}{editing?.is_active ? editorPriceReview?.needsReview ? "Save review & add next" : editing.pricing_mode === "fixed" ? "Publish & add next" : "Publish quote & add next" : "Save draft & add next"}</Button><Button className={cn("min-h-11", editing?.is_active && "bg-accent text-accent-foreground hover:bg-accent-hover")} disabled={saving} onClick={() => void savePackage(false)}>{saving ? <><Loader2 className="animate-spin" />Saving…</> : editing?.is_active ? editorPriceReview?.needsReview ? <><AlertTriangle />Save for review</> : editing.pricing_mode === "fixed" ? <><PackageCheck />Publish & finish</> : <><PackageCheck />Publish quote</> : <><PauseCircle />Save draft & finish</>}</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={promotionOpen} onOpenChange={(value) => { if (!value) closePromotionEditor(); }}>
-        <DialogContent className="max-w-lg sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{promotionPackage && promotionForPackage(promotionPackage.promotions, promotionPackage.id, true) ? "Edit promotion" : "Add promotion"}</DialogTitle>
-            <DialogDescription>Schedule a temporary overlay for {promotionPackage?.name ?? "this package"}. Base tier prices remain unchanged.</DialogDescription>
-          </DialogHeader>
-          {promotionPackage && promotionDraft && <div className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="promotion-type">Promotion type</Label>
-              <select id="promotion-type" className={nativeSelect} value={promotionDraft.promotion_type} onChange={(event) => setPromotionDraft((current) => current ? { ...current, promotion_type: event.target.value as PromotionType, percent_off: "", fixed_price: "" } : current)}>
-                <option value="percent_off">Percent off</option>
-                {promotionPackage.tiers.length === 1 && <option value="fixed_price">Fixed promotional price</option>}
-              </select>
-              <p className="text-xs text-muted-foreground">Percent off works across all valid tiers. Fixed promotional price is limited to a single-tier package.</p>
-            </div>
-            {promotionDraft.promotion_type === "percent_off" ? <Field label={`Percent off (1–${MAX_PROMOTION_PERCENT}%)`}><Input type="number" min="1" max={MAX_PROMOTION_PERCENT} step="1" inputMode="decimal" placeholder="15" value={promotionDraft.percent_off} onChange={(event) => setPromotionDraft((current) => current ? { ...current, percent_off: event.target.value } : current)} /></Field> : <Field label={`Promotional price (base ${money(promotionPackage.tiers[0]?.price ?? 0)})`}><Input type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="75" value={promotionDraft.fixed_price} onChange={(event) => setPromotionDraft((current) => current ? { ...current, fixed_price: event.target.value } : current)} /></Field>}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Starts"><Input type="datetime-local" value={promotionDraft.starts_at} onChange={(event) => setPromotionDraft((current) => current ? { ...current, starts_at: event.target.value } : current)} /></Field>
-              <Field label="Ends"><Input type="datetime-local" value={promotionDraft.ends_at} onChange={(event) => setPromotionDraft((current) => current ? { ...current, ends_at: event.target.value } : current)} /></Field>
-            </div>
-            <Field label="Public label (optional)"><Input maxLength={48} placeholder="Summer service special" value={promotionDraft.label} onChange={(event) => setPromotionDraft((current) => current ? { ...current, label: event.target.value } : current)} /><p className="text-xs text-muted-foreground">Keep it short and factual. Coupon codes and usage limits are not supported.</p></Field>
-            <PromotionDraftPreview item={promotionPackage} draft={promotionDraft} />
-            <div className={cn("flex items-start gap-3 rounded-xl border p-3.5", promotionDraft.is_enabled ? "border-accent-border bg-accent-subtle" : "bg-muted/30")}><span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", promotionDraft.is_enabled ? "bg-accent-soft text-sage-dark" : "bg-muted text-muted-foreground")}><Tag className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium">{promotionDraft.is_enabled ? "Promotion enabled" : "Promotion disabled"}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{promotionDraft.is_enabled ? "Database time controls when the overlay starts and expires." : "Customers continue to see the package’s base price."}</p></div><PricingToggle checked={promotionDraft.is_enabled} onCheckedChange={(is_enabled) => setPromotionDraft((current) => current ? { ...current, is_enabled } : current)} label={promotionDraft.is_enabled ? "Disable promotion" : "Enable promotion"} /></div>
-          </div>}
-          <DialogFooter><Button variant="ghost" disabled={promotionSaving} onClick={closePromotionEditor}>Cancel</Button><Button className="bg-accent text-accent-foreground hover:bg-accent-hover" disabled={promotionSaving} onClick={() => void savePromotion()}>{promotionSaving ? <Loader2 className="animate-spin" /> : <Tag />}{promotionSaving ? "Saving…" : "Save promotion"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1540,66 +1389,15 @@ function coverageDetails(row: ServiceCoverage) {
   }
 }
 
-function CoverageBadge({ state }: { state: CoverageState }) {
-  if (state === "live_fixed") return <Badge className="border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Live fixed price</Badge>;
-  if (state === "needs_review") return <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs review</Badge>;
-  if (state === "paused_valid") return <Badge variant="outline"><PauseCircle />Paused · ready</Badge>;
-  if (state === "draft") return <Badge variant="outline">Draft exists</Badge>;
-  if (state === "quote_only") return <Badge variant="outline">Quote only</Badge>;
-  return <Badge variant="outline">No package</Badge>;
-}
-
-function PackagePromotionPanel({ item, serverNow, backendReady, mutating, onEdit, onDisable }: { item: PackageRow; serverNow: string | null; backendReady: boolean; mutating: boolean; onEdit: () => void; onDisable: () => void }) {
-  const baseEligible = isPubliclyEligibleFixedPackage(item);
-  const promotion = promotionForPackage(item.promotions, item.id, true);
-  const status = promotion ? promotionStatus(promotion, serverNow) : null;
-  const minimumBase = item.tiers.length ? Math.min(...item.tiers.map((tier) => Number(tier.price))) : 0;
-  const preview = promotion
-    ? resolveEffectiveTierPrice(minimumBase, { ...promotion, is_enabled: true }, promotion.starts_at, item.tiers.length)
-    : null;
-  const statusLabel = status === "active" ? "Active" : status === "scheduled" ? "Scheduled" : status === "expired" ? "Expired" : status === "disabled" ? "Disabled" : status === "invalid" ? "Invalid" : "None";
-  const stateClass = status === "active"
-    ? "border-accent-border bg-accent-subtle"
-    : status === "scheduled"
-      ? "border-info/30 bg-info/5"
-      : "border-border bg-muted/20";
-
-  return <div className={cn("mt-4 rounded-xl border p-3.5", stateClass)}>
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2"><p className="flex items-center gap-1.5 text-sm font-medium"><Tag className="h-3.5 w-3.5" />Promotion</p><Badge variant="outline" className="bg-background/80">{statusLabel}</Badge></div>
-        {!backendReady ? <p className="mt-1 text-xs text-muted-foreground">Promotion schema and pricing clock must be deployed before scheduled offers are available.</p> : !baseEligible ? <p className="mt-1 text-xs text-muted-foreground">Publish a valid, review-cleared base price before adding a promotion.</p> : !promotion ? <p className="mt-1 text-xs text-muted-foreground">No scheduled overlay. Customers see the base tier price.</p> : <><p className="mt-1 text-xs text-muted-foreground">{promotion.label || (promotion.promotion_type === "percent_off" ? `${promotion.percent_off}% off` : "Limited-time price")} · {formatPromotionWindow(promotion)}</p>{preview?.isPromotionEffective && <p className="mt-2 text-sm"><span className="text-muted-foreground line-through">{money(preview.basePrice)}</span><span className="mx-2 text-muted-foreground">→</span><span className="font-semibold text-accent">{money(preview.effectivePrice)}</span>{item.tiers.length > 1 && <span className="ml-1 text-xs text-muted-foreground">starting tier</span>}</p>}</>}
-      </div>
-      {baseEligible && backendReady && <div className="flex shrink-0 gap-2"><Button variant="outline" size="sm" disabled={mutating} onClick={onEdit}>{promotion ? "Edit" : "Add promotion"}</Button>{promotion?.is_enabled && <Button variant="ghost" size="sm" disabled={mutating} onClick={onDisable}>Disable</Button>}</div>}
-    </div>
-  </div>;
-}
-
-function PromotionDraftPreview({ item, draft }: { item: PackageRow; draft: PromotionDraft }) {
-  const startsAt = dateTimeLocalToIso(draft.starts_at);
-  const endsAt = dateTimeLocalToIso(draft.ends_at);
-  const input = {
-    promotion_type: draft.promotion_type,
-    percent_off: draft.promotion_type === "percent_off" ? Number(draft.percent_off) : null,
-    fixed_price: draft.promotion_type === "fixed_price" ? Number(draft.fixed_price) : null,
-    starts_at: startsAt ?? "",
-    ends_at: endsAt ?? "",
-  };
-  const error = validatePromotion(input, item.tiers.map((tier) => tier.price));
-  if (error) return <div className="rounded-xl border border-dashed bg-muted/20 p-3 text-xs leading-5 text-muted-foreground">Preview appears after the discount and schedule are valid. {error}</div>;
-  const minimumBase = Math.min(...item.tiers.map((tier) => Number(tier.price)));
-  const preview = resolveEffectiveTierPrice(minimumBase, {
-    id: "preview",
-    package_id: item.id,
-    promotion_type: draft.promotion_type,
-    percent_off: input.percent_off,
-    fixed_price: input.fixed_price,
-    label: draft.label.trim() || null,
-    starts_at: input.starts_at,
-    ends_at: input.ends_at,
-    is_enabled: true,
-  }, input.starts_at, item.tiers.length);
-  return <div className="rounded-xl border border-accent-border bg-accent-subtle p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer preview</p><p className="mt-2 text-lg"><span className="text-muted-foreground line-through">{money(preview.basePrice)}</span><span className="mx-2 text-muted-foreground">→</span><span className="font-semibold text-accent">{money(preview.effectivePrice)}</span>{item.tiers.length > 1 && <span className="ml-1 text-xs text-muted-foreground">starting tier</span>}</p><p className="mt-1 text-xs text-muted-foreground">{draft.label.trim() || (draft.promotion_type === "percent_off" ? `${draft.percent_off}% off` : "Limited-time price")}</p></div>;
+// TRACE-134 (6.11B): each listed service reads Fixed price, Custom Quote or Not priced yet.
+function CoverageBadge({ row }: { row: ServiceCoverage }) {
+  const live = Boolean(row.package?.is_active && !row.package.needs_review);
+  if (row.state === "live_fixed") return <Badge className="border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Fixed price · Live</Badge>;
+  if (row.state === "needs_review") return <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs review</Badge>;
+  if (row.state === "paused_valid") return <Badge variant="outline"><PauseCircle />Fixed price · Paused</Badge>;
+  if (row.state === "quote_only") return <Badge variant="outline" className={live ? "border-info/30 bg-info/5 text-foreground" : undefined}>{live ? "Custom Quote · Live" : "Custom Quote · Paused"}</Badge>;
+  if (row.state === "draft") return <Badge variant="outline">Not priced yet · Draft saved</Badge>;
+  return <Badge variant="outline">Not priced yet</Badge>;
 }
 
 function formatArchivedDate(value: string | null | undefined) {
@@ -1608,18 +1406,19 @@ function formatArchivedDate(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" });
 }
 
+// TRACE-134 (6.11B): Live, Paused, Draft, Needs review or Archived, with the price type beside it.
 function PackageStatus({ item }: { item: PackageRow }) {
-  if (item.archived_at) return <Badge variant="outline"><Archive />Archived</Badge>;
-  const status = isLiveFixedPackage(item)
-    ? <Badge className="border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Live / Active</Badge>
-    : item.needs_review
-      ? <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Review blocked</Badge>
-      : !item.is_active
-        ? <Badge variant="outline"><PauseCircle />Draft / Paused</Badge>
-      : item.pricing_mode !== "fixed"
-        ? <Badge className="border border-info/30 bg-info/5 text-info">{item.pricing_mode === "deposit_quote" ? "Quote + deposit" : "Custom quote"}</Badge>
-        : <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs valid price</Badge>;
-  return <>{status}</>;
+  const kind = item.pricing_mode === "fixed" ? "Fixed price" : item.pricing_mode === "deposit_quote" ? "Custom Quote + deposit" : "Custom Quote";
+  const kindBadge = <Badge variant="outline">{kind}</Badge>;
+  if (item.archived_at) return <><Badge variant="outline"><Archive />Archived</Badge>{kindBadge}</>;
+  const status = item.needs_review
+    ? <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs review</Badge>
+    : !item.is_active
+      ? item.first_published_at ? <Badge variant="outline"><PauseCircle />Paused</Badge> : <Badge variant="outline"><Pencil />Draft</Badge>
+      : isLiveFixedPackage(item) || isPubliclyEligibleQuotePackage(item)
+        ? <Badge className="border border-accent-border bg-accent-soft text-commitment"><CheckCircle2 />Live</Badge>
+        : <Badge className="border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle />Needs a valid price</Badge>;
+  return <>{status}{kindBadge}</>;
 }
 
 function isLiveFixedPackage(item: PackageRow) {
@@ -1644,27 +1443,3 @@ function priceReviewSourceLabel(source: "managed_template" | "service_catalog" |
   return "using the soft-launch fallback range";
 }
 
-function toDateTimeLocal(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "";
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function dateTimeLocalToIso(value: string) {
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-}
-
-function defaultPromotionWindow(serverNow: string) {
-  const start = new Date(serverNow);
-  start.setMinutes(start.getMinutes() + 5, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 7);
-  return { startsAt: toDateTimeLocal(start.toISOString()), endsAt: toDateTimeLocal(end.toISOString()) };
-}
-
-function formatPromotionWindow(promotion: PackagePromotion) {
-  const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  return `${formatter.format(new Date(promotion.starts_at))}–${formatter.format(new Date(promotion.ends_at))}`;
-}

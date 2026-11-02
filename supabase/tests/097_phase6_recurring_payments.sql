@@ -319,8 +319,12 @@ update public.coverage_areas set is_active = true where zip_code = '00097';
 update public.services_catalog set is_active = false where id = 'synthetic-rp-lawn';
 select is(pg_temp.refusal(pg_temp.id('v3')), 'recurring_visit:service_inactive', 'an inactive service blocks it');
 update public.services_catalog set is_active = true where id = 'synthetic-rp-lawn';
+-- TRACE-134 (6.11B): legacy package promotions cannot be enabled on any path; this fixture keeps
+-- characterizing an existing overlay under owner maintenance (the closing trigger disabled for it).
+alter table public.package_promotions disable trigger trg_package_promotion_legacy_closed;
 insert into public.package_promotions(package_id,label,promotion_type,percent_off,starts_at,ends_at,is_enabled)
   values ('97400000-0000-4000-8000-000000000001','Synthetic legacy promotion','percent_off',10,now()-interval '1 day',now()+interval '1 day',true);
+alter table public.package_promotions enable trigger trg_package_promotion_legacy_closed;
 select is(pg_temp.refusal(pg_temp.id('v3')), 'recurring_visit:promotion_decision', 'a package promotion keeps the visit unpayable (item 7)');
 delete from public.package_promotions where package_id = '97400000-0000-4000-8000-000000000001';
 select is(pg_temp.refusal(pg_temp.id('v3')), 'payable', 'every refusal clears once its cause is resolved, at the same price');

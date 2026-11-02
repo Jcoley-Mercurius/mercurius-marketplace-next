@@ -63,7 +63,8 @@ import {
   validateVendorMediaFile,
   vendorMediaPathFromUrl,
 } from "@/lib/vendorMedia";
-import { calculateVendorProfileStrength, vendorBioPoints } from "@/lib/vendorProfileStrength";
+import { calculateVendorProfileStrength, VENDOR_PROFILE_STRENGTH_MAX, vendorBioPoints } from "@/lib/vendorProfileStrength";
+import { VendorCoverageReadback } from "@/components/vendor/VendorCoverageReadback";
 
 type Profile = {
   id: string;
@@ -75,7 +76,6 @@ type Profile = {
   email: string | null;
   services: string[];
   years_experience: number | null;
-  special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
   is_active: boolean | null;
@@ -154,7 +154,7 @@ export default function VendorProfilePage() {
       const { data, error } = await supabase
         .from("contractors")
         .select(
-          "id, name, logo_url, bio, location, services, years_experience, special_offer, our_promise, verified_specialty, is_active, marketing_enabled",
+          "id, name, logo_url, bio, location, services, years_experience, our_promise, verified_specialty, is_active, marketing_enabled",
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -500,7 +500,6 @@ export default function VendorProfilePage() {
         phone: profile.phone?.trim() || null,
         email: profile.email?.trim().toLowerCase() || null,
         years_experience: profile.years_experience,
-        special_offer: profile.special_offer?.trim() || null,
         our_promise: profile.our_promise?.trim() || null,
       };
       const { data, error } = await supabase
@@ -733,6 +732,8 @@ export default function VendorProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        <VendorCoverageReadback contractorId={profile.id} />
 
         <Card id="profile-media" className="scroll-mt-24">
           <CardHeader>
@@ -983,24 +984,6 @@ export default function VendorProfilePage() {
               </div>
             </Field>
 
-            <Field label="Special Offer" id="special_offer" earned={profile.special_offer?.trim() ? 5 : 0} points={5}>
-              <div className="relative">
-                <Tag className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent" />
-                <Input
-                  id="special_offer"
-                  className="pl-9"
-                  placeholder='e.g. "15% off first service"'
-                  value={profile.special_offer ?? ""}
-                  onChange={(event) =>
-                    update("special_offer", event.target.value || null)
-                  }
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                A limited-time promotion that creates urgency.
-              </p>
-            </Field>
-
             <Field label="Our Promise" id="our_promise" earned={profile.our_promise?.trim() ? 5 : 0} points={5}>
               <div className="relative">
                 <HandHeart className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent" />
@@ -1105,6 +1088,7 @@ export default function VendorProfilePage() {
           </CardContent>
         </Card>
 
+        <p className="text-xs text-muted-foreground sm:text-right">Saving your profile does not publish prices, change your visibility or turn Marketing on or off.</p>
         <div className="flex flex-col-reverse gap-2 pb-[env(safe-area-inset-bottom)] sm:flex-row sm:justify-end">
           <Link
             href={`/providers/${profile.id}`}
@@ -1150,7 +1134,7 @@ function ProfileStrengthCard({
               A transparent completeness score based only on available vendor fields and media records.
             </CardDescription>
           </div>
-          <div className="text-right"><div className="text-4xl font-semibold leading-none text-sage-dark tabular-nums">{model.score}</div><p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">out of 100</p></div>
+          <div className="text-right"><div className="text-4xl font-semibold leading-none text-sage-dark tabular-nums">{model.score}</div><p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">out of {VENDOR_PROFILE_STRENGTH_MAX}</p></div>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -1159,12 +1143,12 @@ function ProfileStrengthCard({
           role="progressbar"
           aria-valuenow={model.score}
           aria-valuemin={0}
-          aria-valuemax={100}
+          aria-valuemax={VENDOR_PROFILE_STRENGTH_MAX}
           aria-label="Profile strength"
         >
           <div
             className="h-full rounded-full bg-accent transition-all duration-700"
-            style={{ width: model.score + "%" }}
+            style={{ width: Math.round((model.score / VENDOR_PROFILE_STRENGTH_MAX) * 100) + "%" }}
           />
         </div>
 
@@ -1362,7 +1346,7 @@ function buildStrength(profile: Profile | null, galleryCount: number | null): St
     { key: "essentials", label: "Essentials", earned: breakdown.essentials, total: 40, description: "Identity, services, and contact", icon: Building2 },
     { key: "trust", label: "Trust", earned: breakdown.trust, total: 20, description: "Experience and verification", icon: ShieldCheck },
     { key: "visual", label: "Visual proof", earned: breakdown.visual, total: 20, description: "Logo and up to 3 photos", icon: Camera },
-    { key: "differentiation", label: "Differentiation", earned: breakdown.differentiation, total: 20, description: "Bio, offer, and promise", icon: Sparkles },
+    { key: "differentiation", label: "Differentiation", earned: breakdown.differentiation, total: 15, description: "Bio and promise", icon: Sparkles },
   ];
 
   const actions: StrengthAction[] = [];
@@ -1378,7 +1362,6 @@ function buildStrength(profile: Profile | null, galleryCount: number | null): St
   if (!profile.logo_url) actions.push({ key: "logo", icon: Building2, label: "Add your business logo", description: "Upload the logo homeowners should recognize on your listing.", points: 8, targetId: "profile-media" });
   if (galleryPhotos < 3) actions.push({ key: "gallery", icon: Camera, label: galleryPhotos ? `Add ${3 - galleryPhotos} more project ${3 - galleryPhotos === 1 ? "photo" : "photos"}` : "Add project gallery photos", description: "Up to three real completed-project photos count toward profile strength.", points: (3 - galleryPhotos) * 4, targetId: "profile-media" });
   if (!profile.verified_specialty?.trim()) actions.push({ key: "specialty", icon: ShieldCheck, label: "Request specialty verification", description: "Mercurius controls this field after reviewing the vendor’s specialty.", points: 10, href: "/contact" });
-  if (!profile.special_offer?.trim()) actions.push({ key: "offer", icon: Tag, label: "Add a special offer", description: "Use a truthful, supportable offer that differentiates your listing.", points: 5, targetId: "special_offer" });
   if (!profile.our_promise?.trim()) actions.push({ key: "promise", icon: HandHeart, label: "Add your customer promise", description: "State a practical commitment your business can consistently honor.", points: 5, targetId: "our_promise" });
 
   return {

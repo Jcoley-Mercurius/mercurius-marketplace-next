@@ -235,8 +235,8 @@ reset role;
 select pg_temp.as_user(2);
 set local role authenticated;
 select throws_ok($$insert into public.package_promotions(package_id,promotion_type,percent_off,label,starts_at,ends_at,is_enabled)
-  values ((select id from ids where name='p2'),'percent_off',50,'Half off',now() - interval '1 hour',now() + interval '1 day',true)$$, '42501', null,
-  'vendor: a legacy promotion cannot be created');
+  values ((select id from ids where name='p2'),'percent_off',50,'Half off',now() - interval '1 hour',now() + interval '1 day',false)$$, '42501', null,
+  'vendor: a legacy promotion row cannot be created');
 select throws_ok($$insert into public.contractor_service_zips(contractor_id,zip_code) values (pg_temp.vendor('a'),'33903')$$, '42501', null,
   'vendor: its service ZIP codes cannot be added');
 delete from public.contractor_service_zips where contractor_id = pg_temp.vendor('a');

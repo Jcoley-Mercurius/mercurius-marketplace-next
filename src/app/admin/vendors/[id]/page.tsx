@@ -70,7 +70,7 @@ type Mode = "loading" | "ready" | "error" | "missing";
 type Prefilled = { fields: number; zips: number; unmatchedServices: string[] };
 
 const AVAILABLE_BADGES = ["Licensed", "Insured", "Background Checked", "24/7 Available", "Emergency Services", "Eco-Friendly", "Satisfaction Guaranteed", "Top Rated"];
-const SAFE_SELECT = "id, name, tagline, bio, location, website, video_url, logo_url, services, badges, years_experience, jobs_completed, rating, special_offer, our_promise, verified_specialty, is_active, marketing_enabled";
+const SAFE_SELECT = "id, name, tagline, bio, location, website, video_url, logo_url, services, badges, years_experience, jobs_completed, rating, our_promise, verified_specialty, is_active, marketing_enabled";
 const MEDIA_BUCKET = "vendor-media";
 const APPLICATION_SELECT = "business_description, website, years_experience, email, phone, services, service_areas";
 
@@ -100,7 +100,7 @@ export default function AdminVendorDetailPage() {
     setError("");
     const supabase = createClient();
     try {
-      const [vendorResult, galleryResult, zipResult, serviceResult, areaResult, contactResult, applicationResult, packageResult, draftResult] = await Promise.all([
+      const [vendorResult, galleryResult, zipResult, serviceResult, areaResult, contactResult, applicationResult, packageResult, draftResult, specialOfferResult] = await Promise.all([
         supabase.from("contractors").select(SAFE_SELECT).eq("id", id).maybeSingle(),
         supabase.from("contractor_gallery").select("id, image_url, caption, sort_order").eq("contractor_id", id).order("sort_order"),
         supabase.from("contractor_service_zips").select("zip_code").eq("contractor_id", id),
@@ -110,6 +110,8 @@ export default function AdminVendorDetailPage() {
         supabase.from("vendor_applications").select(APPLICATION_SELECT).eq("contractor_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("vendor_packages").select("service_id").eq("contractor_id", id),
         supabase.rpc("admin_package_drafts", { p_contractor: id }),
+        // DEC-2026-055 item 1: kept for reference, readable by operators only.
+        supabase.rpc("admin_vendor_special_offer", { p_contractor: id }),
       ]);
       const firstError = vendorResult.error ?? galleryResult.error ?? zipResult.error ?? serviceResult.error ?? areaResult.error ?? contactResult.error ?? applicationResult.error ?? packageResult.error ?? draftResult.error;
       if (firstError) throw firstError;
@@ -121,7 +123,7 @@ export default function AdminVendorDetailPage() {
       const contactRows = (contactResult.data ?? []) as { email: string | null; phone: string | null }[];
       const contact = Array.isArray(contactResult.data) ? contactRows[0] : contactResult.data as { email: string | null; phone: string | null } | null;
       const vendor = vendorResult.data as Omit<VendorForm, "email" | "phone">;
-      const loaded: VendorForm = { ...vendor, email: contact?.email ?? null, phone: contact?.phone ?? null, services: vendor.services ?? [], badges: vendor.badges ?? [], is_active: Boolean(vendor.is_active), marketing_enabled: Boolean(vendor.marketing_enabled) };
+      const loaded: VendorForm = { ...vendor, special_offer: specialOfferResult.error ? null : (specialOfferResult.data as string | null) ?? null, email: contact?.email ?? null, phone: contact?.phone ?? null, services: vendor.services ?? [], badges: vendor.badges ?? [], is_active: Boolean(vendor.is_active), marketing_enabled: Boolean(vendor.marketing_enabled) };
       const zips = ((zipResult.data ?? []) as { zip_code: string }[]).map((row) => row.zip_code);
       const catalog = (serviceResult.data ?? []) as Service[];
       const coverage = (areaResult.data ?? []) as CoverageArea[];
@@ -217,7 +219,7 @@ export default function AdminVendorDetailPage() {
     const supabase = createClient();
     try {
       const vendorResult = await supabase.from("contractors").update({
-        name: form.name.trim(), tagline: clean(form.tagline), bio: clean(form.bio), location: clean(form.location), email: clean(form.email), phone: clean(form.phone), website: clean(form.website), video_url: clean(form.video_url), logo_url: clean(form.logo_url), services: form.services, badges: form.badges, years_experience: form.years_experience, jobs_completed: form.jobs_completed, rating: form.rating, special_offer: clean(form.special_offer), our_promise: clean(form.our_promise), verified_specialty: clean(form.verified_specialty), is_active: form.is_active, marketing_enabled: form.marketing_enabled,
+        name: form.name.trim(), tagline: clean(form.tagline), bio: clean(form.bio), location: clean(form.location), email: clean(form.email), phone: clean(form.phone), website: clean(form.website), video_url: clean(form.video_url), logo_url: clean(form.logo_url), services: form.services, badges: form.badges, years_experience: form.years_experience, jobs_completed: form.jobs_completed, rating: form.rating, our_promise: clean(form.our_promise), verified_specialty: clean(form.verified_specialty), is_active: form.is_active, marketing_enabled: form.marketing_enabled,
       }).eq("id", id);
       if (vendorResult.error) throw vendorResult.error;
       const clearZips = await supabase.from("contractor_service_zips").delete().eq("contractor_id", id);
@@ -298,7 +300,7 @@ export default function AdminVendorDetailPage() {
 
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Credentials</CardTitle></CardHeader><CardContent><div className="flex flex-wrap gap-2">{AVAILABLE_BADGES.map((badge) => { const checked = form.badges.includes(badge); return <button key={badge} type="button" onClick={() => update({ badges: checked ? form.badges.filter((item) => item !== badge) : [...form.badges, badge] })} className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", checked ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-border bg-muted text-muted-foreground hover:border-emerald-300")}>{badge}</button>; })}</div></CardContent></Card>
 
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Award className="h-4 w-4" />Stand Out</CardTitle><CardDescription>Optional promotion and trust messaging shown with this provider.</CardDescription></CardHeader><CardContent className="space-y-4"><Field label="Special offer"><Input value={form.special_offer ?? ""} onChange={(event) => update({ special_offer: event.target.value })} placeholder='"15% off first service"' /></Field><Field label="Our promise"><Input value={form.our_promise ?? ""} onChange={(event) => update({ our_promise: event.target.value })} placeholder='"Done right or we come back free"' /></Field><Field label="Verified specialty"><Input value={form.verified_specialty ?? ""} onChange={(event) => update({ verified_specialty: event.target.value })} placeholder='"Pet-safe products only"' /></Field><Field label="Promotional video URL"><Input value={form.video_url ?? ""} onChange={(event) => update({ video_url: event.target.value })} placeholder="YouTube or Vimeo URL" /></Field></CardContent></Card>
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Award className="h-4 w-4" />Stand Out</CardTitle><CardDescription>Optional trust messaging shown with this provider.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="space-y-1"><p className="text-sm font-medium">Special offer (not shown publicly)</p><p className="text-sm text-muted-foreground">{form.special_offer?.trim() || "None recorded"}</p><p className="text-xs text-muted-foreground">Kept for reference only. Offers are not shown on profiles or used in matching (DEC-2026-055).</p></div><Field label="Our promise"><Input value={form.our_promise ?? ""} onChange={(event) => update({ our_promise: event.target.value })} placeholder='"Done right or we come back free"' /></Field><Field label="Verified specialty"><Input value={form.verified_specialty ?? ""} onChange={(event) => update({ verified_specialty: event.target.value })} placeholder='"Pet-safe products only"' /></Field><Field label="Promotional video URL"><Input value={form.video_url ?? ""} onChange={(event) => update({ video_url: event.target.value })} placeholder="YouTube or Vimeo URL" /></Field></CardContent></Card>
 
         <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><ImageIcon className="h-4 w-4" />Before &amp; After Gallery</CardTitle><CardDescription>Operationally managed public portfolio images.</CardDescription></div><Button variant="outline" size="sm" disabled={uploading} onClick={() => galleryInput.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Plus />}Add Photos</Button><input ref={galleryInput} hidden type="file" accept="image/*" multiple onChange={(event) => { if (event.target.files?.length) void addGallery(event.target.files); event.target.value = ""; }} /></div></CardHeader><CardContent>{gallery.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No gallery photos have been uploaded.</p> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{gallery.map((item) => <div key={item.id} className="space-y-2"><div className="group relative aspect-square overflow-hidden rounded-xl bg-muted"><img src={item.image_url} alt={item.caption || "Vendor project"} className="h-full w-full object-cover" /><button type="button" onClick={() => void removeGallery(item)} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" aria-label="Remove image"><Trash2 className="h-4 w-4" /></button></div><Input defaultValue={item.caption ?? ""} onBlur={(event) => void saveCaption(item, event.target.value)} placeholder="Caption" className="h-8 text-xs" /></div>)}</div>}</CardContent></Card>
 

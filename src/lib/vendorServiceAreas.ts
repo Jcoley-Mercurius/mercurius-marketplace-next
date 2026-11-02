@@ -69,3 +69,19 @@ export function publicServiceAreas(
     .map(([city, set]) => ({ city, zips: [...set].sort() }))
     .sort((a, b) => a.city.localeCompare(b.city));
 }
+
+/**
+ * TRACE-134 (6.11B): the vendor's own readback of its service area. Covered ZIPs are grouped by
+ * city exactly as the public profile shows them; ZIPs on file outside current coverage are listed
+ * separately because requests from them are not matched.
+ */
+export function vendorCoverageReadback(
+  zips: readonly string[],
+  areas: readonly { zip_code: string; city: string }[],
+) {
+  const covered = new Set(areas.map((area) => area.zip_code));
+  return {
+    covered: publicServiceAreas(zips, areas),
+    outside: [...new Set(zips.filter((zip) => !covered.has(zip)))].sort(),
+  };
+}

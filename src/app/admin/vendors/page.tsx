@@ -52,7 +52,6 @@ type Vendor = {
   created_at: string;
   user_id: string | null;
   marketing_enabled: boolean;
-  special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
   // TRACE-105: hidden as a test or excluded record (R0.4 listing exclusion). Kept for history.
@@ -69,7 +68,7 @@ type NewVendor = {
   bio: string;
 };
 
-const SAFE_SELECT = "id, name, logo_url, bio, location, rating, badges, services, years_experience, jobs_completed, is_active, created_at, user_id, marketing_enabled, special_offer, our_promise, verified_specialty";
+const SAFE_SELECT = "id, name, logo_url, bio, location, rating, badges, services, years_experience, jobs_completed, is_active, created_at, user_id, marketing_enabled, our_promise, verified_specialty";
 const EMPTY_VENDOR: NewVendor = { name: "", email: "", phone: "", location: "", services: "", years_experience: "", bio: "" };
 
 export default function AdminVendorsPage() {

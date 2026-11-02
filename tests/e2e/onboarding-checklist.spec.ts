@@ -38,6 +38,9 @@ test.beforeEach(async ({ page }) => {
   });
   await page.route("**/rpc/vendor_checklist_exceptions", route => route.fulfill({ json: [] }));
 });
+// A fetch-and-patch handler can still be awaiting route.fetch() when the test ends; its disposed
+// response must not fail the finished test (CI runs 41359562001, 41363559823).
+test.afterEach(async ({ page }) => page.unrouteAll({ behavior: "ignoreErrors" }));
 
 function checklist(page: Page, body: Record<string, unknown> | (() => Record<string, unknown>)) {
   return page.route("**/rpc/vendor_onboarding_checklist", async route => {
