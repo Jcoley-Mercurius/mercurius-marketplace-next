@@ -2,7 +2,7 @@
 
 ## Phase 6.13 admin operations characterization (TRACE-136, DEC-2026-057 proposed), 2026-11-02
 
-- **Checkpoint (verified):** `main` = `8bcbfbe` (6.11A #126, 6.12A #127, 6.11B #128). PR #129 (6.12B, head `c0a19ca`; its handoff entry lives on that branch) open, mergeable, unreviewed; not merged here. Hosted history ends at `20261107001000`, so the "not pushed" notes for `20261104001000`–`20261106001000` below are superseded.
+- **Checkpoint (verified):** `main` = `b1a8cc3` (PR #129, 6.12B, merged 2026-11-02 by the owner; before it `8bcbfbe`: 6.11A #126, 6.12A #127, 6.11B #128). This branch merged `main` after #129 landed; #129's decisions and evidence are kept as written. Hosted history ends at `20261107001000`, so the "not pushed" notes for `20261104001000`–`20261106001000` below are superseded.
 - Branch `claude/phase6-13-admin-operations` from `8bcbfbe`; documentation and one evidence script only. Record: [PHASE-6-ADMIN-OPERATIONS-BRIEF.md](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md).
 - Findings, in review priority, reproduced locally (synthetic, rolled back; [script](../../governance/review-evidence/trace-136-admin-bypass.sql)):
   1. direct `contractors.user_id` reassignment gave a homeowner account the provider's assigned request and address (F613-3);
@@ -17,6 +17,14 @@
   - 6.13A and 6.13B merge together. Bounded 6.13A acceptance criteria: §9.1.
 - Status reconciled from the hosted readback: the "not pushed" notes for `20261104001000`–`20261106001000` (below) and the TRACE-131–135 rows are annotated, not rewritten.
 - Next: Codex review of the brief; owner answers DEC-2026-057 Q1–Q7; implement from `main` after #129 merges. Phase 6 closure checklist: brief §11 (Phase 6 not complete).
+
+## Phase 6.12B vendor earnings, payout states and statements (TRACE-135, DEC-2026-056 approved), 2026-11-02
+
+- Owner approved DEC-2026-056 items 1–8 as recommended (2026-11-01); recorded in DECISION-LOG with an MPS §6.5 note. Same branch `claude/phase6-12-vendor-compliance` (base `7b8934f`).
+- Migration `20261107001000` (additive, read-only, **not pushed**; *applied on hosted per the 2026-11-02 readback; merged as #129 `b1a8cc3`*): `vendor_own_earnings()` words the reviewed classifier (`money_obligation_reconciliation`, `money_ach_payable`) for the caller's effective-payee jobs and weekly statements; no fingerprinted function changed (`45 | 34c51131…`).
+- UI: `/vendor/earnings` + sidebar; dashboard "Released earnings" card replaced; "next weekly payout" wording aligned in the fulfillment and dispute panels. Record: brief §11.
+- Evidence: SQL 107 68/68, 6/6 mutations; full SQL 98/6,132 on clean replay; unit 14/14; browser earnings 6/6 + regression 40/40. Not run: CI, `@visual`, screen reader.
+- Next: Codex review (eligibility-moment display, "Removed from this transfer" wording); push `20261104001000` → `20261105001000` → `20261106001000` → `20261107001000` before the merges that carry them; follow-ups: `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` after deploy.
 
 ## Phase 6.12A vendor compliance status and checkpoint reconciliation (TRACE-135, DEC-2026-056 proposed), 2026-11-01
 

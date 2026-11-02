@@ -2,15 +2,15 @@
 
 Date: 2026-11-02 (America/New_York). Branch `claude/phase6-13-admin-operations` from `main` `8bcbfbe`.
 Characterization and brief only; no application or database change. These notes approve no policy.
-Owner questions are DEC-2026-057 (PROPOSED, §7). Implementation starts from `main` after PR #129 lands.
+Owner questions are DEC-2026-057 (PROPOSED, §7). PR #129 landed 2026-11-02 (`b1a8cc3`); this branch has merged it. Implementation starts from that base.
 
 ## 1. Checkpoint (verified 2026-11-02)
 
 | Item | Evidence |
 |---|---|
 | `main` | `8bcbfbe` = PR #128 (6.11B). Before it: #127 (6.12A, `224395a`), #126 (6.11A, `475f03d`), #125 (6.10, `ad4656b`), #121 (6.9A/6.9B, `2dd9bed`). |
-| PR #129 | Open, `claude/phase6-12-vendor-compliance` → `main`, head `c0a19ca` (6.12B), mergeable, no review decision. Not merged by this slice. |
-| Hosted migrations | `supabase migration list --linked` (read-only): history ends at **`20261107001000`** (6.12B). `20261104001000`–`20261107001000` are applied, so the handoff's "not pushed" notes for 6.11A/6.11B/6.12A/6.12B are superseded. `main` lacks the 6.12B migration file until #129 merges. |
+| PR #129 | 6.12B, head `c0a19ca`: open at characterization; **merged by the owner 2026-11-02** as `b1a8cc3`. Not merged by this slice. This branch merged `main` afterward, keeping #129's decisions (DEC-2026-056 approved) and evidence. |
+| Hosted migrations | `supabase migration list --linked` (read-only): history ends at **`20261107001000`** (6.12B). `20261104001000`–`20261107001000` are applied, so the handoff's "not pushed" notes for 6.11A/6.11B/6.12A/6.12B are superseded. The 6.12B migration file is on `main` since #129. |
 | Stale traceability | TRACE-131/132/133 rows still say "not merged"; all three are on `main` (#121, #125). Corrected in the closure checklist (§11), not by rewriting their history. |
 | Local DB | 212 migrations (6.12B branch state); probes below ran there with synthetic users in one rolled-back transaction. |
 
@@ -192,7 +192,7 @@ The repairs in §8.2/§8.4 are covered by approved authorities and do not wait f
 **Q4 — Hand-set ratings, badges and job counts (F613-3, 6.8).**
 - *Question:* May operators hand-set a provider's `rating`, `badges` and `jobs_completed`?
 - *Today:* free entry on `/admin/vendors/[id]`.
-- *Recommend:* refuse client writes to these three fields; current values stay displayed until DEC-2026-052 item 5 decides the canonical source (reviews for rating).
+- *Recommend:* refuse client writes to these three fields; current values stay displayed until DEC-2026-052 item 6 decides the canonical source (reviews for rating).
 - *Alternative:* editable with a reason and history until DEC-2026-052 is answered.
 - *Affected workflows:* `/admin/vendors/[id]`; public profile and directory; the admin assignment list on `/admin/requests`.
 
@@ -381,7 +381,7 @@ Phase 6 is **not complete**: integrated acceptance and carried corrective work r
 | 6.10 TRACE-133 | yes | yes (#125) | yes | DEC-2026-054 PROPOSED |
 | 6.11A/6.11B TRACE-134 | yes | yes (#126, #128) | yes | follow-up: revoke signed-in SELECT on `contractors.special_offer` |
 | 6.12A TRACE-135 | yes | yes (#127) | yes | — |
-| 6.12B TRACE-135 | yes | **no** (PR #129 open) | yes (local); CI not run | Codex review; follow-ups `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` |
+| 6.12B TRACE-135 | yes | yes (#129, `b1a8cc3`) | yes (local) | Codex review; follow-ups `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` |
 | 6.13 TRACE-136 | **no** (this brief) | no | no | DEC-2026-057 Q1–Q7 |
 | Prepaid plans (DEC-2026-048) | no | no | no | separate slice with finance review |
 

@@ -219,6 +219,8 @@ Every transition must define actor, prerequisites, side effects, notification, t
 - Ledger totals reconcile among customer charge, refunds, processor cost, Mercurius fee, and provider payable.
 - The customer and vendor see accurate, role-appropriate money states.
 
+**Vendor money display (DEC-2026-056):** a vendor sees each job's provider-funds state (§5.5) from the canonical payment records, with no amount before capture, holds by category only, no expected payout date, and one statement per weekly ACH batch without bank details.
+
 ### 6.6 Cancellation, rescheduling, dispute, and support
 
 **Proposed rules**

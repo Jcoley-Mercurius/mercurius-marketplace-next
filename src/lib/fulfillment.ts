@@ -97,7 +97,7 @@ export function payoutLine(payout: Fulfillment["payout"]) {
     case "payment_incomplete": return "The homeowner's payment isn't complete, so this service isn't payable yet.";
     case "held": return "Payout is held while a dispute, refund or review is open.";
     case "onboarding": return "Payout waits for the provider's payout setup to be complete and current.";
-    case "eligible": return "Eligible for the next weekly payout.";
+    case "eligible": return "Eligible; paid in a weekly transfer Mercurius prepares.";
     case "paid": return "Paid out.";
     case "nothing_payable": return "Nothing is payable for this service.";
     default: return "Payout status couldn't be checked. Try again later.";
