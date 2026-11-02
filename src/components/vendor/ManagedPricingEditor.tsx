@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { PricingToggle } from "@/components/vendor/PricingToggle";
 import { loadPackageArchives } from "@/lib/packageArchives";
 import { createClient } from "@/lib/supabase/client";
+import { loadPackageRevisions, packageSaveKey, PackageVersionError, savePackageVersion, setPackageActive, type PackageVersionContent } from "@/lib/vendorPackageVersions";
 
 type TemplateQuestion = {
   id: string;
@@ -55,6 +56,11 @@ type PricingTemplate = {
 };
 type ManagedPackage = {
   packageId: string;
+  name: string;
+  description: string | null;
+  updatedAt: string;
+  /** TRACE-134: the version hash a vendor save is checked against. */
+  revision: string | null;
   template: PricingTemplate;
   serviceName: string;
   tierPrices: Record<string, number>;
@@ -74,13 +80,14 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const pendingSave = useRef<{ payload: string; key: string } | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
     const [templatesResult, servicesResult, packagesResult, archivesResult] = await Promise.all([
       supabase.from("pricing_templates").select("*").eq("is_active", true).order("name"),
       supabase.from("services_catalog").select("id, name").eq("is_active", true),
-      supabase.from("vendor_packages").select("id, template_id, is_active, needs_review").eq("contractor_id", contractorId).not("template_id", "is", null),
+      supabase.from("vendor_packages").select("id, name, description, template_id, is_active, needs_review, updated_at, lineage_id, revision_number").eq("contractor_id", contractorId).not("template_id", "is", null),
       loadPackageArchives(supabase, contractorId).then((archived) => ({ archived, error: null }),
         (error: { message: string }) => ({ archived: new Map<string, string>(), error })),
     ]);
@@ -121,8 +128,12 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
     const serviceMap = new Map(((servicesResult.data ?? []) as { id: string; name: string }[]).map((service) => [service.id, service.name]));
     // TRACE-122: an archived package is read-only history; the template can be activated anew.
     const archivedAt = archivesResult.archived;
-    const allRows = (packagesResult.data ?? []) as { id: string; template_id: string; is_active: boolean; needs_review: boolean }[];
-    const packageRows = allRows.filter((item) => !archivedAt.has(item.id));
+    const allRows = (packagesResult.data ?? []) as { id: string; name: string; description: string | null; template_id: string; is_active: boolean;
+      needs_review: boolean; updated_at: string; lineage_id: string; revision_number: number }[];
+    // TRACE-134: a superseded revision is history; each lineage shows its newest version.
+    const newest = new Map<string, number>();
+    allRows.forEach((item) => newest.set(item.lineage_id, Math.max(newest.get(item.lineage_id) ?? 0, item.revision_number)));
+    const packageRows = allRows.filter((item) => !archivedAt.has(item.id) && newest.get(item.lineage_id) === item.revision_number);
     const packageIds = packageRows.map((item) => item.id);
     const [packageTierResult, packageAddonResult] = packageIds.length
       ? await Promise.all([
@@ -130,7 +141,9 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
           supabase.from("package_addons").select("package_id, template_addon_id, price, is_offered").in("package_id", packageIds),
         ])
       : [{ data: [], error: null }, { data: [], error: null }];
-    const packageError = packageTierResult.error ?? packageAddonResult.error;
+    const revisionResult = operator ? { revisions: new Map(), error: null }
+      : await loadPackageRevisions(supabase, packageIds).then((revisions) => ({ revisions, error: null }), (error: { message: string }) => ({ revisions: new Map(), error }));
+    const packageError = packageTierResult.error ?? packageAddonResult.error ?? revisionResult.error;
     if (packageError) {
       setLoadError(packageError.message);
       setLoading(false);
@@ -149,6 +162,10 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
       }
       activeManaged.push({
         packageId: packageRow.id,
+        name: packageRow.name,
+        description: packageRow.description,
+        updatedAt: packageRow.updated_at,
+        revision: revisionResult.revisions.get(packageRow.id)?.revision ?? null,
         template,
         serviceName,
         isActive: packageRow.is_active,
@@ -172,7 +189,7 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
         serviceName: template ? serviceMap.get(template.service_id) ?? template.service_id : "Managed service pricing" }] : [];
     }));
     setLoading(false);
-  }, [contractorId]);
+  }, [contractorId, operator]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
@@ -185,62 +202,22 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
       return;
     }
     setSavingId(template.id);
-    const supabase = createClient();
-    const packageResult = await supabase.from("vendor_packages").insert({
-      contractor_id: contractorId,
-      service_id: template.service_id,
-      template_id: template.id,
-      name: `${serviceName} — Managed Pricing`,
-      description: template.description,
-      pricing_mode: "fixed",
-      default_frequency: "one-time",
-      is_active: false,
-      needs_review: false,
-    }).select("id").single();
-    if (packageResult.error || !packageResult.data) {
+    try {
+      await savePackageVersion(createClient(), {
+        packageId: null,
+        expectedRevision: null,
+        content: managedContent(template, `${serviceName} — Managed Pricing`, template.description,
+          Object.fromEntries(template.tiers.map((tier) => [tier.id, Number(tier.suggested_price ?? tier.min_price)])),
+          Object.fromEntries(template.addons.map((addon) => [addon.id, { price: Number(addon.default_price), isOffered: true }]))),
+        publish: true,
+        saveKey: crypto.randomUUID(),
+      });
+      toast.success("Template activated", { description: `Customer pricing is now live for ${serviceName}.` });
+    } catch (error) {
+      toast.error("Couldn’t activate this template", { description: error instanceof Error ? error.message : "No package was created." });
+    } finally {
       setSavingId(null);
-      toast.error("Couldn’t activate this template", { description: packageResult.error?.message ?? "No package was created." });
-      return;
     }
-    const packageId = (packageResult.data as { id: string }).id;
-    const tierResult = await supabase.from("package_tiers").insert(template.tiers.map((tier, index) => ({
-      package_id: packageId,
-      template_tier_id: tier.id,
-      name: tier.name,
-      price: tier.suggested_price ?? tier.min_price,
-      frequency: "one-time",
-      includes: tier.includes,
-      sort_order: index,
-    })));
-    if (tierResult.error) {
-      await supabase.from("vendor_packages").delete().eq("id", packageId).eq("contractor_id", contractorId);
-      setSavingId(null);
-      toast.error("Couldn’t activate this template", { description: tierResult.error.message });
-      return;
-    }
-    if (template.addons.length) {
-      const addonResult = await supabase.from("package_addons").insert(template.addons.map((addon) => ({
-        package_id: packageId,
-        template_addon_id: addon.id,
-        price: addon.default_price,
-        is_offered: true,
-      })));
-      if (addonResult.error) {
-        await supabase.from("vendor_packages").delete().eq("id", packageId).eq("contractor_id", contractorId);
-        setSavingId(null);
-        toast.error("Couldn’t activate this template", { description: addonResult.error.message });
-        return;
-      }
-    }
-    const publishResult = await supabase.from("vendor_packages").update({ is_active: true }).eq("id", packageId).eq("contractor_id", contractorId);
-    if (publishResult.error) {
-      setSavingId(null);
-      toast.error("Template saved but not published", { description: publishResult.error.message });
-      await load();
-      return;
-    }
-    setSavingId(null);
-    toast.success("Template activated", { description: `Customer pricing is now live for ${serviceName}.` });
     await load();
   };
 
@@ -250,59 +227,37 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
       return;
     }
     setSavingId(item.packageId);
-    const supabase = createClient();
-    const pauseResult = await supabase.from("vendor_packages").update({ is_active: false }).eq("id", item.packageId).eq("contractor_id", contractorId);
-    if (pauseResult.error) {
+    const request = { packageId: item.packageId, expectedRevision: item.revision, publish: item.isActive,
+      content: managedContent(item.template, item.name, item.description, item.tierPrices, item.addonPrices) };
+    const payload = JSON.stringify(request);
+    const saveKey = packageSaveKey(payload, pendingSave.current);
+    pendingSave.current = { payload, key: saveKey };
+    try {
+      // TRACE-134: one keyed call; a live or in-use version is kept and the change becomes a new version.
+      const result = await savePackageVersion(createClient(), { ...request, saveKey });
+      pendingSave.current = null;
+      toast.success("Prices saved", { description: result.needs_review ? "Some prices are outside the typical range and have been flagged for review." : result.is_active ? "Your live customer pricing is up to date." : "Your prices are saved and stay paused." });
+      await load();
+    } catch (error) {
+      if (error instanceof PackageVersionError) pendingSave.current = null;
+      toast.error(error instanceof PackageVersionError && error.stale ? "These prices changed" : "Couldn’t save prices", {
+        description: `${error instanceof Error ? error.message : "Please try again."} Your current customer pricing was not changed.` });
+      if (error instanceof PackageVersionError && error.stale) await load();
+    } finally {
       setSavingId(null);
-      toast.error("Couldn’t begin saving prices", { description: pauseResult.error.message });
-      return;
-    }
-    const clearTiers = await supabase.from("package_tiers").delete().eq("package_id", item.packageId);
-    if (clearTiers.error) return failSave(clearTiers.error.message);
-    const tierResult = await supabase.from("package_tiers").insert(item.template.tiers.map((tier, index) => ({
-      package_id: item.packageId,
-      template_tier_id: tier.id,
-      name: tier.name,
-      price: item.tierPrices[tier.id],
-      frequency: "one-time",
-      includes: tier.includes,
-      sort_order: index,
-    })));
-    if (tierResult.error) return failSave(tierResult.error.message);
-    const clearAddons = await supabase.from("package_addons").delete().eq("package_id", item.packageId);
-    if (clearAddons.error) return failSave(clearAddons.error.message);
-    if (item.template.addons.length) {
-      const addonResult = await supabase.from("package_addons").insert(item.template.addons.map((addon) => ({
-        package_id: item.packageId,
-        template_addon_id: addon.id,
-        price: item.addonPrices[addon.id]?.price ?? addon.default_price,
-        is_offered: item.addonPrices[addon.id]?.isOffered ?? true,
-      })));
-      if (addonResult.error) return failSave(addonResult.error.message);
-    }
-    const needsReview = item.template.tiers.some((tier) => item.tierPrices[tier.id] < tier.min_price || item.tierPrices[tier.id] > tier.max_price)
-      || item.template.addons.some((addon) => {
-        const value = item.addonPrices[addon.id];
-        return value?.isOffered !== false && ((value?.price ?? addon.default_price) < addon.price_min || (value?.price ?? addon.default_price) > addon.price_max);
-      });
-    const updateResult = await supabase.from("vendor_packages").update({ needs_review: needsReview, is_active: item.isActive }).eq("id", item.packageId).eq("contractor_id", contractorId);
-    if (updateResult.error) return failSave(updateResult.error.message);
-    setSavingId(null);
-    toast.success("Prices saved", { description: needsReview ? "Some prices are outside the typical range and have been flagged for review." : "Your live customer pricing is up to date." });
-    await load();
-
-    function failSave(message: string) {
-      setSavingId(null);
-      toast.error("Couldn’t finish saving prices", { description: `${message} The package has been kept hidden so incomplete pricing is not shown to customers.` });
     }
   };
 
   const togglePackage = async (item: ManagedPackage) => {
     setSavingId(item.packageId);
-    const result = await createClient().from("vendor_packages").update({ is_active: !item.isActive }).eq("id", item.packageId).eq("contractor_id", contractorId);
-    setSavingId(null);
-    if (result.error) toast.error("Couldn’t update availability", { description: result.error.message });
-    else await load();
+    try {
+      await setPackageActive(createClient(), item.packageId, !item.isActive, item.updatedAt);
+      await load();
+    } catch (error) {
+      toast.error("Couldn’t update availability", { description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setSavingId(null);
+    }
   };
 
   if (loading) return <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading managed pricing…</div>;
@@ -323,4 +278,19 @@ export function ManagedPricingEditor({ contractorId, operator = false }: { contr
 
     {archived.length > 0 && <section aria-labelledby="archived-managed" className="space-y-2"><h2 id="archived-managed" className="font-medium">Archived prices</h2><p className="text-sm text-muted-foreground">Mercurius archived these prices. They are kept as history and cannot be published or edited.</p><ul className="grid gap-2 md:grid-cols-2">{archived.map((item) => <li key={item.packageId} className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-3 text-sm"><span className="font-medium">{item.serviceName}</span><Badge variant="outline">{item.templateName}</Badge><Badge variant="outline">Archived</Badge><span className="text-xs text-muted-foreground">{new Date(item.archivedAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}</span></li>)}</ul></section>}
   </div>;
+}
+
+function managedContent(template: PricingTemplate, name: string, description: string | null,
+  tierPrices: Record<string, number>, addonPrices: Record<string, { price: number; isOffered: boolean }>): PackageVersionContent {
+  return {
+    service_id: template.service_id,
+    template_id: template.id,
+    package: { name, description, pricing_mode: "fixed", default_frequency: "one-time" },
+    tiers: template.tiers.map((tier, index) => ({
+      template_tier_id: tier.id, name: tier.name, price: tierPrices[tier.id], frequency: "one-time", includes: tier.includes, sort_order: index,
+    })),
+    addons: template.addons.map((addon, index) => ({
+      template_addon_id: addon.id, price: addonPrices[addon.id]?.price ?? addon.default_price, is_offered: addonPrices[addon.id]?.isOffered ?? true, sort_order: index,
+    })),
+  };
 }

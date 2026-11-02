@@ -9,6 +9,28 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
+-- TRACE-134 (6.11A): a price version that is live or in use is not edited in place on any path.
+-- Edits below that the guard refuses are applied under owner maintenance (version guards disabled for
+-- that statement) so this file keeps characterizing what an in-place change would do (TRACE-126/127).
+create function pg_temp.edit_in_place(p_sql text) returns text language plpgsql as $f$
+begin
+  begin
+    execute p_sql;
+    return 'applied';
+  exception when sqlstate '55000' then null;
+  end;
+  alter table public.vendor_packages disable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers disable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons disable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions disable trigger trg_package_questions_version_guard;
+  execute p_sql;
+  alter table public.vendor_packages enable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers enable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons enable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions enable trigger trg_package_questions_version_guard;
+  return 'refused';
+end $f$;
+
 -- Users: 1 homeowner A, 2 homeowner B, 3 plan provider, 4 other provider, 5–6 operators and the two
 -- finance actors.
 insert into auth.users(id,email) select ('97100000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'payments-'||n||'@example.invalid'
@@ -150,7 +172,8 @@ select throws_ok($$select pg_temp.publish(pg_temp.id('v1'), 4000, 500)$$, 'P0001
 -- the add-on) is accepted first; a second add-on visit characterizes the existing acceptance rule.
 insert into fx values ('v1b', pg_temp.visit(pg_temp.id('s1'), 11, pg_temp.day(11)));
 select pg_temp.accept(pg_temp.id('v1'));
-update public.package_tiers set price = 44 where id = '97500000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 44 where id = '97500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is((select needs_review from public.vendor_packages where id = '97400000-0000-4000-8000-000000000001'), false, 'the correction stays inside the review band');
 select pg_temp.accept(pg_temp.id('v2'));
 select throws_ok($$select pg_temp.accept(pg_temp.id('v1b'))$$, '22023', 'Provider is no longer eligible',
@@ -171,10 +194,14 @@ select throws_ok($$select pg_temp.publish(pg_temp.id('v2'), 4400, 0)$$, 'P0001',
 select set_config('t.v2hash', pg_temp.src(pg_temp.id('v2'))->>'version', true);
 insert into fx values ('v2snap', pg_temp.publish(pg_temp.id('v2'), 4000, 0));
 select is(pg_temp.publish(pg_temp.id('v2'), 4000, 0), pg_temp.id('v2snap'), 'an identical publication retry returns the same snapshot');
-update public.package_tiers set price = 47 where id = '97500000-0000-4000-8000-000000000001';
-update public.vendor_packages set name = 'Synthetic plan lawn (renamed)', description = 'Synthetic description edit' where id = '97400000-0000-4000-8000-000000000001';
-update public.package_tiers set name = 'Weekly (renamed)' where id = '97500000-0000-4000-8000-000000000001';
-update public.package_addons set price = 6 where id = '97600000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 47 where id = '97500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
+select is(pg_temp.edit_in_place($sql$update public.vendor_packages set name = 'Synthetic plan lawn (renamed)', description = 'Synthetic description edit' where id = '97400000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set name = 'Weekly (renamed)' where id = '97500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
+select is(pg_temp.edit_in_place($sql$update public.package_addons set price = 6 where id = '97600000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is(pg_temp.src(pg_temp.id('v2'))->>'version', current_setting('t.v2hash'), 'price, add-on and name edits leave the visit''s source hash unchanged');
 select is((pg_temp.src(pg_temp.id('v1'))->>'addons')::bigint, 500::bigint, 'an add-on revision does not change an existing visit''s add-on');
 select is(pg_temp.pay(pg_temp.id('v2'))->>'state', 'ready', 'the published visit is ready to pay');
@@ -201,30 +228,38 @@ select is(pg_temp.event('evt_rp_cap_v2','capture',jsonb_build_object('attempt_id
 select is((select captured from public.money_obligations where service_request_id = pg_temp.id('v2')), 4000::bigint, 'and captures once');
 select is((select count(*) from public.money_obligations where service_request_id = pg_temp.id('v1')), 0::bigint, 'paying one visit creates nothing for another');
 select is((select count(*) from public.money_obligations where service_request_id = pg_temp.id('s2')), 0::bigint, 'nor for the plan');
-update public.package_tiers set price = 40, name = 'Weekly' where id = '97500000-0000-4000-8000-000000000001';
-update public.package_addons set price = 5 where id = '97600000-0000-4000-8000-000000000001';
-update public.vendor_packages set name = 'Synthetic plan lawn', description = null where id = '97400000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 40, name = 'Weekly' where id = '97500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
+select is(pg_temp.edit_in_place($sql$update public.package_addons set price = 5 where id = '97600000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
+select is(pg_temp.edit_in_place($sql$update public.vendor_packages set name = 'Synthetic plan lawn', description = null where id = '97400000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 
 -- One-time regression (unchanged path; DEC-2026-034 exposure is a separate corrective issue) -------
 -- These expectations characterize the known one-time behavior. They change only with that issue.
 select is((pg_temp.src(pg_temp.id('r1'))->>'service')::bigint, 6000::bigint, 'a one-time request is priced from its tier');
 select ok(pg_temp.src(pg_temp.id('r1')) ? 'tier' and pg_temp.src(pg_temp.id('r1')) ? 'package', 'with the current package and tier rows in its evidence');
-update public.package_tiers set price = 66 where id = '97500000-0000-4000-8000-000000000003';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 66 where id = '97500000-0000-4000-8000-000000000003'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is((pg_temp.src(pg_temp.id('r1'))->>'service')::bigint, 6600::bigint,
   'KNOWN EXPOSURE (one-time): an in-place tier correction changes the unpublished source price');
-update public.package_tiers set price = 60 where id = '97500000-0000-4000-8000-000000000003';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 60 where id = '97500000-0000-4000-8000-000000000003'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 insert into fx values ('r1snap', pg_temp.publish(pg_temp.id('r1'), 6000, 0));
-update public.vendor_packages set description = 'Synthetic one-time edit' where id = '97400000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.vendor_packages set description = 'Synthetic one-time edit' where id = '97400000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select throws_ok($$select pg_temp.checkout(1, pg_temp.id('r1snap'))$$, 'P0001', 'Commercial source changed; review current terms',
   'KNOWN EXPOSURE (one-time): a non-price package edit refuses checkout of a published snapshot');
-update public.vendor_packages set description = null where id = '97400000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.vendor_packages set description = null where id = '97400000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 
 -- Plan re-acceptance after visit creation --------------------------------------------------------------
 -- The plan provider accepts plan S2 again at $50 (new offer, new terms row); visits created before
 -- keep their own bound terms, and a visit created after is bound to the new terms.
 insert into fx values ('v3', pg_temp.visit(pg_temp.id('s2'), 3, pg_temp.day(17)));
 select pg_temp.accept(pg_temp.id('v3'));
-update public.package_tiers set price = 50 where id = '97500000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 50 where id = '97500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 -- TRACE-131: an accepted plan's status changes only as owner maintenance; this simulates re-acceptance.
 set local mercurius.owner_maintenance = 'on';
 update public.service_requests set status = 'matched' where id = pg_temp.id('s2');
@@ -243,7 +278,8 @@ select pg_temp.accept(pg_temp.id('v4'));
 select is((pg_temp.src(pg_temp.id('v4'))->>'service')::bigint, 5000::bigint, 'a visit created after re-acceptance is bound to the new terms');
 select is((private.recurring_visit_terms(pg_temp.id('v3'))).seq < (private.recurring_visit_terms(pg_temp.id('v4'))).seq, true,
   'each visit resolves the terms of its own creation, not the latest acceptance');
-update public.package_tiers set price = 40 where id = '97500000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 40 where id = '97500000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 
 -- Live eligibility refusals: named, with recovery; never substituted ------------------------------------
 create function pg_temp.refusal(p_visit uuid) returns text language plpgsql as $$

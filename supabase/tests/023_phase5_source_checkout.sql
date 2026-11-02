@@ -1,6 +1,28 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+
+-- TRACE-134 (6.11A): a price version that is live or in use is not edited in place on any path.
+-- Edits below that the guard refuses are applied under owner maintenance (version guards disabled for
+-- that statement) so this file keeps characterizing what an in-place change would do (TRACE-126/127).
+create function pg_temp.edit_in_place(p_sql text) returns text language plpgsql as $f$
+begin
+  begin
+    execute p_sql;
+    return 'applied';
+  exception when sqlstate '55000' then null;
+  end;
+  alter table public.vendor_packages disable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers disable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons disable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions disable trigger trg_package_questions_version_guard;
+  execute p_sql;
+  alter table public.vendor_packages enable trigger trg_vendor_package_version_guard;
+  alter table public.package_tiers enable trigger trg_package_tiers_version_guard;
+  alter table public.package_addons enable trigger trg_package_addons_version_guard;
+  alter table public.package_qualifying_questions enable trigger trg_package_questions_version_guard;
+  return 'refused';
+end $f$;
 insert into auth.users(id,raw_user_meta_data) values
  ('71000000-0000-4000-8000-000000000001','{}'),('71000000-0000-4000-8000-000000000002','{}'),
  ('71000000-0000-4000-8000-000000000003','{}'),('71000000-0000-4000-8000-000000000004','{}');
@@ -92,7 +114,8 @@ select set_config('request.jwt.claims','{"role":"authenticated","sub":"71000000-
 insert into source_fixture(key,terms) values('fixed-old',pg_temp.source_terms('73000000-0000-4000-8000-000000000002'));
 select throws_ok($$select pg_temp.publish_source('73000000-0000-4000-8000-000000000002',(select terms||'{"service":1}' from source_fixture where key='fixed-old'))$$,'P0001','Service amount must equal selected offering','Cannot underpay selected offering');
 update source_fixture set id=pg_temp.publish_source('73000000-0000-4000-8000-000000000002',terms) where key='fixed-old';
-update public.package_tiers set price=110 where id='76000000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=110 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select throws_ok($$select public.money_prepare_checkout((select id from source_fixture where key='fixed-old'),'full')$$,'P0001','Commercial source changed; review current terms','Changed offering price blocks stale checkout');
 select throws_ok($$select pg_temp.publish_source('73000000-0000-4000-8000-000000000002',(select terms from source_fixture where key='fixed-old'))$$,'P0001','Commercial source changed; review current terms','Stale approved source cannot be published after price edit');
 insert into source_fixture(key,terms) values('fixed-new',pg_temp.source_terms('73000000-0000-4000-8000-000000000002')||'{"service":11000,"subtotal":11000,"total":12700}');
@@ -107,7 +130,8 @@ insert into source_fixture(key,id) select 'fixed-deposit-attempt',(public.money_
 select public.money_receive_event('evt_source_deposit','capture',jsonb_build_object('attempt_id',(select id from source_fixture where key='fixed-deposit-attempt'),'payment_id','pi_source_deposit','amount',3000,'currency','usd'));
 select is(public.money_process_event('evt_source_deposit'),'processed','Deposit captures against the immutable fixed agreement');
 update public.service_requests set status='vendor_completed' where id='73000000-0000-4000-8000-000000000004';
-update public.package_tiers set price=120 where id='76000000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=120 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is((public.money_prepare_checkout((select id from source_fixture where key='fixed-deposit'),'balance')).amount,9700::bigint,'Catalog price change cannot reprice or strand an agreed deposit balance');
 update public.vendor_packages set is_active=false where id='75000000-0000-4000-8000-000000000001';
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Selected offering is not eligible','Withdrawn offering cannot authorize a new commercial agreement');
@@ -116,11 +140,13 @@ update public.vendor_packages set is_active=true where id='75000000-0000-4000-80
 update public.contractor_service_zips set zip_code='00001' where contractor_id='72000000-0000-4000-8000-000000000001';
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Selected offering is not eligible','Exact ZIP coverage enforced');
 update public.contractor_service_zips set zip_code='00000' where contractor_id='72000000-0000-4000-8000-000000000001';
-update public.package_tiers set rule_question_key='size',rule_min=10,rule_max=20 where id='76000000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set rule_question_key='size',rule_min=10,rule_max=20 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Offering answers do not match selected tier','Missing tier qualifier cannot authorize price');
 update public.service_requests set package_question_answers='{"size":{"answer":"15"}}' where id='73000000-0000-4000-8000-000000000003';
 select lives_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'Matching tier qualifier accepted');
-update public.package_tiers set price=100.001 where id='76000000-0000-4000-8000-000000000001';
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=100.001 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Source price must be positive whole cents','Fractional cents never silently round');
 insert into public.request_quotes(id,request_id,revision,amount,sender_id,reason,sent_at,expires_at,status)
  values('74000000-0000-4000-8000-000000000003','73000000-0000-4000-8000-000000000003',1,117,'71000000-0000-4000-8000-000000000003','Synthetic old quote',now()-interval '2 days',now()-interval '1 day','submitted');

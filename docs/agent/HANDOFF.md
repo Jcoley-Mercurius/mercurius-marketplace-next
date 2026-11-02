@@ -1,5 +1,12 @@
 # Agent handoff — 2026-10-31
 
+## Phase 6.11A offering versions and vendor write boundaries (TRACE-134, DEC-2026-055 approved), 2026-11-01
+
+- Owner approved DEC-2026-055 items 1–2 (2026-10-31); recorded with the DEC-2026-046 clarification and an MPS §4 note. Dependency state verified: #121, #120 and #122 open, nothing merged.
+- Branch `claude/phase6-11a-offering-boundaries` stacked on #122 (`4e97ac7`). Migration `20261104001000` (additive, **not pushed**): live or in-use versions immutable on every path, keyed stale-guarded `vendor_save_package` (new lineage revision or in place for an unused draft), `vendor_set_package_active`, server-side Managed Pricing guardrail, vendor promotion/ZIP writes closed, five-digit ZIPs, owner-maintenance switch for direct sessions only. Both vendor price editors use the commands. Record: brief §8.
+- Evidence: full SQL 95/5,998 PASS on clean reset; SQL 104 (71); concurrency 34/34 plus the new script; unit 599/599; browser quiet run 47/48 then fixed, loaded runs leave 5 operator-surface timeouts (brief §8). TRACE-126/127 not closed (replacement still refuses an unpaid request's checkout, nothing re-priced).
+- Next: Codex review; owner dry run and push of `20261104001000` before merge (DEC-2026-037); 6.11B (Special Offer, listing honesty, states) stacked on this branch.
+
 ## Phase 6.11 characterization and 6.9 integration path (TRACE-134, DEC-2026-055 proposed), 2026-10-31
 
 - **Integration:** `main` `737474f` lacks 6.9A/6.9B. PR #121 (`claude/phase6-9a-exceptions` → `main`, head `a1855f2`, clean merge, CI push run 41219306645 green, migrations already on hosted) carries the reviewed #118/#119 commits unchanged. Merge it with **a merge commit**, then `gh pr edit 120 --base main`; #120's own diff is `a1855f2..f226669`. Nothing merged, rewritten or duplicated.
