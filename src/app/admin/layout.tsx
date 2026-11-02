@@ -22,7 +22,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     let active = true;
     async function verifyAdmin() {
       if (!user) {
-        router.replace("/login?redirect=/admin");
+        // Keep the deep path (and its filters) so sign-in returns to the same record.
+        router.replace(`/login?redirect=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
         if (active) setAccess("denied");
         return;
       }

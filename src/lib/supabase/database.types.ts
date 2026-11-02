@@ -6603,6 +6603,7 @@ export type Database = {
           default_frequency: string
           deposit_amount: number | null
           description: string | null
+          first_published_at: string | null
           id: string
           included_scope: string[]
           is_active: boolean
@@ -6623,6 +6624,7 @@ export type Database = {
           default_frequency?: string
           deposit_amount?: number | null
           description?: string | null
+          first_published_at?: string | null
           id?: string
           included_scope?: string[]
           is_active?: boolean
@@ -6643,6 +6645,7 @@ export type Database = {
           default_frequency?: string
           deposit_amount?: number | null
           description?: string | null
+          first_published_at?: string | null
           id?: string
           included_scope?: string[]
           is_active?: boolean
@@ -7094,6 +7097,10 @@ export type Database = {
         Args: { _body: string; _request_key: string; _ticket_id: string }
         Returns: Json
       }
+      admin_add_request_note: {
+        Args: { p_body: string; p_key: string; p_request: string }
+        Returns: Json
+      }
       admin_archive_package: {
         Args: {
           p_expected_updated_at: string
@@ -7111,6 +7118,15 @@ export type Database = {
         Returns: Json
       }
       admin_cancellation_queue: { Args: never; Returns: Json }
+      admin_catalog_visibility_history: { Args: never; Returns: Json }
+      admin_clear_package_review: {
+        Args: {
+          p_expected_updated_at: string
+          p_package: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       admin_close_plan_stop_request: {
         Args: { _request_id: string; _resolution: string }
         Returns: Json
@@ -7125,6 +7141,20 @@ export type Database = {
           p_package: string
           p_prices: Json
           p_reason: string
+        }
+        Returns: Json
+      }
+      admin_correct_request_details: {
+        Args: {
+          p_address: string
+          p_city: string
+          p_description: string
+          p_expected_updated_at: string
+          p_key: string
+          p_reason: string
+          p_request: string
+          p_state: string
+          p_zip_code: string
         }
         Returns: Json
       }
@@ -7202,6 +7232,7 @@ export type Database = {
         Args: { _job_id: string; _reason: string }
         Returns: string
       }
+      admin_operations_summary: { Args: never; Returns: Json }
       admin_package_contents: { Args: { p_contractor?: string }; Returns: Json }
       admin_package_draft_events: { Args: { p_draft: string }; Returns: Json }
       admin_package_drafts: { Args: { p_contractor?: string }; Returns: Json }
@@ -7223,6 +7254,14 @@ export type Database = {
           _starts_at: string
         }
         Returns: Json
+      }
+      admin_provider_badge_history: {
+        Args: { p_contractor: string }
+        Returns: Json
+      }
+      admin_provider_is_onboarded: {
+        Args: { p_contractor: string }
+        Returns: boolean
       }
       admin_provider_quality_events: {
         Args: { _contractor_id?: string }
@@ -7283,6 +7322,10 @@ export type Database = {
         Returns: Json
       }
       admin_recurring_payment_queue: { Args: never; Returns: Json }
+      admin_request_action_history: {
+        Args: { p_request: string }
+        Returns: Json
+      }
       admin_request_draft_email: {
         Args: {
           p_confirm_unknown?: boolean
@@ -7291,6 +7334,7 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_request_notes: { Args: { p_request: string }; Returns: Json }
       admin_resolve_cadence_date: {
         Args: {
           _anchor_id: string
@@ -7379,8 +7423,29 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_set_catalog_service_visibility: {
+        Args: {
+          p_active: boolean
+          p_expected_active: boolean
+          p_key: string
+          p_owner_approval: string
+          p_reason: string
+          p_service: string
+        }
+        Returns: Json
+      }
       admin_set_package_internal_notes: {
         Args: { p_draft?: string; p_notes?: string; p_package?: string }
+        Returns: Json
+      }
+      admin_set_provider_badges: {
+        Args: {
+          p_badges: string[]
+          p_contractor: string
+          p_expected_badges: string[]
+          p_key: string
+          p_reason: string
+        }
         Returns: Json
       }
       admin_set_recurring_plan_state: {
@@ -7405,6 +7470,16 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_transition_job_status_expected: {
+        Args: {
+          p_expected_updated_at: string
+          p_job: string
+          p_key: string
+          p_reason: string
+          p_to_status: Database["public"]["Enums"]["request_status"]
+        }
+        Returns: Json
+      }
       admin_unlink_contractor: {
         Args: { _contractor_id: string }
         Returns: undefined
@@ -7421,6 +7496,10 @@ export type Database = {
           _unassign?: boolean
         }
         Returns: Json
+      }
+      admin_vendor_special_offer: {
+        Args: { p_contractor: string }
+        Returns: string
       }
       admin_waiver_preview: { Args: { _operation_id: string }; Returns: Json }
       appeal_dispute_resolution:
@@ -8869,10 +8948,21 @@ export type Database = {
         Args: { p_application: string }
         Returns: Json
       }
+      vendor_own_compliance_status: { Args: never; Returns: Json }
+      vendor_own_earnings: { Args: never; Returns: Json }
       vendor_own_evidence_renewal: { Args: never; Returns: Json }
       vendor_own_renewal_documents: { Args: never; Returns: Json }
       vendor_package_approvals: { Args: never; Returns: Json }
       vendor_package_archives: { Args: { p_contractor: string }; Returns: Json }
+      vendor_package_revisions: {
+        Args: { p_packages: string[] }
+        Returns: {
+          in_use: boolean
+          is_head: boolean
+          package_id: string
+          package_revision: string
+        }[]
+      }
       vendor_place_application_retention_hold: {
         Args: { p_application: string; p_key: string; p_reason: string }
         Returns: Json
@@ -9044,6 +9134,24 @@ export type Database = {
       vendor_retention_storage_delete_allowed: {
         Args: { p_bucket: string; p_name: string }
         Returns: boolean
+      }
+      vendor_save_package: {
+        Args: {
+          p_content: Json
+          p_expected_revision: string
+          p_package: string
+          p_publish: boolean
+          p_save_key: string
+        }
+        Returns: Json
+      }
+      vendor_set_package_active: {
+        Args: {
+          p_active: boolean
+          p_expected_updated_at: string
+          p_package: string
+        }
+        Returns: Json
       }
       vendor_start_onboarding_review: {
         Args: {

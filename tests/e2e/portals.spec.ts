@@ -52,8 +52,11 @@ test("admin quote fields, nested confirmation and persistent action errors", asy
   await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(release).toBeFocused();
-  await dialog.getByRole("button", { name: "Save Note", exact: true }).click();
-  await expect(dialog.getByRole("alert").filter({ hasText: "Action could not be completed" })).toBeFocused();
+  // TRACE-136: internal notes are operator-only and append-only; a refused save is reported in place.
+  await expect(dialog.getByText("Visible to Mercurius operators only.", { exact: false })).toBeVisible();
+  await dialog.getByLabel("New internal note").fill("Synthetic operator note");
+  await dialog.getByRole("button", { name: "Add note", exact: true }).click();
+  await expect(dialog.getByRole("alert").filter({ hasText: "Synthetic service unavailable" })).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
   await page.keyboard.press("Escape");
   await expect(review).toBeFocused();
@@ -121,9 +124,13 @@ for (const theme of ["light", "dark"]) {
     await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await expect(confirm.getByRole("button", { name: "Change to Scheduled" })).toBeDisabled();
     await confirm.getByLabel("Reason (required)").fill("Synthetic operator correction");
-    const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/transition_job_status"));
+    // TRACE-136: the change is bound to the version the operator read and carries a request key.
+    const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/admin_transition_job_status_expected"));
     await confirm.getByRole("button", { name: "Change to Scheduled" }).click();
-    expect((await request).postDataJSON()).toMatchObject({ _to_status: "scheduled", _reason: "Synthetic operator correction" });
+    const sent = (await request).postDataJSON();
+    expect(sent).toMatchObject({ p_to_status: "scheduled", p_reason: "Synthetic operator correction", p_job: "00000000-0000-4000-8000-000000000010" });
+    expect(sent.p_expected_updated_at).toEqual(expect.any(String));
+    expect(sent.p_key).toMatch(/^[0-9a-f-]{36}$/);
     await expect(confirm.getByRole("alert")).toBeFocused();
     expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
     await page.screenshot({ path: `test-results/phase4-admin-${theme}.png`, fullPage: true });

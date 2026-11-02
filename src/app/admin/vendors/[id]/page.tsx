@@ -36,6 +36,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
+import { ProviderBadges } from "@/components/admin/ProviderBadges";
+import { completedJobsText, loadVerifiedProviderStats, reviewSummaryText, type VerifiedProviderStats } from "@/lib/adminOperations";
 import { cn } from "@/lib/utils";
 import { applicationPrefill, type PrefillApplication } from "@/lib/vendorApplicationPrefill";
 import { serviceSaveChanges, unpricedServices } from "@/lib/vendorServices";
@@ -54,8 +56,6 @@ type VendorForm = {
   services: string[];
   badges: string[];
   years_experience: number | null;
-  jobs_completed: number | null;
-  rating: number | null;
   special_offer: string | null;
   our_promise: string | null;
   verified_specialty: string | null;
@@ -69,8 +69,7 @@ type CoverageArea = { zip_code: string; city: string; state: string };
 type Mode = "loading" | "ready" | "error" | "missing";
 type Prefilled = { fields: number; zips: number; unmatchedServices: string[] };
 
-const AVAILABLE_BADGES = ["Licensed", "Insured", "Background Checked", "24/7 Available", "Emergency Services", "Eco-Friendly", "Satisfaction Guaranteed", "Top Rated"];
-const SAFE_SELECT = "id, name, tagline, bio, location, website, video_url, logo_url, services, badges, years_experience, jobs_completed, rating, our_promise, verified_specialty, is_active, marketing_enabled";
+const SAFE_SELECT = "id, name, tagline, bio, location, website, video_url, logo_url, services, badges, years_experience, our_promise, verified_specialty, is_active, marketing_enabled";
 const MEDIA_BUCKET = "vendor-media";
 const APPLICATION_SELECT = "business_description, website, years_experience, email, phone, services, service_areas";
 
@@ -91,6 +90,9 @@ export default function AdminVendorDetailPage() {
   const [pricesVersion, setPricesVersion] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [prefilled, setPrefilled] = useState<Prefilled | null>(null);
+  // DEC-2026-057 items 3-4: onboarded providers are activated through onboarding; statistics are verified.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const [stats, setStats] = useState<VerifiedProviderStats | undefined>(undefined);
   const logoInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
 
@@ -113,6 +115,13 @@ export default function AdminVendorDetailPage() {
         // DEC-2026-055 item 1: kept for reference, readable by operators only.
         supabase.rpc("admin_vendor_special_offer", { p_contractor: id }),
       ]);
+      const [onboardedResult, statsResult] = await Promise.all([
+        supabase.rpc("admin_provider_is_onboarded", { p_contractor: id }),
+        loadVerifiedProviderStats(supabase, [id]),
+      ]);
+      // Unknown counts as onboarded, so the page never offers a direct switch it can't confirm.
+      setOnboarded(onboardedResult.error ? true : Boolean(onboardedResult.data));
+      setStats(statsResult.get(id));
       const firstError = vendorResult.error ?? galleryResult.error ?? zipResult.error ?? serviceResult.error ?? areaResult.error ?? contactResult.error ?? applicationResult.error ?? packageResult.error ?? draftResult.error;
       if (firstError) throw firstError;
       if (!vendorResult.data) {
@@ -219,7 +228,9 @@ export default function AdminVendorDetailPage() {
     const supabase = createClient();
     try {
       const vendorResult = await supabase.from("contractors").update({
-        name: form.name.trim(), tagline: clean(form.tagline), bio: clean(form.bio), location: clean(form.location), email: clean(form.email), phone: clean(form.phone), website: clean(form.website), video_url: clean(form.video_url), logo_url: clean(form.logo_url), services: form.services, badges: form.badges, years_experience: form.years_experience, jobs_completed: form.jobs_completed, rating: form.rating, our_promise: clean(form.our_promise), verified_specialty: clean(form.verified_specialty), is_active: form.is_active, marketing_enabled: form.marketing_enabled,
+        name: form.name.trim(), tagline: clean(form.tagline), bio: clean(form.bio), location: clean(form.location), email: clean(form.email), phone: clean(form.phone), website: clean(form.website), video_url: clean(form.video_url), logo_url: clean(form.logo_url), services: form.services, years_experience: form.years_experience, our_promise: clean(form.our_promise), verified_specialty: clean(form.verified_specialty), marketing_enabled: form.marketing_enabled,
+        // An onboarded provider's activation is its onboarding decision; a legacy provider keeps the switch.
+        ...(onboarded === false ? { is_active: form.is_active } : {}),
       }).eq("id", id);
       if (vendorResult.error) throw vendorResult.error;
       const clearZips = await supabase.from("contractor_service_zips").delete().eq("contractor_id", id);
@@ -287,9 +298,9 @@ export default function AdminVendorDetailPage() {
 
   return (
     <div className="min-h-full bg-background pb-20">
-      <div className="sticky top-16 z-10 border-b bg-background/95 backdrop-blur"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 md:px-8"><Link href="/admin/vendors" className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Back to Vendors</Link><div className="flex flex-wrap items-center gap-2"><Link href={`/providers/${form.id}`} target="_blank" className={buttonVariants({ variant: "outline", size: "sm" })}><Eye />Preview Storefront</Link><Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} label={form.is_active ? "Active" : "Hidden"} /><Button disabled={saving} onClick={() => void save()}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Publishing..." : "Publish"}</Button></div></div></div>
+      <div className="sticky top-16 z-10 border-b bg-background/95 backdrop-blur"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 md:px-8"><Link href="/admin/vendors" className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Back to Vendors</Link><div className="flex flex-wrap items-center gap-2"><Link href={`/providers/${form.id}`} target="_blank" className={buttonVariants({ variant: "outline", size: "sm" })}><Eye />Preview Storefront</Link>{onboarded === false && <Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} label={form.is_active ? "Active" : "Hidden"} />}<Button disabled={saving} onClick={() => void save()}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Publishing..." : "Publish"}</Button></div></div></div>
 
-      <section className="border-b bg-gradient-to-br from-primary/8 via-background to-accent/8"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-start sm:px-6 md:px-8"><div className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="flex h-full w-full items-center justify-center">{form.logo_url ? <img src={form.logo_url} alt={`${form.name} logo`} className="h-full w-full object-contain" /> : <span className="text-3xl font-bold text-muted-foreground">{form.name.charAt(0)}</span>}</div><button type="button" disabled={uploading} onClick={() => logoInput.current?.click()} className="absolute inset-0 flex items-center justify-center bg-black/65 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"><Upload className="mr-1 h-4 w-4" />Change</button><input ref={logoInput} hidden type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeLogo(file); event.target.value = ""; }} /></div><div className="w-full flex-1 space-y-3"><Input value={form.name} onChange={(event) => update({ name: event.target.value })} className="h-12 bg-card text-2xl font-semibold" placeholder="Business name" /><Input value={form.tagline ?? ""} onChange={(event) => update({ tagline: event.target.value })} className="bg-card" placeholder="Short vendor tagline" /><div className="grid gap-3 sm:grid-cols-3"><IconField icon={MapPin}><Input value={form.location ?? ""} onChange={(event) => update({ location: event.target.value })} placeholder="Location" /></IconField><IconField icon={Star}><Input type="number" min="0" max="5" step="0.1" value={form.rating ?? ""} onChange={(event) => update({ rating: optionalNumber(event.target.value) })} placeholder="Rating" /></IconField><IconField icon={Briefcase}><Input type="number" min="0" value={form.jobs_completed ?? ""} onChange={(event) => update({ jobs_completed: optionalInteger(event.target.value) })} placeholder="Jobs" /></IconField></div></div></div></section>
+      <section className="border-b bg-gradient-to-br from-primary/8 via-background to-accent/8"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-start sm:px-6 md:px-8"><div className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="flex h-full w-full items-center justify-center">{form.logo_url ? <img src={form.logo_url} alt={`${form.name} logo`} className="h-full w-full object-contain" /> : <span className="text-3xl font-bold text-muted-foreground">{form.name.charAt(0)}</span>}</div><button type="button" disabled={uploading} onClick={() => logoInput.current?.click()} className="absolute inset-0 flex items-center justify-center bg-black/65 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"><Upload className="mr-1 h-4 w-4" />Change</button><input ref={logoInput} hidden type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeLogo(file); event.target.value = ""; }} /></div><div className="w-full flex-1 space-y-3"><Input value={form.name} onChange={(event) => update({ name: event.target.value })} className="h-12 bg-card text-2xl font-semibold" placeholder="Business name" /><Input value={form.tagline ?? ""} onChange={(event) => update({ tagline: event.target.value })} className="bg-card" placeholder="Short vendor tagline" /><div className="grid gap-3 sm:grid-cols-3"><IconField icon={MapPin}><Input value={form.location ?? ""} onChange={(event) => update({ location: event.target.value })} placeholder="Location" /></IconField><IconField icon={Star}><p className="flex h-9 items-center text-sm" title="From published reviews">{reviewSummaryText(stats)}</p></IconField><IconField icon={Briefcase}><p className="flex h-9 items-center text-sm" title="From completed jobs">{completedJobsText(stats)}</p></IconField></div></div></div></section>
 
       {prefilled && <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 md:px-8"><ApplicationPrefillNotice prefilled={prefilled} onAdded={addedToCatalog} /></div>}
 
@@ -298,7 +309,7 @@ export default function AdminVendorDetailPage() {
         <Card><CardHeader><CardTitle>Services Offered</CardTitle><CardDescription>Select catalog services this vendor can perform. Save services keeps the services and service ZIP codes without publishing: visibility, marketing and other profile edits are not saved or changed.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap gap-2">{services.length ? services.map((service) => { const checked = form.services.includes(service.id); return <button key={service.id} type="button" aria-pressed={checked} onClick={() => update({ services: checked ? form.services.filter((id) => id !== service.id) : [...form.services, service.id] })} className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", checked ? "border-accent bg-accent text-accent-foreground" : "border-border bg-muted text-muted-foreground hover:border-accent/50")}>{service.name}</button>; }) : <p className="text-sm text-muted-foreground">No active catalog services are available.</p>}</div>
           <div className="flex flex-wrap items-center gap-2 border-t pt-4"><Button variant="outline" size="sm" disabled={savingServices || saving} onClick={() => void saveServices()}>{savingServices ? <Loader2 className="animate-spin" /> : <Save />}{savingServices ? "Saving..." : "Save services"}</Button><OfferCustomQuote contractorId={id} services={servicesDirty ? [] : quoteCandidates} onDone={reloadPrices} /><p role="status" className="text-xs text-muted-foreground">{servicesDirty ? "Unsaved service changes." : quoteCandidates.length ? `No price yet for this vendor: ${quoteCandidates.map((service) => service.name).join(", ")}. Homeowners can't request these from this vendor until it has a price or Custom Quote.` : "Every saved service has a price or draft for this vendor."}</p></div></CardContent></Card>
 
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Credentials</CardTitle></CardHeader><CardContent><div className="flex flex-wrap gap-2">{AVAILABLE_BADGES.map((badge) => { const checked = form.badges.includes(badge); return <button key={badge} type="button" onClick={() => update({ badges: checked ? form.badges.filter((item) => item !== badge) : [...form.badges, badge] })} className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", checked ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-border bg-muted text-muted-foreground hover:border-emerald-300")}>{badge}</button>; })}</div></CardContent></Card>
+        <ProviderBadges key={form.badges.join("|")} contractorId={form.id} badges={form.badges} onSaved={(badges) => setForm((current) => current ? { ...current, badges } : current)} />
 
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Award className="h-4 w-4" />Stand Out</CardTitle><CardDescription>Optional trust messaging shown with this provider.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="space-y-1"><p className="text-sm font-medium">Special offer (not shown publicly)</p><p className="text-sm text-muted-foreground">{form.special_offer?.trim() || "None recorded"}</p><p className="text-xs text-muted-foreground">Kept for reference only. Offers are not shown on profiles or used in matching (DEC-2026-055).</p></div><Field label="Our promise"><Input value={form.our_promise ?? ""} onChange={(event) => update({ our_promise: event.target.value })} placeholder='"Done right or we come back free"' /></Field><Field label="Verified specialty"><Input value={form.verified_specialty ?? ""} onChange={(event) => update({ verified_specialty: event.target.value })} placeholder='"Pet-safe products only"' /></Field><Field label="Promotional video URL"><Input value={form.video_url ?? ""} onChange={(event) => update({ video_url: event.target.value })} placeholder="YouTube or Vimeo URL" /></Field></CardContent></Card>
 
@@ -311,7 +322,7 @@ export default function AdminVendorDetailPage() {
 
       <aside className="space-y-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="h-4 w-4" />Service Area</CardTitle><CardDescription>Select supported ZIP codes for matching.</CardDescription></CardHeader><CardContent><div className="max-h-80 space-y-2 overflow-y-auto pr-1">{areas.length ? areas.map((area) => { const checked = serviceZips.has(area.zip_code); return <button key={area.zip_code} type="button" onClick={() => setServiceZips((current) => { const next = new Set(current); if (next.has(area.zip_code)) next.delete(area.zip_code); else next.add(area.zip_code); return next; })} className={cn("flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors", checked ? "border-accent bg-accent/10" : "border-border bg-muted/40 text-muted-foreground hover:border-accent/40")}><span><strong>{area.zip_code}</strong><span className="ml-2 text-xs">{area.city}, {area.state}</span></span>{checked && <Badge variant="outline">Covered</Badge>}</button>; }) : <p className="text-sm text-muted-foreground">No active coverage areas have been configured.</p>}</div><p className="mt-3 text-xs text-muted-foreground">{serviceZips.size} ZIP code{serviceZips.size === 1 ? "" : "s"} selected</p></CardContent></Card>
 
-        <Card><CardHeader><CardTitle>Visibility</CardTitle></CardHeader><CardContent className="space-y-4"><Setting label="Active on platform" description="Inactive vendors are hidden from directories and matching."><Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} /></Setting><Setting label="Marketing enabled" description="Eligible for featured placements and spotlights."><Toggle checked={form.marketing_enabled} onChange={(checked) => update({ marketing_enabled: checked })} /></Setting></CardContent></Card>
+        <Card><CardHeader><CardTitle>Visibility</CardTitle></CardHeader><CardContent className="space-y-4">{onboarded === false ? <Setting label="Active on platform" description="Legacy provider without an onboarding record: this switch changes matching eligibility directly and records no reason. A reviewed path for legacy providers is waiting on an owner decision."><Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} /></Setting> : <p className="text-sm text-muted-foreground">Activation and suspension for this provider are recorded through the onboarding decision in the Activation Checklist below.</p>}<Setting label="Marketing enabled" description="Eligible for featured placements and spotlights."><Toggle checked={form.marketing_enabled} onChange={(checked) => update({ marketing_enabled: checked })} /></Setting></CardContent></Card>
 
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Existing Provider Access</CardTitle><CardDescription>Give the confirmed owner of an existing profile access to set it up. Setup access is not approval.</CardDescription></CardHeader><CardContent><ExistingProviderAccess contractorId={id} /></CardContent></Card>
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Vendor Account</CardTitle><CardDescription>Bind an account the applicant already holds, under onboarding review or while suspended.</CardDescription></CardHeader><CardContent><VendorAccountLinking contractorId={id} businessName={form.name} /></CardContent></Card>
@@ -326,7 +337,6 @@ export default function AdminVendorDetailPage() {
 const textareaClass = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 function clean(value: string | null) { return value?.trim() || null; }
 function sameSet(left: readonly string[], right: readonly string[]) { const a = new Set(left); const b = new Set(right); return a.size === b.size && [...a].every((value) => b.has(value)); }
-function optionalNumber(value: string) { const number = Number(value); return value === "" || !Number.isFinite(number) ? null : number; }
 function optionalInteger(value: string) { const number = Number(value); return value === "" || !Number.isFinite(number) ? null : Math.max(0, Math.round(number)); }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <div className="space-y-2"><Label>{label}</Label>{children}</div>; }
 function IconField({ icon: Icon, children }: { icon: typeof MapPin; children: ReactNode }) { return <div className="flex items-center gap-2"><Icon className="h-4 w-4 shrink-0 text-muted-foreground" />{children}</div>; }

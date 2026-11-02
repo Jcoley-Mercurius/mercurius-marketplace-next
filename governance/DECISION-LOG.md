@@ -271,9 +271,53 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 ### DEC-2026-057 — Admin overrides of coverage, catalog, provider status, ratings, request details, package reviews and legacy invoices (Phase 6.13)
 
-**Status:** PROPOSED (2026-11-02). Nothing below is approved or implemented. **Date:** 2026-11-02 (America/New_York).
+**Status:** **APPROVED as amended** (owner instruction, Josh, 2026-11-02, America/New_York, adopting Codex's review answers). The proposal text below the decision is kept as proposed. **Date:** 2026-11-02.
 
-**Covered by approved authorities, not waiting on this decision:** the 6.13A/6.13B repairs in the brief §8.2/§8.4, including closing client writes on `invoices` (MPS §6.5, CFG-004).
+**How the answers were read.** The owner's instruction gave seven required corrections and no separate answer sheet:
+- Corrections 3–7 amend Q3–Q7.
+- Corrections 1 (internal notes) and 2 (stale actions) amend the approved repairs A4 and A6.
+- Q1 and Q2 were not amended, so they are recorded as approved as recommended.
+- Correction 4 is recorded as the amendment to DEC-2026-052 item 6.
+
+If this reading is wrong, the owner corrects it here.
+
+**Decision (amended answers):**
+
+1. **Coverage (Q1), as recommended.** `/admin/coverage` is a read-only readback. Client writes to `coverage_areas` are closed. The allowlist changes only by reviewed migration (CFG-001 owner authority, as DEC-2026-021).
+2. **Catalog hide (Q2), as recommended.**
+   - Hiding or restoring a catalog service goes through a reasoned, recorded command. Hiding also requires the owner's approval note (CFG-002).
+   - Direct client changes to `services_catalog.is_active` are refused.
+   - "Popular" and the service add/edit form are unchanged.
+3. **Provider controls (Q3, amended).**
+   - The reviewed linking and release commands stay functional.
+   - Direct account reassignment (`contractors.user_id`) is prohibited on every client path.
+   - Public-listing exclusion is a separate thing from suspension and eligibility.
+   - Onboarded providers are activated and suspended only through `vendor_decide_onboarding`; direct `is_active` writes on them are refused.
+   - Correction 3 says to report an incomplete reviewed path before building a replacement. The gaps are reported in the brief §7.1, and no replacement is invented:
+     - (a) legacy providers (no onboarding record) have no reviewed suspension path; `is_active` is their eligibility;
+     - (b) `vendor_matching_eligible` also refuses listing-excluded records (an R0 design for test, fake and duplicate records).
+   - Both stay as they are until the owner decides.
+4. **Ratings, counts and badges (Q4, amended; amends DEC-2026-052 item 6).**
+   - Arbitrary client writes to `contractors.rating` and `jobs_completed` are removed.
+   - Operator surfaces show the authoritative summaries (`public_review_summaries`, `get_completed_job_counts`) and never present the stored default or hand-set value as a verified statistic.
+   - Badges stay operator-managed (DEC-2026-047), through an audited command with a reason, stale protection and keyed replay.
+   - **DEC-2026-052 item 6 (amended):** `contractors.rating` is no longer shown as a statistic on any surface or written by any client. The verified public review summary is shown instead. The column and its stored values are unchanged.
+5. **Request corrections (Q5, amended).**
+   - No direct client writes to request address, ZIP or description, for any role.
+   - Before any offer, quote or commercial binding, an operator correction goes through a reasoned, keyed, version-bound command that revalidates coverage and pricing state atomically under the row lock.
+   - After an offer, quote, assignment, payment, promotion reservation or bound price, the command refuses. A dedicated change workflow is required. None exists, so this gap is recorded, not built.
+6. **Package Reviews (Q6, amended).** Clearing a review takes a reason and is recorded in the vendor-visible correction history, now rather than in the pricing work. The existing guardrails (valid positive fixed tiers; a positive deposit for quote + deposit; publication eligibility) and the `updated_at` stale check move server-side. "Pause" uses the reviewed `admin_suspend_package`.
+7. **Legacy invoices (Q7, as recommended).**
+   - Client writes are closed.
+   - `sync_invoice_on_request_change` (definer trigger) and historical reads are preserved.
+   - The create, edit, send, mark-paid and refund controls are removed, and `/admin/invoices` is a read-only legacy readback that points to Finance.
+8. **Repair amendments.**
+   - (A4, correction 1) Every disclosure path for operator-only notes is closed, including participant reads of `service_requests.notes`, not only the new table. The historical column content is kept, not copied or republished.
+   - (A6, correction 2) Admin actions bind to the record version (`updated_at`) or the relevant state, not status alone. Keyed replay is kept, and history is written in the same transaction.
+
+**Not authorized by this decision:** hosted push, merge, payments, automation, financial operations.
+
+**As proposed — covered by approved authorities, not waiting on this decision:** the 6.13A/6.13B repairs in the brief §8.2/§8.4, including closing client writes on `invoices` (MPS §6.5, CFG-004).
 
 **Questions** (the full sheet, with current behavior, is in the brief §7):
 
@@ -378,7 +422,7 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 3. **`quality_feedback` (I3).** *Current:* no writer; 0 hosted rows; client writes now closed. *Recommend:* mark it DEPRECATED as a write path and keep historical rows read-only under CFG-011. Any future private-feedback field belongs on the canonical review record after its own decision.
 4. **Provider visibility and response (G6).** *Implemented as the restrictive default:* a provider sees only its public reviews, as the public does. *Recommend:* keep, with no public provider reply during beta; a provider asks support to check a review against the criteria.
 5. **Review after an issue report.** *Current (kept):* paused while `disputed` or `resolved`; reviewable again once the job returns to `completed`. *Recommend:* keep.
-6. **`contractors.rating`.** A hand-edited number (hosted: 4.5 on all 29 providers) shown on admin vendor lists, pickers, Smart Picks and Featured Providers; never public. *Recommend:* show the verified public summary there instead and leave the column unchanged; no data change.
+6. **`contractors.rating`.** A hand-edited number (hosted: 4.5 on all 29 providers) shown on admin vendor lists, pickers, Smart Picks and Featured Providers; never public. *Recommend:* show the verified public summary there instead and leave the column unchanged; no data change. **Amended and approved 2026-11-02 by DEC-2026-057 item 4:** no surface shows `contractors.rating` as a statistic and no client writes it or `jobs_completed`; the verified summaries are shown instead; column and values unchanged. The other DEC-2026-052 items stay PROPOSED.
 7. **Appeals.** *Implemented:* one appeal per moderation decision (as dispute appeals are per resolution version); a retry returns the same ticket. *Recommend:* confirm, with no deadline.
 8. **What the author is told.** *Implemented:* the criterion and the operator's reason (the reason was already sent before this slice), never the operator's identity. *Recommend:* confirm, and train operators that the reason is author-visible.
 9. **Loyalty points for reviews.** `award_review_points` grants 50 points for a comment of 40+ characters. *Unchanged.* *Recommend:* owner/legal decide incentive and disclosure before Credits activate.

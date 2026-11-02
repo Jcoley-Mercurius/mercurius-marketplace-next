@@ -1,5 +1,20 @@
 # Agent handoff — 2026-11-02
 
+## Phase 6.13 admin operations implementation (TRACE-136, DEC-2026-057 approved as amended), 2026-11-02
+
+- Owner approved DEC-2026-057 using Codex's corrections (2026-11-02). The reading of the answers is recorded in DECISION-LOG (Q1/Q2 as recommended; corrections 3–7 amend Q3–Q7; corrections 1–2 amend A4/A6; correction 4 amends DEC-2026-052 item 6).
+- Branch `claude/phase6-13-admin-operations-release` (on `main` `7ec8f9a`, which merged the characterization as PR #132). PR #132 is a draft. Migration `20261108001000` (additive, **not pushed**) plus the compatible client, as one release. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md).
+- Built:
+  - every notes disclosure path closed (column grants), with operator-only append-only notes;
+  - message sender validation;
+  - no client writes to invoices, coverage, ownership, payout flags, stats, address or description;
+  - keyed, version-bound commands for status, request corrections (pre-binding only), badges, catalog visibility and Package Reviews;
+  - an operations summary that calls the queue functions;
+  - grouped navigation, URL state and deep links, honest finance pages;
+  - Smart Picks, the public Admin link and the `/pricing` legend removed.
+- Gaps reported, not built (brief §12.4): no reviewed suspension for 13 legacy providers; listing exclusion still removes eligibility; no change workflow for bound requests.
+- Next: Codex review. Then, with the owner's authorization, dry run, push `20261108001000`, and merge immediately after (transition behavior in brief §12.5). Phase 6 remains incomplete (brief §11).
+
 ## Phase 6.13 admin operations characterization (TRACE-136, DEC-2026-057 proposed), 2026-11-02
 
 - **Checkpoint (verified):** `main` = `b1a8cc3` (PR #129, 6.12B, merged 2026-11-02 by the owner; before it `8bcbfbe`: 6.11A #126, 6.12A #127, 6.11B #128). This branch merged `main` after #129 landed; #129's decisions and evidence are kept as written. Hosted history ends at `20261107001000`, so the "not pushed" notes for `20261104001000`–`20261106001000` below are superseded.
