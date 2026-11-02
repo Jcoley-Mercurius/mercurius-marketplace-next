@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   AlertTriangle,
   CheckCircle2,
-  PauseCircle,
   RefreshCw,
   Store,
 } from "lucide-react";
@@ -16,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { ConfirmAction } from "@/components/ui/confirm-action";
+import { AdminActionError, adminActionError } from "@/lib/adminOperations";
 import type { CorrectablePackage } from "@/lib/packagePriceCorrections";
 import { cn } from "@/lib/utils";
 import {
@@ -181,63 +182,32 @@ export default function AdminPricingReviewsPage() {
     custom: items.filter((item) => item.template_id === null).length,
   }), [items]);
 
-  async function approve(item: ReviewItem) {
-    if (!canApprove(item)) {
-      toast.error("This package is not safe to approve", { description: approvalBlockReason(item) });
-      return;
-    }
-    const publicEffect = item.is_active
-      ? "If the provider and all remaining public checks are eligible, this active package can become customer-facing immediately."
-      : "The package will remain private until the vendor publishes it.";
-    if (!window.confirm(`Approve “${item.name}” as a pricing exception? ${publicEffect}`)) return;
-
+  // DEC-2026-057 item 6: clearing or pausing a review takes a reason the vendor can read, keeps the
+  // updated_at stale check and runs the approval guardrails on the server. Both are recorded.
+  async function approve(item: ReviewItem, reason: string) {
+    if (!canApprove(item)) throw new AdminActionError(approvalBlockReason(item));
     setBusy({ id: item.id, action: "approve" });
-    const result = await createClient()
-      .from("vendor_packages")
-      .update({ needs_review: false })
-      .eq("id", item.id)
-      .eq("needs_review", true)
-      .eq("updated_at", item.updated_at)
-      .select("id")
-      .maybeSingle();
+    const result = await createClient().rpc("admin_clear_package_review", { p_package: item.id, p_expected_updated_at: item.updated_at, p_reason: reason });
     setBusy(null);
     if (result.error) {
-      toast.error("Package approval failed", { description: result.error.message });
-      return;
-    }
-    if (!result.data) {
-      toast.error("Package changed before approval", { description: "Refresh the queue and review the vendor’s latest saved pricing before approving." });
-      await load(false);
-      return;
+      if (result.error.code === "40001") void load(false);
+      throw new AdminActionError(adminActionError(result.error, "This package changed since you opened it. Review the vendor’s latest saved pricing before approving."));
     }
     setItems((current) => current.filter((candidate) => candidate.id !== item.id));
-    toast.success("Pricing review cleared", { description: publicEffect });
+    toast.success("Pricing review cleared", { description: item.is_active ? "If the provider and all remaining public checks are eligible, this package can become customer-facing now." : "The package stays private until the vendor publishes it." });
   }
 
-  async function pause(item: ReviewItem) {
-    if (!item.is_active || !window.confirm(`Pause “${item.name}” and keep it under review?`)) return;
+  async function pause(item: ReviewItem, reason: string) {
     setBusy({ id: item.id, action: "pause" });
-    const result = await createClient()
-      .from("vendor_packages")
-      .update({ is_active: false })
-      .eq("id", item.id)
-      .eq("needs_review", true)
-      .eq("updated_at", item.updated_at)
-      .select("id, updated_at")
-      .maybeSingle();
+    const result = await createClient().rpc("admin_suspend_package", { p_package: item.id, p_expected_updated_at: item.updated_at, p_reason: reason });
     setBusy(null);
     if (result.error) {
-      toast.error("Package could not be paused", { description: result.error.message });
-      return;
+      if (result.error.code === "40001") void load(false);
+      throw new AdminActionError(adminActionError(result.error, "This package changed since you opened it. Refresh the queue before taking another action."));
     }
-    if (!result.data) {
-      toast.error("Package changed before it was paused", { description: "Refresh the queue before taking another action." });
-      await load(false);
-      return;
-    }
-    const updatedAt = result.data.updated_at;
+    const updatedAt = (result.data as { updated_at?: string } | null)?.updated_at ?? item.updated_at;
     setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, is_active: false, updated_at: updatedAt } : candidate));
-    toast.success("Package paused", { description: "It remains in the review queue and hidden from public pricing." });
+    toast.success("Package paused", { description: "It remains in the review queue and hidden from public pricing. The vendor was told why." });
   }
 
   if (mode === "loading") return <AdminLoading label="Loading package pricing reviews..." />;
@@ -262,7 +232,7 @@ export default function AdminPricingReviewsPage() {
   </div>;
 }
 
-function ReviewCard({ item, busy, approve, pause, corrected }: { item: ReviewItem; busy: { id: string; action: "approve" | "pause" } | null; approve: (item: ReviewItem) => Promise<void>; pause: (item: ReviewItem) => Promise<void>; corrected: () => Promise<void> }) {
+function ReviewCard({ item, busy, approve, pause, corrected }: { item: ReviewItem; busy: { id: string; action: "approve" | "pause" } | null; approve: (item: ReviewItem, reason: string) => Promise<void>; pause: (item: ReviewItem, reason: string) => Promise<void>; corrected: () => Promise<void> }) {
   const itemBusy = busy?.id === item.id;
   const ready = canApprove(item);
   return <Card className="overflow-hidden border-amber-300/60 shadow-sm">
@@ -278,7 +248,7 @@ function ReviewCard({ item, busy, approve, pause, corrected }: { item: ReviewIte
 
         {!ready && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-5 text-destructive"><p className="font-medium">Approval blocked</p><p className="mt-0.5">{approvalBlockReason(item)}</p></div>}
 
-        <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center"><PackagePriceCorrection pkg={correctable(item)} onCorrected={corrected} /><Button className="min-h-11 bg-accent text-accent-foreground hover:bg-accent-hover" disabled={itemBusy || !ready} onClick={() => void approve(item)}>{busy?.id === item.id && busy.action === "approve" ? <RefreshCw className="animate-spin" /> : <CheckCircle2 />}Approve pricing</Button>{item.is_active && <Button variant="outline" className="min-h-11" disabled={itemBusy} onClick={() => void pause(item)}>{busy?.id === item.id && busy.action === "pause" ? <RefreshCw className="animate-spin" /> : <PauseCircle />}Pause &amp; keep under review</Button>}<Link href={`/admin/vendors/${item.contractor_id}`} className={cn(buttonVariants({ variant: "ghost" }), "min-h-11 sm:ml-auto")}>Open vendor</Link></div>
+        <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center"><PackagePriceCorrection pkg={correctable(item)} onCorrected={corrected} /><ConfirmAction triggerVariant="commitment" confirmationTone="commitment" disabled={itemBusy || !ready} requireReason reasonLabel="Reason (the vendor sees this)" reasonHelp="Explain why this price is acceptable." triggerLabel="Approve pricing" title="Approve this pricing exception?" entity={item.name} consequence={item.is_active ? "If the provider and all remaining public checks are eligible, this active package can become customer-facing immediately." : "The package will remain private until the vendor publishes it."} confirmLabel="Approve pricing" describeError={(error) => error instanceof AdminActionError ? error.message : undefined} onConfirm={(reason) => approve(item, reason)} />{item.is_active && <ConfirmAction disabled={itemBusy} requireReason reasonLabel="Reason (the vendor sees this)" triggerLabel="Pause & keep under review" title="Pause this package?" entity={item.name} consequence="It stays in the review queue and is hidden from public pricing. The vendor is notified with your reason." confirmLabel="Pause package" describeError={(error) => error instanceof AdminActionError ? error.message : undefined} onConfirm={(reason) => pause(item, reason)} />}<Link href={`/admin/vendors/${item.contractor_id}`} className={cn(buttonVariants({ variant: "ghost" }), "min-h-11 sm:ml-auto")}>Open vendor</Link></div>
       </div>
     </CardContent>
   </Card>;

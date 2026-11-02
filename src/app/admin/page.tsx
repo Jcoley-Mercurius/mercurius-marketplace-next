@@ -2,101 +2,92 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowUpRight, CheckCircle2, ClipboardList, FileText, UserCheck, Users } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { AdminError, AdminLoading } from "@/components/admin/AdminPageState";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
+import { Status } from "@/components/ui/status";
+import { canonicalRequestState } from "@/lib/lifecycle";
+import { SUMMARY_QUEUES, parseOperationsSummary, type OperationsSummary, type SummaryQueue } from "@/lib/adminOperations";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
 
-type RequestRow = { id: string; service_type: string; city: string; status: string; created_at: string };
-type Stats = { totalRequests: number; pendingRequests: number; activeRequests: number; completedRequests: number; homeowners: number; vendors: number; activeVendors: number; pendingApplications: number };
-const initialStats: Stats = { totalRequests: 0, pendingRequests: 0, activeRequests: 0, completedRequests: 0, homeowners: 0, vendors: 0, activeVendors: 0, pendingApplications: 0 };
-const statusStyle: Record<string, string> = { pending: "bg-amber-100 text-amber-800", matched: "bg-blue-100 text-blue-800", scheduled: "bg-sage-light text-sage-dark", in_progress: "bg-accent/10 text-accent", completed: "bg-green-100 text-green-800", cancelled: "bg-muted text-muted-foreground" };
+// TRACE-136: the overview reads admin_operations_summary, which calls the same queue functions the
+// queue pages call in one transaction, so each count here equals its queue. No threshold, SLA or
+// action of its own; finance counts are shown only to finance-authority holders.
+
+type RequestRow = { id: string; service_type: string; city: string; status: string; matching_status: string; created_at: string };
 
 export default function AdminOverviewPage() {
-  const [stats, setStats] = useState(initialStats);
+  const [summary, setSummary] = useState<OperationsSummary | null>(null);
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [mode, setMode] = useState<"loading" | "live" | "error">("loading");
   const [error, setError] = useState("");
 
-  const loadOverview = useCallback(async () => {
-    setMode("loading");
+  const load = useCallback(async () => {
     setError("");
     try {
       const supabase = createClient();
-      const [requestResult, homeownerResult, vendorResult, applicationResult] = await Promise.all([
-        supabase.from("service_requests").select("id, service_type, city, status, created_at").order("created_at", { ascending: false }),
-        supabase.from("user_roles").select("user_id").eq("role", "homeowner"),
-        supabase.from("contractors").select("id, is_active"),
-        supabase.from("vendor_applications").select("id, status"),
+      const [summaryResult, requestResult] = await Promise.all([
+        supabase.rpc("admin_operations_summary"),
+        supabase.from("service_requests").select("id, service_type, city, status, matching_status, created_at").order("created_at", { ascending: false }).limit(5),
       ]);
-      const failedQuery = [
-        ["service requests", requestResult.error],
-        ["homeowner roles", homeownerResult.error],
-        ["vendors", vendorResult.error],
-        ["vendor applications", applicationResult.error],
-      ].find((entry) => entry[1]);
-      if (failedQuery) {
-        const queryError = failedQuery[1] as { message?: string };
-        throw new Error(`Unable to load ${failedQuery[0]}${queryError.message ? `: ${queryError.message}` : "."}`);
-      }
-
-      const allRequests = requestResult.data ?? [];
-      const vendors = vendorResult.data ?? [];
-      const applications = applicationResult.data ?? [];
-      setStats({
-        totalRequests: allRequests.length,
-        pendingRequests: allRequests.filter((item) => item.status === "pending").length,
-        activeRequests: allRequests.filter((item) => ["matched", "scheduled", "in_progress", "pending_review"].includes(item.status)).length,
-        completedRequests: allRequests.filter((item) => item.status === "completed").length,
-        homeowners: homeownerResult.data?.length ?? 0,
-        vendors: vendors.length,
-        activeVendors: vendors.filter((item) => item.is_active).length,
-        pendingApplications: applications.filter((item) => item.status === "pending").length,
-      });
-      setRequests(allRequests.slice(0, 5));
+      if (summaryResult.error) throw summaryResult.error;
+      if (requestResult.error) throw requestResult.error;
+      setSummary(parseOperationsSummary(summaryResult.data));
+      setRequests((requestResult.data ?? []) as RequestRow[]);
       setMode("live");
     } catch (reason) {
       console.error("Unable to load admin overview", reason);
-      setStats(initialStats);
-      setRequests([]);
-      setError(reason instanceof Error ? reason.message : "The live admin overview could not be loaded.");
+      setError(reason instanceof Error ? reason.message : "The admin overview could not be loaded.");
       setMode("error");
     }
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void loadOverview(); }, 0);
+    const timer = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadOverview]);
+  }, [load]);
 
-  if (mode === "loading") return <AdminLoading label="Loading platform overview..." />;
-  if (mode === "error") return <AdminError title="Admin overview could not be loaded" message={error} retry={() => void loadOverview()} />;
+  if (mode === "loading") return <AdminLoading label="Loading operations overview..." />;
+  if (mode === "error" || !summary) return <AdminError title="Admin overview could not be loaded" message={error} retry={() => { setMode("loading"); void load(); }} />;
 
+  const queues = summary.queues.filter((queue) => SUMMARY_QUEUES[queue.queue]);
   return (
     <div className="mx-auto w-full max-w-7xl space-y-7 p-4 sm:p-6 md:p-8">
-      <PageTitle title="Dashboard" description="Platform operations at a glance" />
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div><h1 className="text-2xl font-bold">Operations overview</h1><p className="mt-1 text-sm text-muted-foreground">Open work in each queue{summary.checkedAt ? `, checked ${formatTime(summary.checkedAt)}` : ""}.</p></div>
+        <Button variant="outline" onClick={() => void load()}><RefreshCw />Refresh</Button>
+      </header>
 
-      {(stats.pendingApplications > 0 || stats.pendingRequests > 0) && <div className="space-y-3">{stats.pendingApplications > 0 && <Alert href="/admin/applications" icon={FileText} text={`${stats.pendingApplications} vendor application${stats.pendingApplications === 1 ? "" : "s"} awaiting review`} action="Review applications" />}{stats.pendingRequests > 0 && <Alert href="/admin/requests" icon={AlertTriangle} text={`${stats.pendingRequests} unassigned service request${stats.pendingRequests === 1 ? "" : "s"} need attention`} action="View requests" />}</div>}
+      <Card><CardHeader><CardTitle>Queues</CardTitle></CardHeader><CardContent className="p-0">
+        <ResponsiveDataList label="Operational queues" rows={queues} rowKey={(queue) => queue.queue} rowLabel={(queue) => SUMMARY_QUEUES[queue.queue].label} columns={[
+          { key: "queue", label: "Queue", render: (queue) => <Link href={SUMMARY_QUEUES[queue.queue].href} className="font-medium hover:text-accent hover:underline">{SUMMARY_QUEUES[queue.queue].label}</Link> },
+          { key: "count", label: "Open", render: (queue) => countText(queue) },
+          { key: "aged", label: "Needs attention first", render: (queue) => agedText(queue) },
+        ]} />
+      </CardContent></Card>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Metric icon={ClipboardList} label="Total Requests" value={stats.totalRequests} />
-        <Metric icon={AlertTriangle} label="Pending" value={stats.pendingRequests} tone="amber" />
-        <Metric icon={CheckCircle2} label="Active Jobs" value={stats.activeRequests} tone="accent" />
-        <Metric icon={UserCheck} label="Active Vendors" value={stats.activeVendors} tone="accent" />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card><CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader><CardContent className="space-y-2"><QuickLink href="/admin/applications" icon={FileText} label="Vendor Applications" value={stats.pendingApplications} /><QuickLink href="/admin/requests" icon={ClipboardList} label="Service Requests" value={stats.totalRequests} /><QuickLink href="/admin/vendors" icon={UserCheck} label="Vendor Directory" value={stats.vendors} /><QuickLink href="/dashboard" icon={Users} label="Homeowner Portal" value={stats.homeowners} /></CardContent></Card>
-        <Card className="lg:col-span-2"><CardHeader><div className="flex items-center justify-between"><CardTitle>Recent Requests</CardTitle><Link href="/admin/requests" className="text-xs font-medium text-accent hover:underline">View all →</Link></div></CardHeader><CardContent>{requests.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">No service requests yet.</p> : <div className="divide-y divide-border">{requests.map((request) => <div key={request.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"><div className="min-w-0"><p className="truncate text-sm font-medium">{request.service_type}</p><p className="text-xs text-muted-foreground">{request.city} · {formatDate(request.created_at)}</p></div><Badge className={cn("capitalize", statusStyle[request.status] ?? "bg-muted text-muted-foreground")}>{request.status.replaceAll("_", " ")}</Badge></div>)}</div>}</CardContent></Card>
-      </div>
+      <Card><CardHeader><div className="flex items-center justify-between"><CardTitle>Recent requests</CardTitle><Link href="/admin/requests" className="text-xs font-medium text-accent hover:underline">All requests</Link></div></CardHeader><CardContent>
+        {requests.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">No service requests yet.</p>
+          : <ul className="divide-y">{requests.map((request) => <li key={request.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <Link href={`/admin/requests?request=${request.id}`} className="min-w-0 hover:underline"><p className="truncate font-medium">{request.service_type}</p><p className="text-xs text-muted-foreground">{request.city} · {formatDate(request.created_at)}</p></Link>
+            <Status state={canonicalRequestState(request.status as Parameters<typeof canonicalRequestState>[0], request.matching_status)} />
+          </li>)}</ul>}
+      </CardContent></Card>
     </div>
   );
 }
 
-function Metric({ icon: Icon, label, value, tone = "default" }: { icon: typeof ClipboardList; label: string; value: number; tone?: "default" | "amber" | "accent" }) { return <Card className={cn(tone === "amber" && "border-amber-200 bg-amber-50", tone === "accent" && "border-accent/25 bg-accent/5")}><CardContent><Icon className={cn("mb-4 h-5 w-5 text-muted-foreground", tone === "amber" && "text-amber-700", tone === "accent" && "text-accent")} /><p className="text-3xl font-bold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></CardContent></Card>; }
-function Alert({ href, icon: Icon, text, action }: { href: string; icon: typeof FileText; text: string; action: string }) { return <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"><Icon className="h-5 w-5 shrink-0 text-amber-700" /><p className="flex-1 text-sm font-medium text-amber-900">{text}</p><Link href={href} className="flex items-center gap-1 text-sm font-medium text-amber-800 hover:underline">{action}<ArrowUpRight className="h-3.5 w-3.5" /></Link></div>; }
-function QuickLink({ href, icon: Icon, label, value }: { href: string; icon: typeof FileText; label: string; value: number }) { return <Link href={href} className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-muted"><Icon className="h-4 w-4 text-muted-foreground" /><span className="flex-1 text-sm">{label}</span><span className="text-xs text-muted-foreground">{value}</span><ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" /></Link>; }
-function PageTitle({ title, description }: { title: string; description: string }) { return <div><h1 className="text-2xl font-bold">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>; }
+function countText(queue: SummaryQueue) {
+  if (queue.state === "restricted") return "Finance authority required";
+  if (queue.state === "error" || queue.count === null) return "Couldn’t load — open the queue";
+  return String(queue.count);
+}
+function agedText(queue: SummaryQueue) {
+  const rule = SUMMARY_QUEUES[queue.queue].agedLabel;
+  if (queue.state !== "ready" || !rule || queue.aged === null) return "—";
+  return `${queue.aged} ${rule}`;
+}
+function formatTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-US", { timeStyle: "short", timeZone: "America/New_York" }).format(date) + " Eastern"; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }

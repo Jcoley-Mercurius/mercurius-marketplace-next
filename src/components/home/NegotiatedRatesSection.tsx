@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Phone, X, CheckCircle2, TrendingDown, Tag, Handshake, ShieldCheck, Sparkles, Award, DollarSign, Gift, Rocket } from "lucide-react";
+import { ArrowRight, Phone, X, CheckCircle2, TrendingDown, Tag, Handshake, ShieldCheck, Sparkles } from "lucide-react";
 import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
 
 /**
@@ -186,97 +186,7 @@ const NegotiatedRatesSection = () => {
           </div>
         </div>
 
-        {/* Smart Picks Legend — 4 handpicked vendors per service */}
-        <div className="max-w-5xl mx-auto mt-20">
-          <div className="text-center mb-10">
-            <motion.span
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4 }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-sage-light text-sage-dark text-sm font-medium mb-4"
-            >
-              <Sparkles className="h-4 w-4" />
-              Our Picks For You
-            </motion.span>
-            <h3 className="text-2xl md:text-3xl font-bold text-foreground mb-3">
-              Compare what matters when options are available
-            </h3>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              As coverage grows, these labels explain why a provider stands out. They appear only when live provider
-              data supports the distinction.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                icon: Award,
-                label: "Top Rated",
-                tagline: "Strong platform record",
-                desc: "An editorial label for an active provider with a strong live platform record.",
-                gradient: "from-[hsl(40,60%,94%)] to-[hsl(35,50%,88%)]",
-                border: "border-[hsl(38,45%,78%)]",
-                iconBg: "bg-[hsl(40,55%,92%)]",
-                iconColor: "text-[hsl(36,60%,40%)]",
-              },
-              {
-                icon: DollarSign,
-                label: "Smart Choice",
-                tagline: "Current package value",
-                desc: "An editorial label for an active provider whose current package pricing offers practical value.",
-                gradient: "from-[hsl(140,25%,93%)] to-[hsl(145,20%,87%)]",
-                border: "border-[hsl(142,22%,76%)]",
-                iconBg: "bg-[hsl(140,22%,91%)]",
-                iconColor: "text-[hsl(142,30%,38%)]",
-              },
-              {
-                icon: Gift,
-                label: "Extra Perks",
-                tagline: "Clearly listed extras",
-                desc: "An editorial label for an active provider whose current package includes clearly listed extras.",
-                gradient: "from-[hsl(15,50%,94%)] to-[hsl(12,45%,88%)]",
-                border: "border-[hsl(14,40%,78%)]",
-                iconBg: "bg-[hsl(15,45%,92%)]",
-                iconColor: "text-[hsl(14,55%,42%)]",
-              },
-              {
-                icon: Rocket,
-                label: "Rising Star",
-                tagline: "Building a platform record",
-                desc: "An editorial label for a newer active provider building a live platform record.",
-                gradient: "from-[hsl(215,15%,92%)] to-[hsl(220,12%,85%)]",
-                border: "border-[hsl(218,12%,75%)]",
-                iconBg: "bg-[hsl(215,12%,90%)]",
-                iconColor: "text-[hsl(218,20%,40%)]",
-              },
-            ].map((pick, idx) => (
-              <motion.div
-                key={pick.label}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: idx * 0.08 }}
-                className={`relative rounded-2xl border-2 ${pick.border} p-5 overflow-hidden bg-card hover:shadow-md transition-all`}
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${pick.gradient} opacity-50 pointer-events-none`} />
-                <div className="relative z-10">
-                  <div className={`h-11 w-11 rounded-xl ${pick.iconBg} flex items-center justify-center mb-4`}>
-                    <pick.icon className={`h-5 w-5 ${pick.iconColor}`} />
-                  </div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">{pick.tagline}</p>
-                  <h4 className="text-lg font-semibold text-foreground mb-2">{pick.label}</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{pick.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            The Mercurius team assigns these editorial labels to active providers based on their live platform record;
-            they are not automatically generated rankings.
-          </p>
-        </div>
+        {/* TRACE-136: the Smart Picks legend is removed; Smart Picks are deferred (MPS §3). */}
 
         {/* Bottom CTA strip */}
         <motion.div

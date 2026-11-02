@@ -27,7 +27,7 @@ const job = (suffix, service, status) => ({
   current_quote_id: status === "quoted" ? "00000000-0000-4000-8000-000000000099" : null,
   quote_revision: status === "quoted" ? 1 : 0, quote_status: status === "quoted" ? "submitted" : null,
   quote_expires_at: status === "quoted" ? new Date(now.getTime() + 24 * 3600000).toISOString() : null,
-  quote_amount: 120, notes: "Synthetic internal note", needs_admin_review: false,
+  quote_amount: 120, needs_admin_review: false,
   match_attempt_count: 1, declined_contractor_ids: [], matching_status: "offered",
   preferred_contractor_id: null, package_question_answers: {},
   service_catalog_id: suffix === "11" ? "synthetic-pool-service" : null,
@@ -233,6 +233,17 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/service_review") return send({ role: user.testRole, job_id: body._job_id, requested: body._job_id?.endsWith("14") ?? false,
     eligibility: body._job_id?.endsWith("14") ? "eligible" : "not_confirmed", review: null, history: [] });
   if (url.pathname === "/rest/v1/rpc/public_review_summaries") return send([]);
+  // TRACE-136: admin operations readbacks. Synthetic and empty; the commands themselves stay refused below.
+  if (url.pathname === "/rest/v1/rpc/get_completed_job_counts") return send([]);
+  if (url.pathname === "/rest/v1/rpc/admin_operations_summary") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), queues: [
+    { queue: "quote", state: "ready", count: 0, aged: 0 }, { queue: "recurring_payment", state: "ready", count: 0, aged: 0 },
+    { queue: "fulfillment", state: "ready", count: 0, aged: 0 }, { queue: "cancellation", state: "ready", count: 1, aged: null },
+    { queue: "support", state: "ready", count: 0, aged: 0 }, { queue: "compliance_renewal", state: "ready", count: 0, aged: null },
+    { queue: "renewal_documents", state: "ready", count: 0, aged: null }, { queue: "finance_exceptions", state: "restricted", count: null, aged: null },
+  ] } : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
+  if (/\/rpc\/(admin_request_notes)$/.test(url.pathname)) return send(user.testRole === "admin" ? { legacy_note: null, notes: [] } : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
+  if (/\/rpc\/(admin_request_action_history|admin_provider_badge_history|admin_catalog_visibility_history)$/.test(url.pathname)) return send(user.testRole === "admin" ? [] : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
+  if (url.pathname === "/rest/v1/rpc/admin_provider_is_onboarded") return send(false);
   if (url.pathname === "/rest/v1/rpc/public_provider_reviews") return send({ summary: { count: 0, average: null }, reviews: [] });
   if (url.pathname === "/rest/v1/rpc/admin_reviews") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [],
     counts: { public: 0, held_for_moderation: 0, rejected: 0, appealed: 0, private: 0, public_average: null, quality_feedback: 0 } } : { message: "Admin access required" }, user.testRole === "admin" ? 200 : 403);

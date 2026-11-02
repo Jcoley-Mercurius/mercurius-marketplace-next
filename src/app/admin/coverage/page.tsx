@@ -1,28 +1,51 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, MapPin, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
-import { toast } from "sonner";
-import { AdminEmpty, AdminError, AdminLoading, AdminToggle } from "@/components/admin/AdminPageState";
+import { MapPin, RefreshCw, Search } from "lucide-react";
+import { AdminEmpty, AdminError, AdminLoading } from "@/components/admin/AdminPageState";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
+
+// TRACE-136 (DEC-2026-057 item 1): the Lee County ZIP allowlist is authoritative and its change
+// authority is the owner (CFG-001). It changes only by reviewed migration, as DEC-2026-021 did, so
+// this page is a read-only readback; client writes to coverage_areas are closed in the database.
 
 type Area = { id: string; zip_code: string; city: string; state: string; is_active: boolean; has_waitlist: boolean };
+
 export default function AdminCoveragePage() {
-  const [areas, setAreas] = useState<Area[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [search, setSearch] = useState(""); const [cityFilter, setCityFilter] = useState("all"); const [open, setOpen] = useState(false); const [newZip, setNewZip] = useState(""); const [newCity, setNewCity] = useState(""); const [newState, setNewState] = useState("FL"); const [saving, setSaving] = useState(false); const [busy, setBusy] = useState<string | null>(null);
-  const load = useCallback(async () => { setLoading(true); setError(""); const result = await createClient().from("coverage_areas").select("id, zip_code, city, state, is_active, has_waitlist").order("zip_code"); if (result.error) { setError(result.error.message); setAreas([]); } else setAreas((result.data ?? []) as Area[]); setLoading(false); }, []);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState("all");
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    const result = await createClient().from("coverage_areas").select("id, zip_code, city, state, is_active, has_waitlist").order("zip_code");
+    if (result.error) { setError(result.error.message); setAreas([]); } else setAreas((result.data ?? []) as Area[]);
+    setLoading(false);
+  }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
-  const toggle = async (area: Area, field: "is_active" | "has_waitlist") => { setBusy(`${area.id}:${field}`); const value = !area[field]; const result = await createClient().from("coverage_areas").update({ [field]: value }).eq("id", area.id); setBusy(null); if (result.error) return toast.error("Coverage area could not be updated", { description: result.error.message }); setAreas((current) => current.map((item) => item.id === area.id ? { ...item, [field]: value } : item)); toast.success("Coverage area updated"); };
-  const add = async () => { const zip = newZip.trim(); const city = newCity.trim(); const state = newState.trim().toUpperCase(); if (!/^\d{5}$/.test(zip)) return toast.error("Enter a five-digit ZIP code."); if (!city) return toast.error("City is required."); if (!/^[A-Z]{2}$/.test(state)) return toast.error("Enter a two-letter state code."); setSaving(true); const result = await createClient().from("coverage_areas").insert({ zip_code: zip, city, state }); setSaving(false); if (result.error) return toast.error("Coverage area could not be added", { description: result.error.message }); toast.success("Coverage area added"); setOpen(false); setNewZip(""); setNewCity(""); setNewState("FL"); await load(); };
-  const remove = async (area: Area) => { if (!window.confirm(`Remove ${area.zip_code} — ${area.city}? Existing vendor ZIP links may prevent deletion.`)) return; setBusy(`${area.id}:delete`); const result = await createClient().from("coverage_areas").delete().eq("id", area.id); setBusy(null); if (result.error) return toast.error("Coverage area could not be removed", { description: result.error.message }); setAreas((current) => current.filter((item) => item.id !== area.id)); toast.success("Coverage area removed"); };
-  const cities = useMemo(() => [...new Set(areas.map((area) => area.city))].sort(), [areas]); const filtered = useMemo(() => { const query = search.trim().toLowerCase(); return areas.filter((area) => (cityFilter === "all" || area.city === cityFilter) && (!query || area.zip_code.includes(query) || area.city.toLowerCase().includes(query))); }, [areas, cityFilter, search]);
-  if (loading) return <AdminLoading label="Loading coverage areas..." />; if (error) return <AdminError title="Coverage areas could not be loaded" message={error} retry={() => void load()} />;
-  return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8"><header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Service footprint</p><h1 className="font-heading text-3xl font-semibold tracking-tight">Coverage Areas</h1><p className="mt-2 text-sm text-muted-foreground">Manage ZIP codes, active regions, and waitlist availability.</p></div><div className="flex gap-2"><Button variant="outline" onClick={() => void load()}><RefreshCw />Refresh</Button><Button onClick={() => setOpen(true)}><Plus />Add ZIP Code</Button></div></header><div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{[{ label: "Total ZIPs", value: areas.length, icon: MapPin }, { label: "Active", value: areas.filter((area) => area.is_active).length, icon: MapPin }, { label: "Waitlisted", value: areas.filter((area) => area.has_waitlist).length, icon: Users }, { label: "Cities", value: cities.length, icon: MapPin }].map((stat) => <Card key={stat.label}><CardContent className="py-4"><div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground"><stat.icon className="h-4 w-4" />{stat.label}</div><p className="text-2xl font-semibold">{stat.value}</p></CardContent></Card>)}</div><div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search ZIP or city..." className="pl-9" /></div><select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className={cn(selectClass, "sm:w-52")}><option value="all">All Cities</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select></div><Card><CardContent className="p-0">{filtered.length === 0 ? <AdminEmpty icon={MapPin} title={areas.length ? "No areas match these filters" : "No coverage areas configured"} /> : <div className="overflow-x-auto"><table className="w-full min-w-[750px] text-sm"><thead className="border-b bg-muted/60"><tr className="text-left"><th className="p-4 font-medium text-muted-foreground">ZIP Code</th><th className="p-4 font-medium text-muted-foreground">City</th><th className="p-4 font-medium text-muted-foreground">State</th><th className="p-4 text-center font-medium text-muted-foreground">Active</th><th className="p-4 text-center font-medium text-muted-foreground">Waitlist</th><th className="p-4 text-right font-medium text-muted-foreground">Actions</th></tr></thead><tbody className="divide-y">{filtered.map((area) => <tr key={area.id} className={cn("hover:bg-muted/30", !area.is_active && "opacity-55")}><td className="p-4 font-mono font-medium">{area.zip_code}</td><td className="p-4">{area.city}</td><td className="p-4">{area.state}</td><td className="p-4 text-center"><AdminToggle checked={area.is_active} disabled={Boolean(busy)} loading={busy === `${area.id}:is_active`} label={`Set ${area.zip_code} active`} onChange={() => void toggle(area, "is_active")} /></td><td className="p-4 text-center"><AdminToggle checked={area.has_waitlist} disabled={Boolean(busy)} loading={busy === `${area.id}:has_waitlist`} label={`Set ${area.zip_code} waitlist`} onChange={() => void toggle(area, "has_waitlist")} /></td><td className="p-4 text-right"><Button variant="ghost" size="sm" className="text-destructive" disabled={Boolean(busy)} onClick={() => void remove(area)}><Trash2 />Remove</Button></td></tr>)}</tbody></table></div>}</CardContent></Card><Dialog open={open} onOpenChange={(value) => { if (!saving) setOpen(value); }}><DialogContent><DialogHeader><DialogTitle>Add Coverage Area</DialogTitle><DialogDescription>Add a real ZIP code to the managed SWFL service footprint.</DialogDescription></DialogHeader><div className="space-y-4"><Field label="ZIP Code"><Input inputMode="numeric" maxLength={5} value={newZip} onChange={(event) => setNewZip(event.target.value.replace(/\D/g, ""))} placeholder="33901" /></Field><Field label="City"><Input value={newCity} onChange={(event) => setNewCity(event.target.value)} placeholder="Fort Myers" /></Field><Field label="State"><Input maxLength={2} value={newState} onChange={(event) => setNewState(event.target.value.toUpperCase())} placeholder="FL" /></Field></div><DialogFooter><Button variant="outline" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving || !newZip || !newCity} onClick={() => void add()}>{saving && <Loader2 className="animate-spin" />}Add Area</Button></DialogFooter></DialogContent></Dialog></div>;
+  const cities = useMemo(() => [...new Set(areas.map((area) => area.city))].sort(), [areas]);
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return areas.filter((area) => (cityFilter === "all" || area.city === cityFilter) && (!query || area.zip_code.includes(query) || area.city.toLowerCase().includes(query)));
+  }, [areas, cityFilter, search]);
+  if (loading) return <AdminLoading label="Loading coverage areas..." />;
+  if (error) return <AdminError title="Coverage areas could not be loaded" message={error} retry={() => void load()} />;
+  const active = areas.filter((area) => area.is_active).length;
+  return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Service footprint</p><h1 className="font-heading text-3xl font-semibold tracking-tight">Coverage Areas</h1><p className="mt-2 text-sm text-muted-foreground">{active} of {areas.length} ZIP codes active. Read-only.</p></div><Button variant="outline" onClick={() => void load()}><RefreshCw />Refresh</Button></header>
+    <section aria-labelledby="coverage-authority" className="rounded-xl border bg-muted/30 p-4 text-sm"><h2 id="coverage-authority" className="font-semibold">The service area changes only with the owner’s approval</h2><p className="mt-1 text-muted-foreground">The Lee County ZIP allowlist decides where requests are accepted. Adding, removing or pausing a ZIP is an owner decision, applied as a reviewed database change.</p></section>
+    <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search ZIP codes" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search ZIP or city..." className="bg-card pl-9" /></div><select aria-label="Filter by city" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-3 text-sm sm:w-56"><option value="all">All cities</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select></div>
+    <Card><CardContent className="p-0">{filtered.length === 0 ? <AdminEmpty icon={MapPin} title={areas.length ? "No ZIP codes match these filters" : "No coverage areas"} /> : <ResponsiveDataList label="Coverage areas" rows={filtered} rowKey={(area) => area.id} rowLabel={(area) => `${area.zip_code} ${area.city}`} columns={[
+      { key: "zip", label: "ZIP", render: (area) => <span className="font-mono">{area.zip_code}</span> },
+      { key: "city", label: "City", render: (area) => `${area.city}, ${area.state}` },
+      { key: "status", label: "Status", render: (area) => <Badge variant={area.is_active ? "secondary" : "outline"}>{area.is_active ? "Active" : "Inactive"}</Badge> },
+      { key: "waitlist", label: "Waitlist", render: (area) => area.has_waitlist ? "Collects interest" : "—" },
+    ]} />}</CardContent></Card>
+  </div>;
 }
-const selectClass = "h-9 rounded-lg border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-2"><Label>{label}</Label>{children}</div>; }

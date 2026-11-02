@@ -7,7 +7,8 @@ import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
 import { isRecurringPlan } from "@/lib/recurringVisits";
 import { formatAppointment } from "@/lib/offerStatus";
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   AlertTriangle,
@@ -21,7 +22,6 @@ import {
   MapPin,
   MessageSquare,
   RefreshCw,
-  Save,
   Search,
   Send,
   User,
@@ -42,7 +42,6 @@ import {
 } from "@/components/ui/dialog";
 import { ResponsiveDataList } from "@/components/ui/responsive-data-list";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { AdminQuotePanel } from "@/components/quotes/AdminQuotePanel";
 import { AdminQuoteQueue } from "@/components/quotes/AdminQuoteQueue";
 import { AdminRecurringPaymentQueue } from "@/components/dashboard/AdminRecurringPaymentQueue";
@@ -55,6 +54,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { RequestOperatorNotes } from "@/components/admin/RequestOperatorNotes";
+import { RequestCorrection } from "@/components/admin/RequestCorrection";
+import { AdminActionError, adminActionError, createKeyStore, parseRequestsQuery, requestsQueryString } from "@/lib/adminOperations";
 
 type ServiceRequest = {
   id: string;
@@ -71,7 +73,6 @@ type ServiceRequest = {
   customer_id: string;
   contractor_id: string | null;
   description: string | null;
-  notes: string | null;
   total_amount: number | null;
   quote_amount: number | null;
   assigned_at: string | null;
@@ -98,9 +99,6 @@ type Contractor = {
   name: string;
   services: string[];
   location: string | null;
-  rating: number | null;
-  jobs_completed: number | null;
-  badges: string[] | null;
   is_active: boolean;
 };
 
@@ -178,15 +176,30 @@ const outcomeStyle: Record<string, string> = {
   reassigned: "border-border bg-muted text-muted-foreground",
 };
 
+// TRACE-136: the request list keeps its filters and the open record in the URL
+// (?q=, ?status=, ?request=), so a deep link, reload or Back keeps the operator's context.
 export default function AdminRequestsPage() {
+  return <Suspense fallback={<Loading />}><AdminRequestsContent /></Suspense>;
+}
+
+const REQUEST_SELECT = "id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id";
+
+function AdminRequestsContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = useMemo(() => parseRequestsQuery(new URLSearchParams(searchParams.toString()), statuses), [searchParams]);
+  const pushedRecord = useRef(false);
+  const [keyFor] = useState(createKeyStore);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [mode, setMode] = useState<Mode>("loading");
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [selected, setSelected] = useState<ServiceRequest | null>(null);
+  const [search, setSearch] = useState(query.q);
+  const statusFilter = query.status;
+  const [outside, setOutside] = useState<ServiceRequest | null>(null);
+  const [recordError, setRecordError] = useState("");
   const [detailTab, setDetailTab] = useState("details");
   const [assignSearch, setAssignSearch] = useState("");
   const [attempts, setAttempts] = useState<MatchAttempt[]>([]);
@@ -194,8 +207,20 @@ export default function AdminRequestsPage() {
   const [eligibleMatches, setEligibleMatches] = useState<EligibleMatch[]>([]);
   const [eligibleError, setEligibleError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [note, setNote] = useState("");
   const [action, setAction] = useState<Action>(null);
+  const selected = useMemo(() => query.request ? requests.find((request) => request.id === query.request) ?? (outside?.id === query.request ? outside : null) : null, [outside, query.request, requests]);
+
+  const navigate = useCallback((next: { q?: string; status?: string; request?: string | null }, push = false) => {
+    const href = `${pathname}${requestsQueryString({ q: next.q ?? query.q, status: next.status ?? query.status, request: next.request === undefined ? query.request : next.request })}`;
+    if (push) router.push(href, { scroll: false }); else router.replace(href, { scroll: false });
+  }, [pathname, query.q, query.request, query.status, router]);
+  const setStatusFilter = (status: string) => navigate({ status });
+  useEffect(() => {
+    // Search is typed freely and written to the URL once typing pauses.
+    if (search === query.q) return;
+    const timer = window.setTimeout(() => navigate({ q: search }), 300);
+    return () => window.clearTimeout(timer);
+  }, [navigate, query.q, search]);
 
   const contractorNames = useMemo(() => Object.fromEntries(contractors.map((contractor) => [contractor.id, contractor.name])), [contractors]);
 
@@ -207,9 +232,9 @@ export default function AdminRequestsPage() {
       const expiryResult = await supabase.rpc("expire_stale_matches");
       if (expiryResult.error) console.warn("Unable to expire stale offers", expiryResult.error.message);
       const [requestResult, profileResult, contractorResult] = await Promise.all([
-        supabase.from("service_requests").select("id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id").order("created_at", { ascending: false }),
+        supabase.from("service_requests").select(REQUEST_SELECT).order("created_at", { ascending: false }),
         supabase.from("profiles").select("user_id, full_name"),
-        supabase.from("contractors").select("id, name, services, location, rating, jobs_completed, badges, is_active").order("name"),
+        supabase.from("contractors").select("id, name, services, location, is_active").order("name"),
       ]);
       const loadError = requestResult.error ?? profileResult.error ?? contractorResult.error;
       if (loadError) throw loadError;
@@ -223,7 +248,6 @@ export default function AdminRequestsPage() {
         ...contractor,
         services: contractor.services ?? [],
       })));
-      setSelected((current) => current ? nextRequests.find((request) => request.id === current.id) ?? null : null);
       setMode("live");
     } catch (reason) {
       console.error("Unable to load admin requests", reason);
@@ -256,14 +280,37 @@ export default function AdminRequestsPage() {
     } else setEligibleMatches((result.data ?? []) as EligibleMatch[]);
   }, []);
 
-  const openDetail = (request: ServiceRequest) => {
-    setActionError("");
-    setSelected(request);
-    setDetailTab("details");
-    setAssignSearch("");
-    setNote(request.notes ?? "");
-    void loadAttempts(request.id);
-    void loadEligible(request.id);
+  // A record named by the URL that is not in the loaded list is fetched by ID.
+  useEffect(() => {
+    if (mode !== "live" || !query.request || requests.some((request) => request.id === query.request) || outside?.id === query.request) return;
+    let cancelled = false;
+    void createClient().from("service_requests").select(REQUEST_SELECT).eq("id", query.request).maybeSingle().then((result) => {
+      if (cancelled) return;
+      if (result.error || !result.data) { setRecordError(result.error ? result.error.message : "This request was not found or you don't have access to it."); return; }
+      setRecordError("");
+      setOutside({ ...(result.data as ServiceRequest), declined_contractor_ids: (result.data as ServiceRequest).declined_contractor_ids ?? [] });
+    });
+    return () => { cancelled = true; };
+  }, [mode, outside?.id, query.request, requests]);
+
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    if (!selectedId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActionError(""); setDetailTab("details"); setAssignSearch("");
+    void loadAttempts(selectedId);
+    void loadEligible(selectedId);
+  }, [loadAttempts, loadEligible, selectedId]);
+
+  const openById = (id: string) => {
+    setRecordError("");
+    pushedRecord.current = true;
+    navigate({ request: id }, true);
+  };
+  const openDetail = (request: ServiceRequest) => openById(request.id);
+  const closeDetail = () => {
+    if (pushedRecord.current) { pushedRecord.current = false; router.back(); }
+    else navigate({ request: null });
   };
 
   const runAction = async (request: ServiceRequest, kind: string, operation: () => Promise<{ error: { message: string } | null }>, success: string) => {
@@ -318,18 +365,15 @@ export default function AdminRequestsPage() {
 
   const changeStatus = async (request: ServiceRequest, status: string, reason: string) => {
     if (status === request.status) return;
+    // Bound to the version the operator read; a retry of the same change reuses its key.
+    const key = keyFor(`status:${request.id}:${request.updated_at}:${status}:${reason}`);
+    let refusal = "";
     const changed = await runAction(request, `status:${status}`, async () => {
-      const result = await createClient().rpc("transition_job_status", { _job_id: request.id, _to_status: status, _reason: reason });
-      return { error: result.error };
+      const result = await createClient().rpc("admin_transition_job_status_expected", { p_job: request.id, p_expected_updated_at: request.updated_at, p_key: key, p_to_status: status, p_reason: reason });
+      refusal = adminActionError(result.error);
+      return { error: result.error ? new Error(refusal) : null };
     }, `Status changed to ${label(status)}.`);
-    if (!changed) throw new Error("The status change was not saved.");
-  };
-
-  const saveNote = async (request: ServiceRequest) => {
-    await runAction(request, "note", async () => {
-      const result = await createClient().from("service_requests").update({ notes: note.trim() || null }).eq("id", request.id);
-      return { error: result.error };
-    }, "Internal note saved.");
+    if (!changed) throw new AdminActionError(refusal || "The status change was not saved.");
   };
 
   const filtered = useMemo(() => {
@@ -353,10 +397,11 @@ export default function AdminRequestsPage() {
   return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
     <header><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Service operations</p><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-heading text-3xl font-semibold tracking-tight">Service Requests</h1><p className="mt-2 text-sm text-muted-foreground">{requests.length} live request{requests.length === 1 ? "" : "s"} across the platform</p></div><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button></div></header>
 
-    <AdminQuoteQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
-    <AdminRecurringPaymentQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
-    <AdminFulfillmentQueue open={(id) => { const request = requests.find((item) => item.id === id); if (request) openDetail(request); }} />
-    <AdminCancellationQueue />
+    {recordError && <p role="alert" className="rounded-lg border border-destructive p-3 text-sm text-destructive">{recordError}</p>}
+    <div id="quote-exceptions"><AdminQuoteQueue open={openById} /></div>
+    <div id="recurring-payments"><AdminRecurringPaymentQueue open={openById} /></div>
+    <div id="fulfillment-follow-up"><AdminFulfillmentQueue open={openById} /></div>
+    <div id="cancellation-follow-up-queue"><AdminCancellationQueue open={openById} /></div>
 
     {overdueCount > 0 && <div className="flex flex-col gap-3 rounded-xl border border-status-danger bg-status-danger-bg p-4 text-status-danger sm:flex-row sm:items-center"><AlertTriangle className="h-5 w-5 shrink-0" /><div><p className="text-sm font-medium">{overdueCount} matched request{overdueCount === 1 ? " is" : "s are"} overdue</p><p className="mt-0.5 text-xs text-status-danger">Release the match for reassignment or coordinate directly with the vendor.</p></div><Button size="sm" variant="outline" className="sm:ml-auto" onClick={() => setStatusFilter("matched")}>View matched</Button></div>}
 
@@ -373,7 +418,7 @@ export default function AdminRequestsPage() {
       { key: "actions", label: "Actions", render: request => <Button variant="outline" size="sm" aria-label={`Review ${request.service_type} ${request.id.slice(0, 10)}`} onClick={() => openDetail(request)}><Eye />Review</Button> },
     ]} />}</CardContent></Card>
 
-    <RequestDialog saved={() => { void load(false); if (selected) { void loadAttempts(selected.id); void loadEligible(selected.id); } }} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} note={note} setNote={setNote} action={action} close={() => { if (!action) setSelected(null); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} saveNote={saveNote} />
+    <RequestDialog saved={() => { setOutside(null); void load(false); if (selected) { void loadAttempts(selected.id); void loadEligible(selected.id); } }} actionError={actionError} request={selected} tab={detailTab} setTab={setDetailTab} profiles={profiles} contractorNames={contractorNames} candidates={visibleEligibleMatches} eligibleError={eligibleError} assignSearch={assignSearch} setAssignSearch={setAssignSearch} attempts={attempts} attemptError={attemptError} action={action} close={() => { if (!action) closeDetail(); }} assign={assignVendor} offerNext={offerNext} release={releaseMatch} changeStatus={changeStatus} />
   </div>;
 }
 
@@ -391,15 +436,12 @@ function RequestDialog(props: {
   setAssignSearch: (value: string) => void;
   attempts: MatchAttempt[];
   attemptError: string;
-  note: string;
-  setNote: (value: string) => void;
   action: Action;
   close: () => void;
   assign: (request: ServiceRequest, candidate: EligibleMatch, reason: string) => Promise<void>;
   offerNext: (request: ServiceRequest) => Promise<void>;
   release: (request: ServiceRequest, reason: string) => Promise<void>;
   changeStatus: (request: ServiceRequest, status: string, reason: string) => Promise<void>;
-  saveNote: (request: ServiceRequest) => Promise<void>;
 }) {
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (props.actionError && !document.querySelector('[role=alertdialog]')) errorRef.current?.focus(); }, [props.actionError]);
@@ -423,11 +465,12 @@ function RequestDialog(props: {
     {!isRecurringPlan(request) && <FulfillmentPanel key={`fulfillment-${request.id}-${request.status}`} jobId={request.id} />}
     {["pending", "matched", "quoted", "scheduled", "in_progress"].includes(request.status) && <JobOperations key={request.id} jobId={request.id} role="admin" onSaved={props.saved} />}
     {["pending", "cancelled"].includes(request.status) && <CancellationOutcome key={`refund-${request.id}-${request.status}`} jobId={request.id} role="admin" />}
-    <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).filter(status => !isRecurringPlan(request) || !planWorkStatuses.has(status)).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
+    <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).filter(status => !isRecurringPlan(request) || !planWorkStatuses.has(status)).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} describeError={(error) => error instanceof AdminActionError ? error.message : undefined} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
 
     <section className="rounded-xl border bg-muted/30 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote / Pricing</h3><AdminQuotePanel key={`${request.id}:${request.quote_revision ?? 0}:${request.quote_status ?? ""}`} request={request} providerName={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "The provider" : "The provider"} onChanged={props.saved} /></section>
 
-    <section><label htmlFor="admin-note" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Internal Notes</label><Textarea id="admin-note" rows={4} value={props.note} onChange={(event) => props.setNote(event.target.value)} placeholder="Add internal operations notes..." className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /><Button size="sm" className="mt-2" disabled={busy} onClick={() => void props.saveNote(request)}>{props.action?.kind === "note" ? <Loader2 className="animate-spin" /> : <Save />}Save Note</Button></section>
+    <RequestCorrection key={`correction-${request.id}-${request.updated_at}`} request={request} onSaved={props.saved} />
+    <RequestOperatorNotes key={`notes-${request.id}`} requestId={request.id} />
   </TabsContent><TabsContent value="chat" className="min-h-[460px] flex-1 overflow-hidden data-active:flex data-active:flex-col"><AdminChat key={request.id} requestId={request.id} homeowner={props.profiles[request.customer_id] ?? "Homeowner"} vendor={request.contractor_id ? props.contractorNames[request.contractor_id] ?? "Vendor" : "Vendor"} /></TabsContent></Tabs><DialogFooter><Button variant="outline" disabled={busy} onClick={props.close}>Close</Button></DialogFooter></DialogContent></Dialog>;
 }
 

@@ -88,12 +88,6 @@ export function Footer() {
               >
                 Terms
               </Link>
-              <Link
-                href="/admin"
-                className="text-sm text-muted-foreground/60 transition-colors hover:text-slate"
-              >
-                Admin
-              </Link>
             </div>
           </div>
         </div>
