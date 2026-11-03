@@ -208,6 +208,6 @@ Additive: three private tables, three nullable/defaulted columns and a widened c
 The §4 "known gap" (the `money_source` current-tier price) is closed for visits. The same exposure on one-time requests is TRACE-126.
 
 **Open gates:**
-- Two-person finance review before merge; reviewers not yet named.
+- Two-person finance review before merge; reviewers not yet named. *2026-11-03 (TRACE-137): merged as #113 on 2026-10-29 without a recorded review; now owner decision D-10 in the [closure report](PHASE-6-CLOSURE-REPORT.md).*
 - Merge, with separate owner authorization (the hosted push was done 2026-10-28).
 - Activation (finance authorities, a publication path, money mode) is outside this slice.
