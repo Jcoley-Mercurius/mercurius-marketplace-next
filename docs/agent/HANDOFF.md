@@ -3,6 +3,7 @@
 ## Phase 6.13 Codex review forward fix (TRACE-136, DEC-2026-057 reconciled), 2026-11-03
 
 - **Checkpoint (verified):** PR #132 merged at `d5ba4fc` (`main` `015f371`, 2026-11-02 23:44 UTC), before the review fixes. Hosted has `20261108001000` as merged. Readback 2026-11-03: 0 catalog visibility events, 0 hidden services, 0 badge events, 0 request actions, 0 operator notes; fingerprint `45 | 34c51131…`.
+- PR #134 (14:42 UTC) merged `6e9c031` into `main` `b5629a6`, rewriting `20261108001000` in the repository. PR #135 restores the applied content and keeps all corrections in `20261109001000`.
 - Branch `claude/phase6-13-review-forward-fix` from `main` `015f371`. Migration `20261109001000` (additive, **not pushed**) plus the client. `20261108001000` is not edited. Commit `6e9c031` on the merged branch and draft #133 (expand/contract) are superseded, and #133 is closed. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md) (§12.5 steps and matrix, §12.7 dispositions).
 - What the fix does:
   - drops the catalog command and the unkeyed Package Review clearance;

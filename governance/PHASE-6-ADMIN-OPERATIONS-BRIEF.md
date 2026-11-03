@@ -400,6 +400,8 @@ Carried across the phase (not closed by any slice):
 
 Usage counts on hosted: 0 catalog visibility events, 0 hidden services, 0 badge events, 0 request actions, 0 operator notes, 0 legacy notes. One onboarded provider record was updated after the merge (01:02 UTC, still active), which the merged guard allows only through reviewed paths.
 
+**Later on 2026-11-03:** PR #134 merged the superseded branch commit `6e9c031` into `main` (`b5629a6`, 14:42 UTC). That brought the reviewed client to production, but it also rewrote `20261108001000` in the repository so that it no longer matched what hosted applied. This PR restores `20261108001000` to the applied (original) content, so a clean replay of `main` reproduces hosted. The corrections live only in `20261109001000`. Until that migration is pushed, the production client's Package Reviews approval calls the keyed clearance that doesn't exist yet, so it fails closed. Every other path works.
+
 The review fixes are therefore a **forward fix on `main`**: migration `20261109001000_phase6_admin_operations_review_fixes.sql` (additive, **not pushed**) plus the client. `20261108001000` is not edited. Commit `6e9c031` on the merged branch and draft #133 (expand/contract) were prepared before the merge was noticed; #133 is closed. No money function changes; the fingerprint doesn't cover payment-adjacent behavior, which is listed in §12.5.
 
 ### 12.1 Decision as recorded
