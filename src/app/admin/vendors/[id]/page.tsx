@@ -90,8 +90,7 @@ export default function AdminVendorDetailPage() {
   const [pricesVersion, setPricesVersion] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [prefilled, setPrefilled] = useState<Prefilled | null>(null);
-  // DEC-2026-057 items 3-4: onboarded providers are activated through onboarding; statistics are verified.
-  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  // DEC-2026-057 item 4: statistics are the verified summaries.
   const [stats, setStats] = useState<VerifiedProviderStats | undefined>(undefined);
   const logoInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
@@ -115,13 +114,7 @@ export default function AdminVendorDetailPage() {
         // DEC-2026-055 item 1: kept for reference, readable by operators only.
         supabase.rpc("admin_vendor_special_offer", { p_contractor: id }),
       ]);
-      const [onboardedResult, statsResult] = await Promise.all([
-        supabase.rpc("admin_provider_is_onboarded", { p_contractor: id }),
-        loadVerifiedProviderStats(supabase, [id]),
-      ]);
-      // Unknown counts as onboarded, so the page never offers a direct switch it can't confirm.
-      setOnboarded(onboardedResult.error ? true : Boolean(onboardedResult.data));
-      setStats(statsResult.get(id));
+      setStats((await loadVerifiedProviderStats(supabase, [id])).get(id));
       const firstError = vendorResult.error ?? galleryResult.error ?? zipResult.error ?? serviceResult.error ?? areaResult.error ?? contactResult.error ?? applicationResult.error ?? packageResult.error ?? draftResult.error;
       if (firstError) throw firstError;
       if (!vendorResult.data) {
@@ -229,8 +222,6 @@ export default function AdminVendorDetailPage() {
     try {
       const vendorResult = await supabase.from("contractors").update({
         name: form.name.trim(), tagline: clean(form.tagline), bio: clean(form.bio), location: clean(form.location), email: clean(form.email), phone: clean(form.phone), website: clean(form.website), video_url: clean(form.video_url), logo_url: clean(form.logo_url), services: form.services, years_experience: form.years_experience, our_promise: clean(form.our_promise), verified_specialty: clean(form.verified_specialty), marketing_enabled: form.marketing_enabled,
-        // An onboarded provider's activation is its onboarding decision; a legacy provider keeps the switch.
-        ...(onboarded === false ? { is_active: form.is_active } : {}),
       }).eq("id", id);
       if (vendorResult.error) throw vendorResult.error;
       const clearZips = await supabase.from("contractor_service_zips").delete().eq("contractor_id", id);
@@ -298,7 +289,7 @@ export default function AdminVendorDetailPage() {
 
   return (
     <div className="min-h-full bg-background pb-20">
-      <div className="sticky top-16 z-10 border-b bg-background/95 backdrop-blur"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 md:px-8"><Link href="/admin/vendors" className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Back to Vendors</Link><div className="flex flex-wrap items-center gap-2"><Link href={`/providers/${form.id}`} target="_blank" className={buttonVariants({ variant: "outline", size: "sm" })}><Eye />Preview Storefront</Link>{onboarded === false && <Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} label={form.is_active ? "Active" : "Hidden"} />}<Button disabled={saving} onClick={() => void save()}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Publishing..." : "Publish"}</Button></div></div></div>
+      <div className="sticky top-16 z-10 border-b bg-background/95 backdrop-blur"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 md:px-8"><Link href="/admin/vendors" className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Back to Vendors</Link><div className="flex flex-wrap items-center gap-2"><Link href={`/providers/${form.id}`} target="_blank" className={buttonVariants({ variant: "outline", size: "sm" })}><Eye />Preview Storefront</Link><Button disabled={saving} onClick={() => void save()}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Publishing..." : "Publish"}</Button></div></div></div>
 
       <section className="border-b bg-gradient-to-br from-primary/8 via-background to-accent/8"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-start sm:px-6 md:px-8"><div className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="flex h-full w-full items-center justify-center">{form.logo_url ? <img src={form.logo_url} alt={`${form.name} logo`} className="h-full w-full object-contain" /> : <span className="text-3xl font-bold text-muted-foreground">{form.name.charAt(0)}</span>}</div><button type="button" disabled={uploading} onClick={() => logoInput.current?.click()} className="absolute inset-0 flex items-center justify-center bg-black/65 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"><Upload className="mr-1 h-4 w-4" />Change</button><input ref={logoInput} hidden type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeLogo(file); event.target.value = ""; }} /></div><div className="w-full flex-1 space-y-3"><Input value={form.name} onChange={(event) => update({ name: event.target.value })} className="h-12 bg-card text-2xl font-semibold" placeholder="Business name" /><Input value={form.tagline ?? ""} onChange={(event) => update({ tagline: event.target.value })} className="bg-card" placeholder="Short vendor tagline" /><div className="grid gap-3 sm:grid-cols-3"><IconField icon={MapPin}><Input value={form.location ?? ""} onChange={(event) => update({ location: event.target.value })} placeholder="Location" /></IconField><IconField icon={Star}><p className="flex h-9 items-center text-sm" title="From published reviews">{reviewSummaryText(stats)}</p></IconField><IconField icon={Briefcase}><p className="flex h-9 items-center text-sm" title="From completed jobs">{completedJobsText(stats)}</p></IconField></div></div></div></section>
 
@@ -322,7 +313,7 @@ export default function AdminVendorDetailPage() {
 
       <aside className="space-y-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="h-4 w-4" />Service Area</CardTitle><CardDescription>Select supported ZIP codes for matching.</CardDescription></CardHeader><CardContent><div className="max-h-80 space-y-2 overflow-y-auto pr-1">{areas.length ? areas.map((area) => { const checked = serviceZips.has(area.zip_code); return <button key={area.zip_code} type="button" onClick={() => setServiceZips((current) => { const next = new Set(current); if (next.has(area.zip_code)) next.delete(area.zip_code); else next.add(area.zip_code); return next; })} className={cn("flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors", checked ? "border-accent bg-accent/10" : "border-border bg-muted/40 text-muted-foreground hover:border-accent/40")}><span><strong>{area.zip_code}</strong><span className="ml-2 text-xs">{area.city}, {area.state}</span></span>{checked && <Badge variant="outline">Covered</Badge>}</button>; }) : <p className="text-sm text-muted-foreground">No active coverage areas have been configured.</p>}</div><p className="mt-3 text-xs text-muted-foreground">{serviceZips.size} ZIP code{serviceZips.size === 1 ? "" : "s"} selected</p></CardContent></Card>
 
-        <Card><CardHeader><CardTitle>Visibility</CardTitle></CardHeader><CardContent className="space-y-4">{onboarded === false ? <Setting label="Active on platform" description="Legacy provider without an onboarding record: this switch changes matching eligibility directly and records no reason. A reviewed path for legacy providers is waiting on an owner decision."><Toggle checked={form.is_active} onChange={(checked) => update({ is_active: checked })} /></Setting> : <p className="text-sm text-muted-foreground">Activation and suspension for this provider are recorded through the onboarding decision in the Activation Checklist below.</p>}<Setting label="Marketing enabled" description="Eligible for featured placements and spotlights."><Toggle checked={form.marketing_enabled} onChange={(checked) => update({ marketing_enabled: checked })} /></Setting></CardContent></Card>
+        <Card><CardHeader><CardTitle>Visibility</CardTitle></CardHeader><CardContent className="space-y-4"><div id="activation" className="space-y-2 text-sm"><p><span className="font-medium">Active on platform:</span> {form.is_active ? "Yes" : "No"}</p><p className="text-muted-foreground">There is no direct switch (DEC-2026-057 item 3). A provider is activated or suspended through the onboarding decision in the Activation Checklist below. To stop work for a provider without an onboarding record, use “Hide from public listing and matching” in <Link href="/admin/recruiting" className="underline underline-offset-2">Recruiting</Link>: it takes a reason, is recorded, and removes matching eligibility.</p></div><Setting label="Marketing enabled" description="Eligible for featured placements and spotlights."><Toggle checked={form.marketing_enabled} onChange={(checked) => update({ marketing_enabled: checked })} /></Setting></CardContent></Card>
 
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Existing Provider Access</CardTitle><CardDescription>Give the confirmed owner of an existing profile access to set it up. Setup access is not approval.</CardDescription></CardHeader><CardContent><ExistingProviderAccess contractorId={id} /></CardContent></Card>
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Vendor Account</CardTitle><CardDescription>Bind an account the applicant already holds, under onboarding review or while suspended.</CardDescription></CardHeader><CardContent><VendorAccountLinking contractorId={id} businessName={form.name} /></CardContent></Card>

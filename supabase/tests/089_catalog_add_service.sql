@@ -53,10 +53,16 @@ reset role;
 -- Taking a service away hides it and keeps the row.
 select pg_temp.as_user('1');
 set local role authenticated;
--- TRACE-136 (DEC-2026-057 item 2): hiding takes a reason and the owner's approval note.
+-- TRACE-136 (DEC-2026-057 item 2, amended): hiding a service is an owner-approved, reviewed
+-- change (migration). No operator control or command hides it, and no client deletes it.
 select throws_ok($$update public.services_catalog set is_active = false where id = 'synthetic-roof-replacement'$$, '42501', null, 'an admin cannot hide a service with a direct write');
-select lives_ok($$select public.admin_set_catalog_service_visibility('synthetic-roof-replacement', true, false, 'Synthetic: no longer offered', 'Synthetic owner approval', 'c6130000-0000-4000-8000-0000000000aa')$$, 'an admin hides a service through the reasoned command');
-select is((select is_active from public.services_catalog where id = 'synthetic-roof-replacement'), false, 'an admin hides a service and still sees it');
+select throws_ok($$delete from public.services_catalog where id = 'synthetic-roof-replacement'$$, '42501', null, 'an admin cannot delete a service');
+reset role;
+-- A reviewed migration runs as the owner.
+update public.services_catalog set is_active = false where id = 'synthetic-roof-replacement';
+select pg_temp.as_user('1');
+set local role authenticated;
+select is((select is_active from public.services_catalog where id = 'synthetic-roof-replacement'), false, 'a service hidden by a reviewed change is still visible to admins');
 reset role;
 set local role anon;
 select is((select count(*)::int from public.services_catalog where id = 'synthetic-roof-replacement'), 0, 'a hidden service is not public');

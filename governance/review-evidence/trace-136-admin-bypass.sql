@@ -1,8 +1,9 @@
 -- TRACE-136 (Phase 6.13) bypass probes. Synthetic users, single transaction, ROLLBACK.
--- Run: psql -h 127.0.0.1 -p 55422 -U postgres -d postgres -X -A -t -f governance/review-evidence/trace-136-admin-bypass.sql
--- Each line prints the probe, the result and the expectation after migration 20261108001000, and
--- MATCH or DIFF. Before that migration (characterization, 2026-11-02) the same probes showed the
--- bypasses recorded in the brief §6.1 (the "before" column there).
+-- Run: psql -h 127.0.0.1 -p 55422 -U postgres -d postgres -X -A -t -q -f governance/review-evidence/trace-136-admin-bypass.sql | grep -v '^$'
+-- Each line prints the probe, the result and the expectation after migration 20261108001000 (the
+-- expand step, brief §12.5), and MATCH or DIFF. The probes are the ones in SQL 108 (same fixtures
+-- and expectations), generated from it. Before that migration (characterization, 2026-11-02) the
+-- same areas showed the bypasses recorded in the brief §6.1 (the "before" column there).
 begin;
 -- Fixtures (as owner). Replica mode skips FK checks for the onboarding row only.
 insert into auth.users(id,email,email_confirmed_at) values
@@ -56,6 +57,13 @@ grant execute on function pg_temp.try(text), pg_temp.val(text) to authenticated,
 create temp table out(n serial, label text, got text, expect text); grant all on out to authenticated, anon; grant all on sequence out_n_seq to authenticated, anon;
 create function pg_temp.p(label text, got text, expect text) returns void language sql as $$ insert into out(label,got,expect) values(label,got,expect) $$;
 grant execute on function pg_temp.p(text,text,text) to authenticated, anon;
+-- Versions as first read, so a retry can send exactly what the first call sent.
+create table pg_temp.v as select id, updated_at from public.service_requests where id::text like 'c6132000-%'
+  union all select id, updated_at from public.vendor_packages where id = 'c6135000-0000-4000-8000-000000000001';
+grant select on pg_temp.v to authenticated;
+-- Finance authority for the dual-role admin only (admin 1 has none).
+insert into public.money_authorities(user_id,granted_by,reason) values
+ ('c6130000-0000-4000-8000-000000000005','c6130000-0000-4000-8000-000000000005','Synthetic finance holder');
 
 set local role authenticated;
 -- Admin without finance authority: direct API writes.
@@ -69,9 +77,12 @@ select pg_temp.p('A4b contractors jobs_completed', pg_temp.try($q$update public.
 select pg_temp.p('A4c contractors badges direct', pg_temp.try($q$update public.contractors set badges=array['Top Rated'] where id='c6131000-0000-4000-8000-00000000000a'$q$), 'REFUSED 42501');
 select pg_temp.p('A5 contractors user_id reassigned', pg_temp.try($q$update public.contractors set user_id='c6130000-0000-4000-8000-000000000004' where id='c6131000-0000-4000-8000-00000000000a'$q$), 'REFUSED 42501');
 select pg_temp.p('A5b contractors insert with user_id', pg_temp.try($q$insert into public.contractors(name,user_id) values('Probe linked','c6130000-0000-4000-8000-000000000004')$q$), 'REFUSED 42501');
-select pg_temp.p('A5c contractors insert unlinked (legacy create)', pg_temp.try($q$insert into public.contractors(name,is_active) values('Probe new',true)$q$), 'ALLOWED rows=1');
+select pg_temp.p('A5c contractors insert created active (unreviewed activation)', pg_temp.try($q$insert into public.contractors(name,is_active) values('Probe new',true)$q$), 'REFUSED 42501');
+select pg_temp.p('A5d contractors insert with the active default', pg_temp.try($q$insert into public.contractors(name) values('Probe default')$q$), 'REFUSED 42501');
+select pg_temp.p('A5e contractors insert inactive (record only)', pg_temp.try($q$insert into public.contractors(name,is_active) values('Probe new',false)$q$), 'ALLOWED rows=1');
 select pg_temp.p('A20 is_active on onboarded provider', pg_temp.try($q$update public.contractors set is_active=false where id='c6131000-0000-4000-8000-00000000000b'$q$), 'REFUSED 42501');
-select pg_temp.p('A20b is_active on legacy provider (gap kept)', pg_temp.try($q$update public.contractors set is_active=false where id='c6131000-0000-4000-8000-00000000000c'$q$), 'ALLOWED rows=1');
+select pg_temp.p('A20b suspend legacy provider directly (correction 3)', pg_temp.try($q$update public.contractors set is_active=false where id='c6131000-0000-4000-8000-00000000000c'$q$), 'REFUSED 42501');
+select pg_temp.p('A20d unchanged is_active in a profile save still saves', pg_temp.try($q$update public.contractors set is_active=true where id='c6131000-0000-4000-8000-00000000000c'$q$), 'ALLOWED rows=1');
 select pg_temp.p('A20c profile text edit still saves', pg_temp.try($q$update public.contractors set tagline='Probe tagline' where id='c6131000-0000-4000-8000-00000000000a'$q$), 'ALLOWED rows=1');
 select pg_temp.p('A6 coverage insert', pg_temp.try($q$insert into public.coverage_areas(zip_code,city,state,is_active) values('99999','Nowhere','ZZ',true)$q$), 'REFUSED 42501');
 select pg_temp.p('A7 coverage deactivate', pg_temp.try($q$update public.coverage_areas set is_active=false where zip_code='33901'$q$), 'REFUSED 42501');
@@ -79,6 +90,9 @@ select pg_temp.p('A8 coverage delete', pg_temp.try($q$delete from public.coverag
 select pg_temp.p('A9 catalog pricing_mode', pg_temp.try($q$update public.services_catalog set pricing_mode=case when pricing_mode='quote' then 'fixed' else 'quote' end where id='house-cleaning'$q$), 'REFUSED 23514');
 select pg_temp.p('A18 catalog is_active direct', pg_temp.try($q$update public.services_catalog set is_active=false where id='house-cleaning'$q$), 'REFUSED 42501');
 select pg_temp.p('A18b catalog is_popular direct (unchanged)', pg_temp.try($q$update public.services_catalog set is_popular = not is_popular where id='house-cleaning'$q$), 'ALLOWED rows=1');
+select pg_temp.p('A18c unchanged is_active in an edit still saves', pg_temp.try($q$update public.services_catalog set is_active=true where id='house-cleaning'$q$), 'ALLOWED rows=1');
+select pg_temp.p('A18d catalog delete (hides the service)', pg_temp.try($q$delete from public.services_catalog where id='house-cleaning'$q$), 'REFUSED 42501');
+select pg_temp.p('A18e catalog insert hidden', pg_temp.try($q$insert into public.services_catalog(id,name,category_id,is_active) select 'probe-hidden','Probe hidden',category_id,false from public.services_catalog where id='house-cleaning'$q$), 'REFUSED 42501');
 select pg_temp.p('A10 smart_picks insert', pg_temp.try($q$insert into public.smart_picks(service_id,pick_type,contractor_id) values('house-cleaning','best-rated','c6131000-0000-4000-8000-00000000000a')$q$), 'REFUSED 42501');
 select pg_temp.p('A10b smart_picks read', pg_temp.try($q$select 1 from public.smart_picks$q$), 'REFUSED 42501');
 select pg_temp.p('A11 disputes direct status', pg_temp.try($q$update public.disputes set status='resolved' where id='c6133000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
@@ -92,32 +106,52 @@ select pg_temp.p('A15 request delete', pg_temp.try($q$delete from public.service
 select pg_temp.p('A19 package needs_review direct', pg_temp.try($q$update public.vendor_packages set needs_review=false where id='c6135000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
 select pg_temp.p('A21 admin message as homeowner sender_id', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000002','homeowner','spoof')$q$), 'REFUSED 42501');
 select pg_temp.p('A22 admin message as admin', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000001','admin','Support reply')$q$), 'ALLOWED rows=1');
-select pg_temp.p('A23 admin reads notes column directly', pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
+-- Mixed versions (brief §12.5): the previous admin requests select (with notes) and the new one.
+select pg_temp.p('M1 previous admin requests select loads (expand step)', pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3');
+select pg_temp.p('M2 new admin requests select loads', pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3');
+select pg_temp.p('M3 previous notes save fails closed', pg_temp.try($q$update public.service_requests set notes='Previous client note save' where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
 select pg_temp.p('A24 admin legacy note readback', pg_temp.val($q$select public.admin_request_notes('c6132000-0000-4000-8000-000000000001')->>'legacy_note'$q$), 'LEGACY shared note');
 select pg_temp.p('N1 add operator note', pg_temp.val($q$select public.admin_add_request_note('c6132000-0000-4000-8000-000000000001','c6136000-0000-4000-8000-000000000001','Operator-only probe')->>'replayed'$q$), 'false');
 select pg_temp.p('N2 replay same key', pg_temp.val($q$select public.admin_add_request_note('c6132000-0000-4000-8000-000000000001','c6136000-0000-4000-8000-000000000001','Operator-only probe')->>'replayed'$q$), 'true');
 select pg_temp.p('N3 same key, different text', pg_temp.val($q$select public.admin_add_request_note('c6132000-0000-4000-8000-000000000001','c6136000-0000-4000-8000-000000000001','Changed')::text$q$), 'REFUSED 22023');
+select pg_temp.p('N4 same key, different request', pg_temp.val($q$select public.admin_add_request_note('c6132000-0000-4000-8000-000000000002','c6136000-0000-4000-8000-000000000001','Operator-only probe')::text$q$), 'REFUSED 22023');
 select pg_temp.p('S1 status change, stale version', pg_temp.val($q$select public.admin_transition_job_status_expected('c6132000-0000-4000-8000-000000000002','2000-01-01','c6136000-0000-4000-8000-000000000002','cancelled','probe')::text$q$), 'REFUSED 40001');
 select pg_temp.p('C1 correction before offer', pg_temp.val($q$select (public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002',(select updated_at from public.service_requests where id='c6132000-0000-4000-8000-000000000002'),'c6136000-0000-4000-8000-000000000003','4 Probe St','Fort Myers','FL','33901','Corrected scope','Homeowner called with the right address')->'after'->>'address')$q$), '4 Probe St');
-select pg_temp.p('C2 correction replay', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002','2000-01-01','c6136000-0000-4000-8000-000000000003','4 Probe St','Fort Myers','FL','33901','Corrected scope','Homeowner called with the right address')->>'replayed'$q$), 'true');
+select pg_temp.p('C2 correction replay (same version, same intent)', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002',(select updated_at from pg_temp.v where id='c6132000-0000-4000-8000-000000000002'),'c6136000-0000-4000-8000-000000000003','4 Probe St','Fort Myers','FL','33901','Corrected scope','Homeowner called with the right address')->>'replayed'$q$), 'true');
+select pg_temp.p('C2b same key, different version read', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002','2000-01-01','c6136000-0000-4000-8000-000000000003','4 Probe St','Fort Myers','FL','33901','Corrected scope','Homeowner called with the right address')::text$q$), 'REFUSED 22023');
+select pg_temp.p('C2c same key, different reason', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002',(select updated_at from pg_temp.v where id='c6132000-0000-4000-8000-000000000002'),'c6136000-0000-4000-8000-000000000003','4 Probe St','Fort Myers','FL','33901','Corrected scope','Another reason')::text$q$), 'REFUSED 22023');
 select pg_temp.p('C3 correction, stale version (new key)', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002','2000-01-01','c6136000-0000-4000-8000-000000000004','6 Probe St','Fort Myers','FL','33901','x','x')::text$q$), 'REFUSED 40001');
 select pg_temp.p('C4 correction after match', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000001',(select updated_at from public.service_requests where id='c6132000-0000-4000-8000-000000000001'),'c6136000-0000-4000-8000-000000000005','7 Probe St','Fort Myers','FL','33901','x','x')::text$q$), 'REFUSED 55000');
 select pg_temp.p('C5 correction to an uncovered ZIP', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002',(select updated_at from public.service_requests where id='c6132000-0000-4000-8000-000000000002'),'c6136000-0000-4000-8000-000000000006','4 Probe St','Miami','FL','33101','x','x')::text$q$), 'REFUSED 22023');
 select pg_temp.p('G1 badges, stale expectation', pg_temp.val($q$select public.admin_set_provider_badges('c6131000-0000-4000-8000-00000000000a',array['Insured'],array['Licensed'],'probe','c6136000-0000-4000-8000-000000000007')::text$q$), 'REFUSED 40001');
 select pg_temp.p('G2 badges with reason', pg_temp.val($q$select public.admin_set_provider_badges('c6131000-0000-4000-8000-00000000000a','{}',array['Licensed'],'License verified','c6136000-0000-4000-8000-000000000008')->>'replayed'$q$), 'false');
 select pg_temp.p('G3 badges replay', pg_temp.val($q$select public.admin_set_provider_badges('c6131000-0000-4000-8000-00000000000a','{}',array['Licensed'],'License verified','c6136000-0000-4000-8000-000000000008')->>'replayed'$q$), 'true');
-select pg_temp.p('K1 hide service without owner approval', pg_temp.val($q$select public.admin_set_catalog_service_visibility('house-cleaning',true,false,'probe',null,'c6136000-0000-4000-8000-000000000009')::text$q$), 'REFUSED 22023');
-select pg_temp.p('P1 clear package review without reason', pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from public.vendor_packages where id='c6135000-0000-4000-8000-000000000001'),' ')::text$q$), 'REFUSED 22023');
-select pg_temp.p('P2 clear package review, stale', pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001','2000-01-01','Reviewed')::text$q$), 'REFUSED 40001');
-select pg_temp.p('P3 clear package review with reason', pg_temp.val($q$select (public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from public.vendor_packages where id='c6135000-0000-4000-8000-000000000001'),'Quote-only package reviewed')->>'package_id')$q$), 'c6135000-0000-4000-8000-000000000001');
+select pg_temp.p('G4 same key, different badges read', pg_temp.val($q$select public.admin_set_provider_badges('c6131000-0000-4000-8000-00000000000a',array['Licensed'],array['Licensed'],'License verified','c6136000-0000-4000-8000-000000000008')::text$q$), 'REFUSED 22023');
+select pg_temp.p('G5 same key, different provider', pg_temp.val($q$select public.admin_set_provider_badges('c6131000-0000-4000-8000-00000000000c','{}',array['Licensed'],'License verified','c6136000-0000-4000-8000-000000000008')::text$q$), 'REFUSED 22023');
+select pg_temp.p('K1 no catalog visibility command (Q2 amended)', pg_temp.val($q$select to_regprocedure('public.admin_set_catalog_service_visibility(text,boolean,boolean,text,text,uuid)')::text$q$), '<null>');
+select pg_temp.p('P1 clear package review without reason', pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from public.vendor_packages where id='c6135000-0000-4000-8000-000000000001'),' ','c6136000-0000-4000-8000-0000000000c1')::text$q$), 'REFUSED 22023');
+select pg_temp.p('P2 clear package review, stale', pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001','2000-01-01','Reviewed','c6136000-0000-4000-8000-0000000000c2')::text$q$), 'REFUSED 40001');
+select pg_temp.p('P1b clear package review without a key', pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from public.vendor_packages where id='c6135000-0000-4000-8000-000000000001'),'Quote-only package reviewed',null)::text$q$), 'REFUSED 22023');
+select pg_temp.p('P3 clear package review with reason', pg_temp.val($q$select (public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from public.vendor_packages where id='c6135000-0000-4000-8000-000000000001'),'Quote-only package reviewed','c6136000-0000-4000-8000-0000000000c3')->>'replayed')$q$), 'false');
+select pg_temp.p('P4 retry returns the original result', pg_temp.val($q$select (public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from pg_temp.v where id='c6135000-0000-4000-8000-000000000001'),'Quote-only package reviewed','c6136000-0000-4000-8000-0000000000c3')->>'replayed')$q$), 'true');
+select pg_temp.p('P5 same key, different reason', pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from pg_temp.v where id='c6135000-0000-4000-8000-000000000001'),'Another reason','c6136000-0000-4000-8000-0000000000c3')::text$q$), 'REFUSED 22023');
 select pg_temp.p('Q1 summary finance row (no authority)', pg_temp.val($q$select q->>'state' from jsonb_array_elements(public.admin_operations_summary()->'queues') q where q->>'queue'='finance_exceptions'$q$), 'restricted');
 select pg_temp.p('Q2 summary quote count = queue count', pg_temp.val($q$select ((select (q->>'count')::int from jsonb_array_elements(public.admin_operations_summary()->'queues') q where q->>'queue'='quote') = jsonb_array_length(public.admin_quote_queue()->'items'))::text$q$), 'true');
 
--- Homeowner A.
+-- Changed actor: a second admin reusing another operator's keys is refused on every command.
+select pg_temp.as_user('5');
+select pg_temp.p('R1 note key, different actor', pg_temp.val($q$select public.admin_add_request_note('c6132000-0000-4000-8000-000000000001','c6136000-0000-4000-8000-000000000001','Operator-only probe')::text$q$), 'REFUSED 22023');
+select pg_temp.p('R2 badge key, different actor', pg_temp.val($q$select public.admin_set_provider_badges('c6131000-0000-4000-8000-00000000000a','{}',array['Licensed'],'License verified','c6136000-0000-4000-8000-000000000008')::text$q$), 'REFUSED 22023');
+select pg_temp.p('R3 correction key, different actor', pg_temp.val($q$select public.admin_correct_request_details('c6132000-0000-4000-8000-000000000002',(select updated_at from pg_temp.v where id='c6132000-0000-4000-8000-000000000002'),'c6136000-0000-4000-8000-000000000003','4 Probe St','Fort Myers','FL','33901','Corrected scope','Homeowner called with the right address')::text$q$), 'REFUSED 22023');
+select pg_temp.p('R4 package review key, different actor', pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000-4000-8000-000000000001',(select updated_at from pg_temp.v where id='c6135000-0000-4000-8000-000000000001'),'Quote-only package reviewed','c6136000-0000-4000-8000-0000000000c3')::text$q$), 'REFUSED 22023');
+-- Finance holder: the read is authorized, so the row is ready, or error if the read fails.
+select pg_temp.p('Q3 summary finance row (authority held)', pg_temp.val($q$select q->>'state' from jsonb_array_elements(public.admin_operations_summary()->'queues') q where q->>'queue'='finance_exceptions'$q$), 'ready');
+
+-- Homeowner A. Expand step: the legacy notes column is still readable by the participant (as
+-- before this release) and frozen; the contract migration narrows the read.
 select pg_temp.as_user('2');
-select pg_temp.p('H1 homeowner reads notes', pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
-select pg_temp.p('H1b homeowner broad select *', pg_temp.val($q$select count(*)::text from (select * from public.service_requests) s$q$), 'REFUSED 42501');
-select pg_temp.p('H1c homeowner reads own request (listed columns)', pg_temp.val($q$select count(*)::text from public.service_requests where customer_id='c6130000-0000-4000-8000-000000000002'$q$), '2');
+select pg_temp.p('H1 homeowner writes notes', pg_temp.try($q$update public.service_requests set notes='mine' where id='c6132000-0000-4000-8000-000000000002'$q$), 'REFUSED 42501');
+select pg_temp.p('H1c homeowner reads own request', pg_temp.val($q$select count(*)::text from public.service_requests where customer_id='c6130000-0000-4000-8000-000000000002'$q$), '2');
 select pg_temp.p('H1d homeowner operator-note readback', pg_temp.val($q$select public.admin_request_notes('c6132000-0000-4000-8000-000000000001')::text$q$), 'REFUSED 42501');
 select pg_temp.p('H1e homeowner reads operator-note table', pg_temp.val($q$select count(*)::text from private.request_operator_notes$q$), 'REFUSED 42501');
 select pg_temp.p('H2 homeowner still sees own invoice', pg_temp.val($q$select count(*)::text from public.invoices where customer_id='c6130000-0000-4000-8000-000000000002'$q$), '1');
@@ -132,8 +166,8 @@ select pg_temp.p('H4 homeowner coverage insert', pg_temp.try($q$insert into publ
 
 -- Vendor A (assigned to request 1).
 select pg_temp.as_user('3');
-select pg_temp.p('V1 vendor reads notes', pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
-select pg_temp.p('V1b vendor reads assigned request (listed columns)', pg_temp.val($q$select address from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), '1 Probe St');
+select pg_temp.p('V1 vendor writes notes', pg_temp.try($q$update public.service_requests set notes='vendor' where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
+select pg_temp.p('V1b vendor reads assigned request', pg_temp.val($q$select address from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), '1 Probe St');
 select pg_temp.p('V2 vendor payouts_paused=true', pg_temp.try($q$update public.contractors set payouts_paused=true where id='c6131000-0000-4000-8000-00000000000a'$q$), 'REFUSED 42501');
 select pg_temp.p('V3 vendor invoices update', pg_temp.try($q$update public.invoices set vendor_payout=1 where contractor_id='c6131000-0000-4000-8000-00000000000a'$q$), 'REFUSED 42501');
 select pg_temp.p('V4 vendor posts as vendor', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000003','vendor','On my way')$q$), 'ALLOWED rows=1');
@@ -146,7 +180,6 @@ select pg_temp.p('D1 dual posts as homeowner on own request', pg_temp.try($q$ins
 select pg_temp.p('D2 dual posts as admin on another request', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000005','admin','Support')$q$), 'ALLOWED rows=1');
 select pg_temp.p('D3 dual posts as homeowner on another''s request', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000005','homeowner','x')$q$), 'REFUSED 42501');
 select pg_temp.p('D4 dual posts as vendor', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000005','vendor','x')$q$), 'REFUSED 42501');
-select pg_temp.p('D5 dual reads notes on own request', pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000003'$q$), 'REFUSED 42501');
 
 -- Homeowner B.
 select pg_temp.as_user('4');
@@ -156,11 +189,15 @@ select pg_temp.p('B1 homeowner B reads A''s request', pg_temp.val($q$select coun
 reset role; set local role anon; select set_config('request.jwt.claims','{"role":"anon"}',true);
 select pg_temp.p('Z1 anon reads smart_picks', pg_temp.try($q$select 1 from public.smart_picks$q$), 'REFUSED 42501');
 select pg_temp.p('Z2 anon reads notes', pg_temp.val($q$select notes from public.service_requests limit 1$q$), 'REFUSED 42501');
+select pg_temp.p('Z3 anon writes notes', pg_temp.try($q$update public.service_requests set notes='x'$q$), 'REFUSED 42501');
 
 reset role;
 select pg_temp.p('X1 seeded invoice unchanged', (select status||' payout='||vendor_payout from public.invoices where id='c6134000-0000-4000-8000-000000000009'), 'pending payout=85.00');
 select pg_temp.p('X2 legacy note kept in place', (select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000001'), 'LEGACY shared note');
-select pg_temp.p('X3 vendor-visible review history', (select changes->0->>'kind'||' / '||reason from private.vendor_package_price_corrections where package_id='c6135000-0000-4000-8000-000000000001'), 'review_cleared / Quote-only package reviewed');
+select pg_temp.p('X3 vendor-visible review history (once, despite the retry)', (select changes->0->>'kind'||' / '||reason from private.vendor_package_price_corrections where package_id='c6135000-0000-4000-8000-000000000001'), 'review_cleared / Quote-only package reviewed');
+select pg_temp.p('X3b one keyed clearance', (select count(*)::text from private.package_review_clearances where package_id='c6135000-0000-4000-8000-000000000001'), '1');
+select pg_temp.p('X7 legacy provider record unchanged', (select is_active::text from public.contractors where id='c6131000-0000-4000-8000-00000000000c'), 'true');
+select pg_temp.p('X8 catalog service still shown', (select count(*)::text from public.services_catalog where id='house-cleaning' and is_active), '1');
 select pg_temp.p('X4 correction history row', (select count(*)::text from private.admin_request_actions where request_id='c6132000-0000-4000-8000-000000000002'), '1');
 select pg_temp.p('X5 badge history row', (select before_badges::text||'->'||after_badges::text from private.provider_badge_events where contractor_id='c6131000-0000-4000-8000-00000000000a'), '{}->{Licensed}');
 select pg_temp.p('X6 provider owner unchanged', (select user_id::text from public.contractors where id='c6131000-0000-4000-8000-00000000000a'), 'c6130000-0000-4000-8000-000000000003');

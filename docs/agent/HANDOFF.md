@@ -1,5 +1,15 @@
 # Agent handoff — 2026-11-02
 
+## Phase 6.13 Codex review fixes on PR #132 (TRACE-136, DEC-2026-057 reconciled), 2026-11-02
+
+- Same branch `claude/phase6-13-admin-operations-release` (PR #132 draft). Contract step on the stacked branch `claude/phase6-13-notes-contract`. Nothing pushed to hosted or merged. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md), with dispositions in §12.7.
+- Q2 reconciled to the amended decision: no catalog visibility command or control. Hiding is a reviewed migration only; direct `is_active` changes, hidden inserts and deletes are refused.
+- Q3, conservative fix: no client changes `is_active` for any provider, and client-created records start inactive. Recovery path: the listing exclusion, or onboarding review.
+- Deployment is expand/contract (brief §12.5 steps and matrix). The previous admin requests page is tested against the expand schema.
+- Summary finance state split (`restricted` = denial; `error` = failed authorized read). Every new key is bound to actor, target and intent; Package Review clearance is keyed; four history tables are append-only.
+- DEC-2026-058 (hide "Top Rated") is PROPOSED, pending owner approval, and not built.
+- Next: Codex re-review of PR #132 and the contract PR, then the owner-authorized steps 1–8 in brief §12.5. Phase 6 remains incomplete (brief §11).
+
 ## Phase 6.13 admin operations implementation (TRACE-136, DEC-2026-057 approved as amended), 2026-11-02
 
 - Owner approved DEC-2026-057 using Codex's corrections (2026-11-02). The reading of the answers is recorded in DECISION-LOG (Q1/Q2 as recommended; corrections 3–7 amend Q3–Q7; corrections 1–2 amend A4/A6; correction 4 amends DEC-2026-052 item 6).

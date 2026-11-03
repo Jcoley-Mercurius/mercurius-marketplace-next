@@ -7118,10 +7118,10 @@ export type Database = {
         Returns: Json
       }
       admin_cancellation_queue: { Args: never; Returns: Json }
-      admin_catalog_visibility_history: { Args: never; Returns: Json }
       admin_clear_package_review: {
         Args: {
           p_expected_updated_at: string
+          p_key: string
           p_package: string
           p_reason: string
         }
@@ -7258,10 +7258,6 @@ export type Database = {
       admin_provider_badge_history: {
         Args: { p_contractor: string }
         Returns: Json
-      }
-      admin_provider_is_onboarded: {
-        Args: { p_contractor: string }
-        Returns: boolean
       }
       admin_provider_quality_events: {
         Args: { _contractor_id?: string }
@@ -7422,17 +7418,6 @@ export type Database = {
           _reason: string
         }
         Returns: undefined
-      }
-      admin_set_catalog_service_visibility: {
-        Args: {
-          p_active: boolean
-          p_expected_active: boolean
-          p_key: string
-          p_owner_approval: string
-          p_reason: string
-          p_service: string
-        }
-        Returns: Json
       }
       admin_set_package_internal_notes: {
         Args: { p_draft?: string; p_notes?: string; p_package?: string }
