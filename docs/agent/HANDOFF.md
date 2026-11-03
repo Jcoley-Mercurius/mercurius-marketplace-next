@@ -17,6 +17,7 @@
   3. CS-1 (revoke `special_offer` SELECT and `get_vendor_earnings_metrics`; `/vendors` copy) as its own slice.
   4. Human checks on the final candidate.
   Phase 6 is not accepted.
+- **Second pass (2026-11-03, review direction):** report only. "No review recorded" is stated as an evidence gap, and 6.1 and 6.2 move from D to A1. §4.6 names each deferral's gate, condition and owner. General support after 48 hours (D-6c) is separate from the unbuilt formal-dispute override (D-6d). Human checks come last, after every acceptance-affecting repair. Every D item is marked Open. CS-1 is implemented separately as TRACE-138 (PR #137, not pushed or merged), and it surfaced W-4–W-6.
 
 ## Phase 6.13 Codex review forward fix (TRACE-136, DEC-2026-057 reconciled), 2026-11-03
 

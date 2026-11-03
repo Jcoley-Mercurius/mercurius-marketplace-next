@@ -2,6 +2,8 @@
 
 **Status:** PREPARED, NOT PERFORMED (2026-11-03). Nothing on this page is marked passed. Automated axe, keyboard and SQL results don't satisfy these checks (PHASE-6-SCOPE "Phase acceptance checkpoint"; MDS blueprint accessibility and testing requirements). The person performing a check fills in the result columns: date, person, device and assistive technology, result, and notes. A failure becomes a finding with the checkpoint, step and what was heard or seen.
 
+**When:** last, on the final acceptance candidate, after every acceptance-affecting repair has merged (closure report A2 and §9). Record the candidate commit with each result. A later change to a surface a script covers invalidates that result; rerun the script on the new candidate.
+
 Related: [closure report](PHASE-6-CLOSURE-REPORT.md) items A2, X-1 and X-2.
 
 ## 0. Setup (isolated, synthetic, payments off)
