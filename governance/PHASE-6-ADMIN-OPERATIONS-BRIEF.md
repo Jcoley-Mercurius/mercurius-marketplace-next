@@ -363,7 +363,9 @@ Additive migration, not pushed.
 - **Browser** (new `admin-operations.spec.ts`): grouped nav desktop/mobile Sheet, keyboard-only queue → record → action → return, deep link and Back, stale message, footer/pricing link absence, non-admin redirect; regression on `quote-proposals`, `recurring-visits`, `fulfillment`, `exceptions`, `support`, `finance-commands`, `portals`, `reviews`.
 - **Not automatable here:** screen reader, real devices, `@visual` baselines — recorded as not performed.
 
-## 11. Phase 6 closure checklist (status, 2026-11-02)
+## 11. Phase 6 closure checklist (status, 2026-11-02; reconciled 2026-11-03)
+
+*2026-11-03 (TRACE-137 closeout audit):* every numbered slice 6.1–6.13 has reached `main` (`85bb7c6`, every Phase 6 PR head verified as an ancestor). The 6.13 forward fix is merged and on hosted. The canonical status, evidence and dispositions now live in [PHASE-6-CLOSURE-REPORT.md](PHASE-6-CLOSURE-REPORT.md); this table is kept as the 2026-11-02 record with dated corrections.
 
 Phase 6 is **not complete**: integrated acceptance and carried corrective work remain. "Merged" means on `main`; "verified" means its own automated evidence passed; "accepted" is the owner's, after Codex review and the phase checkpoint.
 
@@ -382,12 +384,12 @@ Phase 6 is **not complete**: integrated acceptance and carried corrective work r
 | 6.11A/6.11B TRACE-134 | yes | yes (#126, #128) | yes | follow-up: revoke signed-in SELECT on `contractors.special_offer` |
 | 6.12A TRACE-135 | yes | yes (#127) | yes | — |
 | 6.12B TRACE-135 | yes | yes (#129, `b1a8cc3`) | yes (local) | Codex review; follow-ups `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` |
-| 6.13 TRACE-136 | yes (§12: `20261108001000` merged and on hosted; review forward fix `20261109001000` + client) | #132 yes (`015f371`); forward fix **no** (draft PR) | yes (local; §12.6) | Codex review of the forward fix; push and merge need owner authorization (§12.5); retained restrictions §12.4; DEC-2026-058 PROPOSED |
+| 6.13 TRACE-136 | yes (§12: `20261108001000` merged and on hosted; review forward fix `20261109001000` + client) | #132 yes (`015f371`); forward fix **no** (draft PR). *2026-11-03: yes, #135 `85bb7c6`; `20261109001000` pushed 2026-11-03 with owner authorization.* | yes (local; §12.6). *2026-11-03: `main` CI 41692704323 green.* | Codex review of the forward fix *(not recorded before the merge; still outstanding)*; ~~push and merge need owner authorization (§12.5)~~ *done 2026-11-03*; retained restrictions §12.4; DEC-2026-058 PROPOSED |
 | Prepaid plans (DEC-2026-048) | no | no | no | separate slice with finance review |
 
 Carried across the phase (not closed by any slice):
 
-- **Pricing repairs:** TRACE-126 (one-time accepted-price exposure) and TRACE-127 (add-on visit acceptance after a price change) OPEN; DEC-2026-051 items 6–8 PROPOSED; F613-18.
+- **Pricing repairs:** TRACE-126 (one-time accepted-price exposure) and TRACE-127 (add-on visit acceptance after a price change) OPEN; DEC-2026-051 items 6–8 PROPOSED; ~~F613-18~~ *(2026-11-03: resolved by DEC-2026-057 Q6, the keyed `admin_clear_package_review`; no longer carried)*.
 - **Finance sign-offs:** 6.6c two-person finance review not recorded; promotions gated pending finance review (DEC-2026-038/041/042); 0 hosted money authorities.
 - **Unresolved policies:** DEC-2026-050, 052 (items 1–5, 7–9), 054 PROPOSED; DEC-2026-057 approved as amended (retained restrictions §12.4 need owner decisions); DEC-2026-058 PROPOSED; DEC-2026-049 items 7–8 blocked.
 - **Payment kernel:** P-K1/P-K2, F-1/F-2/F-3 (6.9 brief §11).
@@ -483,6 +485,8 @@ These are restrictions the release keeps on purpose. They are not workflows it c
 6. **Owner's own messages.** The owner's two admin role rows also act as homeowner where their account owns a request; the role validation allows both, by design.
 
 ### 12.5 Deployment of the forward fix, step by step (no hosted action authorized)
+
+*2026-11-03: completed.* Steps 1–3 were done with the owner's authorization (read-only preflight, dry run listing only `20261109001000`, push, readback; §12 "Pushed to hosted"). Step 4: PR #135 merged as `85bb7c6` at 18:19 UTC, with `main` CI 41692704323 green. Step 0, the Codex review of the forward fix, is not recorded. The previous production deployment is now #134's (14:42 UTC), which carries the reviewed client from `6e9c031`. Its UI code is identical to CF (§12.6), so it is fully supported on SF. The #132 deployment (CM) also remains a supported rollback. Never C0. The plan below is kept as written.
 
 Releases and schema states:
 - **C0:** the client before PR #132.

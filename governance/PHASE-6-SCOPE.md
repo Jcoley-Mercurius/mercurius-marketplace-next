@@ -63,6 +63,8 @@ already-merged brief branch, so 6.9A/6.9B are not on `main` (route to `main` is 
 2026-11-02 checkpoint: `main` `8bcbfbe` carries 6.11A, 6.11B and 6.12A (#126–#128); 6.12B is PR #129 (open). Hosted history ends at `20261107001000`. *Update 2026-11-02: #129 merged (`b1a8cc3`).* 6.13 / TRACE-136: DEC-2026-057 approved as amended; 6.13A+6.13B merged as PR #132 (`015f371`; `20261108001000` on hosted; characterization merged as #130). The Codex review corrections are a forward fix (`20261109001000` + client, PR #135; migration pushed 2026-11-03; Q2 reconciled, DEC-2026-058 PROPOSED). Phase 6 is not complete (brief §11).
 6.13 / TRACE-136 characterized, no implementation ([brief](PHASE-6-ADMIN-OPERATIONS-BRIEF.md), with the Phase 6 closure checklist in §11); override questions are DEC-2026-057 (PROPOSED). Phase 6 is not complete. These notes approve no policy.
 
+2026-11-03 checkpoint (closeout audit, TRACE-137): `main` `85bb7c6` carries every numbered slice 6.1–6.13; #135 merged; hosted history ends at `20261109001000`, and its stored statements match `main`. The canonical status is the [closure report](PHASE-6-CLOSURE-REPORT.md): A/B/C/D dispositions, integrated journeys (SQL 109), owner decision sheet and corrective slices. The [manual acceptance scripts](PHASE-6-MANUAL-ACCEPTANCE.md) are prepared, not performed. Phase 6 is not complete or accepted. These notes approve no policy.
+
 ## Count and order
 
 The roadmap lists seven workflow areas. Plan for **13 implementation slices**, followed

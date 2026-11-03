@@ -1,4 +1,22 @@
-# Agent handoff — 2026-11-02
+# Agent handoff — 2026-11-03
+
+## Phase 6 closeout audit and acceptance preparation (TRACE-137), 2026-11-03
+
+- **Checkpoint (verified):** `main` `85bb7c6` (PR #135 merge, `main` CI 41692704323 green); nothing landed since. All 25 Phase 6 PR heads are ancestors of `main`. `supabase migration list --linked` pairs all 214 migrations through `20261109001000`. Hosted's stored statements for `20261108001000` and `20261109001000` match `main` (not the `b5629a6` rewrite); read only.
+- Branch `claude/phase6-closeout-audit` from `85bb7c6`. No application code or migration changed. It adds:
+  - [closure report](../../governance/PHASE-6-CLOSURE-REPORT.md): canonical, with A/B/C/D per requirement, decision sheet D-1–D-12 and corrective slices CS-1–CS-5;
+  - [manual acceptance scripts](../../governance/PHASE-6-MANUAL-ACCEPTANCE.md);
+  - SQL 109 integrated journeys;
+  - `scripts/phase6-manual-fixtures.sql`, a local-only synthetic seed that refuses non-synthetic databases.
+- Evidence: SQL 109 98/98; full SQL 100 files / 6,386 PASS on a clean replay of 214 migrations; fingerprint `45 | 34c51131…`; secret scan pass; the seed reproduces 13 checkpoints and they render signed in. Browser, unit, build and concurrency: reused from `main` CI (unchanged code).
+- Stale records corrected with dated notes: brief §11 and §12.5, TRACE-125 and TRACE-136, PHASE-6-SCOPE, roadmap, PHASE-6-RECURRING-VISITS.
+- Not performed: screen reader, real devices, `@visual` (Windows baselines only), 200% zoom, human keyboard pass.
+- Next:
+  1. Codex reviews the report and SQL 109 (A1, including merged diffs with no recorded review).
+  2. The owner answers the decision sheet.
+  3. CS-1 (revoke `special_offer` SELECT and `get_vendor_earnings_metrics`; `/vendors` copy) as its own slice.
+  4. Human checks on the final candidate.
+  Phase 6 is not accepted.
 
 ## Phase 6.13 Codex review forward fix (TRACE-136, DEC-2026-057 reconciled), 2026-11-03
 
@@ -12,7 +30,7 @@
   - adds the keyed clearance, append-only history on five tables, and the summary finance split.
 - Rollback after merge: the #132 deployment, never the pre-#132 one.
 - DEC-2026-058 (hide "Top Rated") is PROPOSED, pending owner approval, and not built.
-- Next: Codex review, then merge PR #135. The migration is already on hosted, so the merge only reconciles `main`'s copy of `20261108001000` and adds the record. Phase 6 remains incomplete (brief §11).
+- Next: Codex review, then merge PR #135. The migration is already on hosted, so the merge only reconciles `main`'s copy of `20261108001000` and adds the record. Phase 6 remains incomplete (brief §11). *(2026-11-03: #135 merged as `85bb7c6`; no Codex review recorded. See the TRACE-137 entry.)*
 
 ## Phase 6.13 admin operations implementation (TRACE-136, DEC-2026-057 approved as amended), 2026-11-02
 
