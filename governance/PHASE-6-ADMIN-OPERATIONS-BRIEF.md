@@ -513,7 +513,25 @@ Mixed-version matrix:
 
 ### 12.6 Verification evidence (local; synthetic data only)
 
-EVIDENCE_PLACEHOLDER
+Results, 2026-11-03, local stack, on `main` `015f371` + `20261109001000`. **Local evidence only**; CI is reported in the PR. Human checks are listed at the end.
+- **Clean replay:** `supabase db reset --local`, 214 migrations. Money fingerprint (`scripts/promotion-money-fingerprint.sql`) `45 | 34c51131e2ca18f65d3b29afd8d12e11`, unchanged.
+- **Full SQL suite:** 99 files, 6,288 tests, PASS.
+- **SQL 108:** 154 assertions, including:
+  - mixed-version selects (M1: the pre-#132 select is refused; M2: the current select loads; M3);
+  - replay binding for each command (N4, G4–G5, C2b–C2c, P1b, P4–P5, R1–R4, the status set);
+  - append-only on five tables, incl. the kept catalog table;
+  - finance states (Q1, Q3–Q5);
+  - catalog (A18c–e, K1);
+  - provider activation (A5c–e, A20b, A20d);
+  - notes reads (H1r–H1s, V1r, D5, A23);
+  - column-grant completeness.
+- **SQL 089:** 12 assertions.
+- **Probe script:** 115/115 MATCH, 0 DIFF; identical on a second clean replay ([results](review-evidence/trace-136-probe-results.txt)).
+- **Concurrency:** `scripts/admin-operations-concurrency.mjs` 8/8 scenarios on 6 runs (A7 same key from two admins; A8 duplicate Package Review clearance). It is now a CI step.
+- **Lint, types, unit:** lint and typecheck exit 0; unit tests 56 files, 645 tests.
+- **Browser:** the forward-fix client is the reviewed client from `6e9c031` (identical UI code). Its affected specs ran locally on 2026-11-02, with 3 new tests: 94/98 passed, and the 4 load timeouts passed on rerun. The rerun on this head was interrupted twice by the local machine (session restarts under heavy load), so this head's browser evidence is CI's full non-visual suite.
+
+Not performed: the full non-visual browser suite locally, hosted dry run or push, screen reader, real devices, `@visual`, 200% zoom.
 
 ### 12.7 Codex review of PR #132 — findings and dispositions (2026-11-02; delivered as the forward fix)
 
