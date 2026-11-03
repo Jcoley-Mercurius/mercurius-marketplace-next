@@ -3,13 +3,16 @@
 // is refused 40001. A2 one key sent twice at once: one transition, both answers equal. A3 two
 // admins correct the same unbound request from one read: one applies. A4 two badge changes from
 // one read: one applies. A5 one operator note key sent twice at once: one row. A6 summary read ∥
-// status change: the summary count still equals its queue. Run only against a disposable local
+// status change: the summary count still equals its queue. A7 two admins send the same key at once:
+// one applies, the other is refused as a different actor (22023), never replayed. A8 one Package
+// Review clearance key sent twice at once: one clearance, one replay, one vendor-visible history
+// row. Run only against a disposable local
 // database; fixtures are synthetic with fresh ids and are left in place (reset before delivery).
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-const container = process.env.ADMIN_OPS_DB_CONTAINER ?? 'supabase_db_mercurius-marketplace-next';
+const container = process.env.ADMIN_OPS_DB_CONTAINER ?? 'supabase_db_mercurius-phase5-isolated';
 function sql(source) {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', ['exec', '-i', container, 'psql', '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres'], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -106,4 +109,27 @@ const transition = (who, req, key, to = 'matched') => sql(as(who,
   assert.equal(parsed.summary, parsed.queue, 'A6: summary equals its queue within one transaction');
   console.log('A6 ok: summary parity under a concurrent change');
 }
-console.log('admin operations concurrency: 6/6 scenarios passed');
+// A7
+{
+  const req = await request(true), key = randomUUID();
+  const results = await settled([transition(adminA, req, key), transition(adminB, req, key)]);
+  assert.equal(fulfilled(results).length, 1, 'A7: one admin\'s change applies');
+  assert.match(String(rejected(results)[0].reason?.message), /already used for a different action/, 'A7: the other actor is refused, not replayed');
+  assert.equal(await sql(`select count(*) from private.admin_request_actions where request_key = '${key}'`), '1', 'A7: one action');
+  console.log('A7 ok: same key, different actor refused');
+}
+// A8
+{
+  const pkg = randomUUID(), key = randomUUID();
+  await sql(`insert into public.vendor_packages(id, contractor_id, service_id, name, pricing_mode, is_active, needs_review)
+    values ('${pkg}', '${contractor}', 'house-cleaning', 'Synthetic review package', 'custom_quote', false, true);
+    update public.vendor_packages set needs_review = true where id = '${pkg}';`);
+  const version = await sql(`select updated_at from public.vendor_packages where id = '${pkg}'`);
+  const clear = () => sql(as(adminA, `select public.admin_clear_package_review('${pkg}', '${version}', 'Synthetic review', '${key}')`));
+  const results = await settled([clear(), clear()]);
+  assert.equal(fulfilled(results).length, 2, 'A8: both answers succeed');
+  assert.equal(fulfilled(results).map((result) => JSON.parse(result.value)).filter((answer) => answer.replayed).length, 1, 'A8: one answer is the replay');
+  assert.equal(await sql(`select count(*) from private.vendor_package_price_corrections where package_id = '${pkg}'`), '1', 'A8: one vendor-visible history row');
+  console.log('A8 ok: one clearance, one replay');
+}
+console.log('admin operations concurrency: 8/8 scenarios passed');

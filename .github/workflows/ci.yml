@@ -122,6 +122,8 @@ jobs:
         run: node scripts/exception-resolutions-concurrency.mjs
       - name: Concurrent support requests, triage, dispute decisions, appeals and evidence
         run: node scripts/support-concurrency.mjs
+      - name: Concurrent admin status changes, corrections, badges, notes, package reviews and key reuse
+        run: node scripts/admin-operations-concurrency.mjs
       - name: Clean reset after committed concurrency fixtures
         run: sh scripts/phase5-db.sh reset
       - name: Verify clean replay

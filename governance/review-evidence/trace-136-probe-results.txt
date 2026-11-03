@@ -1,5 +1,5 @@
-# TRACE-136 probe results after migration 20261108001000 (local stack, clean replay of all migrations, 2026-11-02).
-# Script: governance/review-evidence/trace-136-admin-bypass.sql. Synthetic fixtures, one transaction, ROLLBACK.
+# TRACE-136 probe results after migration 20261108001000, the expand step (local stack, clean replay of all migrations, 2026-11-02, revised for the Codex review of PR #132).
+# Script: governance/review-evidence/trace-136-admin-bypass.sql (generated from SQL 108). Synthetic fixtures, one transaction, ROLLBACK.
 A1 invoices insert paid: REFUSED 42501  [expect REFUSED 42501] MATCH
 A2 invoices update payout/released: REFUSED 42501  [expect REFUSED 42501] MATCH
 A16 invoices delete: REFUSED 42501  [expect REFUSED 42501] MATCH
@@ -9,9 +9,12 @@ A4b contractors jobs_completed: REFUSED 42501  [expect REFUSED 42501] MATCH
 A4c contractors badges direct: REFUSED 42501  [expect REFUSED 42501] MATCH
 A5 contractors user_id reassigned: REFUSED 42501  [expect REFUSED 42501] MATCH
 A5b contractors insert with user_id: REFUSED 42501  [expect REFUSED 42501] MATCH
-A5c contractors insert unlinked (legacy create): ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
+A5c contractors insert created active (unreviewed activation): REFUSED 42501  [expect REFUSED 42501] MATCH
+A5d contractors insert with the active default: REFUSED 42501  [expect REFUSED 42501] MATCH
+A5e contractors insert inactive (record only): ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
 A20 is_active on onboarded provider: REFUSED 42501  [expect REFUSED 42501] MATCH
-A20b is_active on legacy provider (gap kept): ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
+A20b suspend legacy provider directly (correction 3): REFUSED 42501  [expect REFUSED 42501] MATCH
+A20d unchanged is_active in a profile save still saves: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
 A20c profile text edit still saves: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
 A6 coverage insert: REFUSED 42501  [expect REFUSED 42501] MATCH
 A7 coverage deactivate: REFUSED 42501  [expect REFUSED 42501] MATCH
@@ -19,6 +22,9 @@ A8 coverage delete: REFUSED 42501  [expect REFUSED 42501] MATCH
 A9 catalog pricing_mode: REFUSED 23514  [expect REFUSED 23514] MATCH
 A18 catalog is_active direct: REFUSED 42501  [expect REFUSED 42501] MATCH
 A18b catalog is_popular direct (unchanged): ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
+A18c unchanged is_active in an edit still saves: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
+A18d catalog delete (hides the service): REFUSED 42501  [expect REFUSED 42501] MATCH
+A18e catalog insert hidden: REFUSED 42501  [expect REFUSED 42501] MATCH
 A10 smart_picks insert: REFUSED 42501  [expect REFUSED 42501] MATCH
 A10b smart_picks read: REFUSED 42501  [expect REFUSED 42501] MATCH
 A11 disputes direct status: REFUSED 42501  [expect REFUSED 42501] MATCH
@@ -32,29 +38,43 @@ A15 request delete: REFUSED 42501  [expect REFUSED 42501] MATCH
 A19 package needs_review direct: REFUSED 42501  [expect REFUSED 42501] MATCH
 A21 admin message as homeowner sender_id: REFUSED 42501  [expect REFUSED 42501] MATCH
 A22 admin message as admin: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
-A23 admin reads notes column directly: REFUSED 42501  [expect REFUSED 42501] MATCH
+M1 previous admin requests select loads (expand step): 3  [expect 3] MATCH
+M2 new admin requests select loads: 3  [expect 3] MATCH
+M3 previous notes save fails closed: REFUSED 42501  [expect REFUSED 42501] MATCH
 A24 admin legacy note readback: LEGACY shared note  [expect LEGACY shared note] MATCH
 N1 add operator note: false  [expect false] MATCH
 N2 replay same key: true  [expect true] MATCH
 N3 same key, different text: REFUSED 22023  [expect REFUSED 22023] MATCH
+N4 same key, different request: REFUSED 22023  [expect REFUSED 22023] MATCH
 S1 status change, stale version: REFUSED 40001  [expect REFUSED 40001] MATCH
 C1 correction before offer: 4 Probe St  [expect 4 Probe St] MATCH
-C2 correction replay: true  [expect true] MATCH
+C2 correction replay (same version, same intent): true  [expect true] MATCH
+C2b same key, different version read: REFUSED 22023  [expect REFUSED 22023] MATCH
+C2c same key, different reason: REFUSED 22023  [expect REFUSED 22023] MATCH
 C3 correction, stale version (new key): REFUSED 40001  [expect REFUSED 40001] MATCH
 C4 correction after match: REFUSED 55000  [expect REFUSED 55000] MATCH
 C5 correction to an uncovered ZIP: REFUSED 22023  [expect REFUSED 22023] MATCH
 G1 badges, stale expectation: REFUSED 40001  [expect REFUSED 40001] MATCH
 G2 badges with reason: false  [expect false] MATCH
 G3 badges replay: true  [expect true] MATCH
-K1 hide service without owner approval: REFUSED 22023  [expect REFUSED 22023] MATCH
+G4 same key, different badges read: REFUSED 22023  [expect REFUSED 22023] MATCH
+G5 same key, different provider: REFUSED 22023  [expect REFUSED 22023] MATCH
+K1 no catalog visibility command (Q2 amended): <null>  [expect <null>] MATCH
 P1 clear package review without reason: REFUSED 22023  [expect REFUSED 22023] MATCH
 P2 clear package review, stale: REFUSED 40001  [expect REFUSED 40001] MATCH
-P3 clear package review with reason: c6135000-0000-4000-8000-000000000001  [expect c6135000-0000-4000-8000-000000000001] MATCH
+P1b clear package review without a key: REFUSED 22023  [expect REFUSED 22023] MATCH
+P3 clear package review with reason: false  [expect false] MATCH
+P4 retry returns the original result: true  [expect true] MATCH
+P5 same key, different reason: REFUSED 22023  [expect REFUSED 22023] MATCH
 Q1 summary finance row (no authority): restricted  [expect restricted] MATCH
 Q2 summary quote count = queue count: true  [expect true] MATCH
-H1 homeowner reads notes: REFUSED 42501  [expect REFUSED 42501] MATCH
-H1b homeowner broad select *: REFUSED 42501  [expect REFUSED 42501] MATCH
-H1c homeowner reads own request (listed columns): 2  [expect 2] MATCH
+R1 note key, different actor: REFUSED 22023  [expect REFUSED 22023] MATCH
+R2 badge key, different actor: REFUSED 22023  [expect REFUSED 22023] MATCH
+R3 correction key, different actor: REFUSED 22023  [expect REFUSED 22023] MATCH
+R4 package review key, different actor: REFUSED 22023  [expect REFUSED 22023] MATCH
+Q3 summary finance row (authority held): ready  [expect ready] MATCH
+H1 homeowner writes notes: REFUSED 42501  [expect REFUSED 42501] MATCH
+H1c homeowner reads own request: 2  [expect 2] MATCH
 H1d homeowner operator-note readback: REFUSED 42501  [expect REFUSED 42501] MATCH
 H1e homeowner reads operator-note table: REFUSED 42501  [expect REFUSED 42501] MATCH
 H2 homeowner still sees own invoice: 1  [expect 1] MATCH
@@ -66,8 +86,8 @@ H9 homeowner status-change command: REFUSED 42501  [expect REFUSED 42501] MATCH
 H10 homeowner operations summary: REFUSED 42501  [expect REFUSED 42501] MATCH
 H3 homeowner smart_picks insert: REFUSED 42501  [expect REFUSED 42501] MATCH
 H4 homeowner coverage insert: REFUSED 42501  [expect REFUSED 42501] MATCH
-V1 vendor reads notes: REFUSED 42501  [expect REFUSED 42501] MATCH
-V1b vendor reads assigned request (listed columns): 1 Probe St  [expect 1 Probe St] MATCH
+V1 vendor writes notes: REFUSED 42501  [expect REFUSED 42501] MATCH
+V1b vendor reads assigned request: 1 Probe St  [expect 1 Probe St] MATCH
 V2 vendor payouts_paused=true: REFUSED 42501  [expect REFUSED 42501] MATCH
 V3 vendor invoices update: REFUSED 42501  [expect REFUSED 42501] MATCH
 V4 vendor posts as vendor: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
@@ -77,13 +97,16 @@ D1 dual posts as homeowner on own request: ALLOWED rows=1  [expect ALLOWED rows=
 D2 dual posts as admin on another request: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
 D3 dual posts as homeowner on another's request: REFUSED 42501  [expect REFUSED 42501] MATCH
 D4 dual posts as vendor: REFUSED 42501  [expect REFUSED 42501] MATCH
-D5 dual reads notes on own request: REFUSED 42501  [expect REFUSED 42501] MATCH
 B1 homeowner B reads A's request: 0  [expect 0] MATCH
 Z1 anon reads smart_picks: REFUSED 42501  [expect REFUSED 42501] MATCH
 Z2 anon reads notes: REFUSED 42501  [expect REFUSED 42501] MATCH
+Z3 anon writes notes: REFUSED 42501  [expect REFUSED 42501] MATCH
 X1 seeded invoice unchanged: pending payout=85.00  [expect pending payout=85.00] MATCH
 X2 legacy note kept in place: LEGACY shared note  [expect LEGACY shared note] MATCH
-X3 vendor-visible review history: review_cleared / Quote-only package reviewed  [expect review_cleared / Quote-only package reviewed] MATCH
+X3 vendor-visible review history (once, despite the retry): review_cleared / Quote-only package reviewed  [expect review_cleared / Quote-only package reviewed] MATCH
+X3b one keyed clearance: 1  [expect 1] MATCH
+X7 legacy provider record unchanged: true  [expect true] MATCH
+X8 catalog service still shown: 1  [expect 1] MATCH
 X4 correction history row: 1  [expect 1] MATCH
 X5 badge history row: {}->{Licensed}  [expect {}->{Licensed}] MATCH
 X6 provider owner unchanged: c6130000-0000-4000-8000-000000000003  [expect c6130000-0000-4000-8000-000000000003] MATCH

@@ -75,6 +75,13 @@ export function isCorrectableRequest(request: {
     && request.total_amount === null && request.quote_amount === null && request.payment_status === "pending";
 }
 
+/**
+ * The admin requests list select. It never names service_requests.notes, so it loads both before
+ * and after the contract migration narrows that column (brief §12.5); SQL 108 runs this exact
+ * string against the expand-step schema.
+ */
+export const ADMIN_REQUEST_SELECT = "id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id";
+
 /** URL state for /admin/requests: ?q=, ?status=, ?request=. Unknown values are dropped. */
 export function parseRequestsQuery(params: URLSearchParams, statuses: readonly string[]) {
   const status = params.get("status") ?? "all";
