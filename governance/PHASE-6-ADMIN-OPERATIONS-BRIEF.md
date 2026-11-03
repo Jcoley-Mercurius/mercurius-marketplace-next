@@ -382,7 +382,7 @@ Phase 6 is **not complete**: integrated acceptance and carried corrective work r
 | 6.11A/6.11B TRACE-134 | yes | yes (#126, #128) | yes | follow-up: revoke signed-in SELECT on `contractors.special_offer` |
 | 6.12A TRACE-135 | yes | yes (#127) | yes | — |
 | 6.12B TRACE-135 | yes | yes (#129, `b1a8cc3`) | yes (local) | Codex review; follow-ups `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` |
-| 6.13 TRACE-136 | yes (§12; expand migration `20261108001000` + client; contract migration in a follow-up PR) | **no** (PR #132, draft; characterization merged as #130 `7ec8f9a`) | yes (local; §12.6); CI §12.6 | Codex re-review; hosted pushes and merges need owner authorization (§12.5); retained restrictions §12.4; DEC-2026-058 PROPOSED |
+| 6.13 TRACE-136 | yes (§12: `20261108001000` merged and on hosted; review forward fix `20261109001000` + client) | #132 yes (`015f371`); forward fix **no** (draft PR) | yes (local; §12.6) | Codex review of the forward fix; push and merge need owner authorization (§12.5); retained restrictions §12.4; DEC-2026-058 PROPOSED |
 | Prepaid plans (DEC-2026-048) | no | no | no | separate slice with finance review |
 
 Carried across the phase (not closed by any slice):
@@ -394,9 +394,17 @@ Carried across the phase (not closed by any slice):
 - **Human acceptance:** screen-reader, real-device, `@visual` and 200% zoom checks for every Phase 6 journey; integrated Codex journey review (PHASE-6-SCOPE "Phase acceptance checkpoint").
 - **Not authorized here:** payments, automation, financial operations, hosted pushes, merges.
 
-## 12. Implementation (DEC-2026-057 approved as amended, 2026-11-02; revised for the Codex review of PR #132)
+## 12. Implementation (DEC-2026-057 approved as amended, 2026-11-02; forward fix for the Codex review of PR #132)
 
-Migration `20261108001000_phase6_admin_operations.sql` (additive, **not pushed**) plus the client that is compatible with it. This is the **expand** step of an expand/contract release (§12.5). The **contract** step is a separate migration that narrows the legacy notes column read. It is pushed only after this client is live, so the admin requests page keeps loading throughout and the previous client stays a usable rollback. No money function changed: the fingerprint is `45 | 34c51131…` before and after. That fingerprint doesn't cover payment-adjacent behavior, which is listed for review in §12.5.
+**State, read back 2026-11-03:** PR #132 merged to `main` at `d5ba4fc` (`015f371`, 2026-11-02 23:44 UTC), before the Codex review fixes. Hosted has `20261108001000` as merged: the catalog hide command exists and the notes read is already narrowed. The money fingerprint is `45 | 34c51131…`. The newest production deployment was created at the merge.
+
+Usage counts on hosted: 0 catalog visibility events, 0 hidden services, 0 badge events, 0 request actions, 0 operator notes, 0 legacy notes. One onboarded provider record was updated after the merge (01:02 UTC, still active), which the merged guard allows only through reviewed paths.
+
+**Later on 2026-11-03:** PR #134 merged the superseded branch commit `6e9c031` into `main` (`b5629a6`, 14:42 UTC). That brought the reviewed client to production, but it also rewrote `20261108001000` in the repository so that it no longer matched what hosted applied. This PR restores `20261108001000` to the applied (original) content, so a clean replay of `main` reproduces hosted. The corrections live only in `20261109001000`. Until that migration is pushed, the production client's Package Reviews approval calls the keyed clearance that doesn't exist yet, so it fails closed. Every other path works.
+
+**Pushed to hosted 2026-11-03 with the owner's authorization:** dry run listed only `20261109001000`, then `supabase db push --linked`. Readback: the catalog command and the unkeyed clearance are gone; the keyed clearance is granted to `authenticated` and not `anon`; `package_review_clearances` exists; the catalog history is kept; catalog deletes, the notes read and `anon` updates are closed; 22 active providers and 0 hidden services, unchanged; fingerprint `45 | 34c51131…` unchanged. Preflight just before the push: 0 catalog events, 0 badge events, 0 request actions, 0 operator notes.
+
+The review fixes are therefore a **forward fix on `main`**: migration `20261109001000_phase6_admin_operations_review_fixes.sql` (additive; **pushed 2026-11-03**, above) plus the client. `20261108001000` is not edited. Commit `6e9c031` on the merged branch and draft #133 (expand/contract) were prepared before the merge was noticed; #133 is closed. No money function changes; the fingerprint doesn't cover payment-adjacent behavior, which is listed in §12.5.
 
 ### 12.1 Decision as recorded
 
@@ -416,16 +424,15 @@ The owner's instruction gave seven required corrections and no separate answer s
 | A1 | `invoices`: insert/update/delete revoked from `anon`/`authenticated`, admin write policies dropped. The definer trigger and every SELECT path are kept. | migration §A1; `/admin/invoices` read-only |
 | A2 | Invoker guard `private.guard_contractor_operator_writes`: no client change to `user_id` (or non-null on insert), or to `payouts_paused*`. Linking, binding and release commands run as owner and are untouched. | migration; probes A3, A5, A5b, V2; SQL 072 green |
 | A3 | Invoker guard `private.guard_message_sender`: `sender_id` must be the caller, and `sender_role` must be a role the caller holds *on that thread*. Dual-role accounts post under each role they qualify for. This also closes an admin posting under another account's `sender_id`, which was found while building. | probes A21–A22, H5–H7, V4–V6, D1–D4 |
-| A4 (amended by correction 1) | Operator notes are written only to `private.request_operator_notes` (append-only, admin-only: `admin_add_request_note`, keyed; `admin_request_notes`). From the expand step, no client writes `service_requests.notes`, so nothing new can enter the shared column. The participant **read** of that column is narrowed by the contract step (§12.5). | probes A12, M3, H1, V1, Z2–Z3, N1–N4, R1 |
+| A4 (amended by correction 1) | `20261108001000` (merged): SELECT and UPDATE on `service_requests.notes` are closed to signed-in roles by column grants, and operator notes are written only to `private.request_operator_notes` (admin-only: `admin_add_request_note`, keyed; `admin_request_notes`). The forward fix also closes `anon` updates, and makes the notes table refuse TRUNCATE as well. | probes A12, A23, H1, H1r–H1s, V1, V1r, D5, Z2–Z3, M1–M3, N1–N4, R1 |
 | A5 | `admin_resolve_dispute` EXECUTE revoked from clients. `admin_decide_dispute` (definer) still calls it. `/admin/quality` links to Disputes; SQL 008/024 use the keyed command. | probe A17; SQL 008, 024 |
 | A6 (amended by correction 2) | `admin_transition_job_status_expected`: bound to the row version (`updated_at`, bumped by every write), so any intervening change refuses with `40001`, not only a status change. The key is checked after the row lock, so a concurrent retry replays rather than failing. The history row is written in the same transaction as the transition. | probe S1; SQL 108; concurrency A1–A2 |
 | A7 | `smart_picks`: all client privileges revoked. Table and rows kept. | probes A10, A10b, Z1 |
 | A8 | `admin_operations_summary`: the same queue functions in one transaction. The finance row is `restricted` **only** when `money_require_finance` denies the caller. A failed read after that check passes is `error`, like any other queue, never a zero (finding 4). No threshold or action. | probes Q1–Q5; SQL 108 parity; concurrency A6 |
 
 **Notes disclosure inventory (correction 1).** `service_requests.notes` was readable through the table-wide SELECT grant by the homeowner (customer policy) and the assigned provider (vendor policy). No other path exposes it: none of the definer functions, views, realtime publication (`service_requests` is not published), Edge Functions, API routes or email templates read the column (`dispute_detail` reads dispute-decision notes).
-- **Expand step (this PR):** every client write to `notes`, `address`, `city`, `state`, `zip_code` and `description` is revoked, from `authenticated` and `anon`. Operator notes go to the private table. No client in this PR selects `notes`; the unit test `mixed-version deployment` fails if one does.
-- **Contract step (follow-up PR, §12.5):** table-wide SELECT is replaced by a column grant on every column except `notes`. After that, a new `service_requests` column needs an explicit grant, and the contract test fails if one is missing.
-- **Privacy between the steps:** the column is frozen, so no note written after the expand push can reach a participant. Values already in the column stay readable to the homeowner and provider until the contract push, exactly as today. Hosted had **0** such rows at the 2026-11-02 read-only readback; the preflight in §12.5 re-reads that count before each push.
+- **Closed (merged in `20261108001000`, on hosted):** table-wide SELECT is replaced by a column grant on every column except `notes`, and no client role updates `notes`, `address`, `city`, `state`, `zip_code` or `description`. The forward fix adds the same closure for `anon` updates. SQL 108 fails if a new column lacks its grant. No client selects `notes`; the unit test `mixed-version deployment` fails if one does.
+- **Consequence for rollback:** the pre-#132 client selects `notes`, so its requests page cannot load against this schema. It is not a rollback target (§12.5).
 - **History preserved:** existing values stay in the column, unchanged, and are not copied into operator notes. Operators read them through `admin_request_notes` as "Earlier shared note (read-only)".
 
 ### 12.3 Policy changes newly approved (as built)
@@ -433,7 +440,7 @@ The owner's instruction gave seven required corrections and no separate answer s
 | Item | Built |
 |---|---|
 | Q1 coverage | Client writes to `coverage_areas` revoked and admin write policies dropped. `/admin/coverage` is a read-only readback that names the owner as change authority. |
-| Q2 catalog hide (amended) | No command or control hides, restores or removes a service. An invoker guard refuses a client change to `is_active` and a client insert of a hidden service. Client DELETE is revoked and the admin delete policy dropped (deleting is hiding). A reviewed migration (owner) is the only path. "Popular" and add/edit are unchanged. `/admin/catalog` shows Shown/Hidden read-only. |
+| Q2 catalog hide (amended) | The merged `admin_set_catalog_service_visibility` is dropped by the forward fix (unused on hosted: 0 events); its empty history table is kept, append-only. No command or control hides, restores or removes a service. An invoker guard refuses a client change to `is_active` and a client insert of a hidden service. Client DELETE is revoked and the admin delete policy dropped (deleting is hiding). A reviewed migration (owner) is the only path. "Popular" and add/edit are unchanged. `/admin/catalog` shows Shown/Hidden read-only. |
 | Q3 provider controls (conservative) | Direct `user_id` reassignment is refused on every client path (A2). **No client changes `is_active` for any provider**, onboarded or legacy, and a client-created contractor record starts inactive. Stored values, the reviewed linking/onboarding commands and the legacy review starts are unchanged. The list and detail pages no longer show a switch; the detail page names the recovery path (DECISION-LOG DEC-2026-057 item 3): <ul><li>to stop work, the reasoned, recorded listing exclusion on `/admin/recruiting`, which also removes matching eligibility;</li><li>to activate or suspend, onboarding review then `vendor_decide_onboarding`;</li><li>anything else, a reviewed migration.</li></ul> |
 | Q4 statistics and badges | Client writes to `rating` and `jobs_completed` are refused, and new providers are created with the defaults only. Every operator surface shows `public_review_summaries` and `get_completed_job_counts` and never falls back to the stored value. Badges go through `admin_set_provider_badges` (reason, expected badges, key, history). |
 | Q5 request corrections | No client writes to address, ZIP or description (A4). `admin_correct_request_details` works only before any binding:<ul><li>**Version-bound and keyed.**</li><li>**Refuses with `55000` once a binding exists:** offer, match, quote, payment, obligation, promotion or bound price.</li><li>**Revalidates under the row lock** the active coverage ZIP and the active catalog service.</li><li>**Records before and after** in `private.admin_request_actions`.</li></ul> |
@@ -452,7 +459,7 @@ The owner's instruction gave seven required corrections and no separate answer s
 
 Versions are bound as UTC text, so the session time zone cannot turn a genuine retry into a refusal. `admin_operations_summary` and the history reads are read-only and take no key.
 
-**Append-only history (finding 6).** `private.request_operator_notes`, `private.provider_badge_events`, `private.admin_request_actions` and `private.package_review_clearances` have row triggers refusing UPDATE and DELETE and a statement trigger refusing TRUNCATE, for every role including the owner. No catalog history exists after the Q2 correction. Existing tables from earlier slices (for example `vendor_package_price_corrections`) are unchanged.
+**Append-only history (finding 6).** `private.request_operator_notes`, `private.provider_badge_events`, `private.admin_request_actions`, `private.package_review_clearances` and the kept, empty `private.catalog_visibility_events` have row triggers refusing UPDATE and DELETE and a statement trigger refusing TRUNCATE, for every role including the owner. Existing tables from earlier slices (for example `vendor_package_price_corrections`) are unchanged.
 
 UI (6.13B), under MDS §5–§8:
 - **Navigation:** grouped sidebar (five MDS groups, each a labelled section, `aria-current`; same in the mobile Sheet). The Smart Picks entry is removed and `/admin/smart-picks` redirects to `/admin/featured`. The public footer Admin link and the `/pricing` legend are removed.
@@ -475,39 +482,32 @@ These are restrictions the release keeps on purpose. They are not workflows it c
 5. **"Top Rated" (DEC-2026-058, PROPOSED, pending owner approval).** Recommendation: stop displaying and offering it until objective criteria are approved. Stored values and badge history are preserved, nothing is rewritten, and nothing is built until approved.
 6. **Owner's own messages.** The owner's two admin role rows also act as homeowner where their account owns a request; the role validation allows both, by design.
 
-### 12.5 Deployment: expand/contract, step by step (no hosted action authorized)
+### 12.5 Deployment of the forward fix, step by step (no hosted action authorized)
 
 Releases and schema states:
-- **C0:** the client in production now (`main`).
-- **C1:** this PR's client. It never selects or writes `notes`, and works against S1 and S2.
-- **S0:** hosted today (through `20261107001000`).
-- **S1 (expand):** S0 + `20261108001000` (this PR). Note writes are closed; SELECT on `notes` is kept.
-- **S2 (contract):** S1 + the contract migration in a follow-up PR (prepared on `claude/phase6-13-notes-contract`, stacked on this branch). It replaces the table-wide SELECT on `service_requests` with a column grant excluding `notes`, and adds no other change.
+- **C0:** the client before PR #132.
+- **CM:** `main` now (PR #132, `015f371`).
+- **CF:** the forward-fix client.
+- **SM:** hosted now (`20261108001000` as merged).
+- **SF:** SM + `20261109001000`.
 
 | Step | Action (each needs the owner's separate authorization) | Read back before the next step | Rollback in this phase |
 |---|---|---|---|
-| 0 | Codex review of PR #132 (revised) and of the contract PR | — | — |
-| 1 | Read-only preflight: `supabase migration list --linked` ends at `20261107001000`; count of non-empty `service_requests.notes` (0 on 2026-11-02) | counts recorded in the PR | none needed |
-| 2 | `supabase db push --linked --dry-run` lists only `20261108001000` | dry-run output | none needed |
-| 3 | `supabase db push --linked` (S0 → S1), with C0 live | migration listed; `notes` UPDATE revoked and SELECT kept; new functions present; fingerprint `45 \| 34c51131…` | C0 keeps working on S1 (matrix). The migration stays; fix forward. |
-| 4 | Merge PR #132 → Vercel deploys C1 | `/admin` overview, `/admin/requests` list and record, notes panel, catalog, vendors | `vercel promote <C0 deployment>`: C0 is compatible with S1 |
-| 5 | Soak; record the last C0 deployment id as "do not promote after step 7" | production deployment is C1 | as step 4 |
-| 6 | Contract PR: dry run lists only the contract migration; re-read the notes count | dry-run output | none needed |
-| 7 | Push the contract migration (S1 → S2), with C1 live | `notes` SELECT revoked from `authenticated`; every other column granted | promote any deployment from step 4 onward (C1). C0 is no longer a rollback target. |
-| 8 | Merge the contract PR (no client change) | as step 4 | as step 7 |
+| 0 | Codex review of the forward-fix PR | — | — |
+| 1 | Read-only preflight: `supabase migration list --linked` ends at `20261108001000`; usage counts as above (any catalog hide or badge change since 2026-11-03 is reported before pushing) | counts in the PR | none needed |
+| 2 | `supabase db push --linked --dry-run` lists only `20261109001000` | dry-run output | none needed |
+| 3 | `supabase db push --linked` (SM → SF), with CM live | the catalog command and the 3-argument clearance are gone; the 4-argument clearance and `package_review_clearances` exist; append-only triggers present; fingerprint `45 \| 34c51131…` | CM keeps working on SF, except the rejected controls, which fail closed (matrix). The migration stays; fix forward. |
+| 4 | Merge the forward-fix PR → Vercel deploys CF | `/admin`, requests list and record, notes, catalog, vendors, Package Reviews | `vercel promote` the CM deployment (the #132 merge, created 2026-11-02 23:44 UTC). **Never C0.** |
 
 Mixed-version matrix:
 
-| Client × schema | Supported? | Admin requests page | Notes privacy | Old controls | Evidence |
-|---|---|---|---|---|---|
-| C0 × S0 | today | loads | legacy column readable by participants; writable by admins | bypasses open (characterization §6.1) | brief §6.1 |
-| C0 × S1 | yes: the step 3→4 window, and the rollback target in steps 4–6 | **loads** (C0's exact select runs) | column frozen: C0's "Save Note" fails closed with a permission error; existing values readable as today (hosted 0) | fail closed, nothing changes: invoice, coverage, catalog hide, payout pause, rating/badge saves, Activate/Deactivate, quality-page dispute action, Package Reviews approve. `/admin/smart-picks` fails to load (retired). Status changes still work through `transition_job_status`. Portals unaffected. | SQL 108 M1, M3, A-series; probes |
-| C1 × S0 | **no** (ordering prevents it: push before merge) | list loads, but notes, correction, badge history and overview fail (missing RPCs), all failing closed | unchanged from today | — | — If it happens (migration missed), push `20261108001000` at once (DEC-2026-037). |
-| C1 × S1 | yes (steps 4–6) | loads | no note written after step 3 reaches a participant; operator notes are private | n/a | SQL 108 M2; unit `mixed-version deployment`; browser suite |
-| C1 × S2 | yes (final state, and the rollback target after step 7) | loads | the participant read of `notes` is closed | n/a | contract test (stacked branch); unit test |
-| C0 × S2 | **no** (promoting C0 after step 7 is prevented by step 5) | fails to load (permission denied on `notes`), failing closed | private | — | contract test. Recovery: promote a C1 deployment; no migration change. |
-
-No order breaks a deployed client or a rollback target. The only unsupported combinations are excluded by the order itself.
+| Client × schema | Supported? | Behaviour | Evidence |
+|---|---|---|---|
+| C0 × SM or SF | **no** | requests page fails to load (permission denied on `notes`), failing closed; nothing disclosed | SQL 108 M1 |
+| CM × SM | today | everything loads; the rejected controls (catalog hide with a typed note, legacy Active switch) work | hosted readback |
+| CM × SF | yes: the step 3→4 window, and the rollback target after step 4 | requests, notes, status, corrections and badges work (same signatures). These fail closed and change nothing: <ul><li>catalog Visibility (command removed);</li><li>legacy Activate/Deactivate (guard);</li><li>"Add Vendor" (it inserts `is_active: true`; refused);</li><li>Package Reviews approve (calls the removed 3-argument clearance).</li></ul> Pause, the summary and portals work. | SQL 108 A5c, A20b, K1, the Package Review clearance check |
+| CF × SM | **no** (ordering prevents it: push before merge) | everything loads; only Package Reviews approve fails closed (the 4-argument clearance is missing). If it happens, push `20261109001000` at once (DEC-2026-037). | — |
+| CF × SF | yes (final) | all paths | SQL 108; browser suite |
 
 **Payment-adjacent review items** (not covered by the fingerprint):
 - the invoice ledger is now trigger-only;
@@ -517,40 +517,36 @@ No order breaks a deployed client or a rollback target. The only unsupported com
 
 ### 12.6 Verification evidence (local; synthetic data only)
 
-Results, 2026-11-02, local stack, after the revisions for the Codex review. **Local evidence only**; CI is reported in the PR. Human checks are listed at the end.
-- **Clean replay:** `supabase db reset --local`, 213 migrations. Money fingerprint (`scripts/promotion-money-fingerprint.sql`) `45 | 34c51131e2ca18f65d3b29afd8d12e11`, unchanged.
-- **Full SQL suite:** 99 files, 6,279 tests, PASS. One intermediate failure was fixed: SQL 002 expects the vendor guard's wording for a vendor `is_active` write, so the new admin `is_active` refusal applies to admins only, and vendors keep the existing guard.
-- **SQL 108:** 145 assertions, including:
-  - mixed-version selects (M1–M3);
+Results, 2026-11-03, local stack, on `main` `015f371` + `20261109001000`. **Local evidence only**; CI is reported in the PR. Human checks are listed at the end.
+- **Clean replay:** `supabase db reset --local`, 214 migrations. Money fingerprint (`scripts/promotion-money-fingerprint.sql`) `45 | 34c51131e2ca18f65d3b29afd8d12e11`, unchanged.
+- **Full SQL suite:** 99 files, 6,288 tests, PASS.
+- **SQL 108:** 154 assertions, including:
+  - mixed-version selects (M1: the pre-#132 select is refused; M2: the current select loads; M3);
   - replay binding for each command (N4, G4–G5, C2b–C2c, P1b, P4–P5, R1–R4, the status set);
-  - append-only (12);
+  - append-only on five tables, incl. the kept catalog table;
   - finance states (Q1, Q3–Q5);
   - catalog (A18c–e, K1);
-  - provider activation (A5c–e, A20b, A20d).
+  - provider activation (A5c–e, A20b, A20d);
+  - notes reads (H1r–H1s, V1r, D5, A23);
+  - column-grant completeness.
 - **SQL 089:** 12 assertions.
-- **Probe script:** 110/110 MATCH, 0 DIFF, and identical on a second run after the final migration change ([results](review-evidence/trace-136-probe-results.txt)).
-- **Concurrency:** `scripts/admin-operations-concurrency.mjs` 8/8 scenarios on 8 runs (5 before and 3 after the final replay). A7 (same key, two admins) and A8 (duplicate Package Review clearance) are new, and it is now a CI step.
-- **Lint and types:** `npm run lint` and `npm run typecheck` exit 0.
-- **Unit tests:** 56 files, 645 tests. New: the `mixed-version deployment` set and the summary error state.
-- **Browser (production build with CI's fixture environment):** the affected specs ran 98 tests: 94 passed, and 4 timed out under load (average about 18). Those 4 passed when rerun at normal load.
-  - Specs: admin-operations, portals, catalog-cadences, legacy-provider-review, existing-provider-access, vendor-readiness, vendor-prices, onboarding-checklist.
-  - New tests: catalog visibility read-only; no provider activation switch and inactive creation; Package Review key reused on retry.
-  - The catalog test found a contrast failure on dimmed hidden rows (`opacity-55`). The dimming is removed; the Shown/Hidden label carries the state.
-  - An earlier run was invalid and is not counted: a build had inlined `.env.local`'s hosted URL. The browser only sent requests carrying the synthetic anon key.
-- **Contract step (stacked branch):** contract migration on top of this replay. SQL 109 13/13, and SQL 108 with its expand-only assertions switched (reported in the contract PR).
+- **Probe script:** 115/115 MATCH, 0 DIFF; identical on a second clean replay ([results](review-evidence/trace-136-probe-results.txt)).
+- **Concurrency:** `scripts/admin-operations-concurrency.mjs` 8/8 scenarios on 6 runs (A7 same key from two admins; A8 duplicate Package Review clearance). It is now a CI step.
+- **Lint, types, unit:** lint and typecheck exit 0; unit tests 56 files, 645 tests.
+- **Browser:** the forward-fix client is the reviewed client from `6e9c031` (identical UI code). Its affected specs ran locally on 2026-11-02, with 3 new tests: 94/98 passed, and the 4 load timeouts passed on rerun. The rerun on this head was interrupted twice by the local machine (session restarts under heavy load), so this head's browser evidence is CI's full non-visual suite.
 
-Not performed: the full non-visual browser suite locally (CI runs it), hosted push or dry run, screen reader, real devices, `@visual`, 200% zoom.
+Not performed: the full non-visual browser suite locally, hosted dry run or push, screen reader, real devices, `@visual`, 200% zoom.
 
-### 12.7 Codex review of PR #132 — findings and dispositions (2026-11-02)
+### 12.7 Codex review of PR #132 — findings and dispositions (2026-11-02; delivered as the forward fix)
 
 | # | Finding | Disposition |
 |---|---|---|
-| 1 | Q2 recorded as recommended; the approval amended it | Visibility command, history table and UI removed. Direct `is_active` changes, hidden inserts and deletes are refused, so hiding is a reviewed migration only. DEC-2026-057 item 2 reconciled; SQL 089 and 108 updated. |
+| 1 | Q2 recorded as recommended; the approval amended it | Visibility command and UI removed (the empty history table is kept, append-only). Direct `is_active` changes, hidden inserts and deletes are refused, so hiding is a reviewed migration only. DEC-2026-057 item 2 reconciled; SQL 089 and 108 updated. |
 | 2 | Legacy `is_active` switch kept as an unaudited bypass | Every client `is_active` change is refused and client-created records start inactive. Records and reviewed onboarding are preserved. Recovery path documented in DEC-2026-057 item 3 and on the page. |
-| 3 | Deployment plan intentionally broke the old requests page | Expand/contract (§12.5). The old select is tested against S1, and the contract step is separate. |
+| 3 | Deployment plan intentionally broke the old requests page | Superseded by the merge: SM already narrows `notes`, so expand/contract (#133) was closed. The forward-fix plan (§12.5) keeps CM a working rollback, and SQL 108 M1 records that C0 is not one. |
 | 4 | Summary conflated finance denial and read failure | `restricted` only on a `42501` from `money_require_finance`; a failed authorized read is `error` (SQL 108 Q3–Q5). |
 | 5 | Replay checks incomplete | Bindings per the table in §12.3; Package Review clearance keyed. Tests: N4, G4–G5, C2b–C2c, P4–P5, R1–R4, the status replay set; concurrency A7–A8. |
-| 6 | Append-only history not enforced | Triggers on all four history tables (UPDATE, DELETE, TRUNCATE); SQL 108. |
+| 6 | Append-only history not enforced | Triggers on all five history tables (UPDATE, DELETE, TRUNCATE); SQL 108. |
 | 7 | Restrictions presented as workflows; Top Rated | §12.4 reworded as retained restrictions. DEC-2026-058 PROPOSED, pending owner approval. |
 
 Phase 6 remains incomplete (§11). The finance, payment, pricing and acceptance gaps carried there are unchanged by this revision.

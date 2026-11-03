@@ -288,7 +288,7 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Status:** **APPROVED as amended** (owner instruction, Josh, 2026-11-02, America/New_York, adopting Codex's review answers). The proposal text below the decision is kept as proposed. **Date:** 2026-11-02.
 
-**Reconciled 2026-11-02 (Codex review of PR #132).** The first reading recorded Q2 as approved as recommended. That was wrong. The approval came with an amended Q2, recorded in item 2 below, which supersedes the earlier text: there are no ordinary catalog deactivation controls, and a free-text owner-approval note entered by any admin is not authorization. Items 3, 5 and 8, and the open restrictions, were tightened in the same review. They are noted where they apply.
+**Reconciled 2026-11-02 (Codex review of PR #132).** The first reading recorded Q2 as approved as recommended. That was wrong. The approval came with an amended Q2, recorded in item 2 below, which supersedes the earlier text: there are no ordinary catalog deactivation controls, and a free-text owner-approval note entered by any admin is not authorization. Items 3, 5 and 8, and the open restrictions, were tightened in the same review. They are noted where they apply. PR #132 had merged before the review fixes; they ship as the forward fix `20261109001000` (brief §12).
 
 **How the answers were read.** The owner's instruction gave seven required corrections and no separate answer sheet:
 - Corrections 3–7 amend Q3–Q7.
@@ -307,7 +307,7 @@ If this reading is wrong, the owner corrects it here.
    - Hiding, restoring or removing a catalog service requires an owner-approved, reviewed change (a migration under the owner's authority, as for coverage). No operator command or control does it. A free-text owner-approval note entered by any admin is not authorization.
    - Direct client changes to `services_catalog.is_active`, client inserts of a hidden service and client deletes are refused.
    - "Popular" and the service add/edit form are unchanged.
-   - *Superseded:* the reasoned visibility command with an owner-approval note (first reading). It was never pushed or merged and has been removed from the PR.
+   - *Superseded:* the reasoned visibility command with an owner-approval note (first reading). It was merged with PR #132 and applied on hosted (never used: 0 events, 2026-11-03 readback). Forward fix `20261109001000` drops it and keeps its empty history table, append-only.
 3. **Provider controls (Q3, amended).**
    - The reviewed linking and release commands stay functional.
    - Direct account reassignment (`contractors.user_id`) is prohibited on every client path.
@@ -338,9 +338,9 @@ If this reading is wrong, the owner corrects it here.
 8. **Repair amendments.**
    - (A4, correction 1) Every disclosure path for operator-only notes is closed, including participant reads of `service_requests.notes`, not only the new table. The historical column content is kept, not copied or republished.
    - (A6, correction 2) Admin actions bind to the record version (`updated_at`) or the relevant state, not status alone. Keyed replay is kept, and history is written in the same transaction.
-   - (Reconciled 2026-11-02) Every new keyed command binds its key to the actor, the target and the complete intent, including the version read. A changed actor or material payload is refused; a genuine retry returns the original result. Clearing a Package Review is keyed the same way. The badge, request-action, operator-note and Package Review clearance records are append-only for every role, including the owner: no update, delete or truncate.
+   - (Reconciled 2026-11-02) Every new keyed command binds its key to the actor, the target and the complete intent, including the version read. A changed actor or material payload is refused; a genuine retry returns the original result. Clearing a Package Review is keyed the same way. The badge, request-action, operator-note, Package Review clearance and (kept) catalog visibility records are append-only for every role, including the owner: no update, delete or truncate.
 
-**Not authorized by this decision:** hosted push, merge, payments, automation, financial operations. The deployment is the expand/contract sequence in the brief §12.5. Each step needs the owner's separate authorization.
+**Not authorized by this decision:** hosted push, merge, payments, automation, financial operations. The review corrections ship as the forward fix in the brief §12.5. Each step needs the owner's separate authorization.
 
 **As proposed — covered by approved authorities, not waiting on this decision:** the 6.13A/6.13B repairs in the brief §8.2/§8.4, including closing client writes on `invoices` (MPS §6.5, CFG-004).
 

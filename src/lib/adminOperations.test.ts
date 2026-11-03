@@ -67,10 +67,9 @@ describe("mixed-version deployment (brief §12.5)", () => {
     const offenders = sources.filter((path) => /from\("service_requests"\)[^;]*(select\("[^"]*\bnotes\b|update\(\{[^}]*\bnotes\s*:)/.test(readFileSync(path, "utf8")));
     expect(offenders).toEqual([]);
   });
-  it("the expand migration keeps the notes SELECT grant; no released migration narrows it yet", () => {
-    const migration = read("supabase/migrations/20261108001000_phase6_admin_operations.sql");
-    expect(migration).not.toMatch(/revoke\s+select[^;]*on public\.service_requests/i);
-    expect(migration).toMatch(/revoke update on public\.service_requests from authenticated, anon/);
+  it("the review forward fix does not re-open the notes read", () => {
+    const fix = read("supabase/migrations/20261109001000_phase6_admin_operations_review_fixes.sql");
+    expect(fix).not.toMatch(/grant[^;]*select[^;]*on public\.service_requests/i);
   });
 });
 

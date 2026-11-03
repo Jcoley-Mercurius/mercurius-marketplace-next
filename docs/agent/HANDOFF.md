@@ -1,14 +1,18 @@
 # Agent handoff — 2026-11-02
 
-## Phase 6.13 Codex review fixes on PR #132 (TRACE-136, DEC-2026-057 reconciled), 2026-11-02
+## Phase 6.13 Codex review forward fix (TRACE-136, DEC-2026-057 reconciled), 2026-11-03
 
-- Same branch `claude/phase6-13-admin-operations-release` (PR #132 draft). Contract step on the stacked branch `claude/phase6-13-notes-contract`. Nothing pushed to hosted or merged. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md), with dispositions in §12.7.
-- Q2 reconciled to the amended decision: no catalog visibility command or control. Hiding is a reviewed migration only; direct `is_active` changes, hidden inserts and deletes are refused.
-- Q3, conservative fix: no client changes `is_active` for any provider, and client-created records start inactive. Recovery path: the listing exclusion, or onboarding review.
-- Deployment is expand/contract (brief §12.5 steps and matrix). The previous admin requests page is tested against the expand schema.
-- Summary finance state split (`restricted` = denial; `error` = failed authorized read). Every new key is bound to actor, target and intent; Package Review clearance is keyed; four history tables are append-only.
+- **Checkpoint (verified):** PR #132 merged at `d5ba4fc` (`main` `015f371`, 2026-11-02 23:44 UTC), before the review fixes. Hosted has `20261108001000` as merged. Readback 2026-11-03: 0 catalog visibility events, 0 hidden services, 0 badge events, 0 request actions, 0 operator notes; fingerprint `45 | 34c51131…`.
+- PR #134 (14:42 UTC) merged `6e9c031` into `main` `b5629a6`, rewriting `20261108001000` in the repository. PR #135 restores the applied content and keeps all corrections in `20261109001000`.
+- Branch `claude/phase6-13-review-forward-fix` from `main` `015f371`. Migration `20261109001000` (additive) plus the client. **Pushed to hosted 2026-11-03 with owner authorization**: dry run, push and readback in brief §12. `20261108001000` is not edited. Commit `6e9c031` on the merged branch and draft #133 (expand/contract) are superseded, and #133 is closed. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md) (§12.5 steps and matrix, §12.7 dispositions).
+- What the fix does:
+  - drops the catalog command and the unkeyed Package Review clearance;
+  - refuses client `is_active` changes for all providers, and client-created records start inactive;
+  - binds keys to actor, target and intent;
+  - adds the keyed clearance, append-only history on five tables, and the summary finance split.
+- Rollback after merge: the #132 deployment, never the pre-#132 one.
 - DEC-2026-058 (hide "Top Rated") is PROPOSED, pending owner approval, and not built.
-- Next: Codex re-review of PR #132 and the contract PR, then the owner-authorized steps 1–8 in brief §12.5. Phase 6 remains incomplete (brief §11).
+- Next: Codex review, then merge PR #135. The migration is already on hosted, so the merge only reconciles `main`'s copy of `20261108001000` and adds the record. Phase 6 remains incomplete (brief §11).
 
 ## Phase 6.13 admin operations implementation (TRACE-136, DEC-2026-057 approved as amended), 2026-11-02
 

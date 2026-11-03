@@ -1,4 +1,4 @@
-# TRACE-136 probe results after migration 20261108001000, the expand step (local stack, clean replay of all migrations, 2026-11-02, revised for the Codex review of PR #132).
+# TRACE-136 probe results after migrations 20261108001000 (merged as PR #132) and 20261109001000 (review forward fix) (local stack, clean replay, 2026-11-03).
 # Script: governance/review-evidence/trace-136-admin-bypass.sql (generated from SQL 108). Synthetic fixtures, one transaction, ROLLBACK.
 A1 invoices insert paid: REFUSED 42501  [expect REFUSED 42501] MATCH
 A2 invoices update payout/released: REFUSED 42501  [expect REFUSED 42501] MATCH
@@ -38,8 +38,8 @@ A15 request delete: REFUSED 42501  [expect REFUSED 42501] MATCH
 A19 package needs_review direct: REFUSED 42501  [expect REFUSED 42501] MATCH
 A21 admin message as homeowner sender_id: REFUSED 42501  [expect REFUSED 42501] MATCH
 A22 admin message as admin: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
-M1 previous admin requests select loads (expand step): 3  [expect 3] MATCH
-M2 new admin requests select loads: 3  [expect 3] MATCH
+M1 pre-#132 admin requests select refused (closed; not a rollback target): REFUSED 42501  [expect REFUSED 42501] MATCH
+M2 current admin requests select loads: 3  [expect 3] MATCH
 M3 previous notes save fails closed: REFUSED 42501  [expect REFUSED 42501] MATCH
 A24 admin legacy note readback: LEGACY shared note  [expect LEGACY shared note] MATCH
 N1 add operator note: false  [expect false] MATCH
@@ -101,6 +101,11 @@ B1 homeowner B reads A's request: 0  [expect 0] MATCH
 Z1 anon reads smart_picks: REFUSED 42501  [expect REFUSED 42501] MATCH
 Z2 anon reads notes: REFUSED 42501  [expect REFUSED 42501] MATCH
 Z3 anon writes notes: REFUSED 42501  [expect REFUSED 42501] MATCH
+H1r homeowner reads notes: REFUSED 42501  [expect REFUSED 42501] MATCH
+H1s homeowner broad select *: REFUSED 42501  [expect REFUSED 42501] MATCH
+V1r assigned vendor reads notes: REFUSED 42501  [expect REFUSED 42501] MATCH
+D5 dual reads notes on own request: REFUSED 42501  [expect REFUSED 42501] MATCH
+A23 admin reads notes column directly: REFUSED 42501  [expect REFUSED 42501] MATCH
 X1 seeded invoice unchanged: pending payout=85.00  [expect pending payout=85.00] MATCH
 X2 legacy note kept in place: LEGACY shared note  [expect LEGACY shared note] MATCH
 X3 vendor-visible review history (once, despite the retry): review_cleared / Quote-only package reviewed  [expect review_cleared / Quote-only package reviewed] MATCH

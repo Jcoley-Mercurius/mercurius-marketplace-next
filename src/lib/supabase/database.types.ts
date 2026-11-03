@@ -7118,6 +7118,7 @@ export type Database = {
         Returns: Json
       }
       admin_cancellation_queue: { Args: never; Returns: Json }
+      admin_catalog_visibility_history: { Args: never; Returns: Json }
       admin_clear_package_review: {
         Args: {
           p_expected_updated_at: string
@@ -7258,6 +7259,10 @@ export type Database = {
       admin_provider_badge_history: {
         Args: { p_contractor: string }
         Returns: Json
+      }
+      admin_provider_is_onboarded: {
+        Args: { p_contractor: string }
+        Returns: boolean
       }
       admin_provider_quality_events: {
         Args: { _contractor_id?: string }

@@ -1,7 +1,7 @@
 -- TRACE-136 (Phase 6.13, DEC-2026-057): admin operations closures and commands. Generated from
 -- governance/review-evidence/trace-136-admin-bypass.sql (same fixtures and expectations) plus grant,
--- summary-parity and replay checks. Migration 20261108001000 is the expand step (brief §12.5):
--- the mixed-version checks below run the previous and the new admin requests select against it.
+-- summary-parity and replay checks, after 20261108001000 (merged as PR #132) and the review forward
+-- fix 20261109001000. The mixed-version checks run the pre-#132 and current admin requests selects.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -103,9 +103,10 @@ select is(pg_temp.try($q$delete from public.service_requests where id='c6132000-
 select is(pg_temp.try($q$update public.vendor_packages set needs_review=false where id='c6135000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501', 'A19 package needs_review direct');
 select is(pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000002','homeowner','spoof')$q$), 'REFUSED 42501', 'A21 admin message as homeowner sender_id');
 select is(pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000001','admin','Support reply')$q$), 'ALLOWED rows=1', 'A22 admin message as admin');
--- Mixed versions (brief §12.5): the previous admin requests select (with notes) and the new one.
-select is(pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3', 'M1 previous admin requests select loads (expand step)');
-select is(pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3', 'M2 new admin requests select loads');
+-- Mixed versions (brief §12.5): the pre-#132 admin requests select (with notes) is refused, so that
+-- deployment is not a rollback target; the current select loads.
+select is(pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), 'REFUSED 42501', 'M1 pre-#132 admin requests select refused (closed; not a rollback target)');
+select is(pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3', 'M2 current admin requests select loads');
 select is(pg_temp.try($q$update public.service_requests set notes='Previous client note save' where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501', 'M3 previous notes save fails closed');
 select is(pg_temp.val($q$select public.admin_request_notes('c6132000-0000-4000-8000-000000000001')->>'legacy_note'$q$), 'LEGACY shared note', 'A24 admin legacy note readback');
 select is(pg_temp.val($q$select public.admin_add_request_note('c6132000-0000-4000-8000-000000000001','c6136000-0000-4000-8000-000000000001','Operator-only probe')->>'replayed'$q$), 'false', 'N1 add operator note');
@@ -144,8 +145,7 @@ select is(pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000
 -- Finance holder: the read is authorized, so the row is ready, or error if the read fails.
 select is(pg_temp.val($q$select q->>'state' from jsonb_array_elements(public.admin_operations_summary()->'queues') q where q->>'queue'='finance_exceptions'$q$), 'ready', 'Q3 summary finance row (authority held)');
 
--- Homeowner A. Expand step: the legacy notes column is still readable by the participant (as
--- before this release) and frozen; the contract migration narrows the read.
+-- Homeowner A. The legacy notes column is neither readable nor writable by participants.
 select pg_temp.as_user('2');
 select is(pg_temp.try($q$update public.service_requests set notes='mine' where id='c6132000-0000-4000-8000-000000000002'$q$), 'REFUSED 42501', 'H1 homeowner writes notes');
 select is(pg_temp.val($q$select count(*)::text from public.service_requests where customer_id='c6130000-0000-4000-8000-000000000002'$q$), '2', 'H1c homeowner reads own request');
@@ -187,6 +187,17 @@ reset role; set local role anon; select set_config('request.jwt.claims','{"role"
 select is(pg_temp.try($q$select 1 from public.smart_picks$q$), 'REFUSED 42501', 'Z1 anon reads smart_picks');
 select is(pg_temp.val($q$select notes from public.service_requests limit 1$q$), 'REFUSED 42501', 'Z2 anon reads notes');
 select is(pg_temp.try($q$update public.service_requests set notes='x'$q$), 'REFUSED 42501', 'Z3 anon writes notes');
+reset role; set local role authenticated;
+-- Notes reads (correction 1): no participant or direct admin read, on any request.
+select pg_temp.as_user('2');
+select is(pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501', 'H1r homeowner reads notes');
+select is(pg_temp.val($q$select count(*)::text from (select * from public.service_requests) s$q$), 'REFUSED 42501', 'H1s homeowner broad select *');
+select pg_temp.as_user('3');
+select is(pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501', 'V1r assigned vendor reads notes');
+select pg_temp.as_user('5');
+select is(pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000003'$q$), 'REFUSED 42501', 'D5 dual reads notes on own request');
+select pg_temp.as_user('1');
+select is(pg_temp.val($q$select notes from public.service_requests where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501', 'A23 admin reads notes column directly');
 
 reset role;
 select is((select status||' payout='||vendor_payout from public.invoices where id='c6134000-0000-4000-8000-000000000009'), 'pending payout=85.00', 'X1 seeded invoice unchanged');
@@ -199,9 +210,12 @@ select is((select count(*)::text from private.admin_request_actions where reques
 select is((select before_badges::text||'->'||after_badges::text from private.provider_badge_events where contractor_id='c6131000-0000-4000-8000-00000000000a'), '{}->{Licensed}', 'X5 badge history row');
 select is((select user_id::text from public.contractors where id='c6131000-0000-4000-8000-00000000000a'), 'c6130000-0000-4000-8000-000000000003', 'X6 provider owner unchanged');
 
--- Column grants (expand step): signed-in roles write none of notes, address, ZIP, description or
--- status. SELECT on notes is still granted until the contract migration (brief §12.5).
-select ok(has_column_privilege('authenticated', 'public.service_requests', 'notes', 'SELECT'), 'expand step: the previous admin client can still select notes');
+-- Column grants: signed-in roles read every service_requests column except notes, and write none
+-- of notes, address, ZIP, description or status. A new column without a grant fails here.
+select is((select count(*)::int from information_schema.columns c where c.table_schema='public' and c.table_name='service_requests'
+  and c.column_name <> 'notes' and not has_column_privilege('authenticated', 'public.service_requests', c.column_name, 'SELECT')), 0,
+  'authenticated reads every service_requests column except notes');
+select ok(not has_column_privilege('authenticated', 'public.service_requests', 'notes', 'SELECT'), 'signed-in roles cannot select notes');
 select ok(not has_column_privilege('anon', 'public.service_requests', 'notes', 'SELECT'), 'anon cannot read notes');
 select is((select array_agg(c order by c) from unnest(array['notes','address','city','state','zip_code','description','status']) c
   where has_column_privilege('authenticated', 'public.service_requests', c, 'UPDATE') or has_column_privilege('anon', 'public.service_requests', c, 'UPDATE')), null, 'no client updates the protected request columns');
@@ -234,7 +248,13 @@ select throws_ok($$truncate private.admin_request_actions$$, '42501', 'admin_req
 select throws_ok($$update private.package_review_clearances set reason = 'x'$$, '42501', 'package_review_clearances is append-only', 'package review clearances cannot be edited');
 select throws_ok($$delete from private.package_review_clearances$$, '42501', 'package_review_clearances is append-only', 'package review clearances cannot be deleted');
 select throws_ok($$truncate private.package_review_clearances$$, '42501', 'package_review_clearances is append-only', 'package review clearances cannot be truncated');
-select is(to_regclass('private.catalog_visibility_events'), null, 'no catalog visibility history table (Q2 amended)');
+-- The catalog table is empty on hosted; a synthetic row lets the row triggers be exercised.
+insert into private.catalog_visibility_events(service_id, request_key, actor, before_active, after_active, reason)
+  values ('house-cleaning', gen_random_uuid(), 'c6130000-0000-4000-8000-000000000001', true, true, 'Synthetic history row');
+select throws_ok($$update private.catalog_visibility_events set reason = 'x'$$, '42501', 'catalog_visibility_events is append-only', 'catalog history (kept, read-only) cannot be edited');
+select throws_ok($$delete from private.catalog_visibility_events$$, '42501', 'catalog_visibility_events is append-only', 'catalog history cannot be deleted');
+select throws_ok($$truncate private.catalog_visibility_events$$, '42501', 'catalog_visibility_events is append-only', 'catalog history cannot be truncated');
+select is(to_regprocedure('public.admin_clear_package_review(uuid,timestamptz,text)'), null, 'no unkeyed Package Review clearance');
 
 -- Summary parity: every ready queue count equals its queue function, in the same transaction.
 set local role authenticated;
