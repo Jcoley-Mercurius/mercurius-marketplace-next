@@ -1,4 +1,4 @@
-# TRACE-136 probe results after migration 20261108001000, the expand step (local stack, clean replay of all migrations, 2026-11-02, revised for the Codex review of PR #132).
+# TRACE-136 probe results after migrations 20261108001000 (expand) and 20261108002000 (contract) (local stack, 2026-11-02).
 # Script: governance/review-evidence/trace-136-admin-bypass.sql (generated from SQL 108). Synthetic fixtures, one transaction, ROLLBACK.
 A1 invoices insert paid: REFUSED 42501  [expect REFUSED 42501] MATCH
 A2 invoices update payout/released: REFUSED 42501  [expect REFUSED 42501] MATCH
@@ -38,7 +38,7 @@ A15 request delete: REFUSED 42501  [expect REFUSED 42501] MATCH
 A19 package needs_review direct: REFUSED 42501  [expect REFUSED 42501] MATCH
 A21 admin message as homeowner sender_id: REFUSED 42501  [expect REFUSED 42501] MATCH
 A22 admin message as admin: ALLOWED rows=1  [expect ALLOWED rows=1] MATCH
-M1 previous admin requests select loads (expand step): 3  [expect 3] MATCH
+M1 previous admin requests select refused after the contract step (closed; excluded by the order, SQL 109): REFUSED 42501  [expect REFUSED 42501] MATCH
 M2 new admin requests select loads: 3  [expect 3] MATCH
 M3 previous notes save fails closed: REFUSED 42501  [expect REFUSED 42501] MATCH
 A24 admin legacy note readback: LEGACY shared note  [expect LEGACY shared note] MATCH

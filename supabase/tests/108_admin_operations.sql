@@ -104,7 +104,8 @@ select is(pg_temp.try($q$update public.vendor_packages set needs_review=false wh
 select is(pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000002','homeowner','spoof')$q$), 'REFUSED 42501', 'A21 admin message as homeowner sender_id');
 select is(pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000001','admin','Support reply')$q$), 'ALLOWED rows=1', 'A22 admin message as admin');
 -- Mixed versions (brief §12.5): the previous admin requests select (with notes) and the new one.
-select is(pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3', 'M1 previous admin requests select loads (expand step)');
+-- After the contract migration 20261108002000 the previous select is refused (C0 × S2, unsupported).
+select is(pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), 'REFUSED 42501', 'M1 previous admin requests select refused after the contract step (closed; excluded by the order, SQL 109)');
 select is(pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3', 'M2 new admin requests select loads');
 select is(pg_temp.try($q$update public.service_requests set notes='Previous client note save' where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501', 'M3 previous notes save fails closed');
 select is(pg_temp.val($q$select public.admin_request_notes('c6132000-0000-4000-8000-000000000001')->>'legacy_note'$q$), 'LEGACY shared note', 'A24 admin legacy note readback');
@@ -144,8 +145,7 @@ select is(pg_temp.val($q$select public.admin_clear_package_review('c6135000-0000
 -- Finance holder: the read is authorized, so the row is ready, or error if the read fails.
 select is(pg_temp.val($q$select q->>'state' from jsonb_array_elements(public.admin_operations_summary()->'queues') q where q->>'queue'='finance_exceptions'$q$), 'ready', 'Q3 summary finance row (authority held)');
 
--- Homeowner A. Expand step: the legacy notes column is still readable by the participant (as
--- before this release) and frozen; the contract migration narrows the read.
+-- Homeowner A. The legacy notes column is frozen (expand) and unreadable (contract, SQL 109).
 select pg_temp.as_user('2');
 select is(pg_temp.try($q$update public.service_requests set notes='mine' where id='c6132000-0000-4000-8000-000000000002'$q$), 'REFUSED 42501', 'H1 homeowner writes notes');
 select is(pg_temp.val($q$select count(*)::text from public.service_requests where customer_id='c6130000-0000-4000-8000-000000000002'$q$), '2', 'H1c homeowner reads own request');
@@ -199,9 +199,9 @@ select is((select count(*)::text from private.admin_request_actions where reques
 select is((select before_badges::text||'->'||after_badges::text from private.provider_badge_events where contractor_id='c6131000-0000-4000-8000-00000000000a'), '{}->{Licensed}', 'X5 badge history row');
 select is((select user_id::text from public.contractors where id='c6131000-0000-4000-8000-00000000000a'), 'c6130000-0000-4000-8000-000000000003', 'X6 provider owner unchanged');
 
--- Column grants (expand step): signed-in roles write none of notes, address, ZIP, description or
--- status. SELECT on notes is still granted until the contract migration (brief §12.5).
-select ok(has_column_privilege('authenticated', 'public.service_requests', 'notes', 'SELECT'), 'expand step: the previous admin client can still select notes');
+-- Column grants: signed-in roles write none of notes, address, ZIP, description or status (expand
+-- step) and read no notes (contract step, 20261108002000).
+select ok(not has_column_privilege('authenticated', 'public.service_requests', 'notes', 'SELECT'), 'contract step: signed-in roles cannot select notes (SQL 109)');
 select ok(not has_column_privilege('anon', 'public.service_requests', 'notes', 'SELECT'), 'anon cannot read notes');
 select is((select array_agg(c order by c) from unnest(array['notes','address','city','state','zip_code','description','status']) c
   where has_column_privilege('authenticated', 'public.service_requests', c, 'UPDATE') or has_column_privilege('anon', 'public.service_requests', c, 'UPDATE')), null, 'no client updates the protected request columns');

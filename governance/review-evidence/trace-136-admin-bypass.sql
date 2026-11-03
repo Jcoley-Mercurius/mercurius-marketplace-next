@@ -1,7 +1,8 @@
 -- TRACE-136 (Phase 6.13) bypass probes. Synthetic users, single transaction, ROLLBACK.
 -- Run: psql -h 127.0.0.1 -p 55422 -U postgres -d postgres -X -A -t -q -f governance/review-evidence/trace-136-admin-bypass.sql | grep -v '^$'
--- Each line prints the probe, the result and the expectation after migration 20261108001000 (the
--- expand step, brief §12.5), and MATCH or DIFF. The probes are the ones in SQL 108 (same fixtures
+-- Each line prints the probe, the result and the expectation after migrations 20261108001000 (expand)
+-- and 20261108002000 (contract, brief §12.5), and MATCH or DIFF. The expand-only results are in
+-- PR #132 at 6e9c031. The probes are the ones in SQL 108 (same fixtures
 -- and expectations), generated from it. Before that migration (characterization, 2026-11-02) the
 -- same areas showed the bypasses recorded in the brief §6.1 (the "before" column there).
 begin;
@@ -107,7 +108,8 @@ select pg_temp.p('A19 package needs_review direct', pg_temp.try($q$update public
 select pg_temp.p('A21 admin message as homeowner sender_id', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000002','homeowner','spoof')$q$), 'REFUSED 42501');
 select pg_temp.p('A22 admin message as admin', pg_temp.try($q$insert into public.messages(service_request_id,sender_id,sender_role,content) values('c6132000-0000-4000-8000-000000000001','c6130000-0000-4000-8000-000000000001','admin','Support reply')$q$), 'ALLOWED rows=1');
 -- Mixed versions (brief §12.5): the previous admin requests select (with notes) and the new one.
-select pg_temp.p('M1 previous admin requests select loads (expand step)', pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3');
+-- After the contract migration 20261108002000 the previous select is refused (C0 × S2, unsupported).
+select pg_temp.p('M1 previous admin requests select refused after the contract step (closed; excluded by the order, SQL 109)', pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, notes, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), 'REFUSED 42501');
 select pg_temp.p('M2 new admin requests select loads', pg_temp.val($q$select count(*)::text from (select id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id from public.service_requests where id::text like 'c6132000-%') s$q$), '3');
 select pg_temp.p('M3 previous notes save fails closed', pg_temp.try($q$update public.service_requests set notes='Previous client note save' where id='c6132000-0000-4000-8000-000000000001'$q$), 'REFUSED 42501');
 select pg_temp.p('A24 admin legacy note readback', pg_temp.val($q$select public.admin_request_notes('c6132000-0000-4000-8000-000000000001')->>'legacy_note'$q$), 'LEGACY shared note');
@@ -147,8 +149,7 @@ select pg_temp.p('R4 package review key, different actor', pg_temp.val($q$select
 -- Finance holder: the read is authorized, so the row is ready, or error if the read fails.
 select pg_temp.p('Q3 summary finance row (authority held)', pg_temp.val($q$select q->>'state' from jsonb_array_elements(public.admin_operations_summary()->'queues') q where q->>'queue'='finance_exceptions'$q$), 'ready');
 
--- Homeowner A. Expand step: the legacy notes column is still readable by the participant (as
--- before this release) and frozen; the contract migration narrows the read.
+-- Homeowner A. The legacy notes column is frozen (expand) and unreadable (contract, SQL 109).
 select pg_temp.as_user('2');
 select pg_temp.p('H1 homeowner writes notes', pg_temp.try($q$update public.service_requests set notes='mine' where id='c6132000-0000-4000-8000-000000000002'$q$), 'REFUSED 42501');
 select pg_temp.p('H1c homeowner reads own request', pg_temp.val($q$select count(*)::text from public.service_requests where customer_id='c6130000-0000-4000-8000-000000000002'$q$), '2');

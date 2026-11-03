@@ -67,10 +67,13 @@ describe("mixed-version deployment (brief §12.5)", () => {
     const offenders = sources.filter((path) => /from\("service_requests"\)[^;]*(select\("[^"]*\bnotes\b|update\(\{[^}]*\bnotes\s*:)/.test(readFileSync(path, "utf8")));
     expect(offenders).toEqual([]);
   });
-  it("the expand migration keeps the notes SELECT grant; no released migration narrows it yet", () => {
-    const migration = read("supabase/migrations/20261108001000_phase6_admin_operations.sql");
-    expect(migration).not.toMatch(/revoke\s+select[^;]*on public\.service_requests/i);
-    expect(migration).toMatch(/revoke update on public\.service_requests from authenticated, anon/);
+  it("the expand migration keeps the notes SELECT grant; only the later contract migration narrows it", () => {
+    const expand = read("supabase/migrations/20261108001000_phase6_admin_operations.sql");
+    expect(expand).not.toMatch(/revoke\s+select[^;]*on public\.service_requests/i);
+    expect(expand).toMatch(/revoke update on public\.service_requests from authenticated, anon/);
+    const contract = read("supabase/migrations/20261108002000_phase6_admin_notes_contract.sql");
+    expect(contract).toMatch(/revoke select on public\.service_requests from authenticated/);
+    expect(contract).toMatch(/column_name <> 'notes'/);
   });
 });
 
