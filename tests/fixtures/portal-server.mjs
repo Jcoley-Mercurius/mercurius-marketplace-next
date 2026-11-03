@@ -242,8 +242,7 @@ const server = createServer(async (request, response) => {
     { queue: "renewal_documents", state: "ready", count: 0, aged: null }, { queue: "finance_exceptions", state: "restricted", count: null, aged: null },
   ] } : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
   if (/\/rpc\/(admin_request_notes)$/.test(url.pathname)) return send(user.testRole === "admin" ? { legacy_note: null, notes: [] } : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
-  if (/\/rpc\/(admin_request_action_history|admin_provider_badge_history|admin_catalog_visibility_history)$/.test(url.pathname)) return send(user.testRole === "admin" ? [] : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
-  if (url.pathname === "/rest/v1/rpc/admin_provider_is_onboarded") return send(false);
+  if (/\/rpc\/(admin_request_action_history|admin_provider_badge_history)$/.test(url.pathname)) return send(user.testRole === "admin" ? [] : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
   if (url.pathname === "/rest/v1/rpc/public_provider_reviews") return send({ summary: { count: 0, average: null }, reviews: [] });
   if (url.pathname === "/rest/v1/rpc/admin_reviews") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [],
     counts: { public: 0, held_for_moderation: 0, rejected: 0, appealed: 0, private: 0, public_average: null, quality_feedback: 0 } } : { message: "Admin access required" }, user.testRole === "admin" ? 200 : 403);

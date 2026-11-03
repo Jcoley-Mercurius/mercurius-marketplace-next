@@ -145,3 +145,56 @@ test("coverage is a read-only readback", async ({ page }) => {
   await expect(page.getByRole("switch")).toHaveCount(0);
   await axe(page);
 });
+
+// Codex review of PR #132 (brief §12.7): no catalog visibility control (Q2 amended), no direct
+// provider activation switch (Q3, conservative). The keyed Package Review clearance (finding 5) is
+// checked in vendor-prices.spec with its package fixtures.
+test("catalog visibility is read-only; hiding is an owner-approved, reviewed change", async ({ page }) => {
+  const writes: string[] = [];
+  const row = (id: string, name: string, is_active: boolean) => ({ id, name, category_id: "synthetic-outdoor", icon: "Leaf", tags: [], descriptor: "Synthetic",
+    is_popular: false, is_active, weekly_price: null, monthly_price: 120, one_time_price: 60, default_frequency: "monthly",
+    available_frequencies: ["monthly", "one-time"], sort_order: 0, pricing_mode: "fixed", default_deposit_amount: null });
+  await page.route("**/rest/v1/service_categories?*", route => route.fulfill({ json: [
+    { id: "synthetic-outdoor", name: "Synthetic outdoor", icon: "Leaf", description: "", sort_order: 0, is_active: true },
+  ] }));
+  await page.route("**/rest/v1/services_catalog?*", route => {
+    if (route.request().method() !== "GET") writes.push(route.request().method());
+    return route.fulfill({ json: [row("synthetic-shown", "Synthetic shown service", true), row("synthetic-hidden", "Synthetic hidden service", false)] });
+  });
+  await page.route("**/rpc/admin_set_catalog_service_visibility", route => { writes.push("rpc"); return route.abort(); });
+  await admin(page, "/admin/catalog");
+  await expect(page.getByText(/hiding one is an owner-approved, reviewed change/)).toBeVisible();
+  await expect(page.getByRole("row", { name: /Synthetic shown service/ }).getByText("Shown", { exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Synthetic hidden service/ }).getByText("Hidden", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Hide|Restore|Visibility/i })).toHaveCount(0);
+  await axe(page);
+  expect(writes).toEqual([]);
+});
+
+test("providers have no direct activation switch and are created inactive", async ({ page }) => {
+  const inserts: Record<string, unknown>[] = [];
+  for (const name of ["admin_list_contractor_contacts", "r0_excluded_provider_ids", "public_review_summaries", "get_completed_job_counts"]) {
+    await page.route(`**/rpc/${name}`, route => route.fulfill({ json: [] }));
+  }
+  await page.route("**/rest/v1/contractors*", route => {
+    if (route.request().method() !== "POST") return route.fallback();
+    inserts.push(route.request().postDataJSON());
+    return route.fulfill({ json: { id: "00000000-0000-4000-8000-0000000000f1" } });
+  });
+  await admin(page, "/admin/vendors");
+  await page.getByRole("button", { name: "Quick view" }).first().click();
+  const view = page.getByRole("dialog");
+  await expect(view.getByRole("link", { name: "Activation and suspension" })).toBeVisible();
+  await expect(view.getByRole("button", { name: /^(Activate|Deactivate)$/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Add Vendor" }).click();
+  const add = page.getByRole("dialog", { name: "Add Vendor" });
+  await expect(add.getByText(/becomes active only through onboarding review/)).toBeVisible();
+  await add.getByPlaceholder("Gulf Coast Lawn Co.").fill("Synthetic New Provider");
+  await add.getByRole("button", { name: "Create Vendor" }).click();
+  await expect(page.getByText("Vendor record created (inactive)")).toBeVisible();
+  expect(inserts).toHaveLength(1);
+  expect(inserts[0]).toMatchObject({ name: "Synthetic New Provider", is_active: false });
+});
+

@@ -207,6 +207,32 @@ test("package reviews offers a proposed correction next to approval", async ({ p
   expect((await new AxeBuilder({ page }).include("[role=dialog]").withTags(tags).analyze()).violations).toEqual([]);
 });
 
+// TRACE-136 (Codex review of PR #132, finding 5): clearing a review is keyed; a retry of the same
+// clearance (same package version and reason) reuses the key, so the server replays it.
+test("clearing a Package Review sends a request key, reused on retry", async ({ page }) => {
+  const sent: Record<string, unknown>[] = [];
+  await page.route("**/rest/v1/pricing_templates?*", route => route.fulfill({ json: [] }));
+  await page.route("**/rest/v1/pricing_template_tiers?*", route => route.fulfill({ json: [] }));
+  await page.route("**/rpc/admin_clear_package_review", route => {
+    sent.push(route.request().postDataJSON());
+    return route.fulfill({ status: 503, json: { message: "Synthetic network failure", code: "FIXTURE_ONLY" } });
+  });
+  await syntheticSession(page.context(), "admin");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin/pricing-reviews");
+  await page.getByRole("button", { name: "Approve pricing" }).first().click();
+  const confirm = page.getByRole("alertdialog", { name: "Approve this pricing exception?" });
+  await confirm.getByLabel(/Reason \(the vendor sees this\)/).fill("Synthetic review reason");
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await confirm.getByRole("button", { name: "Approve pricing" }).click();
+    await expect(confirm.getByRole("alert")).toBeVisible();
+  }
+  expect(sent).toHaveLength(2);
+  expect(sent[0]).toMatchObject({ p_package: fixedPkg, p_expected_updated_at: updatedAt, p_reason: "Synthetic review reason" });
+  expect(sent[0].p_key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(sent[1].p_key).toBe(sent[0].p_key);
+});
+
 test("add a price saves a private draft for the chosen vendor at the catalog's cadences", async ({ page }) => {
   const sent: unknown[] = [];
   await page.route("**/rpc/admin_save_package_draft", route => {

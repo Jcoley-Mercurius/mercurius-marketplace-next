@@ -1,5 +1,18 @@
 # Agent handoff — 2026-11-02
 
+## Phase 6.13 Codex review forward fix (TRACE-136, DEC-2026-057 reconciled), 2026-11-03
+
+- **Checkpoint (verified):** PR #132 merged at `d5ba4fc` (`main` `015f371`, 2026-11-02 23:44 UTC), before the review fixes. Hosted has `20261108001000` as merged. Readback 2026-11-03: 0 catalog visibility events, 0 hidden services, 0 badge events, 0 request actions, 0 operator notes; fingerprint `45 | 34c51131…`.
+- Branch `claude/phase6-13-review-forward-fix` from `main` `015f371`. Migration `20261109001000` (additive, **not pushed**) plus the client. `20261108001000` is not edited. Commit `6e9c031` on the merged branch and draft #133 (expand/contract) are superseded, and #133 is closed. Record: [brief §12](../../governance/PHASE-6-ADMIN-OPERATIONS-BRIEF.md) (§12.5 steps and matrix, §12.7 dispositions).
+- What the fix does:
+  - drops the catalog command and the unkeyed Package Review clearance;
+  - refuses client `is_active` changes for all providers, and client-created records start inactive;
+  - binds keys to actor, target and intent;
+  - adds the keyed clearance, append-only history on five tables, and the summary finance split.
+- Rollback after merge: the #132 deployment, never the pre-#132 one.
+- DEC-2026-058 (hide "Top Rated") is PROPOSED, pending owner approval, and not built.
+- Next: Codex review; owner-authorized preflight, dry run and push of `20261109001000`, then merge. Phase 6 remains incomplete (brief §11).
+
 ## Phase 6.13 admin operations implementation (TRACE-136, DEC-2026-057 approved as amended), 2026-11-02
 
 - Owner approved DEC-2026-057 using Codex's corrections (2026-11-02). The reading of the answers is recorded in DECISION-LOG (Q1/Q2 as recommended; corrections 3–7 amend Q3–Q7; corrections 1–2 amend A4/A6; correction 4 amends DEC-2026-052 item 6).

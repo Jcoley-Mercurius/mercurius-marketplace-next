@@ -269,14 +269,32 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-058 — Hide the "Top Rated" badge until objective criteria are approved (Phase 6.13)
+
+**Status:** **PROPOSED — pending owner approval.** Not approved and not built. **Date:** 2026-11-02.
+
+**Context.** "Top Rated" is one of the operator-managed badges (DEC-2026-047; the badge command in DEC-2026-057 item 4). It is shown on the public provider profile, the eligible-providers row and the spotlight. It reads like a verified rating, but no objective criterion stands behind it: DEC-2026-057 item 4 removed hand-set ratings from every surface. Brief §12.4 reported this.
+
+**Recommendation (pending owner approval):**
+- Stop displaying "Top Rated" on every public and operator surface, and stop offering it in the badge editor, until the owner approves objective criteria. Examples of criteria: a minimum number of verified reviews, a verified average, and a review window.
+- Preserve the stored values and history. `contractors.badges` keeps "Top Rated" where it is set today, and `private.provider_badge_events` keeps every change. Nothing is rewritten or deleted.
+- When criteria are approved, the badge is derived from the verified review summary rather than set by hand.
+
+**Alternatives:** (a) keep it as an operator-set badge with clarifying copy ("Mercurius pick", not a rating); (b) remove it permanently.
+
+**Affected:** `/providers/[id]`, the home eligible-providers row and spotlight, and the admin badge editor (`ProviderBadges`). The `admin_set_provider_badges` allowed list is unchanged until the owner decides.
+
 ### DEC-2026-057 — Admin overrides of coverage, catalog, provider status, ratings, request details, package reviews and legacy invoices (Phase 6.13)
 
 **Status:** **APPROVED as amended** (owner instruction, Josh, 2026-11-02, America/New_York, adopting Codex's review answers). The proposal text below the decision is kept as proposed. **Date:** 2026-11-02.
 
+**Reconciled 2026-11-02 (Codex review of PR #132).** The first reading recorded Q2 as approved as recommended. That was wrong. The approval came with an amended Q2, recorded in item 2 below, which supersedes the earlier text: there are no ordinary catalog deactivation controls, and a free-text owner-approval note entered by any admin is not authorization. Items 3, 5 and 8, and the open restrictions, were tightened in the same review. They are noted where they apply. PR #132 had merged before the review fixes; they ship as the forward fix `20261109001000` (brief §12).
+
 **How the answers were read.** The owner's instruction gave seven required corrections and no separate answer sheet:
 - Corrections 3–7 amend Q3–Q7.
 - Corrections 1 (internal notes) and 2 (stale actions) amend the approved repairs A4 and A6.
-- Q1 and Q2 were not amended, so they are recorded as approved as recommended.
+- Q1 was not amended, so it is recorded as approved as recommended.
+- Q2 was amended by the decision supplied with the approval (recorded in item 2; reconciled 2026-11-02, see above).
 - Correction 4 is recorded as the amendment to DEC-2026-052 item 6.
 
 If this reading is wrong, the owner corrects it here.
@@ -284,19 +302,25 @@ If this reading is wrong, the owner corrects it here.
 **Decision (amended answers):**
 
 1. **Coverage (Q1), as recommended.** `/admin/coverage` is a read-only readback. Client writes to `coverage_areas` are closed. The allowlist changes only by reviewed migration (CFG-001 owner authority, as DEC-2026-021).
-2. **Catalog hide (Q2), as recommended.**
-   - Hiding or restoring a catalog service goes through a reasoned, recorded command. Hiding also requires the owner's approval note (CFG-002).
-   - Direct client changes to `services_catalog.is_active` are refused.
+2. **Catalog hide (Q2, amended; reconciled 2026-11-02).**
+   - Ordinary catalog deactivation controls are removed. CFG-002 keeps every service visible.
+   - Hiding, restoring or removing a catalog service requires an owner-approved, reviewed change (a migration under the owner's authority, as for coverage). No operator command or control does it. A free-text owner-approval note entered by any admin is not authorization.
+   - Direct client changes to `services_catalog.is_active`, client inserts of a hidden service and client deletes are refused.
    - "Popular" and the service add/edit form are unchanged.
+   - *Superseded:* the reasoned visibility command with an owner-approval note (first reading). It was merged with PR #132 and applied on hosted (never used: 0 events, 2026-11-03 readback). Forward fix `20261109001000` drops it and keeps its empty history table, append-only.
 3. **Provider controls (Q3, amended).**
    - The reviewed linking and release commands stay functional.
    - Direct account reassignment (`contractors.user_id`) is prohibited on every client path.
    - Public-listing exclusion is a separate thing from suspension and eligibility.
-   - Onboarded providers are activated and suspended only through `vendor_decide_onboarding`; direct `is_active` writes on them are refused.
-   - Correction 3 says to report an incomplete reviewed path before building a replacement. The gaps are reported in the brief §7.1, and no replacement is invented:
-     - (a) legacy providers (no onboarding record) have no reviewed suspension path; `is_active` is their eligibility;
-     - (b) `vendor_matching_eligible` also refuses listing-excluded records (an R0 design for test, fake and duplicate records).
-   - Both stay as they are until the owner decides.
+   - Onboarded providers are activated and suspended only through `vendor_decide_onboarding`.
+   - **Conservative legacy fix (reconciled 2026-11-02):** no direct, unreviewed activation or suspension switch remains for any provider. Client writes to `contractors.is_active` are refused for onboarded and legacy providers alike, and a contractor record created by a client starts inactive. Existing records, their stored `is_active` values and the reviewed legacy onboarding paths are preserved. No new activation mechanism is added.
+   - **Operational recovery path for a legacy provider (no onboarding record):**
+     - *To stop work now:* "Hide from public listing and matching" on `/admin/recruiting` (`r0_set_public_listing_exclusion`). It takes a reason, is recorded in `r0_public_listing_events`, and removes matching eligibility (`vendor_matching_eligible`). Removing the exclusion is also reasoned and recorded.
+     - *To activate or bring under reviewed suspension:* start onboarding review (`r0_start_existing_provider_review` from the provider's real application, or `r0_start_legacy_provider_review` for the closed DEC-2026-027 list), then activate or suspend through `vendor_decide_onboarding`.
+     - *Anything else* (for example, changing a stored `is_active` value directly) needs an owner-approved, reviewed migration.
+   - **Retained restrictions, not completed workflows** (owner decisions needed; correction 3 says report, don't invent):
+     - (a) legacy providers have no reviewed suspension command of their own; the listing exclusion above is the only recorded stop;
+     - (b) `vendor_matching_eligible` still refuses listing-excluded records (an R0 design for test, fake and duplicate records), so a listing exclusion is also a matching exclusion. Separating the two is not built.
 4. **Ratings, counts and badges (Q4, amended; amends DEC-2026-052 item 6).**
    - Arbitrary client writes to `contractors.rating` and `jobs_completed` are removed.
    - Operator surfaces show the authoritative summaries (`public_review_summaries`, `get_completed_job_counts`) and never present the stored default or hand-set value as a verified statistic.
@@ -305,7 +329,7 @@ If this reading is wrong, the owner corrects it here.
 5. **Request corrections (Q5, amended).**
    - No direct client writes to request address, ZIP or description, for any role.
    - Before any offer, quote or commercial binding, an operator correction goes through a reasoned, keyed, version-bound command that revalidates coverage and pricing state atomically under the row lock.
-   - After an offer, quote, assignment, payment, promotion reservation or bound price, the command refuses. A dedicated change workflow is required. None exists, so this gap is recorded, not built.
+   - After an offer, quote, assignment, payment, promotion reservation or bound price, the command refuses. **Retained restriction, not a completed workflow:** a dedicated change workflow is required. None exists and none is built.
 6. **Package Reviews (Q6, amended).** Clearing a review takes a reason and is recorded in the vendor-visible correction history, now rather than in the pricing work. The existing guardrails (valid positive fixed tiers; a positive deposit for quote + deposit; publication eligibility) and the `updated_at` stale check move server-side. "Pause" uses the reviewed `admin_suspend_package`.
 7. **Legacy invoices (Q7, as recommended).**
    - Client writes are closed.
@@ -314,8 +338,9 @@ If this reading is wrong, the owner corrects it here.
 8. **Repair amendments.**
    - (A4, correction 1) Every disclosure path for operator-only notes is closed, including participant reads of `service_requests.notes`, not only the new table. The historical column content is kept, not copied or republished.
    - (A6, correction 2) Admin actions bind to the record version (`updated_at`) or the relevant state, not status alone. Keyed replay is kept, and history is written in the same transaction.
+   - (Reconciled 2026-11-02) Every new keyed command binds its key to the actor, the target and the complete intent, including the version read. A changed actor or material payload is refused; a genuine retry returns the original result. Clearing a Package Review is keyed the same way. The badge, request-action, operator-note, Package Review clearance and (kept) catalog visibility records are append-only for every role, including the owner: no update, delete or truncate.
 
-**Not authorized by this decision:** hosted push, merge, payments, automation, financial operations.
+**Not authorized by this decision:** hosted push, merge, payments, automation, financial operations. The review corrections ship as the forward fix in the brief §12.5. Each step needs the owner's separate authorization.
 
 **As proposed — covered by approved authorities, not waiting on this decision:** the 6.13A/6.13B repairs in the brief §8.2/§8.4, including closing client writes on `invoices` (MPS §6.5, CFG-004).
 

@@ -16,7 +16,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { ConfirmAction } from "@/components/ui/confirm-action";
-import { AdminActionError, adminActionError } from "@/lib/adminOperations";
+import { AdminActionError, adminActionError, createKeyStore } from "@/lib/adminOperations";
 import type { CorrectablePackage } from "@/lib/packagePriceCorrections";
 import { cn } from "@/lib/utils";
 import {
@@ -90,6 +90,7 @@ export default function AdminPricingReviewsPage() {
   const [mode, setMode] = useState<Mode>("loading");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<{ id: string; action: "approve" | "pause" } | null>(null);
+  const [keyFor] = useState(createKeyStore);
 
   const load = useCallback(async (showLoading = false) => {
     if (showLoading) setMode("loading");
@@ -184,10 +185,12 @@ export default function AdminPricingReviewsPage() {
 
   // DEC-2026-057 item 6: clearing or pausing a review takes a reason the vendor can read, keeps the
   // updated_at stale check and runs the approval guardrails on the server. Both are recorded.
+  // A retry of the same clearance (same package version and reason) reuses its key and replays.
   async function approve(item: ReviewItem, reason: string) {
     if (!canApprove(item)) throw new AdminActionError(approvalBlockReason(item));
     setBusy({ id: item.id, action: "approve" });
-    const result = await createClient().rpc("admin_clear_package_review", { p_package: item.id, p_expected_updated_at: item.updated_at, p_reason: reason });
+    const key = keyFor(`clear:${item.id}:${item.updated_at}:${reason}`);
+    const result = await createClient().rpc("admin_clear_package_review", { p_package: item.id, p_expected_updated_at: item.updated_at, p_reason: reason, p_key: key });
     setBusy(null);
     if (result.error) {
       if (result.error.code === "40001") void load(false);

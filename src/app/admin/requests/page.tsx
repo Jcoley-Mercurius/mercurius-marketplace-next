@@ -56,7 +56,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { RequestOperatorNotes } from "@/components/admin/RequestOperatorNotes";
 import { RequestCorrection } from "@/components/admin/RequestCorrection";
-import { AdminActionError, adminActionError, createKeyStore, parseRequestsQuery, requestsQueryString } from "@/lib/adminOperations";
+import { ADMIN_REQUEST_SELECT as REQUEST_SELECT, AdminActionError, adminActionError, createKeyStore, parseRequestsQuery, requestsQueryString } from "@/lib/adminOperations";
 
 type ServiceRequest = {
   id: string;
@@ -182,7 +182,6 @@ export default function AdminRequestsPage() {
   return <Suspense fallback={<Loading />}><AdminRequestsContent /></Suspense>;
 }
 
-const REQUEST_SELECT = "id, service_type, status, address, city, state, zip_code, preferred_date, preferred_time, created_at, updated_at, customer_id, contractor_id, description, total_amount, quote_amount, assigned_at, match_expires_at, match_attempt_count, declined_contractor_ids, payment_status, needs_admin_review, matching_status, preferred_contractor_id, quote_revision, quote_status, quote_expires_at, current_quote_id, pricing_mode, pricing_inputs, frequency, scheduled_start_at, recurrence_parent_id";
 
 function AdminRequestsContent() {
   const router = useRouter();

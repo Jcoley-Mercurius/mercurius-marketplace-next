@@ -382,21 +382,25 @@ Phase 6 is **not complete**: integrated acceptance and carried corrective work r
 | 6.11A/6.11B TRACE-134 | yes | yes (#126, #128) | yes | follow-up: revoke signed-in SELECT on `contractors.special_offer` |
 | 6.12A TRACE-135 | yes | yes (#127) | yes | — |
 | 6.12B TRACE-135 | yes | yes (#129, `b1a8cc3`) | yes (local) | Codex review; follow-ups `/vendors` "released" copy, revoke legacy `get_vendor_earnings_metrics` |
-| 6.13 TRACE-136 | yes (§12, one release: migration `20261108001000` + client) | **no** (PR #132, draft; characterization merged as #130 `7ec8f9a`) | yes (local; §12.6); CI not run | Codex review; hosted push and merge need owner authorization; gaps §12.4 |
+| 6.13 TRACE-136 | yes (§12: `20261108001000` merged and on hosted; review forward fix `20261109001000` + client) | #132 yes (`015f371`); forward fix **no** (draft PR) | yes (local; §12.6) | Codex review of the forward fix; push and merge need owner authorization (§12.5); retained restrictions §12.4; DEC-2026-058 PROPOSED |
 | Prepaid plans (DEC-2026-048) | no | no | no | separate slice with finance review |
 
 Carried across the phase (not closed by any slice):
 
 - **Pricing repairs:** TRACE-126 (one-time accepted-price exposure) and TRACE-127 (add-on visit acceptance after a price change) OPEN; DEC-2026-051 items 6–8 PROPOSED; F613-18.
 - **Finance sign-offs:** 6.6c two-person finance review not recorded; promotions gated pending finance review (DEC-2026-038/041/042); 0 hosted money authorities.
-- **Unresolved policies:** DEC-2026-050, 052 (items 1–5, 7–9), 054 PROPOSED; DEC-2026-057 approved as amended (gaps §12.4 need owner decisions); DEC-2026-049 items 7–8 blocked.
+- **Unresolved policies:** DEC-2026-050, 052 (items 1–5, 7–9), 054 PROPOSED; DEC-2026-057 approved as amended (retained restrictions §12.4 need owner decisions); DEC-2026-058 PROPOSED; DEC-2026-049 items 7–8 blocked.
 - **Payment kernel:** P-K1/P-K2, F-1/F-2/F-3 (6.9 brief §11).
 - **Human acceptance:** screen-reader, real-device, `@visual` and 200% zoom checks for every Phase 6 journey; integrated Codex journey review (PHASE-6-SCOPE "Phase acceptance checkpoint").
 - **Not authorized here:** payments, automation, financial operations, hosted pushes, merges.
 
-## 12. Implementation (DEC-2026-057 approved as amended, 2026-11-02)
+## 12. Implementation (DEC-2026-057 approved as amended, 2026-11-02; forward fix for the Codex review of PR #132)
 
-One reviewable release: migration `20261108001000_phase6_admin_operations.sql` (additive, **not pushed**) plus the client changes that make it safe to deploy. They must ship together (§12.5). No money function changed: the fingerprint is `45 | 34c51131…` before and after. That fingerprint doesn't cover payment-adjacent behavior, which is listed for review in §12.5.
+**State, read back 2026-11-03:** PR #132 merged to `main` at `d5ba4fc` (`015f371`, 2026-11-02 23:44 UTC), before the Codex review fixes. Hosted has `20261108001000` as merged: the catalog hide command exists and the notes read is already narrowed. The money fingerprint is `45 | 34c51131…`. The newest production deployment was created at the merge.
+
+Usage counts on hosted: 0 catalog visibility events, 0 hidden services, 0 badge events, 0 request actions, 0 operator notes, 0 legacy notes. One onboarded provider record was updated after the merge (01:02 UTC, still active), which the merged guard allows only through reviewed paths.
+
+The review fixes are therefore a **forward fix on `main`**: migration `20261109001000_phase6_admin_operations_review_fixes.sql` (additive, **not pushed**) plus the client. `20261108001000` is not edited. Commit `6e9c031` on the merged branch and draft #133 (expand/contract) were prepared before the merge was noticed; #133 is closed. No money function changes; the fingerprint doesn't cover payment-adjacent behavior, which is listed in §12.5.
 
 ### 12.1 Decision as recorded
 
@@ -404,8 +408,10 @@ The owner's instruction gave seven required corrections and no separate answer s
 
 - Corrections 3–7 amend Q3–Q7.
 - Corrections 1 (internal notes) and 2 (stale actions) amend repairs A4 and A6.
-- Q1 and Q2 are approved as recommended.
+- Q1 is approved as recommended.
+- **Q2 is amended (reconciled 2026-11-02).** The first reading said "as recommended" and built a reasoned hide command with an owner-approval note. That was wrong. The amended decision removes ordinary deactivation controls: hiding needs an owner-approved, reviewed change, and a free-text approval note entered by any admin is not authorization. The command, its history table and its UI have been removed.
 - Correction 4 amends DEC-2026-052 item 6: no surface shows `contractors.rating` as a statistic, and no client writes it.
+- **Proposed, pending owner approval:** DEC-2026-058 (hide "Top Rated" until objective criteria are approved; §12.4).
 
 ### 12.2 Repairs under existing authority (as built)
 
@@ -414,28 +420,42 @@ The owner's instruction gave seven required corrections and no separate answer s
 | A1 | `invoices`: insert/update/delete revoked from `anon`/`authenticated`, admin write policies dropped. The definer trigger and every SELECT path are kept. | migration §A1; `/admin/invoices` read-only |
 | A2 | Invoker guard `private.guard_contractor_operator_writes`: no client change to `user_id` (or non-null on insert), or to `payouts_paused*`. Linking, binding and release commands run as owner and are untouched. | migration; probes A3, A5, A5b, V2; SQL 072 green |
 | A3 | Invoker guard `private.guard_message_sender`: `sender_id` must be the caller, and `sender_role` must be a role the caller holds *on that thread*. Dual-role accounts post under each role they qualify for. This also closes an admin posting under another account's `sender_id`, which was found while building. | probes A21–A22, H5–H7, V4–V6, D1–D4 |
-| A4 (amended by correction 1) | Every operator-note disclosure path closed (inventory below). `private.request_operator_notes` is append-only, admin-only (`admin_add_request_note`, keyed; `admin_request_notes`). | probes H1–H1e, V1, D5, Z2, A23–A24, N1–N3 |
+| A4 (amended by correction 1) | `20261108001000` (merged): SELECT and UPDATE on `service_requests.notes` are closed to signed-in roles by column grants, and operator notes are written only to `private.request_operator_notes` (admin-only: `admin_add_request_note`, keyed; `admin_request_notes`). The forward fix also closes `anon` updates, and makes the notes table refuse TRUNCATE as well. | probes A12, A23, H1, H1r–H1s, V1, V1r, D5, Z2–Z3, M1–M3, N1–N4, R1 |
 | A5 | `admin_resolve_dispute` EXECUTE revoked from clients. `admin_decide_dispute` (definer) still calls it. `/admin/quality` links to Disputes; SQL 008/024 use the keyed command. | probe A17; SQL 008, 024 |
 | A6 (amended by correction 2) | `admin_transition_job_status_expected`: bound to the row version (`updated_at`, bumped by every write), so any intervening change refuses with `40001`, not only a status change. The key is checked after the row lock, so a concurrent retry replays rather than failing. The history row is written in the same transaction as the transition. | probe S1; SQL 108; concurrency A1–A2 |
 | A7 | `smart_picks`: all client privileges revoked. Table and rows kept. | probes A10, A10b, Z1 |
-| A8 | `admin_operations_summary`: the same queue functions in one transaction. Finance counts only for finance-authority holders (`restricted` otherwise). No threshold or action. | probes Q1–Q2; SQL 108 parity; concurrency A6 |
+| A8 | `admin_operations_summary`: the same queue functions in one transaction. The finance row is `restricted` **only** when `money_require_finance` denies the caller. A failed read after that check passes is `error`, like any other queue, never a zero (finding 4). No threshold or action. | probes Q1–Q5; SQL 108 parity; concurrency A6 |
 
 **Notes disclosure inventory (correction 1).** `service_requests.notes` was readable through the table-wide SELECT grant by the homeowner (customer policy) and the assigned provider (vendor policy). No other path exposes it: none of the definer functions, views, realtime publication (`service_requests` is not published), Edge Functions, API routes or email templates read the column (`dispute_detail` reads dispute-decision notes).
-- **Closed:** table-wide SELECT is replaced by a column grant on every column except `notes`. A broad `select *` by a signed-in role is now refused, and no client issues one (search of `src/`). No client role may update `notes`, `address`, `city`, `state`, `zip_code` or `description`.
-- **History preserved:** the existing values stay in the column, unchanged, and are not copied into operator notes. Operators read them through `admin_request_notes` as "Earlier shared note (read-only)", stated as having been readable by the homeowner and provider. Hosted has 0 such rows.
-- **New columns:** a new `service_requests` column needs an explicit grant. SQL 108 fails if one is missing.
+- **Closed (merged in `20261108001000`, on hosted):** table-wide SELECT is replaced by a column grant on every column except `notes`, and no client role updates `notes`, `address`, `city`, `state`, `zip_code` or `description`. The forward fix adds the same closure for `anon` updates. SQL 108 fails if a new column lacks its grant. No client selects `notes`; the unit test `mixed-version deployment` fails if one does.
+- **Consequence for rollback:** the pre-#132 client selects `notes`, so its requests page cannot load against this schema. It is not a rollback target (§12.5).
+- **History preserved:** existing values stay in the column, unchanged, and are not copied into operator notes. Operators read them through `admin_request_notes` as "Earlier shared note (read-only)".
 
 ### 12.3 Policy changes newly approved (as built)
 
 | Item | Built |
 |---|---|
 | Q1 coverage | Client writes to `coverage_areas` revoked and admin write policies dropped. `/admin/coverage` is a read-only readback that names the owner as change authority. |
-| Q2 catalog hide | Invoker guard refuses a direct `is_active` change. `admin_set_catalog_service_visibility` takes a reason, the owner's approval note when hiding, the expected visibility (stale protection) and a key; history is in `private.catalog_visibility_events`. "Popular" and add/edit are unchanged. |
-| Q3 provider controls | Direct `user_id` reassignment is refused on every client path (A2). For an onboarded provider, a direct `is_active` change is refused, and the list and detail pages link to the onboarding decision instead of showing a switch. Legacy providers keep the switch, labelled as unreviewed (gap 1). |
-| Q4 statistics and badges | Client writes to `rating` and `jobs_completed` are refused, and new providers are created with the defaults only. Every operator surface shows `public_review_summaries` and `get_completed_job_counts` and never falls back to the stored value: vendors list and detail, the Featured Providers picker (rating removed), and the requests page (no longer loads it). Badges go through `admin_set_provider_badges` (reason, expected badges, key, history). |
-| Q5 request corrections | No client writes to address, ZIP or description (A4 grants). `admin_correct_request_details` works only before any binding (gap 3 covers what happens after):<ul><li>**Version-bound and keyed.**</li><li>**Refuses with `55000` once a binding exists:** offer, match, quote, payment, obligation, promotion or bound price.</li><li>**Revalidates under the row lock** the active coverage ZIP and the active catalog service.</li><li>**Records before and after** in `private.admin_request_actions`.</li></ul>The only pricing state it accepts is "no price bound", which it re-checks under the lock. |
-| Q6 Package Reviews | `admin_clear_package_review` takes a vendor-visible reason. It keeps the `updated_at` stale check and enforces the approval guardrails on the server (previously client-only), and records `review_cleared` in the vendor-visible correction history. Pause uses `admin_suspend_package`. A guard refuses direct admin writes to `needs_review`/`is_active`, and runs after the vendor recompute trigger. |
-| Q7 invoices | A1, plus `/admin/invoices` as a read-only "Legacy invoices" readback. The create/edit/send/mark-paid/refund controls and the revenue tiles are removed, with a link to Finance. |
+| Q2 catalog hide (amended) | The merged `admin_set_catalog_service_visibility` is dropped by the forward fix (unused on hosted: 0 events); its empty history table is kept, append-only. No command or control hides, restores or removes a service. An invoker guard refuses a client change to `is_active` and a client insert of a hidden service. Client DELETE is revoked and the admin delete policy dropped (deleting is hiding). A reviewed migration (owner) is the only path. "Popular" and add/edit are unchanged. `/admin/catalog` shows Shown/Hidden read-only. |
+| Q3 provider controls (conservative) | Direct `user_id` reassignment is refused on every client path (A2). **No client changes `is_active` for any provider**, onboarded or legacy, and a client-created contractor record starts inactive. Stored values, the reviewed linking/onboarding commands and the legacy review starts are unchanged. The list and detail pages no longer show a switch; the detail page names the recovery path (DECISION-LOG DEC-2026-057 item 3): <ul><li>to stop work, the reasoned, recorded listing exclusion on `/admin/recruiting`, which also removes matching eligibility;</li><li>to activate or suspend, onboarding review then `vendor_decide_onboarding`;</li><li>anything else, a reviewed migration.</li></ul> |
+| Q4 statistics and badges | Client writes to `rating` and `jobs_completed` are refused, and new providers are created with the defaults only. Every operator surface shows `public_review_summaries` and `get_completed_job_counts` and never falls back to the stored value. Badges go through `admin_set_provider_badges` (reason, expected badges, key, history). |
+| Q5 request corrections | No client writes to address, ZIP or description (A4). `admin_correct_request_details` works only before any binding:<ul><li>**Version-bound and keyed.**</li><li>**Refuses with `55000` once a binding exists:** offer, match, quote, payment, obligation, promotion or bound price.</li><li>**Revalidates under the row lock** the active coverage ZIP and the active catalog service.</li><li>**Records before and after** in `private.admin_request_actions`.</li></ul> |
+| Q6 Package Reviews | `admin_clear_package_review(package, expected_updated_at, reason, key)` takes a vendor-visible reason. It keeps the stale check, enforces the approval guardrails on the server, records `review_cleared` in the vendor-visible correction history, and is now keyed: a retry replays and writes no second history row. Pause uses `admin_suspend_package`. A guard refuses direct admin writes to `needs_review`/`is_active`. |
+| Q7 invoices | A1, plus `/admin/invoices` as a read-only "Legacy invoices" readback with a link to Finance. |
+
+**Replay contract (finding 5), every new keyed command.** A key binds the actor, the target and the complete intent. A changed actor, target or material field is refused with `22023`, and a genuine retry returns the original result with `replayed: true`. The key is checked after the target's row lock, so a concurrent retry replays rather than failing.
+
+| Command | Bound to |
+|---|---|
+| `admin_add_request_note` | actor, request, body |
+| `admin_set_provider_badges` | actor, provider, badges read (expected), badges wanted, reason |
+| `admin_transition_job_status_expected` | actor, request, action, target status, reason, version read |
+| `admin_correct_request_details` | actor, request, action, every corrected field, reason, version read |
+| `admin_clear_package_review` | actor, package, version read, reason |
+
+Versions are bound as UTC text, so the session time zone cannot turn a genuine retry into a refusal. `admin_operations_summary` and the history reads are read-only and take no key.
+
+**Append-only history (finding 6).** `private.request_operator_notes`, `private.provider_badge_events`, `private.admin_request_actions`, `private.package_review_clearances` and the kept, empty `private.catalog_visibility_events` have row triggers refusing UPDATE and DELETE and a statement trigger refusing TRUNCATE, for every role including the owner. Existing tables from earlier slices (for example `vendor_package_price_corrections`) are unchanged.
 
 UI (6.13B), under MDS §5–§8:
 - **Navigation:** grouped sidebar (five MDS groups, each a labelled section, `aria-current`; same in the mobile Sheet). The Smart Picks entry is removed and `/admin/smart-picks` redirects to `/admin/featured`. The public footer Admin link and the `/pricing` legend are removed.
@@ -443,55 +463,68 @@ UI (6.13B), under MDS §5–§8:
 - **Request URL state:** `/admin/requests` keeps `?q=`, `?status=` and `?request=`. A record outside the loaded list is fetched by ID, and Back closes it.
 - **Queues:** the cancellation queue gains a count, checked-at time and "Open request".
 - **Shared components:** the operator-notes panel, the correction panel with history, and honest dispute and invoice copy.
+- **Catalog (Q2 amended):** the Visibility control is gone. The Shown column is a read-only label, and the page says hiding is an owner-approved, reviewed change.
+- **Providers (Q3, conservative):** no Activate/Deactivate button or Active switch on the list or detail page. The detail page shows the stored state and the recovery path (onboarding decision; the reasoned listing exclusion in Recruiting). "Add Vendor" creates an inactive record.
 - **Sign-in redirect:** the client layout keeps the deep path.
 
-### 12.4 Reported gaps (not built; owner decisions needed)
+### 12.4 Retained restrictions and open items (not completed workflows; owner decisions needed)
 
-1. **Legacy providers have no reviewed suspension path.** For the 13 hosted providers without an onboarding record, matching eligibility is `contractors.is_active`. The direct switch stays: labelled, and recording no reason. Correction 3 says to report rather than invent, so no replacement is built.
-2. **Listing exclusion still removes eligibility.** `vendor_matching_eligible` refuses any provider with an R0 public-listing exclusion (11 hosted; R0 design for test, fake and duplicate records). Separating them would make those records matchable wherever `is_active` is true, so the coupling is kept until the owner decides.
-3. **No change workflow for bound requests.** After an offer, quote or commercial binding, corrections are refused and the UI says a change request is needed. That workflow doesn't exist.
+These are restrictions the release keeps on purpose. They are not workflows it completes.
+
+1. **Legacy providers: no reviewed suspension command of their own.** No switch remains (Q3 conservative fix). The recorded stop is the listing exclusion, and activation is onboarding review. A dedicated legacy suspension command is not built (correction 3: report, don't invent). 13 hosted providers have no onboarding record.
+2. **Listing exclusion also removes matching eligibility.** `vendor_matching_eligible` refuses any provider with an R0 public-listing exclusion (11 hosted; the R0 design for test, fake and duplicate records). The coupling is kept: separating them would make those records matchable wherever `is_active` is true. Until the owner decides, a listing exclusion is a restriction on both listing and matching.
+3. **Requests after a commercial binding: corrections are refused.** After an offer, quote, assignment, payment, promotion or bound price, the correction command refuses and the UI says a change request is needed. That change workflow doesn't exist and is not built.
 4. **Some queues aren't in the summary.** Sourcing and applications-awaiting-review have no server queue function, so they aren't summarized rather than being computed differently from their pages.
-5. **The "Top Rated" badge reads like a statistic.** It is an operator-set badge (DEC-2026-047) but may read as a verified rating; owner to confirm it stays.
+5. **"Top Rated" (DEC-2026-058, PROPOSED, pending owner approval).** Recommendation: stop displaying and offering it until objective criteria are approved. Stored values and badge history are preserved, nothing is rewritten, and nothing is built until approved.
 6. **Owner's own messages.** The owner's two admin role rows also act as homeowner where their account owns a request; the role validation allows both, by design.
 
-### 12.5 Deployment plan (one release) and transition behavior
+### 12.5 Deployment of the forward fix, step by step (no hosted action authorized)
 
-Order (each step needs the owner's separate authorization; none was taken here):
+Releases and schema states:
+- **C0:** the client before PR #132.
+- **CM:** `main` now (PR #132, `015f371`).
+- **CF:** the forward-fix client.
+- **SM:** hosted now (`20261108001000` as merged).
+- **SF:** SM + `20261109001000`.
 
-1. **Review:** Codex reviews PR #132 (migration, client, tests, this section), including the payment-adjacent items below.
-2. **Hosted dry run:** `supabase db push --linked --dry-run` lists only `20261108001000`.
-3. **Push, then merge, minutes apart:** push the migration, read it back, then merge PR #132 so Vercel deploys the compatible client.
+| Step | Action (each needs the owner's separate authorization) | Read back before the next step | Rollback in this phase |
+|---|---|---|---|
+| 0 | Codex review of the forward-fix PR | — | — |
+| 1 | Read-only preflight: `supabase migration list --linked` ends at `20261108001000`; usage counts as above (any catalog hide or badge change since 2026-11-03 is reported before pushing) | counts in the PR | none needed |
+| 2 | `supabase db push --linked --dry-run` lists only `20261109001000` | dry-run output | none needed |
+| 3 | `supabase db push --linked` (SM → SF), with CM live | the catalog command and the 3-argument clearance are gone; the 4-argument clearance and `package_review_clearances` exist; append-only triggers present; fingerprint `45 \| 34c51131…` | CM keeps working on SF, except the rejected controls, which fail closed (matrix). The migration stays; fix forward. |
+| 4 | Merge the forward-fix PR → Vercel deploys CF | `/admin`, requests list and record, notes, catalog, vendors, Package Reviews | `vercel promote` the CM deployment (the #132 merge, created 2026-11-02 23:44 UTC). **Never C0.** |
 
-Between steps 3a (push) and 3b (merge), the old client runs against the new schema:
-- **Requests page:** the old `/admin/requests` selects `notes` and fails to load (permission denied). Operators should not use it during that window.
-- **Old controls:** they fail closed with a permission error and nothing changes. These are the invoice, coverage, catalog-hide, payout-pause and badge/rating saves, the quality-page dispute action, the old notes save, and the Package Reviews approve/pause.
-- **Status changes:** these still work through the old `transition_job_status` call, which is unchanged.
-- **Homeowner and provider portals:** unaffected. No homeowner or vendor client selects `notes` or writes the closed columns.
-- **Rollback:** promote the previous deployment (`vercel promote`) and fix forward. The migration is additive and needs no rollback for the old client to keep working, apart from the requests page above.
+Mixed-version matrix:
 
-The other order is unsafe. If the client deploys first, its new RPCs don't exist yet and the admin overview and request notes fail. So the push goes first and the merge follows immediately.
+| Client × schema | Supported? | Behaviour | Evidence |
+|---|---|---|---|
+| C0 × SM or SF | **no** | requests page fails to load (permission denied on `notes`), failing closed; nothing disclosed | SQL 108 M1 |
+| CM × SM | today | everything loads; the rejected controls (catalog hide with a typed note, legacy Active switch) work | hosted readback |
+| CM × SF | yes: the step 3→4 window, and the rollback target after step 4 | requests, notes, status, corrections and badges work (same signatures). These fail closed and change nothing: <ul><li>catalog Visibility (command removed);</li><li>legacy Activate/Deactivate (guard);</li><li>"Add Vendor" (it inserts `is_active: true`; refused);</li><li>Package Reviews approve (calls the removed 3-argument clearance).</li></ul> Pause, the summary and portals work. | SQL 108 A5c, A20b, K1, the Package Review clearance check |
+| CF × SM | **no** (ordering prevents it: push before merge) | everything loads; only Package Reviews approve fails closed (the 4-argument clearance is missing). If it happens, push `20261109001000` at once (DEC-2026-037). | — |
+| CF × SF | yes (final) | all paths | SQL 108; browser suite |
 
 **Payment-adjacent review items** (not covered by the fingerprint):
 - the invoice ledger is now trigger-only;
-- `admin_operations_summary` calls `money_finance_reconciliation` for finance holders only;
+- `admin_operations_summary` calls `money_finance_reconciliation` for finance holders only, and reports its failure as `error`;
 - Package Reviews approval changes which packages can be published;
 - request corrections refuse once a payment or obligation exists.
 
 ### 12.6 Verification evidence (local; synthetic data only)
 
-Results, 2026-11-02, local stack:
-- **Clean replay:** `supabase db reset --local`, 213 migrations. Money fingerprint `45 | 34c51131e2ca18f65d3b29afd8d12e11` before and after.
-- **Full SQL suite:** 99 files, 6,241 tests, PASS.
-- **Probe script:** 87/87 MATCH, 0 DIFF; the committed results file is identical on the fresh replay.
-- **Concurrency:** `scripts/admin-operations-concurrency.mjs` 6/6 scenarios, ×7 runs.
-- **Lint and types:** `npm run lint` and `npm run typecheck` exit 0.
-- **Unit tests:** 56 files, 642 tests.
-- **Browser:** `admin-operations.spec.ts` 12/12 and `portals.spec.ts` 20/20, then the full `npm run test:a11y` (all specs except `@visual`) 668 passed, 0 failed, all on the production build against the synthetic fixture. An earlier run under heavy machine load (load average about 10) timed out on 10 tests that pass when rerun. Two real defects found there are fixed: invoice-list horizontal scroll at 320 px, and the disputes test now uses a deterministic fixture.
+EVIDENCE_PLACEHOLDER
 
-Evidence files:
-- [`review-evidence/trace-136-probe-results.txt`](review-evidence/trace-136-probe-results.txt): 87 probes after the migration, all matching their expectation.
-- SQL 108 and the updated SQL tests 002, 008, 024, 063, 067, 089 and 098, each change recorded in that test with its DEC-2026-057 item.
-- `scripts/admin-operations-concurrency.mjs`: 6 scenarios.
-- Unit tests in `src/lib/adminOperations.test.ts`, browser tests in `tests/e2e/admin-operations.spec.ts` and the updated `portals.spec.ts`.
+### 12.7 Codex review of PR #132 — findings and dispositions (2026-11-02; delivered as the forward fix)
 
-Not performed: CI, hosted push, screen reader, real devices, `@visual`.
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | Q2 recorded as recommended; the approval amended it | Visibility command and UI removed (the empty history table is kept, append-only). Direct `is_active` changes, hidden inserts and deletes are refused, so hiding is a reviewed migration only. DEC-2026-057 item 2 reconciled; SQL 089 and 108 updated. |
+| 2 | Legacy `is_active` switch kept as an unaudited bypass | Every client `is_active` change is refused and client-created records start inactive. Records and reviewed onboarding are preserved. Recovery path documented in DEC-2026-057 item 3 and on the page. |
+| 3 | Deployment plan intentionally broke the old requests page | Superseded by the merge: SM already narrows `notes`, so expand/contract (#133) was closed. The forward-fix plan (§12.5) keeps CM a working rollback, and SQL 108 M1 records that C0 is not one. |
+| 4 | Summary conflated finance denial and read failure | `restricted` only on a `42501` from `money_require_finance`; a failed authorized read is `error` (SQL 108 Q3–Q5). |
+| 5 | Replay checks incomplete | Bindings per the table in §12.3; Package Review clearance keyed. Tests: N4, G4–G5, C2b–C2c, P4–P5, R1–R4, the status replay set; concurrency A7–A8. |
+| 6 | Append-only history not enforced | Triggers on all five history tables (UPDATE, DELETE, TRUNCATE); SQL 108. |
+| 7 | Restrictions presented as workflows; Top Rated | §12.4 reworded as retained restrictions. DEC-2026-058 PROPOSED, pending owner approval. |
+
+Phase 6 remains incomplete (§11). The finance, payment, pricing and acceptance gaps carried there are unchanged by this revision.

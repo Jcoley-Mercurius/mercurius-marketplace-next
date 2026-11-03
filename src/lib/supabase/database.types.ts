@@ -7122,6 +7122,7 @@ export type Database = {
       admin_clear_package_review: {
         Args: {
           p_expected_updated_at: string
+          p_key: string
           p_package: string
           p_reason: string
         }
@@ -7422,17 +7423,6 @@ export type Database = {
           _reason: string
         }
         Returns: undefined
-      }
-      admin_set_catalog_service_visibility: {
-        Args: {
-          p_active: boolean
-          p_expected_active: boolean
-          p_key: string
-          p_owner_approval: string
-          p_reason: string
-          p_service: string
-        }
-        Returns: Json
       }
       admin_set_package_internal_notes: {
         Args: { p_draft?: string; p_notes?: string; p_package?: string }

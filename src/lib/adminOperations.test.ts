@@ -1,8 +1,8 @@
-import { readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  SUMMARY_QUEUES, adminActionError, completedJobsText, createKeyStore, isCorrectableRequest, parseOperationsSummary,
+  ADMIN_REQUEST_SELECT, SUMMARY_QUEUES, adminActionError, completedJobsText, createKeyStore, isCorrectableRequest, parseOperationsSummary,
   parseRequestsQuery, requestsQueryString, reviewSummaryText, STALE_REQUEST_MESSAGE,
 } from "./adminOperations";
 import { navigationGroups } from "@/components/admin/AdminSidebar";
@@ -31,6 +31,7 @@ describe("operations summary", () => {
       { queue: "quote", state: "ready", count: 3, aged: 1 },
       { queue: "finance_exceptions", state: "restricted", count: null, aged: null },
       { queue: "support", state: "surprise", count: "7", aged: null },
+      { queue: "fulfillment", state: "error", count: null, aged: null },
       { nope: true },
     ] });
     expect(parsed.checkedAt).toBe("2026-11-02T15:00:00Z");
@@ -38,10 +39,37 @@ describe("operations summary", () => {
       { queue: "quote", state: "ready", count: 3, aged: 1 },
       { queue: "finance_exceptions", state: "restricted", count: null, aged: null },
       { queue: "support", state: "error", count: null, aged: null },
+      { queue: "fulfillment", state: "error", count: null, aged: null },
     ]);
   });
   it("links every summarized queue to an admin route", () => {
     for (const entry of Object.values(SUMMARY_QUEUES)) expect(entry.href.startsWith("/admin")).toBe(true);
+  });
+});
+
+describe("mixed-version deployment (brief §12.5)", () => {
+  const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+  it("the admin requests select never names notes, and SQL 108 runs this exact select", () => {
+    const columns = ADMIN_REQUEST_SELECT.split(",").map((column) => column.trim());
+    expect(columns).not.toContain("notes");
+    expect(read("supabase/tests/108_admin_operations.sql")).toContain(`select ${ADMIN_REQUEST_SELECT} from public.service_requests where`);
+  });
+  it("no admin client selects or writes the legacy notes column", () => {
+    const sources: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(name) && !name.endsWith(".test.ts") && !path.endsWith("database.types.ts")) sources.push(path);
+      }
+    };
+    walk(join(process.cwd(), "src"));
+    const offenders = sources.filter((path) => /from\("service_requests"\)[^;]*(select\("[^"]*\bnotes\b|update\(\{[^}]*\bnotes\s*:)/.test(readFileSync(path, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+  it("the review forward fix does not re-open the notes read", () => {
+    const fix = read("supabase/migrations/20261109001000_phase6_admin_operations_review_fixes.sql");
+    expect(fix).not.toMatch(/grant[^;]*select[^;]*on public\.service_requests/i);
   });
 });
 
