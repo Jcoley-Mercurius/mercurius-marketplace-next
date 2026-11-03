@@ -9,7 +9,8 @@
 - Client check: the last direct `special_offer` read left in 6.11B (`b6021ea`), the last metrics call in 6.12B (`c0a19ca`). Production and both earlier production deployments (`b5629a6`, `015f371`) contain those removals, so a push before merge breaks no deployed client.
 - Evidence: SQL 110 64/64 (26 fail on `main`); full SQL 100 / 6,352 on clean replay; PostgREST matrix; browser public-page test (fails on the old copy); fingerprint unchanged.
 - Found, not fixed: `payouts_paused_reason` is readable by anonymous and signed-in roles (hosted: 0 rows set); the `/vendors` eyebrow pill fails contrast (4.43:1). Admins can still blind-write `special_offer` (no client does).
-- Next: Codex review; owner authorizes dry run and push of `20261110001000`, then merge. Then human checks on the final candidate (closure report §9).
+- **Pushed to hosted 2026-11-03 with owner authorization:** dry run listed only `20261110001000`; push applied it. Readback: hosted history ends at `20261110001000`; `authenticated`/`anon` hold no `special_offer` SELECT and no metrics EXECUTE (PUBLIC none); the operator readback and `vendor_own_earnings` stay callable; other signed-in columns unchanged; 8 stored offers kept; fingerprint `45 | 34c51131…`.
+- Next: Codex review, then merge #137 (the hosted schema already matches it; production `85bb7c6` needs neither grant). Then human checks on the final candidate (closure report §9).
 
 ## Phase 6.13 Codex review forward fix (TRACE-136, DEC-2026-057 reconciled), 2026-11-03
 
