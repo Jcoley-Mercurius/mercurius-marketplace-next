@@ -275,6 +275,8 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Owner's words.** The owner was asked whether to accept every recommended option in [closure report §7](PHASE-6-CLOSURE-REPORT.md) as written, and answered "Accept all recommended". For D-10 the recommended option needs two named finance reviewers. Asked who they are, the owner answered "Not named yet; carry", which selects D-10's alternative.
 
+**Finance reviewers (owner, 2026-11-03, later the same day).** Asked what a finance reviewer is, the owner answered: "yeah, I'll be one of the reviewers, and then the bookkeeper will be the other. I don't have a bookkeeper yet, so just put Josh + accountant." Recorded: every two-person finance review in this project (CS-3, the carried 6.6c review F-1, the promotions review F-2, and the other money-path reviews in closure report §4.6) is signed by **Josh** (owner) and **the accountant** (a bookkeeper or accountant, **not yet engaged**). Until the accountant is engaged, no two-person review can be completed. D-10 is unchanged: the 6.6c review stays carried to the R1 gate.
+
 **This decision does not accept Phase 6.** Acceptance still needs the A1 Codex reviews, the repairs below and the A2 human checks (closure report §9).
 
 **Answers** (each item is approved as the §7 row states it; the decision named in the second column is amended in place):
@@ -299,7 +301,7 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 | D-12 | DEC-2026-051 items 6–8; DEC-2026-049 items 7–8; DEC-2026-048 | Each deferral approved with the gate, condition and owner in §4.6. DEC-2026-051 items 6–8: after Phase 6, gate to be named. DEC-2026-049 items 7–8 stay blocked; their rules stay PROPOSED. Prepaid plans are outside Phase 6 acceptance, a separate slice before the R1 gate | deferred (§4.6) |
 
 **Consequences recorded with the answers.**
-- **Finance reviewers.** CS-3 changes the money kernel and needs a two-person finance review before merge. With no reviewers named, CS-3 can be built and reviewed by Codex but not merged. Phase 6 acceptance waits on it, because D-1 places it before acceptance.
+- **Finance reviewers.** CS-3 changes the money kernel and needs a two-person finance review before merge, by Josh and the accountant. Until the accountant is engaged, CS-3 can be built and reviewed by Codex but not merged. Phase 6 acceptance waits on it, because D-1 places it before acceptance.
 - **D-4 and one-time jobs.** The start gate covers one-time jobs only once CS-3 merges. Until payments are activated, no gated job can start in production; R1 isn't open, so nothing live is affected (DEC-2026-050 "Consequence of A").
 - **Not answered here.** W-6 (operator writes to `special_offer`, closure report §4.4) was not on the decision sheet and stays open. So do the DEC-2026-059 "Open" items.
 

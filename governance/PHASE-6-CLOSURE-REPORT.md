@@ -6,6 +6,8 @@
 
 **Owner answers 2026-11-03 (TRACE-140, [DEC-2026-060](DECISION-LOG.md)):** the owner accepted every recommended option in §7 ("Accept all recommended"), except D-10. D-10's recommendation needs two named finance reviewers, so the owner chose its alternative ("Not named yet; carry"). The status column in §7 and the "Answered" notes below record this. **The deferrals in §4.6 are now approved** where the answers select them, and Phase 6 is still not accepted. CS-1 (#137, `d7f073d`) and TRACE-139 (#138, `b7b0d08`) are merged; neither PR has a Codex review recorded in the repository.
 
+**Finance reviewers (owner, later 2026-11-03, DEC-2026-060):** Josh (owner) and the accountant, who is not yet engaged. Every row below that says "finance reviewers (not named)" or "two finance reviewers (not named)" now means these two. A two-person review can't be completed until the accountant is engaged.
+
 **Base:** `main` `85bb7c6` (PR #135 merge, 2026-11-03 18:19 UTC). `git log 85bb7c6..origin/main` was empty when this audit started. Branch `claude/phase6-closeout-audit`.
 
 **Not done here:** no payment, automation or promotion activation; no financial operation; no hosted change (hosted was only read); no merge.
@@ -220,7 +222,7 @@ Screen reader, real devices, `@visual` and 200% zoom have not been performed for
 |---|---|---|---|
 | **CS-1 post-deploy cleanup** (A3), TRACE-138 | Additive migration `20261110001000` revoking `authenticated` SELECT on `contractors.special_offer` and client EXECUTE on `get_vendor_earnings_metrics(uuid)`; SQL 110; `/vendors` copy aligned with DEC-2026-056; browser test | small; no money function, no fingerprint change. **Implemented for review: PR #137.** Not pushed, not merged. *2026-11-03: `20261110001000` pushed to hosted with owner authorization, then #137 merged (`d7f073d`). No Codex review recorded.* | Codex review; owner authorizes dry run and push before merge (DEC-2026-037) |
 | CS-2 Top Rated | hide the badge on public, row and spotlight surfaces and in the editor; data preserved | small, UI | only if D-7 is approved. *Approved 2026-11-03; before acceptance* |
-| CS-3 TRACE-126 | one-time agreed-price source per D-1; lock-order fix | money path; fingerprint changes | D-1; two-person finance review. *D-1 (a) 2026-11-03; before acceptance; cannot merge until two finance reviewers are named* |
+| CS-3 TRACE-126 | one-time agreed-price source per D-1; lock-order fix | money path; fingerprint changes | D-1; two-person finance review. *D-1 (a) 2026-11-03; before acceptance; reviewers Josh + the accountant; cannot merge until the accountant is engaged and both sign* |
 | CS-4 TRACE-127 | acceptance at bound terms per D-2 | matching path | D-2. *D-2 (a) 2026-11-03; before acceptance* |
 | CS-5 DEC-2026-050 | start gate per D-4 (if A or C) | start guard trigger | D-4. *A 2026-11-03; before acceptance; one-time jobs after CS-3* |
 | CS-6 formal-dispute override | operator-opened dispute after 48 hours with a reason, and the approved rule for eligible or transferred payouts | dispute and payout-hold path | only if D-6d (b) is approved; finance review of the hold. *Not commissioned: D-6d (a) 2026-11-03* |
@@ -235,7 +237,7 @@ Screen reader, real devices, `@visual` and 200% zoom have not been performed for
 1. **A1:** Codex reviews this report, SQL 109, and every merged diff named in §3, plus #137 and #138, which also merged without a recorded review.
 2. **No-decision repairs**, each its own PR: CS-8 (contrast), CS-7 (hold-reason grants; W-6 remains an open question), CS-2 (Top Rated), CS-9 (reason categories).
 3. **Matching and start repairs:** CS-4 (D-2), then CS-5 (D-4, recurring visits now).
-4. **CS-3** (D-1, the one-time agreed price): it is planned with Codex first and built for review. It can't merge until the owner names two finance reviewers, and then CS-5 extends the start gate to one-time jobs. **Phase 6 acceptance waits on this.**
+4. **CS-3** (D-1, the one-time agreed price): it is planned with Codex first and built for review. It can't merge until both finance reviewers, Josh and the accountant (not yet engaged), sign off. Then CS-5 extends the start gate to one-time jobs. **Phase 6 acceptance waits on this.**
 5. **A2 human checks last**, on the candidate that contains steps 2–4, light mode only (D-9).
 6. The owner decides acceptance after Codex review.
 
