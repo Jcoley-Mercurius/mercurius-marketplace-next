@@ -36,12 +36,26 @@ export type SupportQueue = {
   operators: { user_id: string; name: string }[]; items: QueueItem[];
 };
 
+// DEC-2026-054 item 1 (approved by DEC-2026-060 D-6b): what the issue is about, for reporting only.
+export const DISPUTE_REASON_CATEGORIES = [
+  { value: "work_not_done", label: "Work wasn't done" },
+  { value: "not_as_agreed", label: "Work wasn't what was agreed" },
+  { value: "quality", label: "Quality of the work" },
+  { value: "damage", label: "Damage to my home or property" },
+  { value: "no_show", label: "Provider didn't show up" },
+  { value: "other", label: "Something else" },
+] as const;
+export type DisputeReasonCategory = (typeof DISPUTE_REASON_CATEGORIES)[number]["value"];
+export function disputeReasonCategoryLabel(value: string | null | undefined) {
+  return DISPUTE_REASON_CATEGORIES.find((category) => category.value === value)?.label ?? null;
+}
+
 export type DisputeStatus = "open" | "vendor_contacted" | "resolved" | "escalated";
 export type DisputeViewer = "homeowner" | "provider" | "operations";
 export type DisputeDecision = { action: "decided" | "appealed"; from: DisputeStatus; to: DisputeStatus; version: number; notes: string | null; at: string; by: string };
 export type DisputeSubmission = { id: string; role: "homeowner" | "provider"; statement: string | null; photo_path: string | null; mine: boolean; at: string };
 export type Dispute = {
-  dispute_id: string; status: DisputeStatus; raised_at: string; reason: string | null;
+  dispute_id: string; status: DisputeStatus; raised_at: string; reason: string | null; reason_category?: DisputeReasonCategory | null;
   completion_at: string | null; window_ends_at: string | null; resolution_version: number;
   resolution_notes: string | null; resolved_at: string | null; ticket_number: string | null;
   decisions: DisputeDecision[]; appeals: { resolution_version: number; reason: string; at: string; ticket_number: string | null; ticket_status: TicketStatus | null }[];
