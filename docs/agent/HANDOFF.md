@@ -1,5 +1,15 @@
 # Agent handoff — 2026-11-03
 
+## Phase 6 closure decision answers (TRACE-140, DEC-2026-060), 2026-11-03
+
+- **Checkpoint (verified):** `main` `b7b0d08` (#138 TRACE-139 merged; #137 CS-1 merged at `d7f073d`). Neither PR has a recorded Codex review. Hosted history ends at `20261110001000` (per TRACE-138, not re-read).
+- Branch `claude/phase6-closeout-decisions`, documentation only.
+- Owner answered closure report §7: "Accept all recommended". Exception: D-10's recommendation needs two named finance reviewers, and the owner chose "Not named yet; carry", so the missed 6.6c review is an R1 blocker. Recorded in DEC-2026-060, with in-place status notes on DEC-2026-049/050/051/052/054/058, MPS checklist E1/G5/G6/I3, and MPS §6.4/§6.6.
+- Work now before acceptance (closure report §9, updated): A1 reviews; CS-8, CS-7, CS-2, CS-9; CS-4, CS-5; CS-3.
+- Finance reviewers (owner, 2026-11-03): **Josh + the accountant**, not yet engaged. CS-3 can't merge until both sign, so **Phase 6 acceptance is blocked on engaging the accountant**.
+- Still open: W-6 (not on the sheet); gates for D-6d, D-8 and DEC-2026-051 items 6–8; the DEC-2026-059 purge and re-issue questions.
+- Next: Codex review of this record; then CS-8 as its own slice from `main`.
+
 ## Vercel Web Analytics URL redaction (TRACE-139), 2026-11-03
 
 - Branch `claude/analytics-url-redaction` from `main` `90f6e48`. Independent of CS-1 (PR #137).

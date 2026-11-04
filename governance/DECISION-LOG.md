@@ -269,6 +269,44 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-060 — Phase 6 closure decision sheet answers (TRACE-140)
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-03 (America/New_York). **Date:** 2026-11-03.
+
+**Owner's words.** The owner was asked whether to accept every recommended option in [closure report §7](PHASE-6-CLOSURE-REPORT.md) as written, and answered "Accept all recommended". For D-10 the recommended option needs two named finance reviewers. Asked who they are, the owner answered "Not named yet; carry", which selects D-10's alternative.
+
+**Finance reviewers (owner, 2026-11-03, later the same day).** Asked what a finance reviewer is, the owner answered: "yeah, I'll be one of the reviewers, and then the bookkeeper will be the other. I don't have a bookkeeper yet, so just put Josh + accountant." Recorded: every two-person finance review in this project (CS-3, the carried 6.6c review F-1, the promotions review F-2, and the other money-path reviews in closure report §4.6) is signed by **Josh** (owner) and **the accountant** (a bookkeeper or accountant, **not yet engaged**). Until the accountant is engaged, no two-person review can be completed. D-10 is unchanged: the 6.6c review stays carried to the R1 gate.
+
+**This decision does not accept Phase 6.** Acceptance still needs the A1 Codex reviews, the repairs below and the A2 human checks (closure report §9).
+
+**Answers** (each item is approved as the §7 row states it; the decision named in the second column is amended in place):
+
+| # | Decision amended | Answer | Work it creates |
+|---|---|---|---|
+| D-1 | TRACE-126 | (a) A one-time fixed request's agreed price is the tier revision and price bound at submission, as visits have been since 6.6c | CS-3 (money path; two-person finance review before merge) |
+| D-2 | TRACE-127 | (a) A visit offered at bound terms may be accepted at those terms after a catalog change | CS-4 |
+| D-3 | MPS checklist E1 | (a) For beta, an appointment "recorded by Mercurius with a reason" is confirmed; copy unchanged | none |
+| D-4 | DEC-2026-050 | Recommendation A as written: start only when paid; admin exception with a reason for ready, processing, failed and unknown, never for held or terms-blocked; enforced in the start guard trigger; recurring visits now, one-time jobs once TRACE-126 (CS-3) is fixed | CS-5 |
+| D-5 | DEC-2026-052 items 1–5, 7, 8 | Recommendations confirmed as written (each keeps current behavior; item 3 marks `quality_feedback` DEPRECATED as a write path) | none |
+| D-6a | DEC-2026-054 items 3, 4, 6, 7, 8, 10 | Recommendations confirmed as written (each keeps current behavior) | none |
+| D-6b | DEC-2026-054 item 1 | Confirmed: reason categories work not done / not as agreed / quality / damage / no-show / other, for reporting only | a small reporting slice |
+| D-6c | DEC-2026-054 item 5, first part | After 48 hours the homeowner uses general support only (no dispute, hold or money change) is the beta behavior | none |
+| D-6d | DEC-2026-054 item 5, second part | (a) No operations-opened formal dispute after 48 hours in Phase 6. **The gate is not named**; §4.6 proposes none, so it stays for the owner to name before the capability is planned | none (CS-6 not commissioned) |
+| D-6e | DEC-2026-054 items 2 and 9 | No money outcome in beta; decided with finance before the R1 gate | deferred (§4.6) |
+| D-7 | DEC-2026-058 | Approved as recommended: hide "Top Rated" on every surface and in the badge editor until objective criteria are approved; stored values and history preserved | CS-2 |
+| D-8 | brief §12.4 items 1–3 | Each accepted as a beta restriction. **Gates not named** (§4.6 proposes none) | deferred |
+| D-9 | Roadmap Phase 6 light/dark gate vs. DEC-2026-026 | Phase 6 accepts light-only; dark mode carried to TRACE-106 before the R1 gate | deferred (§4.6) |
+| D-10 | TRACE-125 | **Alternative selected:** the missed 6.6c two-person finance review is carried as an R1 activation blocker, because no finance reviewers are named | deferred (§4.6) |
+| D-11 | DEC-2026-053 scopes P-K1, P-K2, E11 supplemental refund | Carried to the R1 gate as finance-reviewed slices, with the §4.6 conditions | deferred (§4.6) |
+| D-12 | DEC-2026-051 items 6–8; DEC-2026-049 items 7–8; DEC-2026-048 | Each deferral approved with the gate, condition and owner in §4.6. DEC-2026-051 items 6–8: after Phase 6, gate to be named. DEC-2026-049 items 7–8 stay blocked; their rules stay PROPOSED. Prepaid plans are outside Phase 6 acceptance, a separate slice before the R1 gate | deferred (§4.6) |
+
+**Consequences recorded with the answers.**
+- **Finance reviewers.** CS-3 changes the money kernel and needs a two-person finance review before merge, by Josh and the accountant. Until the accountant is engaged, CS-3 can be built and reviewed by Codex but not merged. Phase 6 acceptance waits on it, because D-1 places it before acceptance.
+- **D-4 and one-time jobs.** The start gate covers one-time jobs only once CS-3 merges. Until payments are activated, no gated job can start in production; R1 isn't open, so nothing live is affected (DEC-2026-050 "Consequence of A").
+- **Not answered here.** W-6 (operator writes to `special_offer`, closure report §4.4) was not on the decision sheet and stays open. So do the DEC-2026-059 "Open" items.
+
+**MPS impact:** checklist E1, G5, G6 and I3 answered; §6.4 gains the start rule; §6.6 gains the dispute answers. **MDS impact:** blocked-start wording (CS-5); "Top Rated" removed from display (CS-2). **MTS impact:** none until each slice lands. **Data/payment/security impact:** CS-3 and CS-5 change money-adjacent guards and each needs its own review; nothing changes by this record.
+
 ### DEC-2026-059 — Vercel Web Analytics as the page-view analytics provider (TRACE-139)
 
 **Status:** **APPROVED** by the owner (Josh), 2026-11-03. **Date:** 2026-11-03.
@@ -285,7 +323,7 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 ### DEC-2026-058 — Hide the "Top Rated" badge until objective criteria are approved (Phase 6.13)
 
-**Status:** **PROPOSED — pending owner approval.** Not approved and not built. **Date:** 2026-11-02.
+**Status:** **PROPOSED — pending owner approval.** Not approved and not built. **Date:** 2026-11-02. *2026-11-03: **APPROVED** as recommended by DEC-2026-060 (D-7); built by CS-2.*
 
 **Context.** "Top Rated" is one of the operator-managed badges (DEC-2026-047; the badge command in DEC-2026-057 item 4). It is shown on the public provider profile, the eligible-providers row and the spotlight. It reads like a verified rating, but no objective criterion stands behind it: DEC-2026-057 item 4 removed hand-set ratings from every surface. Brief §12.4 reported this.
 
@@ -405,7 +443,7 @@ If this reading is wrong, the owner corrects it here.
 
 ### DEC-2026-054 — Dispute categories, outcomes, timing and support reopening
 
-**Status:** **PROPOSED** (2026-10-31, America/New_York). Decision sheet for 6.10 / TRACE-133 (MPS §6.6). No item is approved; current behavior is kept and recorded in [PHASE-6-SUPPORT-BRIEF.md](PHASE-6-SUPPORT-BRIEF.md) §7. **Date:** 2026-10-31.
+**Status:** **PROPOSED** (2026-10-31, America/New_York). Decision sheet for 6.10 / TRACE-133 (MPS §6.6). No item is approved; current behavior is kept and recorded in [PHASE-6-SUPPORT-BRIEF.md](PHASE-6-SUPPORT-BRIEF.md) §7. **Date:** 2026-10-31. *2026-11-03, DEC-2026-060: items 1, 3, 4, 6, 7, 8, 10 **APPROVED** as recommended (D-6a, D-6b; item 1 needs a reporting slice). Item 5: general support only after 48 hours **APPROVED** (D-6c); the operations-opened formal dispute is **not approved** for Phase 6 (D-6d (a)). Items 2 and 9: no money outcome in beta, decided with finance before the R1 gate (D-6e).*
 
 **Already approved and implemented (not reopened):** 48-hour dispute window from the provider's completion and appeals through tickets with no deadline (DEC-2026-009); the separate 72-hour completion review (DEC-2026-006); disputed work held until resolution (CFG-008); support hours and response target (CFG-010); 3-year ticket and message retention (CFG-011).
 
@@ -450,7 +488,7 @@ If this reading is wrong, the owner corrects it here.
 
 ### DEC-2026-052 — Review eligibility, edits, private feedback and provider response
 
-**Status:** **PROPOSED** (2026-10-29, America/New_York). Decision sheet for 6.8 / TRACE-130 (MPS checklist G5, G6, I3). No item is approved. Where an answer is missing, current behavior is kept and recorded in [PHASE-6-REVIEWS.md](PHASE-6-REVIEWS.md) §5. **Date:** 2026-10-29.
+**Status:** **PROPOSED** (2026-10-29, America/New_York). Decision sheet for 6.8 / TRACE-130 (MPS checklist G5, G6, I3). No item is approved. Where an answer is missing, current behavior is kept and recorded in [PHASE-6-REVIEWS.md](PHASE-6-REVIEWS.md) §5. **Date:** 2026-10-29. *2026-11-03: items 1–5, 7 and 8 **APPROVED** as recommended by DEC-2026-060 (D-5). Item 6 was approved as amended by DEC-2026-057 item 4. Item 9 is carried to the Credits gate.*
 
 **Already approved and implemented (not reopened):** one review per completed, homeowner-confirmed service, published on submission whatever the rating (DEC-2026-009, Phase 4 accepted under DEC-2026-019); moderation only for spam, personal information, threats or abuse, or content unrelated to the service, never a low rating alone (DEC-2026-010); legacy private feedback never published (DEC-2026-009); appeal through a support ticket with no deadline (DEC-2026-009).
 
@@ -470,7 +508,7 @@ If this reading is wrong, the owner corrects it here.
 
 ### DEC-2026-051 — Vendor-based pricing; catalog prices are reference defaults; services saved without publishing
 
-**Status:** Items 1–5 APPROVED owner task instruction (2026-10-29, vendor onboarding of pest and other service vendors); items 6–8 PROPOSED, need the owner's decision. **Date:** 2026-10-29 (America/New_York).
+**Status:** Items 1–5 APPROVED owner task instruction (2026-10-29, vendor onboarding of pest and other service vendors); items 6–8 PROPOSED, need the owner's decision. **Date:** 2026-10-29 (America/New_York). *2026-11-03: items 6–8 deferred past Phase 6 by DEC-2026-060 (D-12); they stay PROPOSED, gate to be named.*
 
 **Decision:** (1) A vendor's price, price type and cadences for a service are its own package, independent of every other vendor and of the catalog. Catalog pricing mode and prices are reference defaults: they never price a vendor and changing them changes no vendor price. This was already how pricing worked (characterized in TRACE-129); the admin catalog now says so. (2) A vendor with no price for a service is not priced from the catalog. An operator may offer it as that vendor's Custom Quote from the vendor record. The quote is published through the existing draft-and-publish command with a reason (DEC-2026-046): it is never sent for approval and no email is sent; a linked vendor gets the usual inbox notice. It is never automatic. (3) "Save services" on the vendor record saves Services Offered and service ZIP codes only, without publishing and without changing visibility, Marketing or other profile fields. (4) Termite Control, Rodent Control, Mosquito Control and Flea & Tick Control are added to Specialty as shown Custom Quote services with $0 reference prices, offering monthly, quarterly and one-time (default one-time). (5) A service named on a vendor's application with no catalog match can be added to the catalog from the vendor record (Custom Quote, shown), under DEC-2026-044.
 
@@ -486,7 +524,7 @@ If this reading is wrong, the owner corrects it here.
 
 ### DEC-2026-050 — May work start before payment?
 
-**Status:** **PROPOSED** (2026-10-29, America/New_York). This is the 6.7 acceptance item recorded by DEC-2026-049 item 5. No rule is approved, and nothing dependent on it is implemented. Current behavior is unchanged: any payment state permits starting work. SQL 098 characterizes this as current, not approved. 6.7 / TRACE-128 records the payment state in each start event as an audit fact. **Date:** 2026-10-29.
+**Status:** *2026-11-03: Recommendation A **APPROVED** as written by DEC-2026-060 (D-4); built by CS-5 (recurring visits now, one-time jobs after CS-3). The text below is the proposal as it stood.* **PROPOSED** (2026-10-29, America/New_York). This is the 6.7 acceptance item recorded by DEC-2026-049 item 5. No rule is approved, and nothing dependent on it is implemented. Current behavior is unchanged: any payment state permits starting work. SQL 098 characterizes this as current, not approved. 6.7 / TRACE-128 records the payment state in each start event as an audit fact. **Date:** 2026-10-29.
 
 **Questions for the owner:**
 
@@ -514,7 +552,7 @@ Alternatives:
 
 ### DEC-2026-049 — Recurring visit operating rules and charge timing
 
-**Status:** Items 1–4 and 9 **APPROVED** owner decision with clarifications (Josh, 2026-10-26; recorded below and implemented by 6.6b / TRACE-124). Items 5 and 6 (existing visits) **APPROVED** owner decision (Josh, 2026-10-27; recorded below and implemented by 6.6c / TRACE-125, not released: the two-person finance review must finish before merge). Items 7 and 8 stay **PROPOSED**: the owner confirmed only that quote-priced, promotional and replacement-provider visits stay unpayable; the proposed first-visit promotion, per-plan quote and replacement rules are not approved. 6.6a (TRACE-123) builds only what does not depend on these rules: visit identities, operator-created visits on the accepted plan terms, history and guards. **Date:** 2026-10-25, amended 2026-10-26 and 2026-10-27 (America/New_York).
+**Status:** Items 1–4 and 9 **APPROVED** owner decision with clarifications (Josh, 2026-10-26; recorded below and implemented by 6.6b / TRACE-124). Items 5 and 6 (existing visits) **APPROVED** owner decision (Josh, 2026-10-27; recorded below and implemented by 6.6c / TRACE-125, not released: the two-person finance review must finish before merge). Items 7 and 8 stay **PROPOSED** (*2026-11-03, DEC-2026-060 D-12: kept blocked past Phase 6 acceptance, gate as in the closure report §4.6*): the owner confirmed only that quote-priced, promotional and replacement-provider visits stay unpayable; the proposed first-visit promotion, per-plan quote and replacement rules are not approved. 6.6a (TRACE-123) builds only what does not depend on these rules: visit identities, operator-created visits on the accepted plan terms, history and guards. **Date:** 2026-10-25, amended 2026-10-26 and 2026-10-27 (America/New_York).
 
 **Owner decision, 2026-10-26 (items 1–4 and 9; supersedes the bracketed defaults for those items where they differ):**
 
