@@ -150,3 +150,22 @@ test("vendor dashboard shows the canonical earnings summary, not released earnin
   await expect(page.getByRole("link", { name: "View earnings" })).toHaveAttribute("href", "/vendor/earnings");
   await expect(page.getByRole("navigation", { name: "vendor navigation" }).getByRole("link", { name: "Earnings & Payouts" })).toHaveAttribute("href", "/vendor/earnings");
 });
+
+// CS-1 / TRACE-138: the public vendor page uses the DEC-2026-056 payout wording, not the retired
+// legacy "released" model, and promises no transfer date.
+for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
+  test(`public vendor page ${theme} ${width}px: payout wording`, async ({ page }) => {
+    await page.addInitScript(value => localStorage.setItem("theme", value), theme);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/vendors");
+    const card = page.getByRole("heading", { name: "Completed Work & Payout Visibility" }).locator("xpath=..");
+    await expect(card).toContainText("A payout becomes eligible 48 hours after the homeowner confirms the work is complete, unless it is on hold, and is paid in a weekly transfer Mercurius prepares.");
+    await expect(card).toContainText("The eligible date is not a set transfer date");
+    await expect(card).toContainText("a transfer that failed or that Mercurius is still confirming with the bank isn't counted as paid.");
+    await expect(page.getByText(/releases it|released work|weekly payout cycle/i)).toHaveCount(0);
+    // Axe is scoped to the benefit cards: the page's "For Service Providers" eyebrow has a known,
+    // unrelated contrast shortfall (4.43:1) recorded for a design slice (TRACE-138).
+    expect((await new AxeBuilder({ page }).include(".card-feature").withTags(tags).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+  });
+}
