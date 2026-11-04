@@ -1,3 +1,24 @@
+# Agent handoff — 2026-11-04
+
+## Phase 6 corrective slices CS-8, CS-7, CS-2, CS-9, CS-5 (TRACE-141–145), 2026-11-04
+
+- **Stack (each its own PR, based on the previous):** #139 decisions (TRACE-140) ← CS-8 contrast (TRACE-141) ← CS-7 hold-reason grants (TRACE-142, migration `20261111001000`) ← CS-2 Top Rated (TRACE-143) ← CS-9 dispute categories (TRACE-144, `20261112001000`) ← CS-5 start gate (TRACE-145, `20261113001000`).
+- **Hosted:** none of the three migrations is pushed. Each needs your authorization for the dry run and push before its PR merges (DEC-2026-037). Merge in stack order.
+- **Evidence:**
+  - SQL: full suite on a clean replay of 218 migrations, 103 files / 6,546 PASS. Per slice: SQL 111 41/41 (23 fail with the old grants), 112 38/38; 098 176/176, 095 103/103 and 109 98/98 rewritten to DEC-2026-050 A.
+  - Fingerprint `45 | 34c51131…` unchanged.
+  - Concurrency: `fulfillment` and `exception-resolutions` pass.
+  - Unit 655/655; types and lint clean.
+- **Browser:** the full non-visual suite was still running, on a build with CI's synthetic `NEXT_PUBLIC_*` values. Results are in each PR.
+  - An earlier local build had inlined `.env.local`, so its run was discarded. Build with CI's env.
+- **Not built:** CS-4 (TRACE-127) and CS-3 (TRACE-126). Both change fingerprinted money functions (`find_eligible_packages_core`; `money_source`), so each needs a Codex plan first, then the two-person finance review (Josh + the accountant, not yet engaged) before merge.
+- **Phase 6 is not accepted.** Still open:
+  - A1 Codex reviews (all slices, #137–#139 and this stack);
+  - CS-4 and CS-3 with the finance review;
+  - A2 human checks on the final candidate;
+  - W-6;
+  - the unnamed gates for D-6d, D-8 and DEC-2026-051 items 6–8.
+
 # Agent handoff — 2026-11-03
 
 ## Phase 6 closure decision answers (TRACE-140, DEC-2026-060), 2026-11-03
