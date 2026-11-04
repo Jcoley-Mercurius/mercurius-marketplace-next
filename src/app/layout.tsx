@@ -7,7 +7,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { MotionProvider } from "@/components/providers/MotionProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { LIGHT_ONLY_LAUNCH } from "@/components/theme/themeMode";
-import { Analytics } from "@vercel/analytics/next";
+import { SiteAnalytics } from "@/components/providers/SiteAnalytics";
 
 export const metadata: Metadata = {
   title: "Mercurius Marketplace",
@@ -36,7 +36,7 @@ export default function RootLayout({
             </AuthProvider>
           </ThemeProvider>
         </MotionProvider>
-        <Analytics />
+        <SiteAnalytics />
       </body>
     </html>
   );

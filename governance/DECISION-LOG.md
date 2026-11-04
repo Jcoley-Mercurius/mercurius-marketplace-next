@@ -269,6 +269,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-059 — Vercel Web Analytics as the page-view analytics provider (TRACE-139)
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-03. **Date:** 2026-11-03.
+
+**Decision.** Vercel Web Analytics (cookieless, first-party `/_vercel/insights`) is the approved provider for aggregate page-view measurement. Every event is redacted before it leaves the browser: the URL fragment and every query parameter except `utm_*` are dropped, and an event whose URL cannot be parsed is not sent.
+
+**Context.** The Vercel integration bot added `<Analytics />` without redaction (PR #131, merged 2026-11-02). The tracker reports `location.href`, so invitation open keys, Auth `token_hash`/`code` and fragment session tokens reached Vercel. MTS §2 leaves the observability provider to the owner.
+
+**Scope.** Page views only. Custom events (roadmap Phase 7 funnel and marketplace events), Speed Insights and any other provider need their own decision. The existing privacy policy wording (analytics vendors, basic usage measurement) covers this use.
+
+**Open.** Whether to purge events collected before the redaction shipped, and whether to re-issue provider invitations opened since 2026-11-02.
+
+**MTS impact:** `src/lib/analyticsRedaction.ts`, `src/components/providers/SiteAnalytics.tsx`. **Required evidence:** unit `analytics-redaction`; hosted page views show bare paths after merge.
+
 ### DEC-2026-058 — Hide the "Top Rated" badge until objective criteria are approved (Phase 6.13)
 
 **Status:** **PROPOSED — pending owner approval.** Not approved and not built. **Date:** 2026-11-02.
