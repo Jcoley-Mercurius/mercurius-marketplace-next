@@ -41,8 +41,8 @@ select is((select count(*)::int from information_schema.role_table_grants
 select is((select string_agg(attname, ',' order by attnum) from pg_attribute
   where attrelid = 'public.contractors'::regclass and attnum > 0 and not attisdropped
     and has_column_privilege('authenticated','public.contractors',attname,'SELECT')),
-  'id,name,logo_url,bio,location,rating,badges,services,years_experience,jobs_completed,is_active,created_at,updated_at,user_id,marketing_enabled,our_promise,verified_specialty,payouts_paused,payouts_paused_reason,payouts_paused_at,video_url,website,tagline',
-  'signed-in readable columns are the previous set without special_offer');
+  'id,name,logo_url,bio,location,rating,badges,services,years_experience,jobs_completed,is_active,created_at,updated_at,user_id,marketing_enabled,our_promise,verified_specialty,video_url,website,tagline',
+  'signed-in readable columns are the previous set without special_offer (and, since CS-7 / 20261111001000, without the payout-hold columns)');
 select is(has_function_privilege('authenticated','public.admin_vendor_special_offer(uuid)','EXECUTE'), true, 'the operator readback stays callable; its body checks the operator');
 select is(has_function_privilege('anon','public.admin_vendor_special_offer(uuid)','EXECUTE'), false, 'anonymous visitors cannot call the operator readback');
 select is((select prosecdef from pg_proc where oid = 'public.admin_vendor_special_offer(uuid)'::regprocedure), true, 'the operator readback is security definer');
