@@ -1,5 +1,15 @@
 # Agent handoff — 2026-11-03
 
+## Vercel Web Analytics URL redaction (TRACE-139), 2026-11-03
+
+- Branch `claude/analytics-url-redaction` from `main` `90f6e48`. Independent of CS-1 (PR #137).
+- Finding: PR #131 (Vercel bot, merged 2026-11-02) added `<Analytics />`, and the live tracker reports `location.href` including query and fragment. Invitation open keys, `token_hash`, Auth `code` and fragment session tokens were reported before `/set-password` cleared them.
+- Change: `redactAnalyticsEvent` keeps only `utm_*` parameters and drops the fragment, wired through the client `SiteAnalytics` wrapper.
+- Evidence: unit 6/6 new, 651/651 full; typecheck and lint; local debug-script readback of four URLs.
+- DEC-2026-059: owner approved Vercel Web Analytics (page views only) 2026-11-03.
+- Open (owner): purge collected events; re-issue invitations opened since 2026-11-02.
+- Next: Codex review; after merge, confirm hosted page views show bare paths.
+
 ## Phase 6 corrective slice CS-1 (TRACE-138), 2026-11-03
 
 - **Checkpoint (verified):** `main` `85bb7c6`; production deployment is `85bb7c6` (GitHub deployment record, 18:20 UTC). Hosted history ends at `20261109001000`. Hosted read-only: `authenticated` still holds SELECT on `contractors.special_offer` (8 providers store text) and EXECUTE on `get_vendor_earnings_metrics`.
