@@ -163,9 +163,9 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
     await expect(card).toContainText("The eligible date is not a set transfer date");
     await expect(card).toContainText("a transfer that failed or that Mercurius is still confirming with the bank isn't counted as paid.");
     await expect(page.getByText(/releases it|released work|weekly payout cycle/i)).toHaveCount(0);
-    // Axe is scoped to the benefit cards: the page's "For Service Providers" eyebrow has a known,
-    // unrelated contrast shortfall (4.43:1) recorded for a design slice (TRACE-138).
-    expect((await new AxeBuilder({ page }).include(".card-feature").withTags(tags).analyze()).violations).toEqual([]);
+    // CS-8 (closure report W-5): the whole page, including the "For Service Providers" eyebrow
+    // (sage-dark on sage-light, 4.43:1 before the token fix).
+    expect((await new AxeBuilder({ page }).include("#main-content").withTags(tags).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
   });
 }
