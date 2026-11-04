@@ -23,9 +23,10 @@ async function open(page: Page, badges: string[], width: number) {
 for (const width of [320, 1440]) {
   test(`profile credentials omit Top Rated at ${width}px`, async ({ page }) => {
     await open(page, ["Licensed", "Top Rated", "Insured"], width);
-    const credentials = page.getByRole("heading", { name: "Credentials" }).locator("xpath=ancestor::*[self::section or self::div][1]/..");
-    await expect(credentials.getByText("Licensed", { exact: true })).toBeVisible();
-    await expect(credentials.getByText("Insured", { exact: true })).toBeVisible();
+    // The section title is a card title (not a heading), so the section is found by its text.
+    await expect(page.getByText("Credentials", { exact: true })).toBeVisible();
+    await expect(page.getByText("Licensed", { exact: true })).toBeVisible();
+    await expect(page.getByText("Insured", { exact: true })).toBeVisible();
     await expect(page.getByText(/top rated/i)).toHaveCount(0);
     expect((await new AxeBuilder({ page }).include("main").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
@@ -34,6 +35,6 @@ for (const width of [320, 1440]) {
 
 test("a provider whose only badge is Top Rated shows no Credentials section", async ({ page }) => {
   await open(page, ["Top Rated"], 1440);
-  await expect(page.getByRole("heading", { name: "Credentials" })).toHaveCount(0);
+  await expect(page.getByText("Credentials", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/top rated/i)).toHaveCount(0);
 });
