@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 const benefits = [
   { icon: Calendar, title: "Matched Job Opportunities", description: "See work matched to your services, location, and availability without chasing every lead yourself." },
-  { icon: DollarSign, title: "Completed Work & Payout Visibility", description: "Track completed work in the vendor portal and see invoice and payout status when Mercurius releases it. Eligible released work is intended to follow a weekly payout cycle; timing may vary under the applicable booking or provider terms." },
+  { icon: DollarSign, title: "Completed Work & Payout Visibility", description: "Track completed work and payouts in the vendor portal. A payout becomes eligible 48 hours after the homeowner confirms the work is complete, unless it is on hold, and is paid in a weekly transfer Mercurius prepares. The eligible date is not a set transfer date, and a transfer that failed or that Mercurius is still confirming with the bank isn't counted as paid." },
   { icon: Users, title: "Coordinated Homeowner Experience", description: "Keep scheduling, job updates, and homeowner communication organized with platform support when coordination is needed." },
   { icon: TrendingUp, title: "Tools for Thoughtful Growth", description: "Use clear pricing, job records, and local marketplace visibility to support your business as opportunities fit your capacity." },
 ];

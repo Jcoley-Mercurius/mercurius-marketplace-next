@@ -62,7 +62,8 @@ select lives_ok($$update public.contractors set bio = 'Synthetic bio, edited' wh
 reset role;
 select pg_temp.as_user(1);
 set local role authenticated;
-select is((select special_offer from public.contractors where id = 'c1051000-0000-4000-8000-00000000000a'), 'Synthetic 20% off', 'the operator still reads the stored text');
+-- Through the operator readback: no client role reads the column directly since CS-1 (SQL 110).
+select is(public.admin_vendor_special_offer('c1051000-0000-4000-8000-00000000000a'), 'Synthetic 20% off', 'the operator still reads the stored text');
 reset role;
 
 -- (2) Legacy promotions.

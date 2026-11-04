@@ -1,5 +1,17 @@
 # Agent handoff — 2026-11-03
 
+## Phase 6 corrective slice CS-1 (TRACE-138), 2026-11-03
+
+- **Checkpoint (verified):** `main` `85bb7c6`; production deployment is `85bb7c6` (GitHub deployment record, 18:20 UTC). Hosted history ends at `20261109001000`. Hosted read-only: `authenticated` still holds SELECT on `contractors.special_offer` (8 providers store text) and EXECUTE on `get_vendor_earnings_metrics`.
+- Branch `claude/phase6-cs1-post-deploy-cleanup` from `85bb7c6`, separate from the closeout audit (PR #136). Scope: closure report W-1, W-2, W-3.
+  - Migration `20261110001000` (privileges only, **not pushed**) revokes both grants. `admin_vendor_special_offer` and `vendor_own_earnings` are unchanged.
+  - `/vendors` payout copy follows DEC-2026-056 items 2 and 5.
+- Client check: the last direct `special_offer` read left in 6.11B (`b6021ea`), the last metrics call in 6.12B (`c0a19ca`). Production and both earlier production deployments (`b5629a6`, `015f371`) contain those removals, so a push before merge breaks no deployed client.
+- Evidence: SQL 110 64/64 (26 fail on `main`); full SQL 100 / 6,352 on clean replay; PostgREST matrix; browser public-page test (fails on the old copy); fingerprint unchanged.
+- Found, not fixed: `payouts_paused_reason` is readable by anonymous and signed-in roles (hosted: 0 rows set); the `/vendors` eyebrow pill fails contrast (4.43:1). Admins can still blind-write `special_offer` (no client does).
+- **Pushed to hosted 2026-11-03 with owner authorization:** dry run listed only `20261110001000`; push applied it. Readback: hosted history ends at `20261110001000`; `authenticated`/`anon` hold no `special_offer` SELECT and no metrics EXECUTE (PUBLIC none); the operator readback and `vendor_own_earnings` stay callable; other signed-in columns unchanged; 8 stored offers kept; fingerprint `45 | 34c51131…`.
+- Next: Codex review, then merge #137 (the hosted schema already matches it; production `85bb7c6` needs neither grant). Then human checks on the final candidate (closure report §9).
+
 ## Phase 6 closeout audit and acceptance preparation (TRACE-137), 2026-11-03
 
 - **Checkpoint (verified):** `main` `85bb7c6` (PR #135 merge, `main` CI 41692704323 green); nothing landed since. All 25 Phase 6 PR heads are ancestors of `main`. `supabase migration list --linked` pairs all 214 migrations through `20261109001000`. Hosted's stored statements for `20261108001000` and `20261109001000` match `main` (not the `b5629a6` rewrite); read only.
