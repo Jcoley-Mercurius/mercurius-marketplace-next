@@ -241,7 +241,9 @@ select is((select row(r1.status, r2.status, r2.matching_status)::text from publi
   where r1.id = pg_temp.id('v1') and r2.id = pg_temp.id('v2')), '(scheduled,matched,offered)', 'accepting one visit does not accept the next');
 select is((select count(*) from private.recurring_series_terms where series_id in (pg_temp.id('v1'), pg_temp.id('v2'))), 0::bigint,
   'accepting a visit does not create plan terms');
-select lives_ok($$select pg_temp.call(3, format('select to_jsonb(public.transition_job_status(%L,''in_progress''))', pg_temp.id('v1')))$$, 'work starts on visit 1');
+-- CS-5 (DEC-2026-050 A): work on a visit waits for its own payment; the payment path is SQL 097/098.
+select throws_ok($$select pg_temp.call(3, format('select to_jsonb(public.transition_job_status(%L,''in_progress''))', pg_temp.id('v1')))$$, '22023',
+  'This visit''s price hasn''t been reviewed and paid yet. Work can start once it''s paid.', 'unpaid visit 1 waits for its own payment before work starts');
 select is((select status::text from public.service_requests where id = pg_temp.id('v2')), 'matched', 'visit 2 is untouched');
 select throws_ok($$select pg_temp.call(3, format('select to_jsonb(public.transition_job_status(%L,''in_progress''))', pg_temp.id('s1')))$$, '22023',
   'Work is recorded on each recurring visit, not on the plan', 'the plan itself cannot be started');
@@ -354,7 +356,7 @@ select is(pg_temp.call(1, format('select public.recurring_series(%L)', pg_temp.i
     'visit_price',40.00,'visit_total',45.00,'has_addons',true,'accepted_at',(select accepted_at from private.recurring_series_terms where series_id = pg_temp.id('s1'))),
   'the homeowner reads the accepted plan terms');
 select is((select array_agg(v->>'status' order by v->>'starts_at') from jsonb_array_elements(pg_temp.call(1, format('select public.recurring_series(%L)', pg_temp.id('s1'))) -> 'visits') v
-  where (v->>'id')::uuid in (pg_temp.id('v1'), pg_temp.id('v2'))), array['in_progress','scheduled'], 'and each visit''s own status');
+  where (v->>'id')::uuid in (pg_temp.id('v1'), pg_temp.id('v2'))), array['scheduled','scheduled'], 'and each visit''s own status (both accepted; neither paid, so neither started, CS-5)');
 select is((select v->>'payment' from jsonb_array_elements(pg_temp.call(1, format('select public.recurring_series(%L)', pg_temp.id('s1'))) -> 'visits') v
   where (v->>'id')::uuid = pg_temp.id('v2')), 'awaiting_payment', 'the homeowner sees visit 2 awaiting payment');
 select is((select v->>'payment' from jsonb_array_elements(pg_temp.call(1, format('select public.recurring_series(%L)', pg_temp.id('s1'))) -> 'visits') v

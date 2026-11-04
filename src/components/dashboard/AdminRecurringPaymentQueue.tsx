@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CreditCard, Loader2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 import { formatEastern } from "@/lib/offerStatus";
-import { recurringQueueLabel, type RecurringPaymentQueueItem } from "@/lib/recurringVisits";
+import { canStartWithPaymentException, recurringQueueLabel, type RecurringPaymentQueueItem } from "@/lib/recurringVisits";
 import { cents } from "@/lib/quoteProposals";
 import { createClient } from "@/lib/supabase/client";
 
@@ -13,9 +14,12 @@ type State = { mode: "loading" } | { mode: "error"; message: string } | { mode: 
 
 // TRACE-125 (DEC-2026-049 item 5): accepted recurring visits that are still unpaid from 24 hours
 // before their appointment (or from a later acceptance), and their confirmed failures and unknown
-// outcomes. Read-only: nothing here publishes a price, charges, cancels or messages anyone.
+// outcomes. Nothing here publishes a price, charges, cancels or messages anyone. CS-5: operations may
+// start an eligible visit before payment with a recorded reason (DEC-2026-050 A); payout still needs
+// full capture.
 export function AdminRecurringPaymentQueue({ open }: { open: (requestId: string) => void }) {
   const [state, setState] = useState<State>({ mode: "loading" });
+  const startKeys = useRef(new Map<string, string>());
 
   const load = useCallback(async () => {
     const result = await createClient().rpc("admin_recurring_payment_queue");
@@ -65,6 +69,17 @@ export function AdminRecurringPaymentQueue({ open }: { open: (requestId: string)
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => open(item.request_id)}>Open visit</Button>
+                  {canStartWithPaymentException(item) && <ConfirmAction requireReason triggerLabel="Start without payment" title="Start this visit before it's paid?"
+                    entity={item.service_type} reasonLabel="Reason" reasonHelp="For example, the homeowner is paying on site. The reason is kept with the start."
+                    consequence="The visit starts now with a recorded payment exception. Nothing is charged, and the provider's payout still waits for full payment."
+                    confirmLabel="Start visit" describeError={(error) => (error as { message?: string } | null)?.message} onConfirm={async (reason) => {
+                      let key = startKeys.current.get(item.request_id);
+                      if (!key) { key = crypto.randomUUID(); startKeys.current.set(item.request_id, key); }
+                      const result = await createClient().rpc("admin_start_visit_payment_exception", { _job_id: item.request_id, _operation_key: key, _reason: reason });
+                      if (result.error) throw result.error;
+                      startKeys.current.delete(item.request_id);
+                      await load();
+                    }} />}
                 </div>
               </li>
             );
