@@ -4,6 +4,8 @@
 
 **Revised 2026-11-03 (second pass, on review direction):** review evidence gaps stated as gaps (§3); a deferral register naming each deferred item's release gate, acceptance condition and owner (§4.6); general support after 48 hours separated from a new formal-dispute override (P-3, D-6); human checks placed after every acceptance-affecting repair (A2, §9); decision sheet statuses (§7); CS-1 implemented as its own PR (TRACE-138, §4.4, §8) and the findings it surfaced (W-4–W-6).
 
+**Owner answers 2026-11-03 (TRACE-140, [DEC-2026-060](DECISION-LOG.md)):** the owner accepted every recommended option in §7 ("Accept all recommended"), except D-10. D-10's recommendation needs two named finance reviewers, so the owner chose its alternative ("Not named yet; carry"). The status column in §7 and the "Answered" notes below record this. **The deferrals in §4.6 are now approved** where the answers select them, and Phase 6 is still not accepted. CS-1 (#137, `d7f073d`) and TRACE-139 (#138, `b7b0d08`) are merged; neither PR has a Codex review recorded in the repository.
+
 **Base:** `main` `85bb7c6` (PR #135 merge, 2026-11-03 18:19 UTC). `git log 85bb7c6..origin/main` was empty when this audit started. Branch `claude/phase6-closeout-audit`.
 
 **Not done here:** no payment, automation or promotion activation; no financial operation; no hosted change (hosted was only read); no merge.
@@ -103,7 +105,7 @@ Where an item's later gate has no explicit authority, it is classed **B** with "
 | **P-4 DEC-2026-058 Top Rated** | PROPOSED | badge still shown | — | "Top Rated" reads as a verified rating with no criterion | Owner approves the recommendation (hide until criteria exist) or an alternative (§7 D-7). If approved, a small UI slice (CS-2). | Owner | **B** |
 | **R-3 6.13 retained restrictions** §12.4 items 1–3 | DEC-2026-057 correction 3 ("report, don't invent") | restrictions kept | SQL 108 | (1) no reviewed suspension for 13 legacy providers; (2) listing exclusion also removes matching; (3) no change workflow for bound requests | Owner decides whether each is an accepted beta restriction or needs a slice (§7 D-8). | Owner | **B** |
 | R-3b §12.4 items 4–6 | — | — | — | (4) sourcing and applications queues not summarized; (5) = P-4; (6) owner dual-role messaging by design | (4): record as a known limitation; (6): no action | Codex confirms | **D** (as recorded) |
-| **W-1** `contractors.special_offer` signed-in SELECT | DEC-2026-055 item 1 ("stored text kept for operator access"); 6.11B follow-up "revoke once no deployed client selects it" | grant still present (`has_column_privilege(authenticated…)` = true on the replayed schema) | no client selects it (only `admin_vendor_special_offer` RPC) | precondition met; still readable by any signed-in user (hosted read 2026-11-03: grant present; 8 providers store text) | **CS-1 implemented for review** (TRACE-138, PR #137): migration `20261110001000` revokes it; operator readback kept; SQL 110. Not pushed, not merged | Codex review; owner authorizes the dry run and push before merge (DEC-2026-037); then merged | **A** (A3) |
+| **W-1** `contractors.special_offer` signed-in SELECT | DEC-2026-055 item 1 ("stored text kept for operator access"); 6.11B follow-up "revoke once no deployed client selects it" | grant still present (`has_column_privilege(authenticated…)` = true on the replayed schema) | no client selects it (only `admin_vendor_special_offer` RPC) | precondition met; still readable by any signed-in user (hosted read 2026-11-03: grant present; 8 providers store text) | **CS-1 implemented for review** (TRACE-138, PR #137): migration `20261110001000` revokes it; operator readback kept; SQL 110. Not pushed, not merged. *2026-11-03: pushed and merged (#137 `d7f073d`); W-1–W-3 move to D once A1 records a review of #137* | Codex review; owner authorizes the dry run and push before merge (DEC-2026-037); then merged | **A** (A3) |
 | W-2 `get_vendor_earnings_metrics` | DEC-2026-056 item 1 ("stays for clients deployed before 6.12B") | still granted to `authenticated`; owner-checked; legacy invoices only | no client calls it | precondition met; hygiene, no exposure | **CS-1 implemented for review**: same migration; function kept; `vendor_own_earnings` unchanged | as W-1 | **A** (A3) |
 | W-3 `/vendors` copy | DEC-2026-056 items 1–2 (legacy "released" retired; no expected payout date) | `src/app/vendors/page.tsx:31`: "see invoice and payout status when Mercurius releases it. Eligible released work is intended to follow a weekly payout cycle…" | — | the wording still uses the retired legacy "released" model | **CS-1 implemented for review**: eligibility 48 hours after homeowner confirmation is not a set transfer date; failed and unconfirmed transfers aren't counted as paid (DEC-2026-056 items 2, 5; CFG-008); browser test | Codex review of the copy; merged | **A** (A3) |
 | W-4 `contractors.payouts_paused_reason` readable | DEC-2026-056 item 3 (vendors never see the internal hold reason) | `payouts_paused`, `payouts_paused_reason`, `payouts_paused_at` are column-granted to `anon` and `authenticated` (20260903160000) | found during CS-1; hosted read 2026-11-03: 0 rows hold a reason; no client selects these columns | any visitor could read a hold reason once one is written | Proposal: a CS-1-style grant slice (CS-7), after a deployed-client check | Codex confirms; owner authorizes the push | **A** (proposed) |
@@ -123,7 +125,7 @@ Where an item's later gate has no explicit authority, it is classed **B** with "
 
 ### 4.6 Deferral register
 
-Every item proposed to be carried past Phase 6 acceptance, or classed C. **None of these deferrals is approved.** Each takes effect only when the owner approves it (§7 D-12 for the proposals, or the decision named in the row). "Owner" is the person accountable for the item at its gate. The owner is Josh (OWNER-APPROVALS). Where the row needs a finance reviewer, accountant or legal reviewer, that person hasn't been named; the owner names them. Gate names follow the roadmap. The "R1 gate" is the Phase 9 private-beta activation record ("owner signs the beta activation record after all critical evidence is green"). Where no authority names the gate, the row says so and the gate is a proposal.
+Every item proposed to be carried past Phase 6 acceptance, or classed C. *2026-11-03: DEC-2026-060 approves the deferrals that D-6d, D-6e, D-8, D-9, D-10, D-11 and D-12 select, with the gate, condition and owner in each row. Rows that say "no authority names a gate" (P-3e, T-3, R-3) are approved as deferrals, but their gate is still unnamed. The owner names it before the item is planned.* The paragraph below is kept as written before the answers. **None of these deferrals is approved.** Each takes effect only when the owner approves it (§7 D-12 for the proposals, or the decision named in the row). "Owner" is the person accountable for the item at its gate. The owner is Josh (OWNER-APPROVALS). Where the row needs a finance reviewer, accountant or legal reviewer, that person hasn't been named; the owner names them. Gate names follow the roadmap. The "R1 gate" is the Phase 9 private-beta activation record ("owner signs the beta activation record after all critical evidence is green"). Where no authority names the gate, the row says so and the gate is a proposal.
 
 | Item | Proposed release gate | Gate authority | Acceptance condition at that gate | Owner |
 |---|---|---|---|---|
@@ -191,41 +193,53 @@ Screen reader, real devices, `@visual` and 200% zoom have not been performed for
 
 ## 7. Owner decision sheet
 
-**Every item is OPEN, awaiting the owner's answer.** The recommended option is listed first. It is a proposal for Codex review, not an approval. No item is approved until the owner supplies the answer, and no item may be recorded as approved here, in DECISION-LOG or in TRACEABILITY before then. An answer is recorded with its date and the owner's words.
+*2026-11-03: every item is answered (DEC-2026-060). The status column records each answer; the text above the table is kept as written.* **Every item is OPEN, awaiting the owner's answer.** The recommended option is listed first. It is a proposal for Codex review, not an approval. No item is approved until the owner supplies the answer, and no item may be recorded as approved here, in DECISION-LOG or in TRACEABILITY before then. An answer is recorded with its date and the owner's words.
 
 | # | Question | Options (recommended first) | Blocks | Status |
 |---|---|---|---|---|
-| D-1 | TRACE-126: what is the agreed price of a one-time fixed request before its snapshot? | (a) the tier revision and price bound at submission (as visits do since 6.6c); (b) current tier until the snapshot, with homeowner re-confirmation on change | CS-3 | Open |
-| D-2 | TRACE-127: may a visit offered at bound terms be accepted after a catalog change? | (a) yes, at its bound terms (DEC-2026-049 item 6 already applies this to created visits); (b) no; operations re-offers | CS-4 | Open |
-| D-3 | MPS E1: what makes an appointment confirmed? | (a) for beta, "recorded by Mercurius with a reason" *is* confirmed, with copy unchanged; (b) the provider acknowledges; (c) both parties acknowledge | 6.5 | Open |
-| D-4 | DEC-2026-050 unpaid start | A (paid only, admin exception) / B (no prerequisite) / C (recurring only), as written in DEC-2026-050 | 6.7 | Open |
-| D-5 | DEC-2026-052 items 1–5, 7, 8 | confirm the recommendations as written | 6.8 | Open |
-| D-6a | DEC-2026-054 items 3, 4, 6, 7, 8, 10 | confirm the recommendations; each keeps current behavior | 6.10 | Open |
-| D-6b | DEC-2026-054 item 1, reason categories | confirm (a small reporting slice) / defer | 6.10 | Open |
-| D-6c | DEC-2026-054 item 5, first part: after 48 hours the homeowner uses general support only (current behavior; no dispute, hold or money change) | confirm as the beta behavior / change it | 6.10 | Open |
-| D-6d | DEC-2026-054 item 5, second part: may operations open a formal dispute after 48 hours (new, not built)? | (a) not in Phase 6; general support only, with the gate named in §4.6 / (b) approve, with a rule for an already-eligible or transferred payout, then CS-6 with finance review | 6.10, CS-6 | Open |
-| D-6e | DEC-2026-054 items 2 and 9 | no money outcome in beta; decide with finance before the R1 gate (§4.6) | 6.10 | Open |
-| D-7 | DEC-2026-058 "Top Rated" | approve hiding until criteria exist / (a) relabel / (b) remove | CS-2 | Open |
-| D-8 | 6.13 §12.4 restrictions 1–3 | accept each as a beta restriction / commission a slice | 6.13 | Open |
-| D-9 | Light/dark gate vs. light-only | accept light-only for Phase 6, with dark carried to TRACE-106 before R1 / TRACE-106 first | gate | Open |
-| D-10 | 6.6c finance sign-off (missed before merge) | name two reviewers and review now / carry as an R1 blocker | 6.6 | Open |
-| D-11 | Payment-kernel scopes K-1 (P-K1), K-2 (P-K2) and K-4 (supplemental refund) | carry to the R1 gate as finance-reviewed slices, with the conditions in §4.6 / build in Phase 6 | 6.9 | Open |
-| D-12 | Deferrals in §4.6 that no other item decides: DEC-2026-051 items 6–8; DEC-2026-049 items 7–8 kept blocked; prepaid outside Phase 6 | approve each deferral with the gate, condition and owner in §4.6 / decide now | — | Open |
+| D-1 | TRACE-126: what is the agreed price of a one-time fixed request before its snapshot? | (a) the tier revision and price bound at submission (as visits do since 6.6c); (b) current tier until the snapshot, with homeowner re-confirmation on change | CS-3 | **Answered (a)** 2026-11-03 |
+| D-2 | TRACE-127: may a visit offered at bound terms be accepted after a catalog change? | (a) yes, at its bound terms (DEC-2026-049 item 6 already applies this to created visits); (b) no; operations re-offers | CS-4 | **Answered (a)** 2026-11-03 |
+| D-3 | MPS E1: what makes an appointment confirmed? | (a) for beta, "recorded by Mercurius with a reason" *is* confirmed, with copy unchanged; (b) the provider acknowledges; (c) both parties acknowledge | 6.5 | **Answered (a)** 2026-11-03 |
+| D-4 | DEC-2026-050 unpaid start | A (paid only, admin exception) / B (no prerequisite) / C (recurring only), as written in DEC-2026-050 | 6.7 | **Answered A** 2026-11-03 (CS-5) |
+| D-5 | DEC-2026-052 items 1–5, 7, 8 | confirm the recommendations as written | 6.8 | **Answered: confirmed** 2026-11-03 |
+| D-6a | DEC-2026-054 items 3, 4, 6, 7, 8, 10 | confirm the recommendations; each keeps current behavior | 6.10 | **Answered: confirmed** 2026-11-03 |
+| D-6b | DEC-2026-054 item 1, reason categories | confirm (a small reporting slice) / defer | 6.10 | **Answered: confirm** 2026-11-03 (reporting slice) |
+| D-6c | DEC-2026-054 item 5, first part: after 48 hours the homeowner uses general support only (current behavior; no dispute, hold or money change) | confirm as the beta behavior / change it | 6.10 | **Answered: confirmed** 2026-11-03 |
+| D-6d | DEC-2026-054 item 5, second part: may operations open a formal dispute after 48 hours (new, not built)? | (a) not in Phase 6; general support only, with the gate named in §4.6 / (b) approve, with a rule for an already-eligible or transferred payout, then CS-6 with finance review | 6.10, CS-6 | **Answered (a)** 2026-11-03; gate not named; CS-6 not commissioned |
+| D-6e | DEC-2026-054 items 2 and 9 | no money outcome in beta; decide with finance before the R1 gate (§4.6) | 6.10 | **Answered** 2026-11-03 |
+| D-7 | DEC-2026-058 "Top Rated" | approve hiding until criteria exist / (a) relabel / (b) remove | CS-2 | **Answered: hide** 2026-11-03 |
+| D-8 | 6.13 §12.4 restrictions 1–3 | accept each as a beta restriction / commission a slice | 6.13 | **Answered: accepted as beta restrictions** 2026-11-03; gates not named |
+| D-9 | Light/dark gate vs. light-only | accept light-only for Phase 6, with dark carried to TRACE-106 before R1 / TRACE-106 first | gate | **Answered: light-only for Phase 6**, dark to TRACE-106 before R1, 2026-11-03 |
+| D-10 | 6.6c finance sign-off (missed before merge) | name two reviewers and review now / carry as an R1 blocker | 6.6 | **Answered: carry as an R1 blocker** (alternative; no reviewers named) 2026-11-03 |
+| D-11 | Payment-kernel scopes K-1 (P-K1), K-2 (P-K2) and K-4 (supplemental refund) | carry to the R1 gate as finance-reviewed slices, with the conditions in §4.6 / build in Phase 6 | 6.9 | **Answered: carry to the R1 gate** 2026-11-03 |
+| D-12 | Deferrals in §4.6 that no other item decides: DEC-2026-051 items 6–8; DEC-2026-049 items 7–8 kept blocked; prepaid outside Phase 6 | approve each deferral with the gate, condition and owner in §4.6 / decide now | — | **Answered: deferrals approved** 2026-11-03 |
 
 ## 8. Corrective slices (proposed, each a reviewed bounded plan)
 
 | Slice | Contents | Size | Gate |
 |---|---|---|---|
-| **CS-1 post-deploy cleanup** (A3), TRACE-138 | Additive migration `20261110001000` revoking `authenticated` SELECT on `contractors.special_offer` and client EXECUTE on `get_vendor_earnings_metrics(uuid)`; SQL 110; `/vendors` copy aligned with DEC-2026-056; browser test | small; no money function, no fingerprint change. **Implemented for review: PR #137.** Not pushed, not merged | Codex review; owner authorizes dry run and push before merge (DEC-2026-037) |
-| CS-2 Top Rated | hide the badge on public, row and spotlight surfaces and in the editor; data preserved | small, UI | only if D-7 is approved |
-| CS-3 TRACE-126 | one-time agreed-price source per D-1; lock-order fix | money path; fingerprint changes | D-1; two-person finance review |
-| CS-4 TRACE-127 | acceptance at bound terms per D-2 | matching path | D-2 |
-| CS-5 DEC-2026-050 | start gate per D-4 (if A or C) | start guard trigger | D-4 |
-| CS-6 formal-dispute override | operator-opened dispute after 48 hours with a reason, and the approved rule for eligible or transferred payouts | dispute and payout-hold path | only if D-6d (b) is approved; finance review of the hold |
+| **CS-1 post-deploy cleanup** (A3), TRACE-138 | Additive migration `20261110001000` revoking `authenticated` SELECT on `contractors.special_offer` and client EXECUTE on `get_vendor_earnings_metrics(uuid)`; SQL 110; `/vendors` copy aligned with DEC-2026-056; browser test | small; no money function, no fingerprint change. **Implemented for review: PR #137.** Not pushed, not merged. *2026-11-03: `20261110001000` pushed to hosted with owner authorization, then #137 merged (`d7f073d`). No Codex review recorded.* | Codex review; owner authorizes dry run and push before merge (DEC-2026-037) |
+| CS-2 Top Rated | hide the badge on public, row and spotlight surfaces and in the editor; data preserved | small, UI | only if D-7 is approved. *Approved 2026-11-03; before acceptance* |
+| CS-3 TRACE-126 | one-time agreed-price source per D-1; lock-order fix | money path; fingerprint changes | D-1; two-person finance review. *D-1 (a) 2026-11-03; before acceptance; cannot merge until two finance reviewers are named* |
+| CS-4 TRACE-127 | acceptance at bound terms per D-2 | matching path | D-2. *D-2 (a) 2026-11-03; before acceptance* |
+| CS-5 DEC-2026-050 | start gate per D-4 (if A or C) | start guard trigger | D-4. *A 2026-11-03; before acceptance; one-time jobs after CS-3* |
+| CS-6 formal-dispute override | operator-opened dispute after 48 hours with a reason, and the approved rule for eligible or transferred payouts | dispute and payout-hold path | only if D-6d (b) is approved; finance review of the hold. *Not commissioned: D-6d (a) 2026-11-03* |
 | CS-7 hold-reason grants (W-4, W-6) | revoke client SELECT on the `payouts_paused*` columns after a deployed-client check; close or record operator `special_offer` writes | small, privileges | Codex confirms; owner authorizes the push |
 | CS-8 contrast (W-5) | fix the eyebrow pair's contrast; check other uses of the pair | small, UI | Codex; before A2 |
+| CS-9 dispute reason categories (D-6b) | the six DEC-2026-054 item 1 categories on dispute submission, for reporting only; no money or hold effect | small | D-6b confirmed 2026-11-03; before acceptance |
 
 ## 9. Next bounded repair recommendation
+
+*Updated 2026-11-03 after the owner's answers (DEC-2026-060).* Steps 2 and 3 below are done. The remaining order:
+
+1. **A1:** Codex reviews this report, SQL 109, and every merged diff named in §3, plus #137 and #138, which also merged without a recorded review.
+2. **No-decision repairs**, each its own PR: CS-8 (contrast), CS-7 (hold-reason grants; W-6 remains an open question), CS-2 (Top Rated), CS-9 (reason categories).
+3. **Matching and start repairs:** CS-4 (D-2), then CS-5 (D-4, recurring visits now).
+4. **CS-3** (D-1, the one-time agreed price): it is planned with Codex first and built for review. It can't merge until the owner names two finance reviewers, and then CS-5 extends the start gate to one-time jobs. **Phase 6 acceptance waits on this.**
+5. **A2 human checks last**, on the candidate that contains steps 2–4, light mode only (D-9).
+6. The owner decides acceptance after Codex review.
+
+The original recommendation is kept below.
 
 1. **Codex reviews this report, SQL 109 and the CS-1 PR** (#137). A1 starts here, including which merged diffs need their own review.
 2. **CS-1:** after review, the owner authorizes the dry run and push of `20261110001000`, then the merge (DEC-2026-037).

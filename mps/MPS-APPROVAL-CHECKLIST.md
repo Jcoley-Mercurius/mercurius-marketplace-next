@@ -44,7 +44,7 @@
 
 ## E. Fulfillment policy
 
-- [ ] **E1 — Schedule confirmation:** Define the conditions that make an appointment confirmed.
+- [x] **E1 — Schedule confirmation:** For beta, an appointment recorded by Mercurius operations with a reason is confirmed (DEC-2026-060 D-3, 2026-11-03).
 - [x] **E2 — Rescheduling:** 48+ hours free; 24–48 hours $25; under 24 hours case by case. Accepted weather/emergency/acts-of-God events waive penalties.
 - [x] **E3 — Customer cancellation:** 72+ hours full refund; 24–72 hours 50%; under 24 hours no refund, with approved uncontrollable-event waiver.
 - [x] **E4 — Vendor cancellation:** Rematch first, otherwise full refund; record quality impact unless an emergency/uncontrollable exception is accepted.
@@ -72,8 +72,8 @@
 - [ ] **G2 — Licensing/insurance:** Define category/jurisdiction requirements, evidence, expiry, renewal, and public badges.
 - [ ] **G3 — Provider activation:** Approve the activation checklist and accountable operator.
 - [ ] **G4 — Suspension/removal:** Define triggers, pending-job handling, appeals, and customer communication.
-- [ ] **G5 — Review eligibility:** Approve verified-review requirements, duplicate/edit behavior, and publication timing.
-- [ ] **G6 — Moderation:** Approve public/private feedback distinction, moderation criteria, provider response, and appeal.
+- [x] **G5 — Review eligibility:** One review per completed, homeowner-confirmed service, published on submission (DEC-2026-009); no review deadline in beta, corrections any time with a reason, paused while an issue is open (DEC-2026-052 items 1, 2, 5, approved by DEC-2026-060 D-5, 2026-11-03).
+- [x] **G6 — Moderation:** Criteria per DEC-2026-010; no public provider reply in beta; one appeal per moderation decision, no deadline; the author is told the criterion and reason, never the operator (DEC-2026-052 items 4, 7, 8, approved by DEC-2026-060 D-5, 2026-11-03).
 
 ## H. Support, communications, and privacy
 
@@ -88,7 +88,7 @@
 
 - [ ] **I1 — Smart Picks:** Approve a customer-facing editorial purpose and relationship to matching, or mark DEPRECATED.
 - [ ] **I2 — Support tickets:** Identify the real intake source and workflow, add one, or mark DEPRECATED.
-- [ ] **I3 — `quality_feedback`:** Define a private-feedback role distinct from reviews, migrate it, or mark DEPRECATED.
+- [x] **I3 — `quality_feedback`:** DEPRECATED as a write path; historical rows read-only under CFG-011 (DEC-2026-052 item 3, approved by DEC-2026-060 D-5, 2026-11-03).
 - [ ] **I4 — Vendor Plans:** Keep as honest soft-launch information, remove from navigation, or define a later approved release.
 - [ ] **I5 — Public Admin link:** Approve removal from the public footer.
 - [ ] **I6 — Advanced vendor marketing:** Keep explicitly deferred until core marketplace outcomes are proven.
