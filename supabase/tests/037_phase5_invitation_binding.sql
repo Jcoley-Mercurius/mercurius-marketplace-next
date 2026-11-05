@@ -308,9 +308,13 @@ create temp table bind_fingerprint as select pg_temp.fingerprint() as before;
 select count(pg_temp.overview(id)) from public.contractors where id::text like 'f2000000-%';
 select is(pg_temp.fingerprint(),(select before from bind_fingerprint),'Reading the overview for every provider writes nothing');
 
--- Nothing here activates a listing, and the evidence is append-only.
-select is((select count(*) from public.contractors where id::text like 'f2000000-%' and (is_active or marketing_enabled)),0::bigint,
- 'Binding neither activates nor lists a contractor record');
+-- Binding enables no marketing, and the evidence is append-only. Since DEC-2026-061 (TRACE-146)
+-- the onboarding decision sets is_active, so it follows the onboarding status exactly.
+select is((select count(*) from public.contractors where id::text like 'f2000000-%' and marketing_enabled),0::bigint,
+ 'Binding does not enable marketing on a contractor record');
+select is((select count(*) from public.contractors c join public.vendor_onboarding o on o.contractor_id=c.id
+  where c.id::text like 'f2000000-%' and c.is_active is distinct from (o.status='active')),0::bigint,
+ 'is_active follows the onboarding decision and nothing else');
 select throws_ok($$update public.vendor_account_link_decisions set invitation_attempt_id=null where business_key='bind-1'$$,'55000',null,
  'A binding decision cannot be rewritten');
 select throws_ok($$insert into public.vendor_account_link_decisions(business_key,contractor_id,application_version_id,action,auth_user_id,
