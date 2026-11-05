@@ -292,11 +292,10 @@ select is(pg_temp.st(pg_temp.id('v2')), 'scheduled', 'J3 isolation: confirming v
 select is((select count(*)::int from public.money_lifecycle_confirmations where request_id = pg_temp.id('v2')), 0, 'J3 isolation: no confirmation receipt for visit 2');
 select ok(not exists(select 1 from jsonb_array_elements(pg_temp.call(5, 'select public.admin_recurring_payment_queue()')->'items') i
   where i->>'request_id' = pg_temp.id('v2')::text), 'J3 recurring: unpaid visit 2 (10 days out) is not queued before appointment − 24 h (DEC-2026-049 item 5)');
--- DEC-2026-050 is PROPOSED: start is not gated on payment. Characterized as current, not approved.
-select is(pg_temp.err(3, format('select public.start_job(%L,%L,null)', pg_temp.id('v2'), pg_temp.k(33))), 'ok',
-  'J3 (GAP, DEC-2026-050 PROPOSED): an unpaid visit can still be started; the start records its payment state');
-select isnt((select metadata#>>'{payment_at_start,state}' from public.job_events where job_id = pg_temp.id('v2') and metadata->>'to' = 'in_progress' limit 1),
-  'paid', 'J3: the unpaid start is recorded as not paid');
+-- DEC-2026-050 A (approved by DEC-2026-060 D-4; CS-5): a recurring visit starts only when paid.
+select is(pg_temp.err(3, format('select public.start_job(%L,%L,null)', pg_temp.id('v2'), pg_temp.k(33))), '22023',
+  'J3 (CS-5, DEC-2026-050 A): an unpaid visit cannot be started');
+select is(pg_temp.st(pg_temp.id('v2')), 'scheduled', 'J3: the unpaid visit stays scheduled, with no start event');
 
 -- J4 Cancellation and reschedule (CFG-006) ------------------------------------------------------
 insert into fx values ('j4', pg_temp.one_time(1, 'ij-j4-00000000001'));

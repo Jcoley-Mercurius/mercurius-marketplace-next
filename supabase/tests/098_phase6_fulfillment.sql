@@ -2,7 +2,9 @@
 -- one-time job and on individual recurring visits. Work starts only on an accepted assignment by its
 -- provider or operations; completion needs this visit's own evidence; the homeowner's decision is
 -- bound to the completion they reviewed; payout keeps the confirmation + 48 h and hold guards. The
--- unpaid-start matrix is characterized as unchanged (DEC-2026-050 open). Synthetic data only.
+-- unpaid-start matrix follows DEC-2026-050 A (approved by DEC-2026-060 D-4; CS-5 / TRACE-145): a
+-- recurring visit starts only when paid, with an operator exception for ready, processing, failed and
+-- unknown; one-time jobs are not gated until TRACE-126. Synthetic data only.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -95,16 +97,16 @@ begin
   perform set_config('request.jwt.claims',coalesce(prior,''),true);
   return public.money_publish_snapshot(request,terms,'98100000-0000-4000-8000-000000000005','98100000-0000-4000-8000-000000000006');
 end $$;
-create function pg_temp.checkout(p_snapshot uuid) returns uuid language sql as $$
-  select (pg_temp.call(1, format('select to_jsonb(public.money_prepare_checkout(%L,''full''))', p_snapshot))->>'id')::uuid $$;
+create function pg_temp.checkout(p_snapshot uuid, p_homeowner integer default 1) returns uuid language sql as $$
+  select (pg_temp.call(p_homeowner, format('select to_jsonb(public.money_prepare_checkout(%L,''full''))', p_snapshot))->>'id')::uuid $$;
 create function pg_temp.event(p_id text, p_type text, p_payload jsonb) returns text language plpgsql as $$
 begin
   perform public.money_receive_event(p_id, p_type, p_payload);
   return public.money_process_event(p_id);
 end $$;
 -- A paid visit: reviewed, checked out and captured in full.
-create function pg_temp.paid(p_visit uuid, p_n integer) returns void language plpgsql as $$
-declare attempt uuid := pg_temp.checkout(pg_temp.publish(p_visit));
+create function pg_temp.paid(p_visit uuid, p_n integer, p_homeowner integer default 1) returns void language plpgsql as $$
+declare attempt uuid := pg_temp.checkout(pg_temp.publish(p_visit), p_homeowner);
 begin
   perform pg_temp.event('evt_ff_cap_'||p_n,'capture',jsonb_build_object('attempt_id',attempt,'payment_id','pi_ff_'||p_n,'amount',4000,'currency','usd'));
 end $$;
@@ -191,6 +193,11 @@ select throws_ok($$select pg_temp.run(5, format('select public.transition_job_st
 select pg_temp.accept(pg_temp.id('v1'));
 select pg_temp.accept(pg_temp.id('v2'));
 select is(pg_temp.st(pg_temp.id('v1')), 'scheduled', 'the provider accepts the visit');
+select throws_ok($$select pg_temp.start(3, pg_temp.id('v1'), 1)$$, '22023', 'This visit''s price hasn''t been reviewed and paid yet. Work can start once it''s paid.',
+  'CS-5: an accepted visit that is not paid cannot start');
+-- The lifecycle tests below work on paid visits.
+select pg_temp.paid(pg_temp.id('v1'), 1);
+select pg_temp.paid(pg_temp.id('v2'), 2);
 select throws_ok($$select pg_temp.start(1, pg_temp.id('v1'), 1)$$, '42501', null, 'the homeowner cannot start work');
 select throws_ok($$select pg_temp.start(2, pg_temp.id('v1'), 1)$$, '42501', null, 'another homeowner cannot start work');
 select throws_ok($$select pg_temp.start(4, pg_temp.id('v1'), 1)$$, '42501', null, 'another provider cannot start work');
@@ -274,9 +281,9 @@ select is((pg_temp.ff(1, pg_temp.id('v1'))->>'dispute_window_ends_at')::timestam
 select is((pg_temp.ff(1, pg_temp.id('v1'))->>'review_at')::timestamptz, pg_temp.done_at(pg_temp.id('v1')) + interval '72 hours',
   'operations review an unanswered completion after 72 hours');
 select is(pg_temp.ff(1, pg_temp.id('v1'))->'payout', 'null'::jsonb, 'the homeowner sees no payout state');
-select is(pg_temp.ff(3, pg_temp.id('v1'))#>>'{payout,state}', 'no_payment_record', 'the provider sees there is no payment record yet');
+select is(pg_temp.ff(3, pg_temp.id('v1'))#>>'{payout,state}', 'awaiting_confirmation', 'the provider sees the payout waits for the homeowner''s confirmation (visit paid, CS-5)');
 select is(pg_temp.ff(3, pg_temp.id('v1'))->'payout' ? 'blocker', false, 'without the operator detail');
-select is(pg_temp.ff(5, pg_temp.id('v1'))#>>'{started,payment_at_start,state}', 'review_pending', 'operations see the payment state when work started');
+select is(pg_temp.ff(5, pg_temp.id('v1'))#>>'{started,payment_at_start,state}', 'paid', 'operations see the payment state when work started');
 select is(pg_temp.ff(3, pg_temp.id('v1'))#>>'{started,payment_at_start}', null, 'the provider does not');
 select throws_ok($$select pg_temp.ff(2, pg_temp.id('v1'))$$, '42501', null, 'another homeowner cannot read the fulfillment');
 select throws_ok($$select pg_temp.ff(4, pg_temp.id('v1'))$$, '42501', null, 'nor another provider');
@@ -322,6 +329,7 @@ select throws_ok($$update public.service_requests set status = 'in_progress' whe
 -- Disputes --------------------------------------------------------------------------------------------
 insert into fx values ('v3', pg_temp.visit(pg_temp.id('s1'), 4, 12));
 select pg_temp.accept(pg_temp.id('v3'));
+select pg_temp.paid(pg_temp.id('v3'), 3);
 select pg_temp.start(3, pg_temp.id('v3'), 5);
 select pg_temp.complete(3, pg_temp.id('v3'), array[pg_temp.photo(3, pg_temp.id('v3'), 'a.png'), pg_temp.photo(3, pg_temp.id('v3'), 'b.png')]);
 select throws_ok($$select pg_temp.dispute(3, pg_temp.id('v3'), pg_temp.done_at(pg_temp.id('v3')))$$, '42501', null, 'the provider cannot open the homeowner''s dispute');
@@ -340,6 +348,7 @@ select is(pg_temp.ff(3, pg_temp.id('v3'))#>>'{dispute,status}', 'open', 'the pro
 -- The 48-hour dispute window (Phase 4) is unchanged; confirmation has no window.
 insert into fx values ('v4', pg_temp.visit(pg_temp.id('s1'), 5, 13));
 select pg_temp.accept(pg_temp.id('v4'));
+select pg_temp.paid(pg_temp.id('v4'), 4);
 select pg_temp.start(3, pg_temp.id('v4'), 6);
 select pg_temp.complete(3, pg_temp.id('v4'), array[pg_temp.photo(3, pg_temp.id('v4'), 'a.png'), pg_temp.photo(3, pg_temp.id('v4'), 'b.png')]);
 update public.service_requests set vendor_completed_at = now() - interval '48 hours' + interval '1 microsecond' where id = pg_temp.id('v4');
@@ -391,7 +400,8 @@ select is(pg_temp.blocker(pg_temp.id('h3')), 'dispute_hold', 'an open dispute ho
 select is(pg_temp.ff(3, pg_temp.id('h3'))#>>'{payout,state}', 'held', 'the provider sees it held');
 select is(pg_temp.ff(5, pg_temp.id('h3'))#>>'{payout,blocker}', 'dispute_hold', 'operations see why');
 
--- Unpaid start: CURRENT behavior, characterized (DEC-2026-050 open; no payment prerequisite exists) -----
+-- Unpaid start: DEC-2026-050 A (CS-5). Each unpaid state is refused with its reason; operations may record
+-- an exception, with a reason, for ready, processing, failed and unknown only. -----------------------------
 insert into fx values ('m_ready', pg_temp.visit(pg_temp.id('s1'), 11, 14));
 insert into fx values ('m_proc', pg_temp.visit(pg_temp.id('s1'), 12, 15));
 insert into fx values ('m_fail', pg_temp.visit(pg_temp.id('s1'), 13, 16));
@@ -406,22 +416,46 @@ insert into fx values ('m_unk_a', pg_temp.checkout(pg_temp.publish(pg_temp.id('m
 select public.money_flag_checkout(pg_temp.id('m_unk_a'), 'synthetic_lost_response');
 select pg_temp.publish(pg_temp.id('m_held'));
 update public.money_obligations set dispute_open = true where service_request_id = pg_temp.id('m_held');
-select is(pg_temp.start(3, pg_temp.id(k), 20 + n::int)->>'outcome', 'started', 'CURRENT: '||k||' visit can be started')
-  from unnest(array['m_ready','m_proc','m_fail','m_unk','m_held']) with ordinality as t(k, n);
+select throws_ok(format('select pg_temp.start(3, %L, %s)', pg_temp.id(k), 20 + n::int), '22023', msg, 'CS-5: the provider cannot start a visit that is '||k)
+  from (values ('m_ready', 1, 'This visit isn''t paid yet. Work can start once the homeowner pays for it.'),
+               ('m_proc', 2, 'The homeowner''s payment for this visit is still processing. Wait for the outcome before you start work.'),
+               ('m_fail', 3, 'The homeowner''s payment for this visit didn''t go through. Work can start once it''s paid.'),
+               ('m_unk', 4, 'Mercurius is confirming this visit''s payment. Work can start once it''s confirmed.'),
+               ('m_held', 5, 'This visit''s payment is on hold. Mercurius will contact you before work starts.')) as t(k, n, msg);
+select throws_ok($$select pg_temp.run(5, format('select public.transition_job_status(%L,''in_progress'',''Synthetic override'')', pg_temp.id('m_ready')))$$,
+  '22023', 'This visit isn''t paid yet. Work can start once the homeowner pays for it.', 'CS-5: operations cannot bypass the gate through the lifecycle command');
+create function pg_temp.except(p_user integer, p_job uuid, p_key integer, p_reason text default 'Synthetic: homeowner paying on site') returns jsonb language sql as $$
+  select pg_temp.call(p_user, format('select public.admin_start_visit_payment_exception(%L,%L,%L)', p_job, pg_temp.k(p_key), p_reason)) $$;
+select throws_ok($$select pg_temp.except(3, pg_temp.id('m_ready'), 25)$$, '42501', null, 'CS-5: the provider cannot record a payment exception');
+select throws_ok($$select pg_temp.except(1, pg_temp.id('m_ready'), 25)$$, '42501', null, 'CS-5: nor the homeowner');
+select throws_ok($$select pg_temp.except(5, pg_temp.id('m_ready'), 25, '  ')$$, '22023', 'Enter the reason work may start before payment', 'CS-5: an exception needs a reason');
+select throws_ok($$select pg_temp.except(5, pg_temp.id('m_held'), 25)$$, '22023', null, 'CS-5: no exception for a held visit');
+select throws_ok($$select pg_temp.except(5, pg_temp.id('r1'), 25)$$, '22023', 'A payment exception applies only to a recurring visit', 'CS-5: the exception is for recurring visits only');
+select is(pg_temp.except(5, pg_temp.id(k), 25 + n::int)->>'payment_exception', 'true', 'CS-5: operations start '||k||' with a recorded exception')
+  from unnest(array['m_ready','m_proc','m_fail','m_unk']) with ordinality as t(k, n);
+select is(pg_temp.except(5, pg_temp.id('m_ready'), 26)->>'outcome', 'replayed', 'CS-5: a retried exception replays the start');
+select is((select count(*)::int from private.visit_start_payment_exceptions where job_id = pg_temp.id('m_ready')), 1, 'CS-5: and records one exception');
+select is((select row(actor_id, reason, payment_state)::text from private.visit_start_payment_exceptions where job_id = pg_temp.id('m_proc')),
+  row(pg_temp.u(5), 'Synthetic: homeowner paying on site', 'processing')::text, 'CS-5: the exception keeps the actor, reason and payment state');
+select is((select metadata->>'payment_exception' from public.job_events where job_id = pg_temp.id('m_fail') and metadata->>'to' = 'in_progress'), 'true',
+  'CS-5: the start event records the exception');
+select is((select metadata->>'payment_exception' from public.job_events where job_id = pg_temp.id('v1') and metadata->>'to' = 'in_progress' order by created_at limit 1), 'false',
+  'CS-5: a paid start records no exception');
+select throws_ok($$update private.visit_start_payment_exceptions set reason = 'x'$$, '42501', null, 'CS-5: exceptions are append-only');
+select is(pg_temp.st(pg_temp.id('m_held')), 'scheduled', 'CS-5: the held visit stays scheduled');
 select is((select metadata#>>'{payment_at_start,state}' from public.job_events where job_id = pg_temp.id('v1') and metadata->>'start_key' = pg_temp.k(1)::text),
-  'review_pending', 'recorded at start: review missing');
+  'paid', 'recorded at start: paid');
 select is(pg_temp.started_payment(pg_temp.id('m_ready')), 'ready', 'recorded at start: ready but unpaid');
 select is(pg_temp.started_payment(pg_temp.id('m_proc')), 'processing', 'recorded at start: processing');
 select is(pg_temp.started_payment(pg_temp.id('m_fail')), 'failed', 'recorded at start: confirmed failure');
 select is(pg_temp.started_payment(pg_temp.id('m_unk')), 'unknown', 'recorded at start: unknown outcome');
-select is((select metadata#>>'{payment_at_start,reason}' from public.job_events where job_id = pg_temp.id('m_held') and metadata->>'to' = 'in_progress'),
-  'held', 'recorded at start: held');
-select is(pg_temp.start(3, pg_temp.id('r1'), 30)->>'outcome', 'started', 'CURRENT: an unpaid one-time job can be started');
+select is(pg_temp.start(3, pg_temp.id('r1'), 30)->>'outcome', 'started', 'one-time jobs are not gated until TRACE-126 (DEC-2026-050 A): an unpaid one-time job still starts');
 select is(pg_temp.started_payment(pg_temp.id('r1')), 'no_obligation', 'recorded at start: no payment record');
 
 -- Stopping the plan never cancels or rewrites an existing visit ------------------------------------------
 insert into fx values ('v6', pg_temp.visit(pg_temp.id('s3'), 16, 10));
 select pg_temp.accept(pg_temp.id('v6'));
+select pg_temp.paid(pg_temp.id('v6'), 16, 2);
 select is(pg_temp.call(5, format('select public.admin_set_recurring_plan_state(%L,%L,''stop'',''active'',''Synthetic stop'')',
   pg_temp.id('s3'), pg_temp.k(40)))->>'to_state', 'ended', 'operations stop future visits');
 select is(pg_temp.st(pg_temp.id('v6')), 'scheduled', 'the existing visit stays scheduled');
@@ -469,6 +503,7 @@ select is(pg_temp.item(pg_temp.id('v8'), 'fulfillment_exception')->>'detail', 'n
 -- An unanswered completion is queued at the approved 72-hour review time, not before.
 insert into fx values ('v9', pg_temp.visit(pg_temp.id('s1'), 19, 21));
 select pg_temp.accept(pg_temp.id('v9'));
+select pg_temp.paid(pg_temp.id('v9'), 9);
 select pg_temp.start(3, pg_temp.id('v9'), 56);
 select pg_temp.complete(3, pg_temp.id('v9'), array[pg_temp.photo(3, pg_temp.id('v9'), 'a.png'), pg_temp.photo(3, pg_temp.id('v9'), 'b.png')]);
 update public.service_requests set confirmation_sent_at = now() - interval '72 hours' + interval '1 microsecond' where id = pg_temp.id('v9');
