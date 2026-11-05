@@ -9,8 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { adminActionError } from "@/lib/adminOperations";
 import { cn } from "@/lib/utils";
+import { isHiddenProviderBadge } from "@/lib/providerBadges";
 
 export const PROVIDER_BADGES = ["Licensed", "Insured", "Background Checked", "24/7 Available", "Emergency Services", "Eco-Friendly", "Satisfaction Guaranteed", "Top Rated"] as const;
+// CS-2: hidden badges stay accepted by the server and in the draft, but aren't offered here.
+export const OFFERED_PROVIDER_BADGES = PROVIDER_BADGES.filter((badge) => !isHiddenProviderBadge(badge));
 
 type HistoryEntry = { before: string[]; after: string[]; reason: string; created_at: string; actor_name: string };
 
@@ -54,13 +57,13 @@ export function ProviderBadges({ contractorId, badges, onSaved }: { contractorId
   return <Card>
     <CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-4 w-4" />Credentials</CardTitle><CardDescription>Badge changes are saved on their own, with a reason, and kept in the history below.</CardDescription></CardHeader>
     <CardContent className="space-y-3">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Badges">{PROVIDER_BADGES.map((badge) => { const checked = draft.includes(badge); return <button key={badge} type="button" aria-pressed={checked} onClick={() => setDraft(checked ? draft.filter((item) => item !== badge) : [...draft, badge])} className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", checked ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-border bg-muted text-muted-foreground hover:border-emerald-300")}>{badge}</button>; })}</div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Badges">{OFFERED_PROVIDER_BADGES.map((badge) => { const checked = draft.includes(badge); return <button key={badge} type="button" aria-pressed={checked} onClick={() => setDraft(checked ? draft.filter((item) => item !== badge) : [...draft, badge])} className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", checked ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-border bg-muted text-muted-foreground hover:border-emerald-300")}>{badge}</button>; })}</div>
       {changed && <>
         <FormField label="Reason" required help="For example, the license or insurance document you checked.">{(control) => <Textarea {...control} rows={2} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} />}</FormField>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="flex gap-2"><Button size="sm" disabled={saving || !reason.trim()} onClick={() => void save()}>{saving && <Loader2 className="animate-spin" />}Save badges</Button><Button size="sm" variant="outline" disabled={saving} onClick={() => { setDraft(badges); setReason(""); setError(""); }}>Cancel</Button></div>
       </>}
-      {history.length > 0 && <ol className="space-y-1 border-t pt-3 text-xs text-muted-foreground">{history.slice(0, 10).map((entry, index) => <li key={`${entry.created_at}:${index}`}>{(entry.after.length ? entry.after.join(", ") : "No badges")} · {entry.actor_name} · {formatDateTime(entry.created_at)} · “{entry.reason}”</li>)}</ol>}
+      {history.length > 0 && <ol className="space-y-1 border-t pt-3 text-xs text-muted-foreground">{history.slice(0, 10).map((entry, index) => <li key={`${entry.created_at}:${index}`}>{(entry.after.length ? entry.after.filter((badge) => !isHiddenProviderBadge(badge)).join(", ") || "No badges" : "No badges")} · {entry.actor_name} · {formatDateTime(entry.created_at)} · “{entry.reason}”</li>)}</ol>}
     </CardContent>
   </Card>;
 }

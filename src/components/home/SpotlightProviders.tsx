@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { displayedProviderBadges } from "@/lib/providerBadges";
 
 type FeaturedRow = {
   id: string;
@@ -113,7 +114,7 @@ export function SpotlightProviders() {
                   </div>
                   {provider.headline && <p className="mb-3 text-sm font-medium leading-relaxed text-foreground/85">“{provider.headline}”</p>}
                   {provider.bio && <p className="mb-5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{provider.bio}</p>}
-                  <div className="flex flex-wrap gap-1.5">{provider.badges?.slice(0, 3).map((badge) => <span key={badge} className="inline-flex items-center gap-1 rounded-md border border-accent-border bg-accent-soft px-2 py-1 text-[11px] font-medium text-sage-dark"><BadgeCheck className="h-3 w-3" />{badge}</span>)}{provider.services?.slice(0, 3).map((service) => <span key={service} className="rounded-md bg-slate-soft px-2 py-1 text-[11px] font-medium text-muted-foreground">{formatService(service)}</span>)}</div>
+                  <div className="flex flex-wrap gap-1.5">{displayedProviderBadges(provider.badges).slice(0, 3).map((badge) => <span key={badge} className="inline-flex items-center gap-1 rounded-md border border-accent-border bg-accent-soft px-2 py-1 text-[11px] font-medium text-sage-dark"><BadgeCheck className="h-3 w-3" />{badge}</span>)}{provider.services?.slice(0, 3).map((service) => <span key={service} className="rounded-md bg-slate-soft px-2 py-1 text-[11px] font-medium text-muted-foreground">{formatService(service)}</span>)}</div>
                   <p className="mt-6 flex items-center text-sm font-semibold text-accent">View full storefront<ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" /></p>
                 </div>
               </article>

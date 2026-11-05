@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EARLY_ACCESS_CTA } from "@/lib/earlyAccessExperience";
 import { createClient } from "@/lib/supabase/client";
 import type { PricingFrequency } from "@/lib/vendorPricing";
+import { displayedProviderBadges } from "@/lib/providerBadges";
 
 export type EligibleProvider = {
   contractor_id: string;
@@ -124,7 +125,7 @@ export function EligibleProvidersRow({
 }
 
 function ProviderCard({ provider, zipCode, onChoose, invited }: { provider: EligibleProvider; zipCode: string; onChoose: (provider: EligibleProvider) => void; invited: boolean }) {
-  const badges = (provider.badges ?? []).filter((badge) => badge.trim() && badge.toLowerCase() !== "top rated").slice(0, 3);
+  const badges = displayedProviderBadges(provider.badges).slice(0, 3);
   const initials = provider.contractor_name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "MP";
   const fixedPrice = provider.path === "fixed" && provider.effective_price !== null ? Number(provider.effective_price) : null;
 
