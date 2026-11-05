@@ -52,7 +52,7 @@
   /* Custom */
   --color-sage: hsl(150 35% 45%);
   --color-sage-light: hsl(150 30% 92%);
-  --color-sage-dark: hsl(150 40% 33%);
+  --color-sage-dark: hsl(150 40% 30%);
   --color-cream: hsl(40 30% 96%);
   --color-warm-white: hsl(40 25% 99%);
   --color-slate-dark: hsl(220 20% 15%);
@@ -321,7 +321,7 @@
       var(--color-sage) 16%,
       var(--color-background)
     );
-    --color-sage-dark: hsl(150 40% 33%);
+    --color-sage-dark: hsl(150 40% 30%);
     --color-coral-light: color-mix(
       in oklch,
       var(--color-coral) 14%,
