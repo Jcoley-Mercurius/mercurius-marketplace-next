@@ -1,0 +1,13 @@
+-- Phase 6 corrective slice CS-7 / TRACE-142: payout-hold columns closed to clients. Record:
+-- governance/PHASE-6-CLOSURE-REPORT.md §4.4 W-4 and §8 CS-7.
+-- Additive: privileges only. No table, column, function or stored value is dropped or rewritten,
+-- and no money function changes (fingerprint 45 | 34c51131… before and after).
+--
+-- W-4, DEC-2026-056 item 3: a vendor never sees the internal hold reason. 20260903160000 granted
+-- payouts_paused, payouts_paused_reason and payouts_paused_at to anon and authenticated in the
+-- public contractor projection, so any visitor could read a reason once one was written. No client
+-- reads these columns (deployed-client check, 2026-11-03: only generated types name them), and
+-- client writes were already refused by the 6.13 scope trigger (20261109001000). Security definer
+-- functions run as the owner and are unaffected. Vendors see holds by category through
+-- vendor_own_earnings(), which is unchanged.
+revoke select (payouts_paused, payouts_paused_reason, payouts_paused_at) on public.contractors from anon, authenticated;
