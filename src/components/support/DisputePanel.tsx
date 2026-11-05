@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatAppointment } from "@/lib/appointments";
 import {
   describeSupportError, disputeStatusLabel, newRequestKey, payoutText, refundText, type Dispute, type DisputeDetail,
+  disputeReasonCategoryLabel,
 } from "@/lib/support";
 
 // TRACE-133: one service's disputes for the homeowner, its provider or operations, from
@@ -49,6 +50,7 @@ function DisputeRecord({ dispute, jobId, viewer, onChanged }: { dispute: Dispute
       {dispute.ticket_number && <> · ticket <span className="font-mono">{dispute.ticket_number}</span></>}
       {" · "}filed {formatAppointment(dispute.raised_at)}
       {dispute.completion_at && <> about the completion recorded {formatAppointment(dispute.completion_at)}</>}</p>
+    {disputeReasonCategoryLabel(dispute.reason_category) && <p className="text-sm font-medium">{disputeReasonCategoryLabel(dispute.reason_category)}</p>}
     {dispute.reason && <p className="whitespace-pre-wrap break-words text-sm">“{dispute.reason}”</p>}
     {dispute.status === "resolved" && dispute.resolution_notes && <div className="rounded-lg bg-muted/40 p-3 text-sm">
       <p className="font-medium">Decision (version {dispute.resolution_version})</p>

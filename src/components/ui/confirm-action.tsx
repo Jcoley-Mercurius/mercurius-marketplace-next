@@ -4,14 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 /** UI duplicate guard only. The caller still owns server authorization/idempotency. */
-export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, reasonLabel = "Reason", reasonHelp = "Explain why this change is needed.", disabled = false, confirmationTone = "destructive", triggerVariant = "outline", describeError, onConfirm }: {
+export function ConfirmAction({ triggerLabel, title, consequence, entity, confirmLabel, requireReason = false, choice, reasonLabel = "Reason", reasonHelp = "Explain why this change is needed.", disabled = false, confirmationTone = "destructive", triggerVariant = "outline", describeError, onConfirm }: {
   triggerLabel: string; title: string; consequence: string; entity: string;
   confirmLabel: string; requireReason?: boolean; disabled?: boolean;
   reasonLabel?: string; reasonHelp?: string;
-  onConfirm: (reason: string) => Promise<void>;
+  /** A required choice shown above the reason, passed to onConfirm as its second argument. */
+  choice?: { label: string; help?: string; options: readonly { value: string; label: string }[] };
+  onConfirm: (reason: string, choice: string) => Promise<void>;
   /** Optional wording for a refusal the caller has already made human-readable. */
   describeError?: (error: unknown) => string | undefined;
   confirmationTone?: "destructive" | "commitment";
@@ -19,6 +22,8 @@ export function ConfirmAction({ triggerLabel, title, consequence, entity, confir
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [chosen, setChosen] = useState("");
+  const missing = (requireReason && !reason.trim()) || (Boolean(choice) && !chosen);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
@@ -29,12 +34,12 @@ export function ConfirmAction({ triggerLabel, title, consequence, entity, confir
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   async function confirm() {
-    if (disabled || inFlight.current || (requireReason && !reason.trim())) return;
+    if (disabled || inFlight.current || missing) return;
     inFlight.current = true;
     setPending(true);
     setError("");
     try {
-      await onConfirm(reason.trim());
+      await onConfirm(reason.trim(), chosen);
       setOpen(false);
       setResult(`${confirmLabel}: ${entity}. Done.`);
     } catch (caught) {
@@ -49,7 +54,7 @@ export function ConfirmAction({ triggerLabel, title, consequence, entity, confir
     <AlertDialog.Root open={open} onOpenChange={(nextOpen) => {
       if (inFlight.current) return;
       setOpen(nextOpen);
-      if (nextOpen) { setReason(""); setError(""); setResult(""); }
+      if (nextOpen) { setReason(""); setChosen(""); setError(""); setResult(""); }
     }}>
       <AlertDialog.Trigger disabled={disabled} render={<Button variant={triggerVariant} />}>{triggerLabel}</AlertDialog.Trigger>
       <AlertDialog.Portal>
@@ -58,12 +63,13 @@ export function ConfirmAction({ triggerLabel, title, consequence, entity, confir
           <AlertDialog.Title className="text-xl font-semibold">{title}</AlertDialog.Title>
           <p className="font-medium break-words">{entity}</p>
           <AlertDialog.Description className="text-sm text-muted-foreground">{consequence}</AlertDialog.Description>
+          {choice && <FormField label={choice.label} required help={choice.help}>{(control) => <Select {...control} value={chosen} disabled={pending} onChange={(event) => setChosen(event.target.value)}><option value="">Choose one</option>{choice.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>}</FormField>}
           {requireReason && <FormField label={reasonLabel} required help={reasonHelp}>{(control) => <Textarea {...control} value={reason} maxLength={1000} disabled={pending} onChange={(event) => setReason(event.target.value)} />}</FormField>}
           {error && <p ref={errorRef} tabIndex={-1} role="alert" className="text-sm text-destructive">{error}</p>}
           <p role="status" className="text-sm">{pending ? "Confirming action…" : ""}</p>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <AlertDialog.Close render={<Button ref={cancelRef} variant="outline" disabled={pending} />}>Cancel</AlertDialog.Close>
-            <Button variant={confirmationTone} loading={pending} disabled={disabled || (requireReason && !reason.trim())} onClick={() => void confirm()}>{pending ? "Confirming…" : confirmLabel}</Button>
+            <Button variant={confirmationTone} loading={pending} disabled={disabled || missing} onClick={() => void confirm()}>{pending ? "Confirming…" : confirmLabel}</Button>
           </div>
         </AlertDialog.Popup>
       </AlertDialog.Portal>

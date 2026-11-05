@@ -97,10 +97,13 @@ test("completion concern records a reason without claiming vendor work started",
   await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
   await expect(confirm.getByRole("button", { name: "Report issue", exact: true })).toBeDisabled();
   await confirm.getByLabel("Reason (required)").fill("Synthetic completion concern");
+  // CS-9: the category is required too (DEC-2026-054 item 1, for reporting only).
+  await expect(confirm.getByRole("button", { name: "Report issue", exact: true })).toBeDisabled();
+  await confirm.getByLabel("What is the issue about? (required)").selectOption("quality");
   // TRACE-128: the issue is bound to the completion the homeowner reviewed.
   const request = page.waitForRequest(request => request.method() === "POST" && request.url().includes("/rpc/homeowner_dispute_completion"));
   await confirm.getByRole("button", { name: "Report issue", exact: true }).click();
-  expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic completion concern", _completed_at: expect.any(String) });
+  expect((await request).postDataJSON()).toMatchObject({ _reason: "Synthetic completion concern", _category: "quality", _completed_at: expect.any(String) });
   await expect(confirm.getByRole("alert")).toBeFocused();
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
   await page.screenshot({ path: "test-results/phase4-homeowner-issue.png", fullPage: true });
