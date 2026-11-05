@@ -51,6 +51,7 @@ import {
 } from "@/lib/serviceRequestStatus";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { DISPUTE_REASON_CATEGORIES } from "@/lib/support";
 
 export type HomeownerDashboardJob = {
   id: string;
@@ -394,7 +395,7 @@ export function HomeownerJobDetailDialog({
 
   // TRACE-128: the decision is bound to the completion shown here (its submission time); if the
   // provider resubmitted proof meanwhile, the server refuses it and the refreshed proof is shown.
-  function respondToCompletion(confirm: boolean, reason = "") {
+  function respondToCompletion(confirm: boolean, reason = "", category = "") {
     const supabase = createClient();
     const completedAt = currentJob.vendor_completed_at ?? "";
     return runAction(
@@ -407,6 +408,7 @@ export function HomeownerJobDetailDialog({
               _job_id: currentJob.id,
               _completed_at: completedAt,
               _reason: reason,
+              _category: category,
             }),
       confirm ? "Service confirmed" : "Issue reported",
       confirm
@@ -549,8 +551,8 @@ export function HomeownerJobDetailDialog({
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               {disputeOpen && <ConfirmAction triggerLabel="Report an issue" title="Report an issue with this service?"
                 entity={currentJob.service_type} consequence="Mercurius opens a support ticket and reviews your concern with you and the provider. This doesn’t confirm the work, and the provider’s payout stays on hold while it’s open."
-                confirmLabel="Report issue" requireReason disabled={!actionsEnabled || Boolean(busyAction)}
-                onConfirm={async reason => { const saved = await respondToCompletion(false, reason); if (!saved) { void onRefresh().catch(() => undefined); throw new Error("Issue was not saved"); } }} />}
+                confirmLabel="Report issue" requireReason choice={{ label: "What is the issue about?", options: DISPUTE_REASON_CATEGORIES }} disabled={!actionsEnabled || Boolean(busyAction)}
+                onConfirm={async (reason, category) => { const saved = await respondToCompletion(false, reason, category); if (!saved) { void onRefresh().catch(() => undefined); throw new Error("Issue was not saved"); } }} />}
               <ConfirmAction triggerLabel="Confirm done" triggerVariant="commitment" confirmationTone="commitment" title="Confirm the work is done?"
                 entity={currentJob.service_type}
                 consequence={`This tells Mercurius and the provider you accept the completed work. The provider’s payout can begin 48 hours after you confirm unless an issue or hold applies.${disputeOpen && disputeBy ? ` You can still report an issue until ${disputeBy}.` : ""}`}

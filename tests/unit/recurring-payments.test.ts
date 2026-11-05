@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recurringQueueLabel, visitCheckoutHref, visitPaymentLine, type VisitPayment } from "@/lib/recurringVisits";
+import { canStartWithPaymentException, recurringQueueLabel, visitCheckoutHref, visitPaymentLine, type VisitPayment } from "@/lib/recurringVisits";
 import { queueKindLabel } from "@/lib/quoteProposals";
 
 // TRACE-125: each visit's payment comes from its canonical obligation, snapshot and checkout state
@@ -71,5 +71,13 @@ describe("recurring payment queue labels", () => {
   it("keeps the shared wording for failures and unknown outcomes", () => {
     expect(recurringQueueLabel({ kind: "payment_failed", detail: {} })).toEqual(queueKindLabel.payment_failed);
     expect(recurringQueueLabel({ kind: "payment_unresolved", detail: {} })).toEqual(queueKindLabel.payment_unresolved);
+  });
+});
+
+describe("CS-5 start before payment (DEC-2026-050 A)", () => {
+  it("offers the operator exception only for ready, processing, failed and unknown visits", () => {
+    for (const state of ["ready", "processing", "failed", "unknown"] as const) expect(canStartWithPaymentException({ detail: { state } })).toBe(true);
+    for (const state of ["review_pending", "paid", "not_accepted", "cancelled"] as const) expect(canStartWithPaymentException({ detail: { state } })).toBe(false);
+    expect(canStartWithPaymentException({ detail: {} })).toBe(false);
   });
 });

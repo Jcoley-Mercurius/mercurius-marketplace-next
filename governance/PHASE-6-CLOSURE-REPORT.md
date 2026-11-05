@@ -221,14 +221,14 @@ Screen reader, real devices, `@visual` and 200% zoom have not been performed for
 | Slice | Contents | Size | Gate |
 |---|---|---|---|
 | **CS-1 post-deploy cleanup** (A3), TRACE-138 | Additive migration `20261110001000` revoking `authenticated` SELECT on `contractors.special_offer` and client EXECUTE on `get_vendor_earnings_metrics(uuid)`; SQL 110; `/vendors` copy aligned with DEC-2026-056; browser test | small; no money function, no fingerprint change. **Implemented for review: PR #137.** Not pushed, not merged. *2026-11-03: `20261110001000` pushed to hosted with owner authorization, then #137 merged (`d7f073d`). No Codex review recorded.* | Codex review; owner authorizes dry run and push before merge (DEC-2026-037) |
-| CS-2 Top Rated | hide the badge on public, row and spotlight surfaces and in the editor; data preserved | small, UI | only if D-7 is approved. *Approved 2026-11-03; before acceptance* |
+| CS-2 Top Rated | hide the badge on public, row and spotlight surfaces and in the editor; data preserved | small, UI | only if D-7 is approved. *Approved 2026-11-03; before acceptance. Implemented for review (TRACE-143)* |
 | CS-3 TRACE-126 | one-time agreed-price source per D-1; lock-order fix | money path; fingerprint changes | D-1; two-person finance review. *D-1 (a) 2026-11-03; before acceptance; reviewers Josh + the accountant; cannot merge until the accountant is engaged and both sign* |
-| CS-4 TRACE-127 | acceptance at bound terms per D-2 | matching path | D-2. *D-2 (a) 2026-11-03; before acceptance* |
-| CS-5 DEC-2026-050 | start gate per D-4 (if A or C) | start guard trigger | D-4. *A 2026-11-03; before acceptance; one-time jobs after CS-3* |
+| CS-4 TRACE-127 | acceptance at bound terms per D-2 | matching path | D-2. *D-2 (a) 2026-11-03; before acceptance. 2026-11-04: the refusal comes from `private.find_eligible_packages_core`, a fingerprinted money function, so CS-4 is a money-path change: planned with Codex first, two-person finance review (Josh + the accountant) before merge, like CS-3. Not built* |
+| CS-5 DEC-2026-050 | start gate per D-4 (if A or C) | start guard trigger | D-4. *A 2026-11-03; before acceptance; one-time jobs after CS-3. Recurring visits implemented for review (TRACE-145): migration `20261113001000`; not pushed to hosted* |
 | CS-6 formal-dispute override | operator-opened dispute after 48 hours with a reason, and the approved rule for eligible or transferred payouts | dispute and payout-hold path | only if D-6d (b) is approved; finance review of the hold. *Not commissioned: D-6d (a) 2026-11-03* |
 | CS-7 hold-reason grants (W-4, W-6) | revoke client SELECT on the `payouts_paused*` columns after a deployed-client check; close or record operator `special_offer` writes | small, privileges | Codex confirms; owner authorizes the push. *W-4 implemented for review (TRACE-142); W-6 is not included and stays an open owner question* |
 | CS-8 contrast (W-5) | fix the eyebrow pair's contrast; check other uses of the pair | small, UI | Codex; before A2 |
-| CS-9 dispute reason categories (D-6b) | the six DEC-2026-054 item 1 categories on dispute submission, for reporting only; no money or hold effect | small | D-6b confirmed 2026-11-03; before acceptance |
+| CS-9 dispute reason categories (D-6b) | the six DEC-2026-054 item 1 categories on dispute submission, for reporting only; no money or hold effect | small | D-6b confirmed 2026-11-03; before acceptance. *Implemented for review (TRACE-144): migration `20261112001000`, SQL 112; not pushed to hosted* |
 
 ## 9. Next bounded repair recommendation
 

@@ -6,7 +6,7 @@ import { ConfirmAction } from "@/components/ui/confirm-action";
 import { DisputePanel } from "@/components/support/DisputePanel";
 import { createClient } from "@/lib/supabase/client";
 import { formatAppointment } from "@/lib/appointments";
-import { describeSupportError } from "@/lib/support";
+import { DISPUTE_REASON_CATEGORIES, describeSupportError } from "@/lib/support";
 
 // Filing stays the Phase 4 48-hour command; the dispute's history, evidence, decision, appeal and
 // money facts come from dispute_detail (TRACE-133). General support is a separate, non-dispute path.
@@ -29,10 +29,10 @@ export function JobFollowUp({ jobId, status, vendorCompletedAt }: { jobId: strin
       <p className="text-sm">The 48-hour window to report an issue ended {formatAppointment(disputeEnds(vendorCompletedAt))}. You can still {support} about a problem.</p>}
     {hasDispute === false && ["completed", "review_requested", "reviewed"].includes(status) && vendorCompletedAt && now > 0 && now < disputeEnds(vendorCompletedAt) && <>
       <p className="text-sm">You can report an issue with this service until {formatAppointment(disputeEnds(vendorCompletedAt))}. For anything else, {support}.</p>
-      <ConfirmAction requireReason triggerLabel="Dispute completed service" title="Open a service dispute?" entity="Completed service" describeError={describeSupportError}
+      <ConfirmAction requireReason choice={{ label: "What is the issue about?", options: DISPUTE_REASON_CATEGORIES }} triggerLabel="Dispute completed service" title="Open a service dispute?" entity="Completed service" describeError={describeSupportError}
         consequence="Mercurius will open a dispute ticket and review your reason and evidence. The provider's payout is held until the dispute is decided. A dispute doesn't by itself refund you."
-        confirmLabel="Open dispute" onConfirm={async reason => {
-          const result = await createClient().rpc("homeowner_raise_dispute", { _job_id: jobId, _reason: reason });
+        confirmLabel="Open dispute" onConfirm={async (reason, category) => {
+          const result = await createClient().rpc("homeowner_raise_dispute", { _job_id: jobId, _reason: reason, _category: category });
           if (result.error) throw result.error; await load(); setVersion((v) => v + 1);
         }} />
     </>}

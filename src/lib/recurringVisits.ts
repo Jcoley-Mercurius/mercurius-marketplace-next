@@ -209,6 +209,15 @@ export type RecurringPaymentQueueItem = QueueItem & {
   };
 };
 
+/**
+ * CS-5 (DEC-2026-050 A): a recurring visit starts only when paid. Operations may record an exception,
+ * with a reason, for a visit that is ready but unpaid, processing, failed or of unknown outcome, never
+ * for a held, terms-blocked or unreviewed one (admin_start_visit_payment_exception).
+ */
+export function canStartWithPaymentException(item: Pick<RecurringPaymentQueueItem, "detail">) {
+  return ["ready", "processing", "failed", "unknown"].includes(item.detail.state ?? "");
+}
+
 /** Failure and unknown outcomes keep the shared G6 wording; the two visit states are added. */
 export function recurringQueueLabel(item: Pick<RecurringPaymentQueueItem, "kind" | "detail"> & { reason?: VisitPayment["reason"] }) {
   if (item.kind === "review_missing") {

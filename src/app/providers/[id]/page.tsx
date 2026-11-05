@@ -31,6 +31,7 @@ import { HOME_SIZE_GUIDE, homeSizeGuideText } from "@/lib/homeSizeGuide";
 import { createClient } from "@/lib/supabase/client";
 import { cn, yearsLabel } from "@/lib/utils";
 import { publicServiceAreas, type PublicServiceArea } from "@/lib/vendorServiceAreas";
+import { displayedProviderBadges } from "@/lib/providerBadges";
 import {
   isPricingFrequency,
   isPubliclyEligibleFixedPackage,
@@ -508,7 +509,7 @@ export default function ProviderStorefrontPage() {
 
                 {packages.length === 0 && <SectionCard title={invited ? "Request a Service" : "Opening by Invitation"}><p className="text-sm leading-relaxed text-muted-foreground">{invited ? "This provider has not published a live fixed price yet. Submit your service details and Mercurius will confirm provider availability, scope, and pricing before booking." : "This provider has not published a live fixed price yet. Booking opens by invitation; join early access to be considered when services are ready in your area."}</p><Button className="mt-4 bg-accent text-accent-foreground hover:bg-accent-hover" onClick={() => startRequest()}>{invited ? "Request This Provider" : EARLY_ACCESS_CTA}<ArrowRight /></Button></SectionCard>}
 
-                {(contractor.badges?.length ?? 0) > 0 && <SectionCard title="Credentials"><div className="flex flex-wrap gap-3">{contractor.badges?.map((badge) => <div key={badge} className="flex items-center gap-2 rounded-lg bg-sage-light px-3 py-2 text-sm font-medium text-sage-dark"><BadgeCheck className="h-4 w-4" />{badge}</div>)}</div></SectionCard>}
+                {displayedProviderBadges(contractor.badges).length > 0 && <SectionCard title="Credentials"><div className="flex flex-wrap gap-3">{displayedProviderBadges(contractor.badges).map((badge) => <div key={badge} className="flex items-center gap-2 rounded-lg bg-sage-light px-3 py-2 text-sm font-medium text-sage-dark"><BadgeCheck className="h-4 w-4" />{badge}</div>)}</div></SectionCard>}
 
                 {contractor.our_promise && <SectionCard title="Our Promise"><div className="flex items-start gap-3"><Shield className="mt-1 h-5 w-5 shrink-0 text-accent" /><p className="leading-7 text-muted-foreground">{contractor.our_promise}</p></div></SectionCard>}
 
