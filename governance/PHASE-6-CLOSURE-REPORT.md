@@ -66,8 +66,8 @@ Where an item's later gate has no explicit authority, it is classed **B** with "
 
 | ID | Approved requirement / decision | Implementation / `main` | Evidence | Remaining gap | Proposed disposition and rationale | Owner / acceptance condition | Class |
 |---|---|---|---|---|---|---|---|
-| **T-1 TRACE-126** | DEC-2026-034 / 041 item 4: agreed request prices unchanged by later corrections | `private.money_source` one-time path (unchanged since 6.6c) | SQL 097 "KNOWN EXPOSURE (one-time)" | One-time fixed requests price from the *current* tier. An in-place correction changes an unpublished price, a package edit refuses checkout of a published snapshot, and the package→tier lock order can deadlock with a tier edit. | Owner chooses the agreed-price source for one-time requests (§7 D-1). Then a bounded corrective slice (CS-3) with the two-person finance review. Rationale: it contradicts an approved decision on a journey the gate covers, but it changes the money kernel, so it can't be fixed inside this audit. | Owner decision, then CS-3 merged with finance sign-off; or the owner records it as an explicit R1-gate blocker (§4.6) | **B** (then A or C as decided) |
-| **T-2 TRACE-127** | DEC-2026-049 items 6/8; DEC-2026-042 | `vendor_accept_job`, `find_eligible_packages_core` | SQL 097 "existing rule (unchanged)" | After a price or add-on change, an already-offered add-on visit can't be accepted. It stays offered and unpaid; nothing is repriced. | Owner decides whether a visit offered at bound terms stays acceptable after a catalog change (§7 D-2), then a bounded slice (CS-4). Fails safe today. | Owner decision, then CS-4 | **B** |
+| **T-1 TRACE-126** | DEC-2026-034 / 041 item 4: agreed request prices unchanged by later corrections | `private.money_source` one-time path (unchanged since 6.6c) | SQL 097 "KNOWN EXPOSURE (one-time)" | One-time fixed requests price from the *current* tier. An in-place correction changes an unpublished price, a package edit refuses checkout of a published snapshot, and the package→tier lock order can deadlock with a tier edit. | Owner chooses the agreed-price source for one-time requests (§7 D-1). Then a bounded corrective slice (CS-3) with the two-person finance review. Rationale: it contradicts an approved decision on a journey the gate covers, but it changes the money kernel, so it can't be fixed inside this audit. | Owner decision, then CS-3 merged with finance sign-off; or the owner records it as an explicit R1-gate blocker (§4.6). *2026-11-05: characterized again through the real vendor command. Since 6.11A every save of an in-use version, including a rename, pauses the bound row, so checkout is refused and an offered one-time request can't be accepted. Plan for Codex: [PHASE-6-BOUND-TERMS-PLAN](PHASE-6-BOUND-TERMS-PLAN.md) §4; §10 below* | **B** (then A or C as decided) |
+| **T-2 TRACE-127** | DEC-2026-049 items 6/8; DEC-2026-042 | `vendor_accept_job`, `find_eligible_packages_core` | SQL 097 "existing rule (unchanged)" | After a price or add-on change, an already-offered add-on visit can't be accepted. It stays offered and unpaid; nothing is repriced. | Owner decides whether a visit offered at bound terms stays acceptable after a catalog change (§7 D-2), then a bounded slice (CS-4). Fails safe today. | Owner decision, then CS-4. *2026-11-05: wider than recorded. Visits without add-ons are refused too, and an accepted, unpaid visit becomes unpayable (`package_unavailable`), so acceptance alone doesn't deliver D-2. Plan for Codex, with the reading R-1 for owner confirmation: [PHASE-6-BOUND-TERMS-PLAN](PHASE-6-BOUND-TERMS-PLAN.md) §2–§3* | **B** |
 | T-3 DEC-2026-051 items 6–8 | — (PROPOSED) | none | — | twice-a-year cadence; vendor cadences outside the catalog list; guardrail band source | Proposal: defer all three past Phase 6. Rationale: these are onboarding enhancements outside the critical journeys, and current behavior is safe. The deferral needs the owner's approval. | Owner | **B** |
 | F613-18 | DEC-2026-057 Q6 | `admin_clear_package_review` (keyed, reason, history), `20261108001000` + `20261109001000` | SQL 108; concurrency A8 | none. It is still listed as carried in brief §11, which was stale | removed from the carried list (this PR) | — | **D** |
 
@@ -112,7 +112,7 @@ Where an item's later gate has no explicit authority, it is classed **B** with "
 | W-3 `/vendors` copy | DEC-2026-056 items 1–2 (legacy "released" retired; no expected payout date) | `src/app/vendors/page.tsx:31`: "see invoice and payout status when Mercurius releases it. Eligible released work is intended to follow a weekly payout cycle…" | — | the wording still uses the retired legacy "released" model | **CS-1 implemented for review**: eligibility 48 hours after homeowner confirmation is not a set transfer date; failed and unconfirmed transfers aren't counted as paid (DEC-2026-056 items 2, 5; CFG-008); browser test | Codex review of the copy; merged | **A** (A3) |
 | W-4 `contractors.payouts_paused_reason` readable | DEC-2026-056 item 3 (vendors never see the internal hold reason) | `payouts_paused`, `payouts_paused_reason`, `payouts_paused_at` are column-granted to `anon` and `authenticated` (20260903160000) | found during CS-1; hosted read 2026-11-03: 0 rows hold a reason; no client selects these columns | any visitor could read a hold reason once one is written | Proposal: a CS-1-style grant slice (CS-7), after a deployed-client check. *2026-11-03: CS-7 implemented for review (TRACE-142): migration `20261111001000` revokes client SELECT on all three columns; no client reads them; SQL 111. Not pushed to hosted* | Codex confirms; owner authorizes the push | **A** (proposed) |
 | W-5 `/vendors` eyebrow contrast | MDS accessibility (WCAG 2.2 AA) | "For Service Providers" pill, `text-sage-dark` on `bg-sage-light` | axe in CS-1's browser run: 4.43:1, needs 4.5:1. Pre-existing; the pair may recur elsewhere | contrast shortfall | Proposal: a small token or class fix (CS-8) before the human checks. *2026-11-03: CS-8 implemented for review (TRACE-141): light `--color-sage-dark` 33% → 30% lightness, which fixes every use of the pair; axe on all of `/vendors` passes (fails on the old token)* | Codex | **A** (part of A2) |
-| W-6 operator writes to `special_offer` | DEC-2026-055 item 1 restricts vendors; it says nothing about operators | admins can still overwrite the column directly (table UPDATE grant plus the admin bypass in the scope trigger); no client does | CS-1 characterization | stored text could be changed without a record | Proposal: close it with W-4 in CS-7, or record that operator edits are allowed | Codex; owner if it's policy | **B** |
+| W-6 operator writes to `special_offer` | DEC-2026-055 item 1 restricts vendors; it says nothing about operators | admins can still overwrite the column directly (table UPDATE grant plus the admin bypass in the scope trigger); no client does | CS-1 characterization | stored text could be changed without a record | Proposal: close it with W-4 in CS-7, or record that operator edits are allowed. *2026-11-05: still open; `authenticated` holds column UPDATE on `special_offer` (clean replay of `cbd65a7`). Owner question O-3 in §10.5* | Codex; owner if it's policy | **B** |
 
 ### 4.5 Human acceptance, reviews and authority conflicts
 
@@ -222,8 +222,8 @@ Screen reader, real devices, `@visual` and 200% zoom have not been performed for
 |---|---|---|---|
 | **CS-1 post-deploy cleanup** (A3), TRACE-138 | Additive migration `20261110001000` revoking `authenticated` SELECT on `contractors.special_offer` and client EXECUTE on `get_vendor_earnings_metrics(uuid)`; SQL 110; `/vendors` copy aligned with DEC-2026-056; browser test | small; no money function, no fingerprint change. **Implemented for review: PR #137.** Not pushed, not merged. *2026-11-03: `20261110001000` pushed to hosted with owner authorization, then #137 merged (`d7f073d`). No Codex review recorded.* | Codex review; owner authorizes dry run and push before merge (DEC-2026-037) |
 | CS-2 Top Rated | hide the badge on public, row and spotlight surfaces and in the editor; data preserved | small, UI | only if D-7 is approved. *Approved 2026-11-03; before acceptance. Implemented for review (TRACE-143)* |
-| CS-3 TRACE-126 | one-time agreed-price source per D-1; lock-order fix | money path; fingerprint changes | D-1; two-person finance review. *D-1 (a) 2026-11-03; before acceptance; reviewers Josh + the accountant; cannot merge until the accountant is engaged and both sign* |
-| CS-4 TRACE-127 | acceptance at bound terms per D-2 | matching path | D-2. *D-2 (a) 2026-11-03; before acceptance. 2026-11-04: the refusal comes from `private.find_eligible_packages_core`, a fingerprinted money function, so CS-4 is a money-path change: planned with Codex first, two-person finance review (Josh + the accountant) before merge, like CS-3. Not built* |
+| CS-3 TRACE-126 | one-time agreed-price source per D-1; lock-order fix | money path; fingerprint changes | D-1; two-person finance review. *D-1 (a) 2026-11-03; before acceptance; reviewers Josh + the accountant; cannot merge until the accountant is engaged and both sign. 2026-11-05: plan prepared for Codex ([PHASE-6-BOUND-TERMS-PLAN](PHASE-6-BOUND-TERMS-PLAN.md) §4). Not built* |
+| CS-4 TRACE-127 | acceptance at bound terms per D-2 | matching path | D-2. *D-2 (a) 2026-11-03; before acceptance. 2026-11-04: the refusal comes from `private.find_eligible_packages_core`, a fingerprinted money function, so CS-4 is a money-path change: planned with Codex first, two-person finance review (Josh + the accountant) before merge, like CS-3. Not built. 2026-11-05: plan prepared for Codex ([PHASE-6-BOUND-TERMS-PLAN](PHASE-6-BOUND-TERMS-PLAN.md) §3). It leaves `find_eligible_packages_core` unchanged and restates `recurring_visit_source_check` and `vendor_accept_job`. Not built* |
 | CS-5 DEC-2026-050 | start gate per D-4 (if A or C) | start guard trigger | D-4. *A 2026-11-03; before acceptance; one-time jobs after CS-3. Recurring visits implemented for review (TRACE-145): migration `20261113001000`; not pushed to hosted* |
 | CS-6 formal-dispute override | operator-opened dispute after 48 hours with a reason, and the approved rule for eligible or transferred payouts | dispute and payout-hold path | only if D-6d (b) is approved; finance review of the hold. *Not commissioned: D-6d (a) 2026-11-03* |
 | CS-7 hold-reason grants (W-4, W-6) | revoke client SELECT on the `payouts_paused*` columns after a deployed-client check; close or record operator `special_offer` writes | small, privileges | Codex confirms; owner authorizes the push. *W-4 implemented for review (TRACE-142); W-6 is not included and stays an open owner question* |
@@ -249,3 +249,70 @@ The original recommendation is kept below.
 4. **Acceptance-affecting repairs**, in the order the answers set: the fixes from A1 reviews, CS-7 and CS-8, and whichever of CS-2–CS-6 the answers place before acceptance. **No money-kernel rewrite is proposed here.** CS-3 is bounded to the one-time source and needs finance review.
 5. **Human checks (A2) last**, on the final acceptance candidate after step 4 has merged, with the candidate commit recorded on each result.
 6. The owner decides acceptance after Codex review. This report and PR #136 are acceptance preparation, not Phase 6 acceptance.
+
+## 10. Closeout packet, 2026-11-05 (TRACE-147)
+
+**Status:** prepared for Codex review. It accepts nothing, approves no policy and closes no A1 gap. **Phase 6 is not accepted, and Phase 7 is not authorized.**
+
+*2026-11-06 checkpoint (verified): #147 merged by the owner as `02e04a0` (2026-11-06 01:54 UTC); `main` CI run 42146902687 green. `main` and hosted now both end at `20261114001000`, so the "`main` lacks one migration" row below is resolved. No Codex review of #147 is recorded in the repository (manifest row 27 stays open). Codex cleared the CS-4/CS-3 plan architecture with five amendments ([plan](PHASE-6-BOUND-TERMS-PLAN.md) §7). The owner confirmed R-1 (DEC-2026-062), so O-1 is answered and O-8 is done. CS-4 is implemented for review (TRACE-148). The rows below are kept as written on 2026-11-05.*
+
+### 10.1 Verified state
+
+| Check | Result |
+|---|---|
+| `origin/main` | `cbd65a7` (#146), unchanged since the last independent check; CI push run 42043627700 green |
+| Open PRs | #147 (TRACE-146) only; CI pull_request run 42052147727 at `bd40701` green |
+| Hosted history (read-only) | all 219 local migrations paired, ending at `20261114001000` (#147's, pushed 2026-11-05 with owner authorization). So `main` lacks one migration that hosted has. Merging #147 reconciles that. |
+| Hosted aggregates (read-only) | 0 open requests, 0 open visits, 0 obligations, 0 snapshots, 0 plan terms |
+| Codex review records | none for any Phase 6 slice or for #136–#147 ([A1 manifest](PHASE-6-A1-REVIEW-MANIFEST.md)) |
+| Clean replay `main` | 218 migrations; 103 files / 6,546 PASS; fingerprint `45 \| 34c51131…` |
+| Clean replay #147 | 219 migrations; 104 files / 6,576 PASS; fingerprint unchanged |
+
+### 10.2 Completed in this packet
+
+- **CS-4/CS-3 characterization** through the real vendor command, synthetic and rolled back ([plan](PHASE-6-BOUND-TERMS-PLAN.md) §1). TRACE-127 is wider than recorded: no-add-on visits are refused, accepted visits become unpayable, and offered one-time requests can't be accepted. The checkout lock order deadlocks against `vendor_save_package` in a forced-order demonstration (§1.1 there).
+- **CS-4/CS-3 technical plan** for Codex, with readings R-1 to R-5. **No money function was changed.** No Codex-reviewed plan existed, so implementation waits.
+- **One-time CS-5 extension**: planned as a dependent slice ([plan](PHASE-6-BOUND-TERMS-PLAN.md) §5). Not built; it needs CS-3 merged first.
+- **Reconciliation** of CS-1, CS-2, CS-7, CS-8, CS-9 and recurring CS-5 against their merged commits, migrations and tests: no regression found ([manifest](PHASE-6-A1-REVIEW-MANIFEST.md) §3).
+- **#147 clean-replay evidence** and its baseline-against-changed comparison (manifest §3, §3.1). No production correction was repeated, and no reject or suspension policy was added.
+- **[A1 review manifest](PHASE-6-A1-REVIEW-MANIFEST.md)**: 29 rows with exact ranges.
+
+### 10.3 Finance and human-check requirements
+
+- **Two-person finance review (Josh + the accountant)** before merge, for CS-4 and CS-3 (both change fingerprinted money functions). The accountant is **not engaged**, so neither can merge, and **Phase 6 acceptance is blocked on it** (D-1 and D-2 place both before acceptance). Separate and not to be confused: the carried 6.6c review (F-1, D-10) is an **R1 blocker**, not a Phase 6 gate. F-2 promotions stays at its activation gate.
+- **A2 human checks** (light mode only, D-9) run **after** CS-4, CS-3, the one-time CS-5 extension and any A1 fixes have merged. Each runs on that exact candidate SHA, recording the device, browser, assistive technology, person and date in [the scripts](PHASE-6-MANUAL-ACCEPTANCE.md). None has been performed. A result recorded on an earlier candidate doesn't carry over to a surface a later change touches. The candidate isn't final yet: CS-4 changes `/vendor/jobs` acceptance, and CS-3 changes checkout.
+
+### 10.4 Review packet for Codex
+
+1. The CS-4/CS-3 plan, R-1 to R-5 included. **First:** no money function changes until it is cleared.
+2. The A1 manifest rows 1–27 (merged slices and #147).
+3. This packet's record changes (TRACE-147).
+
+### 10.5 Owner decisions and actions
+
+| # | Decision or action | Recommended | Depends on | Consequence if not done |
+|---|---|---|---|---|
+| O-1 | Confirm reading R-1 (plan §2) | *"A visit or request priced at bound terms stays acceptable and payable at those terms while its provider still offers that service at that cadence (a live, unreviewed revision of the same offering). Pausing, archiving or removing the offering, or holding it in Package Reviews, still blocks it."* | Codex clears the plan | Under the strict reading, any vendor save (a rename too) blocks every unpaid visit and one-time request on that offering, and CS-4/CS-3 deliver nothing on a real journey |
+| O-2 | Engage the accountant (the second finance reviewer) | Engage before CS-4/CS-3 implementation completes, so the review can follow Codex's code review | — | CS-4 and CS-3 can't merge, so Phase 6 can't be accepted. The R1 blockers F-1 and F-2 also wait |
+| O-3 | W-6: operator writes to `contractors.special_offer` | *"Operators don't change stored Special Offer text. It stays as stored for operator reading (DEC-2026-055 item 1). Any later need to edit or clear it goes through a recorded command with a reason."* Then a small privileges slice (CS-7 pattern: revoke client UPDATE; no client writes it) | Owner answer; Codex review; push authorization | Stays open; an admin session could change the text without a record. Not an acceptance blocker unless the owner makes it one |
+| O-4 | Name the gate for D-6d (operations-opened formal dispute after 48 hours) | *"Decide at the R1 gate whether beta needs it; until then general support only."* | — | The deferral stays approved with no gate (§4.6) |
+| O-5 | Name gates for D-8 restrictions | (1) legacy providers without a reviewed suspension: **R1 gate**; (2) listing exclusion also removes matching: **after R1, on pilot evidence**; (3) no change workflow for bound requests: **R1 gate** | — | As O-4 |
+| O-6 | Name the gate for DEC-2026-051 items 6–8 (twice-a-year cadence, vendor cadences outside the catalog, guardrail band source) | *"After R1, at the first catalog review."* Current behavior is safe | — | As O-4 |
+| O-7 | #147 follow-ups (DEC-2026-061) | Decide J & M All Purpose LLC's `is_active` (onboarding active, `is_active` false). Decide whether reject should change a legacy-listed provider's `is_active`. Neither is inferred here | — | J & M stays unlisted; reject behavior stays as is |
+| O-8 | Authorize the #147 merge after Codex review | Merge (hosted already has its migration; the merge reconciles `main` and adds the record) | Codex review | `main` stays one migration behind hosted |
+| O-9 | DEC-2026-059 open items (purge collected analytics events; re-issue invitations opened since 2026-11-02) | Kept recorded; nothing purged or re-issued here | Owner | Unchanged |
+
+### 10.6 Checklist before the owner can accept Phase 6 and authorize Phase 7
+
+- [ ] Codex clears the CS-4/CS-3 plan (R-1 to R-5); the owner confirms R-1 (O-1). *2026-11-06: CS-4 architecture cleared with amendments; R-1 confirmed (DEC-2026-062). CS-3's own plan items (R-2 to R-5 as they apply to one-time requests) still need review before CS-3.*
+- [ ] Accountant engaged (O-2).
+- [ ] CS-4 built, Codex code-reviewed, finance-signed (Josh + accountant), hosted push authorized and done, merged.
+- [ ] CS-3 built, the same gates, merged.
+- [ ] One-time CS-5 extension built, reviewed, pushed, merged.
+- [ ] A1: a recorded Codex review for every manifest row 1–27 (or one integrated review naming every range), with findings fixed in bounded slices.
+- [ ] #147 reviewed and merged (O-8). *2026-11-06: merged (`02e04a0`); Codex review still not recorded.*
+- [ ] W-6 answered (O-3), and slice merged if "close" is chosen.
+- [ ] Gates named for D-6d, D-8 and DEC-2026-051 items 6–8 (O-4 to O-6). These don't block acceptance under D-12, but §4.6 needs them before the items are planned.
+- [ ] Final candidate SHA fixed; CI green on it; full SQL suite on a clean replay; fingerprint recorded with every change explained.
+- [ ] A2 human checks performed and recorded on that SHA (screen reader, real devices, 200% zoom and 320 px reflow, keyboard, `@visual` on Windows or approved Linux baselines), light mode only.
+- [ ] The owner records Phase 6 acceptance. Phase 7 is authorized only by that record.

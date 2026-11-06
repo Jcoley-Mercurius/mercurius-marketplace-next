@@ -1,0 +1,30 @@
+# TRACE-126/127 probe results. main cbd65a7, clean replay of 218 migrations on the isolated stack, 2026-11-05.
+# Rows: label | value [| offers]. BEFORE = before the vendor save; AFTER = after a price save; RENAME = after a rename-only save (separate rollback).
+BEFORE vadd|matched | offered | pkg=97400000 | total=45.00 | resolved=45.0000000000000000|pending:45.0000000000000000
+BEFORE vplain|matched | offered | pkg=97400000 | total=40.00 | resolved=40.00000000000000000000|pending:40.00000000000000000000
+BEFORE r2|matched | offered | pkg=97400000 | total=60.00 | resolved=60.00000000000000000000|pending:60.00000000000000000000
+BEFORE vpaid pay|paid|
+BEFORE vpaid start|startable|
+BEFORE vready pay|ready|
+BEFORE r1 source|ok|
+SAVE price|{"reused": false, "is_active": true, "lineage_id": "97400000-0000-4000-8000-000000000001", "new_version": true, "needs_review": false, "revision_number": 2, "replaced_package_id": "97400000-0000-4000-8000-000000000001"}
+old package live?|false
+AFTER accept vadd (add-on visit)|ERR 22023: Provider is no longer eligible
+AFTER accept vplain (no add-on visit)|ERR 22023: Provider is no longer eligible
+AFTER accept r2 (one-time offered)|ERR 22023: Provider is no longer eligible
+AFTER vpaid payment state|paid / -
+AFTER vpaid start block|startable
+AFTER vready payment state|review_pending / package_unavailable
+AFTER vready checkout (homeowner 2)|ERR P0001: The plan's package or price level is no longer offered (paused, replaced or removed).
+AFTER r1 source (one-time accepted)|ERR P0001: Selected offering is not eligible
+AFTER new visit s2|null (blocked)
+AFTER vadd|matched | offered | pkg=97400000 | total=45.00 | resolved=45.0000000000000000|pending:45.0000000000000000
+AFTER vplain|matched | offered | pkg=97400000 | total=40.00 | resolved=40.00000000000000000000|pending:40.00000000000000000000
+AFTER r2|matched | offered | pkg=97400000 | total=60.00 | resolved=60.00000000000000000000|pending:60.00000000000000000000
+SAVE rename|{"reused": false, "is_active": true, "lineage_id": "97400000-0000-4000-8000-000000000001", "new_version": true, "needs_review": false, "revision_number": 2, "replaced_package_id": "97400000-0000-4000-8000-000000000001"}
+RENAME accept vadd|ERR 22023: Provider is no longer eligible
+RENAME accept vplain|ERR 22023: Provider is no longer eligible
+RENAME accept r2|ERR 22023: Provider is no longer eligible
+RENAME vpaid payment state|paid / -
+RENAME vready checkout|ERR P0001: The plan's package or price level is no longer offered (paused, replaced or removed).
+RENAME r1 source|ERR P0001: Selected offering is not eligible

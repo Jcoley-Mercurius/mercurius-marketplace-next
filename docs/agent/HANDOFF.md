@@ -1,4 +1,31 @@
+# Agent handoff — 2026-11-06
+
+## Codex plan review and R-1 (TRACE-147), 2026-11-06
+
+- **Checkpoint (verified):** `main` `02e04a0` (#147 merged by the owner), CI green; hosted and `main` both end at `20261114001000`. No Codex review of #147 is recorded.
+- Codex cleared the CS-4 plan architecture with five amendments: entry-level table locks, the complete lock order, success (not refusal) for ordinary edits, rollback's business effect, and a wider fingerprint. Recorded in [plan](../../governance/PHASE-6-BOUND-TERMS-PLAN.md) §7.
+- The owner confirmed R-1: DEC-2026-062. It sets the CS-3 interpretation but doesn't authorize CS-3.
+- CS-4 implementation: its own PR stacked on #148 (TRACE-148). A1 rows stay open; Phase 6 is not accepted.
+
 # Agent handoff — 2026-11-05
+
+## Phase 6 closeout packet (TRACE-147), 2026-11-05
+
+- **Checkpoint (verified):** `main` `cbd65a7` (#146), CI green. Open: #147 (TRACE-146), whose migration `20261114001000` is on hosted (all 219 paired, read-only). Hosted aggregates: 0 open requests, visits, obligations, snapshots and plan terms. No Codex review is recorded for any Phase 6 slice or for #136–#147.
+- Branch `claude/phase6-closeout-a1-packet` from `cbd65a7`. Documentation and evidence only; **no money function, migration or application code changed**.
+- **CS-4/CS-3:** no Codex-cleared plan existed, so nothing was built. [Plan](../../governance/PHASE-6-BOUND-TERMS-PLAN.md) for Codex, with readings R-1–R-5. R-1 also needs owner confirmation.
+  - Probe through the real vendor command: since 6.11A any save (a rename too) pauses the bound row.
+  - Offered visits (with or without add-ons) and offered one-time requests can't be accepted.
+  - Accepted, unpaid visits become unpayable (`package_unavailable`), and one-time checkout is refused.
+  - Checkout's lock order deadlocks with `vendor_save_package` in a forced-order demonstration; the proposed order doesn't.
+- **One-time CS-5:** planned (plan §5); waits for CS-3.
+- **Evidence:** clean replay `main` 103 files / 6,546 PASS; #147 `bd40701` 104 / 6,576 PASS, plus CI 42052147727 (clean replay green). SQL 113: 21/28 on `main`'s schema, 28/28 on #147's. Fingerprint `45 | 34c51131…`. No regression in CS-1/2/5/7/8/9.
+- **Records:** [A1 manifest](../../governance/PHASE-6-A1-REVIEW-MANIFEST.md) (29 rows with ranges); closure report §10 (owner decisions O-1–O-9, acceptance checklist); TRACE-126/127 notes; TRACE-147.
+- **Phase 6 is not accepted.** Next:
+  1. Codex reviews the plan, then the manifest rows.
+  2. The owner confirms R-1 and engages the accountant.
+  3. CS-4, then CS-3, then one-time CS-5, each with its gates.
+  4. A2 human checks on the final SHA.
 
 ## Onboarding decision sets provider activation (TRACE-146, DEC-2026-061), 2026-11-05
 
