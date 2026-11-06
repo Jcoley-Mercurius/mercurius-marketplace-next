@@ -1,10 +1,11 @@
-// TRACE-127 (CS-4): recurring visits at their bound terms on separate connections, with the real
-// commands. An ordinary vendor revision racing acceptance, publication or checkout must leave each of
+// TRACE-127 (CS-4) and TRACE-126 (CS-3): recurring visits and one-time requests at their bound terms
+// on separate connections, with the real commands. An ordinary vendor revision racing acceptance, publication or checkout must leave each of
 // them SUCCEEDING at the bound amount (never a generic refusal). Parallel acceptances of one offer give
 // one acceptance. Pausing, suspending or archiving the offering and suspending the provider race
 // acceptance with only two outcomes: accepted at the bound terms first, or refused with the named
-// exception. No race may deadlock. Run only against a disposable local or isolated database with
-// 20261115001000 applied. Synthetic fixtures only; they are removed at the end (history and money rows
+// exception. No race may deadlock. One-time requests are submitted through the real submission command,
+// so their bound record is the one a homeowner's submission writes. Run only against a disposable local
+// or isolated database with 20261115001000 and 20261116001000 applied. Synthetic fixtures only; they are removed at the end (history and money rows
 // are append-only, so cleanup bypasses triggers as postgres).
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -33,12 +34,13 @@ const [operator, finance, approver] = [3, 4, 5].map(user);
 const contractor = 'c9b72000-0000-4000-8000-000000000001';
 const pkg = 'c9b74000-0000-4000-8000-000000000001';
 const tier = 'c9b75000-0000-4000-8000-000000000001';
+const oneTimeTier = 'c9b75000-0000-4000-8000-000000000002';
 const plan = 'c9b73000-0000-4000-8000-000000000001';
 const application = 'c9b76000-0000-4000-8000-000000000001';
 const service = 'synthetic-bt-concurrency';
 const zip = '00972';
 const local = (days) => `((now() at time zone 'America/New_York')::date + ${days} + time '09:00')`;
-const ours = `(select id from public.service_requests where id = '${plan}' or recurrence_parent_id = '${plan}')`;
+const ours = `(select id from public.service_requests where id = '${plan}' or recurrence_parent_id = '${plan}' or customer_id = '${homeowner}')`;
 const obligations = `(select id from public.money_obligations where service_request_id in ${ours})`;
 const deadlock = /deadlock detected/;
 
@@ -50,7 +52,7 @@ async function cleanup() {
       for t in select table_name from information_schema.columns where table_schema = 'public' and column_name = 'obligation_id'
           and table_name <> 'money_snapshots' loop
         execute format('delete from public.%I where obligation_id in (select id from public.money_obligations where service_request_id in
-          (select id from public.service_requests where id = %L or recurrence_parent_id = %L))', t, '${plan}', '${plan}');
+          (select id from public.service_requests where id = %L or recurrence_parent_id = %L or customer_id = %L))', t, '${plan}', '${plan}', '${homeowner}');
       end loop; end $$;
     delete from public.money_snapshots where obligation_id in ${obligations};
     delete from public.money_obligations where service_request_id in ${ours};
@@ -63,6 +65,7 @@ async function cleanup() {
     delete from public.notifications where related_request_id in ${ours} or related_contractor_id = '${contractor}';
     delete from public.job_match_attempts where service_request_id in ${ours};
     delete from public.service_requests where recurrence_parent_id = '${plan}';
+    delete from public.service_requests where customer_id = '${homeowner}' and id <> '${plan}';
     delete from public.service_requests where id = '${plan}';
     delete from private.package_archives where contractor_id = '${contractor}';
     delete from private.vendor_package_saves where actor = '${vendorUser}';
@@ -96,21 +99,24 @@ async function createVisit(days) {
 }
 const accept = (visit) => sql(as(vendorUser, `select public.vendor_accept_job('${visit}')`));
 const head = () => sql(`select id from public.vendor_packages where contractor_id = '${contractor}' and lineage_id = '${pkg}' order by revision_number desc limit 1`);
-const content = (price, name = 'Synthetic bound package') => JSON.stringify({ service_id: service,
+// oneTime: the one-time level's price, kept on the new revision (CS-3 races); omitted, the revision
+// offers only the weekly cadence.
+const content = (price, name = 'Synthetic bound package', oneTime = null) => JSON.stringify({ service_id: service,
   package: { name, description: null, pricing_mode: 'fixed', default_frequency: 'weekly' }, questions: [],
-  tiers: [{ name: 'Weekly', price, frequency: 'weekly' }], addons: [] });
+  tiers: [{ name: 'Weekly', price, frequency: 'weekly' }, ...(oneTime ? [{ name: 'One time', price: oneTime, frequency: 'one-time' }] : [])], addons: [] });
 // Reads the head and its revision hash first, so the save itself is the only statement in the race.
-async function prepareSave(price, name) {
+async function prepareSave(price, name, oneTime = null) {
   const id = await head();
   const hash = await sql(`select private.package_revision_hash('${id}')`);
-  return () => sql(as(vendorUser, `select public.vendor_save_package('${id}','${hash}','${content(price, name)}'::jsonb,true,'${randomUUID()}')::text`));
+  return () => sql(as(vendorUser, `select public.vendor_save_package('${id}','${hash}','${content(price, name, oneTime)}'::jsonb,true,'${randomUUID()}')::text`));
 }
 const amounts = (visit) => sql(`select concat_ws('/', r.status, round(r.total_amount, 2), round(a.base_price, 2), round(a.effective_price, 2), a.package_id = '${pkg}')
   from public.service_requests r left join public.job_match_attempts a on a.service_request_id = r.id and a.outcome = 'accepted' where r.id = '${visit}'`);
 const BOUND = 'scheduled/40.00/40.00/40.00/t';
-async function approvedTerms(visit) {
-  const terms = await sql(`select jsonb_build_object('service',4000,'addons',0,'discount',0,'adjustment',0,'subtotal',4000,'tax',0,'tip',0,
-    'deposit',0,'total',4000,'currency','usd','source_version',private.money_source('${visit}')->>'version','policy_version','CFG-005',
+const BOUND_ONE_TIME = 'scheduled/60.00/60.00/60.00/t';
+async function approvedTerms(visit, cents = 4000) {
+  const terms = await sql(`select jsonb_build_object('service',${cents},'addons',0,'discount',0,'adjustment',0,'subtotal',${cents},'tax',0,'tip',0,
+    'deposit',0,'total',${cents},'currency','usd','source_version',private.money_source('${visit}')->>'version','policy_version','CFG-005',
     'tax_evidence','synthetic-tax-decision','reason','Synthetic concurrency review','expires_at',date_trunc('second', now()+interval '2 days'))::text`);
   await sql(as(approver, `select public.money_approve_review('${finance}', jsonb_build_object('operation','snapshot','request','${visit}'::uuid,'terms','${terms}'::jsonb), 'Second review')`));
   return terms;
@@ -121,11 +127,11 @@ function noDeadlock(results, label) {
   for (const r of results) if (r.status === 'rejected') assert.doesNotMatch(r.reason.message, deadlock, `${label}: no deadlock`);
 }
 // A race against genuine unavailability: accepted at the bound terms, or refused with the named code.
-async function unavailableRace(label, visit, other) {
+async function unavailableRace(label, visit, other, bound = BOUND) {
   const results = await Promise.allSettled([accept(visit), other()]);
   noDeadlock(results, label);
   assert.equal(results[1].status, 'fulfilled', `${label}: the catalog or provider command succeeds (${results[1].reason?.message ?? ''})`);
-  if (results[0].status === 'fulfilled') assert.equal(await amounts(visit), BOUND, `${label}: accepted first, at the bound terms`);
+  if (results[0].status === 'fulfilled') assert.equal(await amounts(visit), bound, `${label}: accepted first, at the bound terms`);
   else assert.match(results[0].reason.message, /Provider is no longer eligible/, `${label}: refused only as no longer eligible (${results[0].reason.message})`);
   return results[0].status;
 }
@@ -150,7 +156,8 @@ async function setup() {
       values ('${application}', 'Synthetic bound provider', 'Test', 'Bound', 'bound-terms@example.invalid', 'synthetic', '${contractor}');
     insert into public.vendor_packages(id, contractor_id, service_id, name, pricing_mode, default_frequency, is_active, needs_review)
       values ('${pkg}', '${contractor}', '${service}', 'Synthetic bound package', 'fixed', 'weekly', false, false);
-    insert into public.package_tiers(id, package_id, name, price, frequency, sort_order, rule_conditions) values ('${tier}', '${pkg}', 'Weekly', 40, 'weekly', 0, '[]');
+    insert into public.package_tiers(id, package_id, name, price, frequency, sort_order, rule_conditions) values ('${tier}', '${pkg}', 'Weekly', 40, 'weekly', 0, '[]'),
+      ('${oneTimeTier}', '${pkg}', 'One time', 60, 'one-time', 1, '[]');
     update public.vendor_packages set is_active = true where id = '${pkg}';`);
   // The provider is activated through the real onboarding decision (DEC-2026-061), so the suspension race
   // below uses the real command too.
@@ -166,6 +173,17 @@ async function setup() {
       values ('${plan}', '${homeowner}', 'Synthetic bound lawn', '${service}', '1 Synthetic Way', 'Synthetic', 'FL', '${zip}', 'weekly', 'pending', 'awaiting_match', '${contractor}');
     select private.offer_next_for_request_internal('${plan}');`);
   await sql(as(vendorUser, `select public.vendor_accept_job('${plan}')`));
+}
+// A one-time request at the bound $60, submitted by the homeowner through the real command and offered.
+async function submitOneTime() {
+  const payload = JSON.stringify({ location: { address: '1 Synthetic Way', city: 'Synthetic', state: 'FL', zip_code: zip },
+    preferred_time: 'Synthetic window', selections: [{ service_id: service, frequency: 'one-time', package_id: pkg, tier_id: oneTimeTier,
+      preferred_contractor_id: contractor, expected: { pricing_mode: 'fixed', total: 60 } }] });
+  const out = JSON.parse(await sql(as(homeowner, `select public.submit_service_requests('${randomUUID()}', '${payload}'::jsonb)::text`)));
+  const request = out.requests?.[0]?.request_id;
+  assert.ok(request, `one-time request submitted (${JSON.stringify(out.requests?.[0] ?? out)})`);
+  await sql(`select private.offer_next_for_request_internal('${request}')`);
+  return request;
 }
 const reactivate = async () => sql(as(operator, `select public.vendor_decide_onboarding('${contractor}', ${await revision()}, 'activate', 'Synthetic reactivate', '${randomUUID()}')`));
 const liveHead = () => sql(`select id || '|' || updated_at from public.vendor_packages where lineage_id = '${pkg}' and is_active`);
@@ -280,7 +298,81 @@ try {
   await unavailableRace('C8 operator suspension', visits.shift(),
     () => sql(as(operator, `select public.admin_suspend_package('${id}','${stamp}','Synthetic suspension')::text`)));
   await assert.rejects(accept(visits.shift()), /Provider is no longer eligible/, 'C8: after the suspension, acceptance is refused');
-  console.log('PASS: ordinary revisions racing acceptance, checkout and publication all succeed at the bound terms with unchanged source hashes; six parallel acceptances give one; vendor pause, provider suspension, archive and operator suspension races accept first at the bound terms or refuse as no longer eligible; no race deadlocks.');
+} finally {
+  await cleanup();
+}
+
+try {
+  // Phase 3 (CS-3). One-time requests submitted at the bound $60 before any revision; every revision
+  // keeps a one-time level, at a new price.
+  await setup();
+  const requests = [];
+  for (let n = 0; n < 12; n += 1) requests.push(await submitOneTime());
+  const next = () => requests.shift();
+
+  // C9. One-time acceptance racing an ordinary price revision, three rounds: both succeed, at $60.
+  for (let round = 1; round <= 3; round += 1) {
+    const request = next();
+    const save = await prepareSave(40, 'Synthetic bound package', 60 + round);
+    const results = await Promise.allSettled([accept(request), save()]);
+    noDeadlock(results, `C9 round ${round}`);
+    assert.equal(results[0].status, 'fulfilled', `C9 round ${round}: acceptance succeeds (${results[0].reason?.message ?? ''})`);
+    assert.equal(results[1].status, 'fulfilled', `C9 round ${round}: the revision is saved (${results[1].reason?.message ?? ''})`);
+    assert.equal(await amounts(request), BOUND_ONE_TIME, `C9 round ${round}: accepted at the bound terms`);
+  }
+
+  // C10. Six parallel acceptances of one offer after a rename: exactly one acceptance.
+  {
+    await (await prepareSave(40, 'Synthetic bound package renamed', 64))();
+    const request = next();
+    const results = await Promise.allSettled(Array.from({ length: 6 }, () => accept(request)));
+    noDeadlock(results, 'C10');
+    assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1, 'C10: one acceptance');
+    for (const r of results.filter((x) => x.status === 'rejected')) assert.match(r.reason.message, /No open offer is available to accept/, 'C10: the rest find no open offer');
+    assert.equal(await amounts(request), BOUND_ONE_TIME, 'C10: at the bound terms');
+  }
+
+  // C11. Homeowner checkout racing a price revision, three rounds: both succeed, at $60.
+  for (let round = 1; round <= 3; round += 1) {
+    const request = next();
+    await accept(request);
+    const snapshot = await publish(request, await approvedTerms(request, 6000));
+    const save = await prepareSave(40, 'Synthetic bound package', 70 + round);
+    const results = await Promise.allSettled([sql(as(homeowner, `select (public.money_prepare_checkout('${snapshot}','full')).amount`)), save()]);
+    noDeadlock(results, `C11 round ${round}`);
+    assert.equal(results[0].status, 'fulfilled', `C11 round ${round}: checkout succeeds (${results[0].reason?.message ?? ''})`);
+    assert.equal(results[0].value, '6000', `C11 round ${round}: at the bound $60`);
+    assert.equal(results[1].status, 'fulfilled', `C11 round ${round}: the revision is saved (${results[1].reason?.message ?? ''})`);
+  }
+
+  // C12. Snapshot publication racing a revision: both succeed with the source hash read before it.
+  for (let round = 1; round <= 2; round += 1) {
+    const request = next();
+    await accept(request);
+    const terms = await approvedTerms(request, 6000);
+    const before = await sourceHash(request);
+    const save = await prepareSave(40, 'Synthetic bound package', 80 + round);
+    const results = await Promise.allSettled([publish(request, terms), save()]);
+    noDeadlock(results, `C12 round ${round}`);
+    assert.equal(results[0].status, 'fulfilled', `C12 round ${round}: publication succeeds (${results[0].reason?.message ?? ''})`);
+    assert.equal(results[1].status, 'fulfilled', `C12 round ${round}: the revision is saved (${results[1].reason?.message ?? ''})`);
+    assert.equal(await sql(`select c.source_hash || '/' || s.service from public.money_commercial_sources c join public.money_snapshots s on s.id = c.snapshot_id
+      where c.snapshot_id = '${results[0].value}'`), `${before}/6000`, `C12 round ${round}: same source hash and $60`);
+    assert.equal(await sourceHash(request), before, `C12 round ${round}: the hash is unchanged after the revision`);
+  }
+
+  // C13. One-time acceptance racing the vendor pausing the live revision: accepted first, or refused.
+  // Republished, acceptance succeeds at the bound terms.
+  {
+    const [id, stamp] = (await liveHead()).split('|');
+    await unavailableRace('C13 vendor pause', next(), () => sql(as(vendorUser, `select public.vendor_set_package_active('${id}', false, '${stamp}')::text`)), BOUND_ONE_TIME);
+    const [, paused] = (await sql(`select id || '|' || updated_at from public.vendor_packages where id = '${id}'`)).split('|');
+    await sql(as(vendorUser, `select public.vendor_set_package_active('${id}', true, '${paused}')::text`));
+    const request = next();
+    await accept(request);
+    assert.equal(await amounts(request), BOUND_ONE_TIME, 'C13: after republishing, acceptance succeeds at the bound terms');
+  }
+  console.log('PASS: ordinary revisions racing acceptance, checkout and publication all succeed at the bound terms with unchanged source hashes, for recurring visits and one-time requests; six parallel acceptances give one; vendor pause, provider suspension, archive and operator suspension races accept first at the bound terms or refuse as no longer eligible; no race deadlocks.');
 } finally {
   await cleanup();
 }

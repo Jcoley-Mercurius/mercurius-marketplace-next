@@ -4,7 +4,7 @@
 -- revision still offers the cadence and is not held in Package Reviews. Amounts and visit source hashes
 -- are unchanged. Genuine refusals (paused, archived, in review, cadence dropped, provider, service,
 -- coverage, provider ZIP, promotion, provider matching eligibility) still block, by name. One-time
--- requests (CS-3), legacy visits without bound terms and new visits are unchanged. Every catalog change
+-- requests are covered by CS-3 (SQL 115); legacy visits without bound terms and new visits are unchanged. Every catalog change
 -- goes through the real vendor or operator command. Synthetic data only; amounts are test examples.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -266,7 +266,7 @@ begin
   return next is(o->>'state_pd', 'paid', p_label || ': the paid visit stays paid');
   return next is(o->>'start_pd', 'startable', p_label || ': and startable');
   return next ok(o->>'new_visit' is null, p_label || ': a new visit is still blocked (changed-terms safeguard)');
-  return next is(o->>'accept_r2', '22023: Provider is no longer eligible', p_label || ': a one-time offer is unchanged (CS-3)');
+  return next is(o->>'accept_r2', 'ok', p_label || ': a one-time offer at its bound terms is accepted too (CS-3, SQL 115)');
 end $f$;
 select * from pg_temp.ordinary('price 40 -> 44', pg_temp.observe(null,
   $$select pg_temp.ordinary_obs(pg_temp.plan_content(44, 'Synthetic plan lawn'), 'cs4-save-price-0001')$$));
