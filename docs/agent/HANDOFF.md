@@ -7,6 +7,13 @@
 - The owner confirmed R-1: DEC-2026-062. It sets the CS-3 interpretation but doesn't authorize CS-3.
 - CS-4 implementation: its own PR stacked on #148 (TRACE-148). A1 rows stay open; Phase 6 is not accepted.
 
+## CS-4 bound-terms visits (TRACE-148), 2026-11-06
+
+- Branch `claude/phase6-cs4-visit-bound-terms`, stacked on #148 (`360e104`). Migration `20261115001000` (additive, **not pushed**).
+- What it does: visits stay acceptable and payable at their bound terms after an ordinary revision; genuine refusals still block, by name.
+- Evidence: clean replay 105 files / 6,725 PASS (twice); SQL 114 148/148; concurrency C1–C8 PASS; fingerprint `48 | 88c9a260…` (5 definitions changed). Details in plan §7.4.
+- Gates: Codex code review; finance review (Josh + accountant, not engaged); owner authorization for push and merge. CS-3 not started.
+
 # Agent handoff — 2026-11-05
 
 ## Phase 6 closeout packet (TRACE-147), 2026-11-05
