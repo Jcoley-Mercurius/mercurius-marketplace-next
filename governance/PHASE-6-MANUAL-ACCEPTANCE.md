@@ -4,6 +4,8 @@
 
 **When:** last, on the final acceptance candidate, after every acceptance-affecting repair has merged (closure report A2 and §9). Record the candidate commit with each result. A later change to a surface a script covers invalidates that result; rerun the script on the new candidate.
 
+*2026-11-05 (TRACE-147): still not performed, and no final candidate exists yet. CS-4 (vendor job acceptance), CS-3 (checkout) and the one-time start gate are still to merge, and they touch the J1/J3 vendor-job and checkout scripts. Light mode only (D-9). Each result records the candidate SHA, the browser and version, the device, the assistive technology and version, the person and the date. "Not performed" stays until someone actually performs the check; see closure report §10.3.*
+
 Related: [closure report](PHASE-6-CLOSURE-REPORT.md) items A2, X-1 and X-2.
 
 ## 0. Setup (isolated, synthetic, payments off)
