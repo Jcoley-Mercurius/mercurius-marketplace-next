@@ -176,8 +176,13 @@ select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 44 
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is((select needs_review from public.vendor_packages where id = '97400000-0000-4000-8000-000000000001'), false, 'the correction stays inside the review band');
 select pg_temp.accept(pg_temp.id('v2'));
-select throws_ok($$select pg_temp.accept(pg_temp.id('v1b'))$$, '22023', 'Provider is no longer eligible',
-  'existing rule (unchanged): an add-on visit''s offer bound to the old revision cannot be accepted after a price change; nothing is repriced');
+-- TRACE-127 (CS-4, DEC-2026-060 D-2 (a)): the offered add-on visit is accepted at its bound terms after
+-- the price change (here applied in place under owner maintenance; SQL 114 covers the application-path
+-- revisions). Before CS-4 this was refused ("Provider is no longer eligible").
+select lives_ok($$select pg_temp.accept(pg_temp.id('v1b'))$$,
+  'CS-4: an add-on visit offered at its bound terms is accepted after a price change');
+select is((select round(total_amount, 2) || '/' || round(base_amount, 2) from public.service_requests where id = pg_temp.id('v1b')), '45.00/40.00',
+  'CS-4: at the bound $40 + $5, nothing repriced');
 select is((select status::text from public.service_requests where id = pg_temp.id('v2')), 'scheduled', 'the provider accepts each visit');
 select is((pg_temp.src(pg_temp.id('v1'))->>'service')::bigint, 4000::bigint, 'a price edit before acceptance does not change the visit price');
 select is((pg_temp.src(pg_temp.id('v1'))->>'addons')::bigint, 500::bigint, 'the add-on comes from the bound terms');
