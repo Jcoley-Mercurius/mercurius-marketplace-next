@@ -150,11 +150,14 @@ if (released.ok) {
   assert.equal(await grants(providerC), "granted,already_held", "Reactivation kept the activation grant");
   assert.equal(await vendorRoles(identityC), "1", "A reactivated provider's account keeps one vendor role");
 }
+// DEC-2026-061: the onboarding decision sets is_active; listing (marketing_enabled) stays the
+// operator's separate choice, so no raced provider is listed.
 assert.equal(
-  await sql(`select count(*) from public.contractors
- where name like 'Synthetic role race%' and (is_active is not false or marketing_enabled)`),
-  "0",
-  "Raced providers' contractor records remain inactive and unlisted",
+  await sql(`select count(*) filter (where c.is_active is distinct from (o.status='active') or c.marketing_enabled)
+ || ',' || count(*) from public.contractors c join public.vendor_onboarding o on o.contractor_id=c.id
+ where c.name like 'Synthetic role race%'`),
+  "0,3",
+  "Raced providers' is_active follows the onboarding decision and none is listed",
 );
 console.log(
   `PASS: eight different-key and eight same-key concurrent activations each grant one vendor role once, and a reactivation racing a release resolves to one consistent role state (${released.ok ? "release" : "reactivation"} won). Reset synthetic fixtures afterward.`,

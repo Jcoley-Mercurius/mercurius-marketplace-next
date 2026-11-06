@@ -211,9 +211,13 @@ select is((select count(*) from public.vendor_role_decisions where contractor_id
 select public.vendor_decide_onboarding('e2000000-0000-4000-8000-000000000006',2,'reject','Synthetic rejection','role-reject-incomplete');
 select is(pg_temp.roles('e1000000-0000-4000-8000-000000000006'),'homeowner','Rejection grants no role');
 
--- Nothing here activates a listing.
-select is((select count(*) from public.contractors where id::text like 'e2000000-%' and (is_active or marketing_enabled)),0::bigint,
- 'Granting a role neither activates nor lists a contractor record');
+-- Granting a role turns on no marketing. Since DEC-2026-061 (TRACE-146) the onboarding decision
+-- sets is_active, so it follows the onboarding status exactly and nothing else.
+select is((select count(*) from public.contractors where id::text like 'e2000000-%' and marketing_enabled),0::bigint,
+ 'Granting a role does not enable marketing on a contractor record');
+select is((select count(*) from public.contractors c join public.vendor_onboarding o on o.contractor_id=c.id
+  where c.id::text like 'e2000000-%' and c.is_active is distinct from (o.status='active')),0::bigint,
+ 'is_active follows the onboarding decision and nothing else');
 
 -- Evidence is append-only.
 select throws_ok($$update public.vendor_role_decisions set outcome='granted'$$,'55000',null,'A role decision cannot be rewritten');

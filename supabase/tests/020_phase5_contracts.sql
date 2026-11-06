@@ -114,7 +114,7 @@ select is(public.vendor_decide_onboarding('52000000-0000-4000-8000-000000000001'
 select is(public.vendor_decide_onboarding('52000000-0000-4000-8000-000000000001',1,'activate','All synthetic checks reviewed','activate-1'),2,'Activation retry does not duplicate history');
 select is(public.vendor_is_eligible('52000000-0000-4000-8000-000000000001'),true,'Current licensed and insured vendor eligible');
 select is(public.vendor_evidence_current('52000000-0000-4000-8000-000000000001',now()+interval '1 year'),false,'Exact evidence expiry blocks eligibility');
-select is((select is_active from public.contractors where id='52000000-0000-4000-8000-000000000001'),false,'Independent activation does not mutate legacy matching');
+select is((select is_active from public.contractors where id='52000000-0000-4000-8000-000000000001'),true,'Activation sets legacy matching is_active (DEC-2026-061)');
 select is(public.vendor_decide_onboarding('52000000-0000-4000-8000-000000000001',2,'suspend','Synthetic suspension','suspend-1'),3,'Suspension retained');
 select is(public.vendor_is_eligible('52000000-0000-4000-8000-000000000001'),false,'Suspension overrides valid documents');
 select is(public.vendor_decide_onboarding('52000000-0000-4000-8000-000000000001',3,'renew','Synthetic renewal','renew-1'),4,'Renewal evidence recorded');
