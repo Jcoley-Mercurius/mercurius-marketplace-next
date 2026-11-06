@@ -28,4 +28,8 @@ where (n.nspname, p.proname) in (
   -- TRACE-125: a visit's commercial source is its bound plan terms, checked by one shared rule whose
   -- refusal text comes from the problem helper (money_source, already listed, is restated with the
   -- visit branch). The read-only payment state and queue functions are listed in the finance review.
-  ('private','recurring_visit_terms'), ('private','recurring_visit_source_check'), ('private','recurring_visit_payment_problem'));
+  ('private','recurring_visit_terms'), ('private','recurring_visit_source_check'), ('private','recurring_visit_payment_problem'),
+  -- TRACE-127 (CS-4): acceptance writes the visit's amounts from its offer and now judges a visit with
+  -- bound terms by the payment rule; the rule moved into recurring_visit_offer_problem, and whether the
+  -- bound offering is still offered is bound_offering_problem.
+  ('public','vendor_accept_job'), ('private','recurring_visit_offer_problem'), ('private','bound_offering_problem'));

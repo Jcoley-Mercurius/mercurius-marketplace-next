@@ -181,3 +181,36 @@ where v.recurrence_parent_id is not null and v.status <> 'cancelled';
 ```
 
 **Procedure.** If every count is 0, a rollback changes no live outcome. If any count is above 0, **fix forward instead**. If the owner still orders a rollback, it needs that authorization. Operations then first resolves each counted visit individually under the existing recovery text: let open checkouts finish or expire and reconcile them; then handle the visit under the per-visit policy, or have the plan accepted again on current terms. Nothing is repriced or substituted. Application rollback (`vercel promote`) needs none of this, because CS-4 changes no client.
+
+### 7.4 CS-4 implementation record (TRACE-148, 2026-11-06)
+
+**Implemented for review.** Not merged and not pushed to hosted. Migration `20261115001000_phase6_cs4_visit_bound_terms.sql` is additive: two new private helpers and three restated functions with unchanged signatures and grants. It changes no table, column, grant or data.
+
+**Changed definitions (fingerprint `45 | 34c51131…` on `main` → `48 | 88c9a260…`; the other 43 listed definitions are byte-identical):**
+
+| Function | Change | Why |
+|---|---|---|
+| `private.bound_offering_problem` | **new**, added to the list | R-1: the bound package and level are structurally intact (exist, same provider and service, fixed price, level at the cadence, priced, exact price kind, not archived), and the lineage's live revision offers the cadence, isn't archived and isn't in Package Reviews. Returns `package_in_review`, `package_unavailable` or null. Never reads a live price as the visit's price. |
+| `private.recurring_visit_offer_problem` | **new**, added to the list | The rule set `recurring_visit_source_check` applied, moved unchanged except that its last two branches call `bound_offering_problem`. One rule judges a pending offer (acceptance) and the accepted offer (payment). |
+| `private.recurring_visit_source_check` | restated | Calls the rule set; its output is unchanged for any visit that passed before, so visit source hashes are unchanged (SQL 114, concurrency C4). |
+| `private.money_source` | restated | Amendment 1: reads the request, then takes table locks by branch (visit: promotions only; others: both, unchanged). Visit row locks follow §7.2. The visit evidence and every one-time and quote path are byte-identical. |
+| `public.vendor_accept_job` | restated, added to the list | A visit with bound terms is judged by `recurring_visit_offer_problem` on the row as acceptance leaves it (fields copied from the offer), plus `vendor_matching_eligible`. Refusal text is unchanged; the code goes in `DETAIL`. Plans, one-time requests, visits without bound terms and the replacement path keep the earlier check. |
+
+**Choices for Codex's code review:**
+
+1. **An archived bound revision blocks**, even while a successor is live. This is the conservative reading of "archiving … the offering". An operator archive marks history it no longer offers.
+2. **The price-band ranking filter (≤ 1.25 × median) isn't applied** to a visit with bound terms. It reads the current price, and R-1 binds the price.
+3. **Matching eligibility (`vendor_matching_eligible`: onboarding, compliance, listing exclusion) is checked at acceptance, as before, but not at payment**, which keeps the 6.6c payment rule unchanged. SQL 114 records both.
+4. **A visit without bound terms** (pre-6.6a, no `created` generation) keeps the earlier matching check, so nothing is widened for it.
+5. Acceptance doesn't take the promotions table lock. Payment re-checks promotions under it.
+
+**Evidence** (isolated stack, synthetic):
+
+- Clean replay of 220 migrations: full suite 105 files / 6,725 PASS. After `bound-terms-concurrency.mjs` committed and removed its fixtures, a clean reset and the full suite gave 6,725 PASS again.
+- SQL 114: 148/148. SQL 097: 147/147 (its TRACE-127 assertion rewritten to the D-2 expectation).
+- `bound-terms-concurrency.mjs` (C1–C8): PASS on 4 runs, with no leftover rows. The related concurrency scripts (recurring visits, cadence, recurring payment, fulfillment, exceptions, exception resolutions, vendor offerings, admin operations) all pass.
+- On `main`'s schema, SQL 114 aborts at its first CS-4 check (helper missing), and the concurrency script fails at C1 round 2 with "Provider is no longer eligible".
+- Unit 656/656, types, lint, secret scan.
+- `vendor-offerings-concurrency.mjs` isn't a CI step on `main`; that predates CS-4 and is recorded here only.
+
+**Deployment order (each step needs the owner's authorization):** Codex code review → two-person finance review (Josh + the accountant) → hosted dry run and push of `20261115001000` → merge. The deployed client works on the new schema (same signatures; `/vendor/jobs` reads only `error.message` and re-reads the row), so the push can precede the merge. Rollback: §7.3.
