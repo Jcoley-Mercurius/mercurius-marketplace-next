@@ -1,3 +1,12 @@
+# Agent handoff — 2026-11-06
+
+## Codex plan review and R-1 (TRACE-147), 2026-11-06
+
+- **Checkpoint (verified):** `main` `02e04a0` (#147 merged by the owner), CI green; hosted and `main` both end at `20261114001000`. No Codex review of #147 is recorded.
+- Codex cleared the CS-4 plan architecture with five amendments: entry-level table locks, the complete lock order, success (not refusal) for ordinary edits, rollback's business effect, and a wider fingerprint. Recorded in [plan](../../governance/PHASE-6-BOUND-TERMS-PLAN.md) §7.
+- The owner confirmed R-1: DEC-2026-062. It sets the CS-3 interpretation but doesn't authorize CS-3.
+- CS-4 implementation: its own PR stacked on #148 (TRACE-148). A1 rows stay open; Phase 6 is not accepted.
+
 # Agent handoff — 2026-11-05
 
 ## Phase 6 closeout packet (TRACE-147), 2026-11-05

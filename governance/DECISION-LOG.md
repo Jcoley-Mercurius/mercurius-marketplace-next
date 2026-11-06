@@ -269,6 +269,20 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-062 — Bound terms stay acceptable and payable while the offering is still offered (R-1, TRACE-127/126)
+
+**Status:** **APPROVED** by the owner (Josh), confirmation recorded 2026-11-06 (America/New_York). **Date:** 2026-11-06.
+
+**Owner's words (R-1 confirmed):** "A visit or request priced at bound terms stays acceptable and payable at those terms while its provider still offers that service at that cadence through a live revision of the same offering that is not held in Package Reviews. Price, level, questions and add-ons come from the bound terms. Pausing, archiving or removing the offering, or holding its live revision in Package Reviews, still blocks acceptance and payment."
+
+**What it settles.** It answers reading R-1 of the [bound-terms plan](PHASE-6-BOUND-TERMS-PLAN.md) §2. It reads DEC-2026-049 item 6's live refusal "package offered and not under review" after 6.11A, where every save of an in-use version pauses the bound row and publishes a new revision (DEC-2026-039 item 2, DEC-2026-055 item 2). "Offered" means the offering is still offered through a live revision of the same lineage; it does not require the exact bound row to stay live.
+
+**Scope.** It authorizes the interpretation and the CS-4 implementation (recurring visits, TRACE-127). It also sets the interpretation that later CS-3 work (one-time requests, TRACE-126) will use, but **it does not implement or authorize CS-3**. It does not authorize a production change: hosted migration pushes, merge, payment or automation activation each still need the owner's separate authorization. CS-4 still needs a Codex code review and the two-person finance review (Josh + the accountant, DEC-2026-060) before merge.
+
+**Amends / reads:** DEC-2026-049 item 6 (as read above); DEC-2026-060 D-1 (a) and D-2 (a) (implemented through this reading). **Not changed:** DEC-2026-049 items 7–8 (quote-priced, promotional and replacement-provider visits stay blocked); new-visit changed-terms safeguards; fee, tax, capture, payout and refund rules.
+
+**Impact.** MPS: §6.4/§6.5 accepted-price rule gains this reading. MDS: none (refusal wording unchanged). MTS: CS-4 migration (TRACE-148). Data/payment/security: fingerprinted functions change in CS-4; each change is listed in its PR and needs the finance review.
+
 ### DEC-2026-061 — The onboarding decision sets the provider's platform activation (TRACE-146)
 
 **Status:** **APPROVED** by the owner (Josh), 2026-11-05. **Date:** 2026-11-05.

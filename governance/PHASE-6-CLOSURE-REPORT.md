@@ -254,6 +254,8 @@ The original recommendation is kept below.
 
 **Status:** prepared for Codex review. It accepts nothing, approves no policy and closes no A1 gap. **Phase 6 is not accepted, and Phase 7 is not authorized.**
 
+*2026-11-06 checkpoint (verified): #147 merged by the owner as `02e04a0` (2026-11-06 01:54 UTC); `main` CI run 42146902687 green. `main` and hosted now both end at `20261114001000`, so the "`main` lacks one migration" row below is resolved. No Codex review of #147 is recorded in the repository (manifest row 27 stays open). Codex cleared the CS-4/CS-3 plan architecture with five amendments ([plan](PHASE-6-BOUND-TERMS-PLAN.md) §7). The owner confirmed R-1 (DEC-2026-062), so O-1 is answered and O-8 is done. CS-4 is implemented for review (TRACE-148). The rows below are kept as written on 2026-11-05.*
+
 ### 10.1 Verified state
 
 | Check | Result |
@@ -302,13 +304,13 @@ The original recommendation is kept below.
 
 ### 10.6 Checklist before the owner can accept Phase 6 and authorize Phase 7
 
-- [ ] Codex clears the CS-4/CS-3 plan (R-1 to R-5); the owner confirms R-1 (O-1).
+- [ ] Codex clears the CS-4/CS-3 plan (R-1 to R-5); the owner confirms R-1 (O-1). *2026-11-06: CS-4 architecture cleared with amendments; R-1 confirmed (DEC-2026-062). CS-3's own plan items (R-2 to R-5 as they apply to one-time requests) still need review before CS-3.*
 - [ ] Accountant engaged (O-2).
 - [ ] CS-4 built, Codex code-reviewed, finance-signed (Josh + accountant), hosted push authorized and done, merged.
 - [ ] CS-3 built, the same gates, merged.
 - [ ] One-time CS-5 extension built, reviewed, pushed, merged.
 - [ ] A1: a recorded Codex review for every manifest row 1–27 (or one integrated review naming every range), with findings fixed in bounded slices.
-- [ ] #147 reviewed and merged (O-8).
+- [ ] #147 reviewed and merged (O-8). *2026-11-06: merged (`02e04a0`); Codex review still not recorded.*
 - [ ] W-6 answered (O-3), and slice merged if "close" is chosen.
 - [ ] Gates named for D-6d, D-8 and DEC-2026-051 items 6–8 (O-4 to O-6). These don't block acceptance under D-12, but §4.6 needs them before the items are planned.
 - [ ] Final candidate SHA fixed; CI green on it; full SQL suite on a clean replay; fingerprint recorded with every change explained.

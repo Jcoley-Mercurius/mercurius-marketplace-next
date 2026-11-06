@@ -43,9 +43,9 @@ Rows 22–26 are the stack's own diffs. `0a173bd` (#145) and `cbd65a7` (#146) br
 
 | # | Item | Range | Governing requirement | Evidence | Review status |
 |---|---|---|---|---|---|
-| 27 | TRACE-146 onboarding decision sets `is_active` (#147) | `cbd65a7..bd40701` (3 commits, 9 files) | DEC-2026-061; DEC-2026-057 item 3 | §3 below | **none**; migration already on hosted |
+| 27 | TRACE-146 onboarding decision sets `is_active` (#147; *merged 2026-11-06 as `02e04a0`*) | `cbd65a7..bd40701` (3 commits, 9 files) | DEC-2026-061; DEC-2026-057 item 3 | §3 below | **none**; migration already on hosted |
 | 28 | This closeout packet (TRACE-147) | branch `claude/phase6-closeout-a1-packet` from `cbd65a7` | closure report §9 | probe, lock-order demonstration, this manifest | **none** |
-| 29 | **CS-4 / CS-3 plan** (must be cleared before any money function changes) | [PHASE-6-BOUND-TERMS-PLAN.md](PHASE-6-BOUND-TERMS-PLAN.md) | DEC-2026-060 D-1, D-2, D-4; DEC-2026-049 item 6 | probe + lock-order evidence | **plan review requested** |
+| 29 | **CS-4 / CS-3 plan** (must be cleared before any money function changes). *2026-11-06: CS-4 architecture cleared with five amendments (plan §7); this is a plan review, not a code review* | [PHASE-6-BOUND-TERMS-PLAN.md](PHASE-6-BOUND-TERMS-PLAN.md) | DEC-2026-060 D-1, D-2, D-4; DEC-2026-049 item 6 | probe + lock-order evidence | **plan review requested** |
 
 ## 3. Reconciliation done for this packet (2026-11-05)
 

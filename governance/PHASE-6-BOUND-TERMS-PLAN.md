@@ -2,7 +2,9 @@
 
 **Status:** PLAN FOR CODEX REVIEW, 2026-11-05 (America/New_York). **Nothing here is implemented.** No money function, migration or test has changed. CS-4 and CS-3 each change fingerprinted money functions. Each waits for (1) Codex to clear this plan, (2) the reading in §2 R-1, (3) implementation and a Codex code review, (4) the two-person finance review (Josh + the accountant, not yet engaged, DEC-2026-060) and (5) the owner's authorization for the hosted dry run and push, before it merges. This is not Phase 6 acceptance.
 
-**Base:** `main` `cbd65a7` (#146). Branch `claude/phase6-closeout-a1-packet`.
+*2026-11-06: Codex cleared the architecture with five required amendments, and the owner confirmed R-1 (DEC-2026-062). Both are recorded in §7, which governs CS-4 where it differs from §2–§3. CS-4 is implemented for review as TRACE-148. CS-3 is not implemented. The text above is kept as written.*
+
+**Base:** `main` `cbd65a7` (#146). Branch `claude/phase6-closeout-a1-packet`. *2026-11-06: `main` is `02e04a0` (#147 merged).*
 
 **Governing answers:** DEC-2026-060 D-2 (a) "a visit offered at bound terms may be accepted at those terms after a catalog change" (CS-4); D-1 (a) "a one-time fixed request's agreed price is the tier revision and price bound at submission, as visits have been since 6.6c" (CS-3); D-4 (DEC-2026-050 A): start only when paid, with the operator exception, one-time jobs after CS-3. Also: DEC-2026-049 item 6 (bound visit terms, live eligibility refusals kept, no substitution or repricing); items 7–8 stay blocked; DEC-2026-034 (agreed prices unchanged); DEC-2026-039 item 2 and DEC-2026-055 item 2 (in-use versions become new revisions, never rewritten); DEC-2026-041 item 2 (add-ons are part of the commercial source); DEC-2026-042 (matching keeps the priced selection).
 
@@ -46,7 +48,7 @@ The real `money_source` takes these locks in one statement, so the window is nar
 
 | # | Question | Recommended | Alternative | Why it matters |
 |---|---|---|---|---|
-| **R-1** (owner confirms) | After 6.11A, what does DEC-2026-049 item 6's live refusal "package offered and not under review" require? | **The offering is still offered:** the bound revision's lineage has a live revision for the same provider and service, priced as fixed, not held in Package Reviews, that still offers a level at the visit's cadence. Price, level, add-ons and questions always come from the bound row and terms, never from the live revision. A paused, archived or removed lineage (no live revision), or a live revision held in review, still refuses with the existing named exception. | **Strict:** the exact bound row must be live. Then every save, including a rename, blocks payment for every unpaid visit of that plan, and CS-4 changes nothing on a real journey (F-B1, F-B3). | It decides whether a bound visit is payable, so it is a money rule, not only a code reading. Recommended owner wording: *"A visit or request priced at bound terms stays acceptable and payable at those terms while its provider still offers that service at that cadence (a live, unreviewed revision of the same offering). Pausing, archiving or removing the offering, or holding it in Package Reviews, still blocks it."* |
+| **R-1** (owner confirms) *Confirmed 2026-11-06, DEC-2026-062* | After 6.11A, what does DEC-2026-049 item 6's live refusal "package offered and not under review" require? | **The offering is still offered:** the bound revision's lineage has a live revision for the same provider and service, priced as fixed, not held in Package Reviews, that still offers a level at the visit's cadence. Price, level, add-ons and questions always come from the bound row and terms, never from the live revision. A paused, archived or removed lineage (no live revision), or a live revision held in review, still refuses with the existing named exception. | **Strict:** the exact bound row must be live. Then every save, including a rename, blocks payment for every unpaid visit of that plan, and CS-4 changes nothing on a real journey (F-B1, F-B3). | It decides whether a bound visit is payable, so it is a money rule, not only a code reading. Recommended owner wording: *"A visit or request priced at bound terms stays acceptable and payable at those terms while its provider still offers that service at that cadence (a live, unreviewed revision of the same offering). Pausing, archiving or removing the offering, or holding it in Package Reviews, still blocks it."* |
 | R-2 | Does the one-time offered-acceptance refusal (F-B2, one-time row) belong to CS-3? | **Yes.** D-1 binds the one-time price at submission, so accepting a one-time offer at bound terms is the same rule. CS-3 owns it, behind the same finance gate. | A separate slice | Without it, an offered one-time request can't be accepted after any save, even once CS-3 has fixed checkout. |
 | R-3 | A one-time request accepted by a different provider than the one priced at submission (fallback offer) | **Refuse checkout with a named reason**, "This request's agreed price wasn't recorded for this provider; it needs a new request or quote". No repricing and no fabricated terms. The rule for fallback pricing stays with the owner. | Treat the accepted offer as the binding (a new rule: owner) | Submission evidence (`pricing_inputs`) covers only the submitted package. `vendor_accept_job` overwrites the request's package and price from the accepted offer. Hosted: 0 such requests. |
 | R-4 | Evidence version for the one-time source | **New `commercial-v2:` prefix** for one-time evidence built from immutable bound fields, replacing the `to_jsonb()` package and tier row dumps (they carry `is_active`, `updated_at` and `needs_review`, which change on replacement). Visit evidence keeps `commercial-v1`. | Keep `commercial-v1` | A source hash changes for every one-time request. 0 hosted snapshots, so no stored snapshot changes meaning. |
@@ -114,3 +116,68 @@ DEC-2026-050 A for one-time jobs: start only when paid (captured ≥ the reviewe
 4. Both need the two-person finance review before merge (Josh + the accountant, **not engaged**). Each migration is dry-run and pushed to hosted with owner authorization before its merge (DEC-2026-037).
 5. CS-5 one-time after CS-3 merges.
 6. The A2 human checks then run on the resulting candidate (closure report §9).
+
+## 7. Codex plan review and owner confirmation (2026-11-06)
+
+**Codex plan review (bounded).** Codex cleared the CS-4 architecture with five required amendments. This is a plan review only. It is not a code review, and it doesn't close any A1 row. **Owner:** R-1 confirmed in the owner's words (DEC-2026-062); this also sets the interpretation CS-3 will use, but CS-3 isn't authorized or implemented by it.
+
+### 7.1 The five amendments and how CS-4 meets them
+
+| # | Codex amendment | CS-4 design |
+|---|---|---|
+| 1 | `money_source` takes table `SHARE` locks on `package_promotions` and `package_qualifying_questions` before choosing its branch, so reordering row locks inside the visit branch alone isn't enough | `money_source` reads the request row first, then branches. **Visit path:** only `package_promotions` in `SHARE` (the visit check reads it). **No lock on `package_qualifying_questions`**, which the visit check never reads and package writers insert into after locking their package. **One-time and quote paths:** both table locks, unchanged. |
+| 2 | Document the complete lock order, including callers, request and offer locks, provider, bound and live revisions, tiers and live-eligibility rows, against the actual writers | §7.2 |
+| 3 | A price revision or rename that leaves the offering eligible must preserve acceptance, payment, bound amounts and visit source hashes. Concurrency tests mustn't treat a generic refusal as success | SQL 114 asserts success, not "no error", for each ordinary change (price, rename, add-on, two successive revisions): exact amounts, unchanged source hashes, checkout at the bound amount. The concurrency script fails on any refusal of an ordinary-edit race. Only unavailability races (pause, suspension, archive, provider suspension) may refuse, and only as "no longer eligible". |
+| 4 | Explain rollback's business effect | §7.3 |
+| 5 | Expand the money fingerprint to include `vendor_accept_job` and the new bound-eligibility helper; explain every changed definition and list addition | Added: `public.vendor_accept_job`, `private.bound_offering_problem` and `private.recurring_visit_offer_problem` (the rule set moved out of `recurring_visit_source_check`, which now calls it). The list grows from 45 to 48 functions. Every changed definition is explained in the CS-4 PR. |
+
+### 7.2 Complete lock order
+
+**Readers of a visit's bound terms**, in the order each takes locks:
+
+| Caller | Order |
+|---|---|
+| `vendor_accept_job` (visit with bound terms) | advisory lock (job) → reads the pending offer (no lock) → `service_requests` row `FOR UPDATE` → `contractors` (plan provider) → bound `package_tiers` row → bound `vendor_packages` row → the lineage's live revision → `services_catalog` → `coverage_areas` → `contractor_service_zips`, each `FOR SHARE` → updates the offer rows and the request row it already holds → events and notices |
+| `money_publish_snapshot` | finance checks → advisory lock (request) → `service_requests` `FOR UPDATE` → `money_source`: `package_promotions` table `SHARE` → accepted offer `FOR SHARE` → provider → bound tier → bound package → live revision → catalog → coverage → provider ZIP (`FOR SHARE`) → snapshot and obligation writes |
+| `money_prepare_checkout` → `money_checkout_source_guarded` | advisory lock (request) → `service_requests` `FOR UPDATE` → `money_source` as above → checkout attempt writes |
+| `money_preview_commercial_source` | advisory lock (request) → `service_requests` `FOR UPDATE` → `money_source` as above |
+| `recurring_visit_payment`, the payment queue, `recurring_series` readback, the start guard | no locks (stable reads) |
+
+**Writers whose locks these readers can meet:**
+
+| Writer | Order | Against the readers |
+|---|---|---|
+| `vendor_save_package` | advisory lock (save key) → `contractors` `FOR NO KEY UPDATE` → source package → lineage rows (`NO KEY UPDATE`) → child rows of the **new** package (tiers, add-ons, questions) → publish: pause the old revision, activate the new one | Both take the provider row before any package row, so they serialize there. The reader's `SHARE` on promotions doesn't conflict (a save doesn't write promotions), and the reader no longer holds a questions table lock. |
+| `vendor_set_package_active` (pause/publish) | `contractors` `NO KEY UPDATE` → package → lineage | provider row first, as above |
+| `admin_publish_package_draft` | draft → `contractors` `FOR UPDATE` → target package → lineage → child inserts | provider row first |
+| `admin_suspend_package`, `admin_archive_package`, `admin_clear_package_review` | one package row `FOR UPDATE` | holds a single lock, so it can't close a cycle |
+| `vendor_decide_onboarding` (activate/suspend) | `vendor_onboarding` row → events → `contractors` update | readers never lock onboarding rows, so no cycle |
+| Operator writes to `services_catalog`, `coverage_areas`, `contractor_service_zips`, `package_promotions` | single statement; no server function writes them | one lock each; a promotion insert takes only key-share on its package, which `FOR SHARE` doesn't block |
+| Owner-maintenance tier edit (direct session only) | tier row → package row (review trigger) | readers lock tier before package, matching it |
+
+The 2026-11-05 forced-order demonstration (§1.1) deadlocked because `money_source` took the provider row **last**. CS-4 takes it first on the visit path. The one-time branch keeps its order until CS-3.
+
+### 7.3 Rollback: business effect, state check, recovery
+
+Restoring the previous functions takes a forward migration that restates them. It writes no data, but it is **not harmless once bookings rely on CS-4**. Every visit whose bound revision was replaced would be judged by the strict rule again:
+
+- offered visits can't be accepted;
+- accepted, unpaid visits (published or not) become unpayable (`package_unavailable`), including any whose checkout is open;
+- paid visits aren't affected: payment state checks capture first, and the start gate reads it.
+
+**State check before any rollback** (read-only; run against the target database, results reported as counts only):
+
+```sql
+select count(distinct v.id) filter (where m.outcome = 'pending') as offered_visits_on_replaced_revision,
+       count(distinct v.id) filter (where m.outcome = 'accepted' and coalesce(o.captured, 0) < coalesce(s.total, 1)) as unpaid_accepted_visits_on_replaced_revision,
+       count(distinct v.id) filter (where a.status in ('prepared', 'session_created', 'reconcile')) as open_checkouts_on_replaced_revision
+from public.service_requests v
+join public.vendor_packages p on p.id = v.package_id and not p.is_active
+join public.job_match_attempts m on m.service_request_id = v.id and m.outcome in ('pending', 'accepted')
+left join public.money_obligations o on o.service_request_id = v.id
+left join public.money_snapshots s on s.id = o.current_snapshot_id
+left join public.money_checkout_attempts a on a.obligation_id = o.id
+where v.recurrence_parent_id is not null and v.status <> 'cancelled';
+```
+
+**Procedure.** If every count is 0, a rollback changes no live outcome. If any count is above 0, **fix forward instead**. If the owner still orders a rollback, it needs that authorization. Operations then first resolves each counted visit individually under the existing recovery text: let open checkouts finish or expire and reconcile them; then handle the visit under the per-visit policy, or have the plan accepted again on current terms. Nothing is repriced or substituted. Application rollback (`vercel promote`) needs none of this, because CS-4 changes no client.
