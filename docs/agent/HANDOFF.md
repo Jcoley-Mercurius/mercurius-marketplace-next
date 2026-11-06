@@ -18,6 +18,19 @@
   3. CS-4, then CS-3, then one-time CS-5, each with its gates.
   4. A2 human checks on the final SHA.
 
+## Onboarding decision sets provider activation (TRACE-146, DEC-2026-061), 2026-11-05
+
+- **Found:** Molina Masters Air was activated through onboarding on 2026-11-04 but stayed off the platform. `vendor_decide_onboarding` never wrote `contractors.is_active`, and `20261109001000` removed the admin switch, the only other writer.
+- **Production correction (owner-authorized, 2026-11-05):** Molina's `is_active` set to `true`, conditioned on onboarding `active`. Readback: listable and matching-eligible.
+- **Fix:** migration `20261114001000`. Activate sets `is_active = true`, suspend sets `false`. **Pushed to hosted 2026-11-05 with owner authorization**: the dry run listed only this migration. Readback: hosted history ends at `20261114001000`; the function carries the sync; grants unchanged; every onboarding-active provider is listable except J & M.
+- Branch `claude/onboarding-activation-listing-sync`, based on CS-5 (`b56c1bf`), because hosted already holds `20261111`–`20261113` (the 2026-11-04 entry below says they were not pushed; hosted shows them applied).
+- **Evidence:** SQL 113 28/28 (7 fail without the migration); 035 50/50 and 037 73/73 (assertions updated to DEC-2026-061). Full suite on the local `mercurius-phase5-isolated` database, which holds seeded fixture data: 104 files, 6,338 pass with the migration. Every other failure is identical to a baseline run without it, so it is pre-existing and comes from the seeded data, not a clean replay.
+- **Open:**
+  - J & M All Purpose LLC (onboarding active, `is_active` false): owner decision.
+  - Reject leaves a legacy-listed provider's `is_active` unchanged.
+  - Codex review.
+  - Clean-replay suite run.
+
 # Agent handoff — 2026-11-04
 
 ## Phase 6 corrective slices CS-8, CS-7, CS-2, CS-9, CS-5 (TRACE-141–145), 2026-11-04

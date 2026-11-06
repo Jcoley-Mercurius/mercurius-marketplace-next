@@ -269,6 +269,24 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-061 — The onboarding decision sets the provider's platform activation (TRACE-146)
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-05. **Date:** 2026-11-05.
+
+**Context.** DEC-2026-057 item 3 makes `vendor_decide_onboarding` the only way to activate or suspend an onboarded provider, and `20261109001000` refuses every client write to `contractors.is_active`. But the decision never wrote `is_active`; only the removed admin switch did. Everything a homeowner sees (public listing, booking search, price lookup, completed-job counts, recurring-visit checks) reads `is_active`. So a provider activated after 2026-11-03 stayed off the platform, with no path to list it. Found 2026-11-05 for Molina Masters Air (onboarding activated 2026-11-04, `is_active` false).
+
+**Owner's words.** The owner was shown the gap and two remedies: a one-row correction for the affected provider, and a migration that makes the onboarding decision set the flag. The owner answered: "yes, please go ahead and do both, and then push the migration if you need to … fix that for every vendor going forward."
+
+**Decision.**
+1. In the same transaction as the decision, `vendor_decide_onboarding` sets `contractors.is_active = true` on activate and `false` on suspend. Reject and renew leave it unchanged. `marketing_enabled` stays the operator's separate listing choice. The direct switch stays closed (DEC-2026-057 item 3).
+2. One-time correction, 2026-11-05: Molina Masters Air's `is_active` was set to `true` in production, conditioned on its onboarding status being `active`. This is the owner-approved change of a stored value that DEC-2026-057 item 3 requires. No other stored value is changed. J & M All Purpose LLC (onboarding active since 2026-10-05, `is_active` false) is left as stored pending the owner.
+
+**Amends:** DEC-2026-057 item 3 (the decision now carries the activation it names); the Phase 5 TRACE-068 assertion that activation lists nothing (SQL 035) now holds for `marketing_enabled` only. **Not changed:** legacy providers without an onboarding record (DEC-2026-057 item 3 recovery path); listing exclusion; matching eligibility.
+
+**Impact.** MPS: none (activation already gates participation). MDS: none (the admin Visibility card already says activation happens through the onboarding decision). MTS: migration `20261114001000`. Data/security: one function restated; no grant, table or money function changed. Suspending a provider now also takes it off the public listing and holds its recurring visits as "provider isn't active or listed" until reactivation.
+
+**Required evidence:** SQL 113 and the updated 035; full SQL suite; hosted dry run, push and readback.
+
 ### DEC-2026-060 — Phase 6 closure decision sheet answers (TRACE-140)
 
 **Status:** **APPROVED** by the owner (Josh), 2026-11-03 (America/New_York). **Date:** 2026-11-03.
