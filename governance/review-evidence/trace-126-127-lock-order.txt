@@ -1,0 +1,34 @@
+# F-B4 lock-order demonstration (trace-126-127-lock-order.sh), isolated local stack, PR #147 head bd40701 schema (money functions identical to main: fingerprint 45 | 34c51131...), 2026-11-05.
+# Session A takes checkout locks in the stated order and sleeps 3 s; session B starts after 1 s and runs vendor_save_package on the same package.
+1. Current money_source visit-branch order (tier, package, then provider):
+  fixture: fixture tier rows: 1
+  A: 1
+  A: 1
+  A: 
+  A: ERROR:  deadlock detected
+  A: DETAIL:  Process 878 waits for ShareLock on transaction 3584; blocked by process 885.
+  A: Process 885 waits for ShareLock on transaction 3583; blocked by process 878.
+  A: HINT:  See server log for query details.
+  A: CONTEXT:  while locking tuple (0,17) in relation "contractors"
+  B: B saved revision 2
+2. Current one-time order (table SHARE on promotions/questions, package, tier, then provider):
+  fixture: fixture tier rows: 1
+  A: LOCK TABLE
+  A: 1
+  A: 1
+  A: 
+  A: ERROR:  deadlock detected
+  A: DETAIL:  Process 907 waits for ShareLock on transaction 3590; blocked by process 914.
+  A: Process 914 waits for ShareLock on transaction 3589; blocked by process 907.
+  A: HINT:  See server log for query details.
+  A: CONTEXT:  while locking tuple (0,17) in relation "contractors"
+  B: B saved revision 2
+3. Proposed R-5 order (provider, package, tier):
+  fixture: fixture tier rows: 1
+  A: 1
+  A: 1
+  A: 
+  A: 1
+  A: A committed
+  A: COMMIT
+  B: B saved revision 2
