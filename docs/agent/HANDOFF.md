@@ -1,5 +1,18 @@
 # Agent handoff — 2026-11-06
 
+## CS-3 one-time bound terms (TRACE-149), 2026-11-06
+
+- **Checkpoint (verified):**
+  - `main` is `61a441a` (#148 merged by the owner).
+  - #149 (CS-4) was merged into `claude/phase6-closeout-a1-packet` as `c3ce575`; that branch is now PR #150 to `main`.
+  - No Codex or finance review is recorded on #149 or #150.
+  - Hosted ends at `20261114001000`.
+- Branch `claude/phase6-cs3-one-time-bound-terms`, stacked on #150. Migration `20261116001000` (additive, **not pushed**).
+- Built on the owner's instruction before Codex reviewed CS-3's plan items; Codex reviews plan §4, §8 and the code together.
+- Finding F-C1: matching often offers a package other than the one priced at submission. CS-3 binds only offers of the submitted package and level; the rest is owner decision O-10.
+- Evidence: plan §8 and TRACE-149.
+- Gates: Codex review; finance review (Josh + accountant, not engaged); owner authorization for both hosted pushes (CS-4, then CS-3) and the merges. Phase 6 is not accepted.
+
 ## Codex plan review and R-1 (TRACE-147), 2026-11-06
 
 - **Checkpoint (verified):** `main` `02e04a0` (#147 merged by the owner), CI green; hosted and `main` both end at `20261114001000`. No Codex review of #147 is recorded.

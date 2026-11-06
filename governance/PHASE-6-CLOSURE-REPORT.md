@@ -256,6 +256,16 @@ The original recommendation is kept below.
 
 *2026-11-06 checkpoint (verified): #147 merged by the owner as `02e04a0` (2026-11-06 01:54 UTC); `main` CI run 42146902687 green. `main` and hosted now both end at `20261114001000`, so the "`main` lacks one migration" row below is resolved. No Codex review of #147 is recorded in the repository (manifest row 27 stays open). Codex cleared the CS-4/CS-3 plan architecture with five amendments ([plan](PHASE-6-BOUND-TERMS-PLAN.md) §7). The owner confirmed R-1 (DEC-2026-062), so O-1 is answered and O-8 is done. CS-4 is implemented for review (TRACE-148). The rows below are kept as written on 2026-11-05.*
 
+*2026-11-06 checkpoint, later (verified from GitHub and hosted, read-only):*
+
+- *The owner merged #148 (this packet) to `main` as `61a441a`.*
+- *The owner merged #149 (CS-4) into the closeout branch as `c3ce575`, not into `main`. That branch is now PR #150 to `main`.*
+- *No Codex code review and no finance review is recorded on #149 or #150.*
+- *Hosted ends at `20261114001000`; CS-4's `20261115001000` isn't pushed. #150 must not merge until Codex's code review and the finance review are recorded, and the migration is pushed with the owner's authorization (DEC-2026-037). Merging deploys to production.*
+- *On the owner's instruction, CS-3 is implemented for review as TRACE-149 ([plan](PHASE-6-BOUND-TERMS-PLAN.md) §8), stacked on #150. Codex hadn't reviewed CS-3's plan items first, so Codex reviews plan §4, §8 and the code together.*
+- *CS-3 found that R-3 as recommended would block ordinary bookings (F-C1), and binds only offers of the submitted package and level. The rest is decision O-10.*
+- *Hosted aggregates (read-only): 0 snapshots, 0 obligations, 0 open requests, 0 fixed `pricing-v2` requests, 0 pending offers.*
+
 ### 10.1 Verified state
 
 | Check | Result |
@@ -298,6 +308,7 @@ The original recommendation is kept below.
 | O-4 | Name the gate for D-6d (operations-opened formal dispute after 48 hours) | *"Decide at the R1 gate whether beta needs it; until then general support only."* | — | The deferral stays approved with no gate (§4.6) |
 | O-5 | Name gates for D-8 restrictions | (1) legacy providers without a reviewed suspension: **R1 gate**; (2) listing exclusion also removes matching: **after R1, on pilot evidence**; (3) no change workflow for bound requests: **R1 gate** | — | As O-4 |
 | O-6 | Name the gate for DEC-2026-051 items 6–8 (twice-a-year cadence, vendor cadences outside the catalog, guardrail band source) | *"After R1, at the first catalog review."* Current behavior is safe | — | As O-4 |
+| O-10 | *(2026-11-06, CS-3 §8)* Agreed price of a one-time request offered at a package or level other than the one priced at submission (another provider when none was chosen, or a newer revision) | Not recommended here; options (a) bind the offer's price when the offer is created (new slice), (b) refuse checkout (plan R-3; blocks ordinary bookings), (c) keep the current rule (the accepted offer's current price, confirmed by the homeowner at checkout) and record it | Finance review with the accountant; Codex review of CS-3 | CS-3 leaves these requests on the current rule; D-1's wording doesn't settle them |
 | O-7 | #147 follow-ups (DEC-2026-061) | Decide J & M All Purpose LLC's `is_active` (onboarding active, `is_active` false). Decide whether reject should change a legacy-listed provider's `is_active`. Neither is inferred here | — | J & M stays unlisted; reject behavior stays as is |
 | O-8 | Authorize the #147 merge after Codex review | Merge (hosted already has its migration; the merge reconciles `main` and adds the record) | Codex review | `main` stays one migration behind hosted |
 | O-9 | DEC-2026-059 open items (purge collected analytics events; re-issue invitations opened since 2026-11-02) | Kept recorded; nothing purged or re-issued here | Owner | Unchanged |
@@ -306,8 +317,8 @@ The original recommendation is kept below.
 
 - [ ] Codex clears the CS-4/CS-3 plan (R-1 to R-5); the owner confirms R-1 (O-1). *2026-11-06: CS-4 architecture cleared with amendments; R-1 confirmed (DEC-2026-062). CS-3's own plan items (R-2 to R-5 as they apply to one-time requests) still need review before CS-3.*
 - [ ] Accountant engaged (O-2).
-- [ ] CS-4 built, Codex code-reviewed, finance-signed (Josh + accountant), hosted push authorized and done, merged.
-- [ ] CS-3 built, the same gates, merged.
+- [ ] CS-4 built, Codex code-reviewed, finance-signed (Josh + accountant), hosted push authorized and done, merged. *2026-11-06: built; merged into the closeout branch (#150 to `main`) without a recorded code or finance review; not pushed; not on `main`.*
+- [ ] CS-3 built, the same gates, merged. *2026-11-06: built for review (TRACE-149), ahead of Codex's review of its plan items, on the owner's instruction; not pushed; not merged. O-10 open.*
 - [ ] One-time CS-5 extension built, reviewed, pushed, merged.
 - [ ] A1: a recorded Codex review for every manifest row 1–27 (or one integrated review naming every range), with findings fixed in bounded slices.
 - [ ] #147 reviewed and merged (O-8). *2026-11-06: merged (`02e04a0`); Codex review still not recorded.*
