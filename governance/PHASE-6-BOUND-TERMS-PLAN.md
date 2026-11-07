@@ -4,6 +4,8 @@
 
 *2026-11-06: Codex cleared the architecture with five required amendments, and the owner confirmed R-1 (DEC-2026-062). Both are recorded in §7, which governs CS-4 where it differs from §2–§3. CS-4 is implemented for review as TRACE-148. CS-3 is not implemented. The text above is kept as written.*
 
+*2026-11-06 (later): CS-4 (#149) was merged into the closeout branch, now PR #150 to `main`, with no recorded Codex code review or finance review. CS-3 is implemented for review as TRACE-149 (§8); Codex hasn't reviewed §4 or R-2 to R-5. §8 records a finding that changes R-3 (F-C1) and an owner decision (O-10).*
+
 **Base:** `main` `cbd65a7` (#146). Branch `claude/phase6-closeout-a1-packet`. *2026-11-06: `main` is `02e04a0` (#147 merged).*
 
 **Governing answers:** DEC-2026-060 D-2 (a) "a visit offered at bound terms may be accepted at those terms after a catalog change" (CS-4); D-1 (a) "a one-time fixed request's agreed price is the tier revision and price bound at submission, as visits have been since 6.6c" (CS-3); D-4 (DEC-2026-050 A): start only when paid, with the operator exception, one-time jobs after CS-3. Also: DEC-2026-049 item 6 (bound visit terms, live eligibility refusals kept, no substitution or repricing); items 7–8 stay blocked; DEC-2026-034 (agreed prices unchanged); DEC-2026-039 item 2 and DEC-2026-055 item 2 (in-use versions become new revisions, never rewritten); DEC-2026-041 item 2 (add-ons are part of the commercial source); DEC-2026-042 (matching keeps the priced selection).
@@ -214,3 +216,92 @@ where v.recurrence_parent_id is not null and v.status <> 'cancelled';
 - `vendor-offerings-concurrency.mjs` isn't a CI step on `main`; that predates CS-4 and is recorded here only.
 
 **Deployment order (each step needs the owner's authorization):** Codex code review → two-person finance review (Josh + the accountant) → hosted dry run and push of `20261115001000` → merge. The deployed client works on the new schema (same signatures; `/vendor/jobs` reads only `error.message` and re-reads the row), so the push can precede the merge. Rollback: §7.3.
+
+## 8. CS-3 implementation record (TRACE-149, 2026-11-06)
+
+**Implemented for review on the owner's instruction** (2026-11-06: build CS-3 next and prepare Phase 6 closeout). Codex's recorded plan review (§7) cleared CS-4 only; it did not review §4 or readings R-2 to R-5. **Codex reviews this section, the readings as built and the code together.** The owner's R-1 (DEC-2026-062) is the rule used. Not merged and not pushed to hosted.
+
+**Migration** `20261116001000_phase6_cs3_one_time_bound_terms.sql`, additive, ordered after CS-4's because it reuses `bound_offering_problem`. It adds one private helper and restates two functions with unchanged signatures and grants. It changes no table, column, grant or data.
+
+**Finding F-C1 (changes R-3).** A one-time request's offer is not always for the package priced at submission. Submission prices the cheapest eligible fixed offering, or the one the homeowner chose. Matching offers the top-ranked provider (`offer_next_for_request_internal`, `preferred DESC, rank_order`), and `create_job_offer_internal` then overwrites the request's package, level and price from that offer. When the homeowner names neither a provider nor a package, any provider is permitted (`fallback_permitted`), so "another provider than the one priced at submission" is the normal outcome for those requests, not a rare fallback. A re-offer after a save also carries the newer revision and its price. Refusing all of these at checkout, as R-3 recommended, would block an ordinary booking that works today. **As built, CS-3 binds only an offer or acceptance of the submitted package and level.** Every other one-time request keeps the earlier rule unchanged: live rows, the current price, `commercial-v1` evidence. SQL 115 records the re-offer case as "OPEN (R-3)". The pricing of those requests is decision O-10 below.
+
+**What CS-3 changes.** These conditions together select the bound path:
+
+- a one-time fixed request with an exact `pricing-v2` record;
+- the offer (at acceptance) or the request (at checkout) names that record's package and level;
+- at acceptance only: no quote, no promotion overlay, redemption or homeowner selection, and not the replacement path.
+
+On the bound path:
+
+| Function | Change | Why |
+|---|---|---|
+| `private.one_time_bound_problem` | **new**, added to the fingerprint list | One rule for acceptance and checkout. It validates the bound record rather than trusting it: package, level, frequency and provider; the revision hash recomputed from the bound row; the level price equal to the recorded line; and the total equal to the request's amount when there is no promotion. With an offer, the offer must be the bound package and level at the bound prices. Then the live checks from before, in the same order: provider active and listed, service, coverage, provider ZIP, then `bound_offering_problem` (R-1), then the level's answer conditions and the bound package's required answers. Returns a named code or null; computes no amount. |
+| `private.money_source` | restated | **Bound path:** price from the bound level; add-ons priced again from the bound package's content with `price_selection`, which must equal the recorded total; legacy promotion refusal and promotion logic unchanged; evidence `commercial-v2` from immutable bound fields only (R-4). Locks (R-5, as §7.2): promotions table `SHARE` only, then provider → bound tier → bound package → live revision → the bound package's questions and add-ons (row `SHARE`) → catalog → coverage → provider ZIP. **Every other path is byte-identical** (one-time unbound, quote, visit). |
+| `public.vendor_accept_job` | restated | **Bound one-time branch:** the same locks, the rule judged on the row as acceptance leaves it, plus `vendor_matching_eligible`; refusal "Provider is no longer eligible" with `one_time:<code>` in `DETAIL`. `replacement` is computed before the branch choice (a read; no change in meaning). The visit branch and the earlier check are unchanged. |
+
+**Fingerprint:** on CS-4's 48-function list, `88c9a260…` → `95658de7…`. Exactly `money_source` and `vendor_accept_job` differ; the other 46 are byte-identical. With the helper added, the new list is `49 | 52bdfc2460999a2e796633e124d71bbf`.
+
+**Messages.** Existing texts are kept, with the code in `DETAIL`:
+
+- provider, service, coverage, ZIP and offering refusals: "Selected offering is not eligible";
+- answer refusals: "Offering answers do not match selected tier" and "Required offering answers missing";
+- a bound record that no longer matches its row, on a request with add-ons: the earlier "Offering add-ons changed since the request; a new request or quote is required";
+- without add-ons, new text: "Offering changed since the request; a new request or quote is required".
+
+Clients are unaffected. `/vendor/jobs` shows acceptance's `error.message`, which is unchanged. The checkout function (`moneyCheckoutHandler.ts`) maps any refusal to `COMMERCIAL_REVIEW_REQUIRED`.
+
+**Choices for Codex's code review:**
+
+1. **Bound-path selection** compares the request's or offer's package and level with the submission record, not merely its presence (F-C1).
+2. **Requests without a `pricing-v2` record keep the legacy path**, as visits without bound terms did in CS-4 (§7.4 item 4). Hosted has 0 fixed `pricing-v2` requests and 0 open requests, so this affects no live record.
+3. **Promotional requests keep the earlier acceptance check.** Checkout's promotion logic is unchanged and the promotions gate stays closed.
+4. **The revision-hash check now covers every bound request**, not only those with add-ons. An owner-maintenance in-place edit of a bound row is now refused by name (`terms_inconsistent`) instead of repricing. This closes TRACE-126's in-place exposure; SQL 097's two "KNOWN EXPOSURE (one-time)" assertions are rewritten.
+5. **The price-band and ambiguous-level ranking filters aren't applied** at bound acceptance, as in CS-4 (§7.4 item 2). They read the current price, and the price is bound.
+6. **The evidence version changes** (`commercial-v2`) for bound requests, so a snapshot published before deployment would be refused at checkout ("Commercial source changed; review current terms") and need re-review. Hosted has 0 snapshots.
+
+**Rollback (business effect).** Restating CS-4's functions writes no data, but bound one-time requests whose bound row was replaced would again be unacceptable (offered) or unpayable (accepted). Their sources would revert to `commercial-v1`, so snapshots published under `commercial-v2` would be refused at checkout. **State check** (read-only; counts only):
+
+```sql
+select count(distinct r.id) filter (where m.outcome = 'pending') as offered_on_replaced_revision,
+       count(distinct r.id) filter (where m.outcome = 'accepted' and coalesce(o.captured, 0) < coalesce(s.total, 1)) as unpaid_accepted_on_replaced_revision,
+       (select count(*) from public.money_snapshots x where x.source_version like 'commercial-v2:%'
+          and not exists (select 1 from public.money_obligations y where y.current_snapshot_id = x.id and y.captured >= x.total)) as unpaid_v2_snapshots
+from public.service_requests r
+join public.vendor_packages p on p.id = r.package_id and not p.is_active
+join public.job_match_attempts m on m.service_request_id = r.id and m.outcome in ('pending', 'accepted')
+left join public.money_obligations o on o.service_request_id = r.id
+left join public.money_snapshots s on s.id = o.current_snapshot_id
+where r.recurrence_parent_id is null and r.status <> 'cancelled' and r.pricing_inputs->>'version' = 'pricing-v2';
+```
+
+The procedure is §7.3's. If every count is 0, rollback changes no live outcome. If any is above 0, fix forward; a rollback then needs the owner's authorization and per-request recovery first.
+
+**Decision O-10 (owner, with finance; not decided here).** What is the agreed price of a one-time request offered at a package or level other than the one priced at submission (another provider, or the same provider's newer revision)? Today and after CS-3 it is the accepted offer's current price, which the homeowner sees and confirms at the explicit checkout.
+
+- (a) Bind the offer's price when the offer is created (a new binding record; its own slice).
+- (b) Refuse checkout (plan R-3 as written; blocks ordinary bookings, F-C1).
+- (c) Keep the current rule and record it as the policy.
+
+D-1's wording ("the tier revision and price bound at submission") doesn't settle which applies.
+
+**Evidence** (isolated stack, synthetic):
+
+- Clean replay of 221 migrations: full suite 106 files / 6,868 PASS. After `bound-terms-concurrency.mjs` committed and removed its fixtures, a clean reset and the full suite gave 6,868 PASS again.
+- New SQL 115: 143/143. It covers price, rename, add-on and repeated revisions; every refusal by name; the owner-maintenance edit; promotion and matching exclusion; authorization, expiry, stale and mismatched offers; the unbound paths kept (no `pricing-v2` record; the re-offer recorded as OPEN (R-3)); and the control with no revision.
+- Rewritten expectations:
+  - SQL 097, 147/147: the two "KNOWN EXPOSURE (one-time)" assertions and the evidence-shape assertion.
+  - SQL 104, 71/71: its TRACE-126 assertion, now that the fixture carries a complete `pricing-v2` record.
+  - SQL 114, 148/148: its "one-time unchanged" assertion.
+- `bound-terms-concurrency.mjs`: C1–C13 PASS on 5 runs. The new one-time races are C9 (acceptance vs. save), C10 (six acceptances, one result), C11 (checkout vs. save), C12 (publication vs. save, hash unchanged) and C13 (acceptance vs. vendor pause). The related scripts pass: recurring payment, recurring visit, cadence, fulfillment, pricing, vendor offerings, phase 5 money, reviews.
+- On CS-4's schema, SQL 115 fails its first evidence checks and aborts (helper missing), and the concurrency script fails at C9 round 2 with "Provider is no longer eligible".
+- Rollback state check: 0/0/0 locally. Hosted (read-only): 0 snapshots, 0 obligations, 0 open requests, 0 fixed `pricing-v2` requests, 0 pending offers.
+- Unit 656/656, types, lint (0 warnings), secret scan.
+
+**Deployment order (each step needs the owner's authorization):**
+
+1. Codex review.
+2. The two-person finance review (Josh + the accountant).
+3. CS-4's hosted dry run and push of `20261115001000`, then #150 to `main`.
+4. CS-3's dry run and push of `20261116001000`, then its merge.
+
+The deployed client is unchanged, so each push can precede its merge.

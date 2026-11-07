@@ -32,4 +32,7 @@ where (n.nspname, p.proname) in (
   -- TRACE-127 (CS-4): acceptance writes the visit's amounts from its offer and now judges a visit with
   -- bound terms by the payment rule; the rule moved into recurring_visit_offer_problem, and whether the
   -- bound offering is still offered is bound_offering_problem.
-  ('public','vendor_accept_job'), ('private','recurring_visit_offer_problem'), ('private','bound_offering_problem'));
+  ('public','vendor_accept_job'), ('private','recurring_visit_offer_problem'), ('private','bound_offering_problem'),
+  -- CS-3 (TRACE-126): a one-time request is accepted and checked out at the terms bound at its
+  -- submission; that rule is one_time_bound_problem (money_source and vendor_accept_job, above).
+  ('private','one_time_bound_problem'));
