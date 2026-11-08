@@ -269,6 +269,31 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-063 — One-time offers at other terms: bind the offer's terms, with homeowner acceptance (O-10, TRACE-126/150)
+
+**Status:** **PROPOSED**, awaiting the owner's confirmation. **Date:** 2026-11-07 (America/New_York).
+
+**Source.** On 2026-11-07, the text below arrived in the implementation session as pasted content, worded as an approval ("I approve O-10 option (a) …"). The session doesn't show who wrote it, and **no owner confirmation is recorded**. It is recorded as the proposed decision, not as owner approval. A recommendation from Codex or Claude is not owner approval either. The status becomes APPROVED only when the owner (Josh) confirms it, with the date and wording recorded here.
+
+**Proposed text, as received:** "I approve O-10 option (a), with these requirements:
+- Preserve submission-bound terms when the offer matches the submitted package and level.
+- Otherwise, bind the selected provider's complete commercial terms when the offer is created.
+- Later catalog edits must not reprice that offer. Approved live eligibility checks remain.
+- Different provider, scope or price requires explicit homeowner acceptance of the complete terms before charging.
+- Provider acceptance alone is not homeowner price consent.
+- Changed terms require a new offer and fresh homeowner acceptance.
+- Do not transfer add-ons or promotions to another provider without supported, explicitly agreed terms."
+
+It continues: CS-3's current fallback (the accepted offer's current price) is an open repair, not approved permanent policy and not full TRACE-126 closure; "No production changes or Phase 6 acceptance are authorized by this decision."
+
+**What it would settle.** Decision O-10 ([bound-terms plan](PHASE-6-BOUND-TERMS-PLAN.md) §8; closure report §10.5): one-time fixed requests offered at a package or level other than the one priced at submission. It would read DEC-2026-060 D-1 together with R-1 (DEC-2026-062).
+
+**Scope.** Only a plan was prepared against it (plan §9, TRACE-150), for Codex review. It authorizes no implementation, hosted migration push, merge, production change, payment activation or Phase 6 acceptance. The money-path change will need the two-person finance review (Josh + the accountant, DEC-2026-060) before merge. Plan choices P-3 and O-11 stay proposed and open.
+
+**Would amend / read:** DEC-2026-060 D-1; plan R-3 (superseded by option (a) if confirmed). **Not changed:** DEC-2026-062; DEC-2026-053 E5/E6; DEC-2026-038/041/042 (the promotions gate stays closed); DEC-2026-049 items 7–8; fee, tax, capture, payout and refund rules.
+
+**Impact if confirmed.** MPS: §6.2/§6.5 gain a homeowner terms acceptance for other-terms offers. MDS: a homeowner terms review state (existing components). MTS: one additive migration. Data/payment/security: fingerprinted functions change; the finance review is required.
+
 ### DEC-2026-062 — Bound terms stay acceptable and payable while the offering is still offered (R-1, TRACE-127/126)
 
 **Status:** **APPROVED** by the owner (Josh), confirmation recorded 2026-11-06 (America/New_York). **Date:** 2026-11-06.

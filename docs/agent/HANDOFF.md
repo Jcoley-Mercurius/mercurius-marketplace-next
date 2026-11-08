@@ -1,3 +1,24 @@
+# Agent handoff — 2026-11-07
+
+## Reconciliation and O-10 repair plan (TRACE-150, DEC-2026-063 proposed), 2026-11-07
+
+- **Checkpoint (verified, read-only):**
+  - `main` is `98fe138` (#150, 2026-11-06), CI 42273533761 green, deployed to production. It carries CS-4.
+  - Hosted ends at `20261115001000` (CS-4); fingerprint `48 | 88c9a260…` matches `main`. No push record exists in the repository.
+  - #151 (CS-3) merged into `claude/phase6-closeout-a1-packet` (`a26a7fd`) after that branch had gone to `main`. **CS-3 is not on `main`**, and `20261116001000` is not on hosted.
+  - No Codex or finance review is recorded on #149–#151. CS-4 missed its pre-release gates; recorded, not satisfied.
+- DEC-2026-063 (O-10 option (a) with seven requirements) is **proposed**. The approval text arrived as pasted content with no owner confirmation recorded. TRACE-126 stays open. P-3 and O-11 are proposed.
+- Branch `claude/phase6-o10-offer-bound-terms` from `7d0bdba`; documentation only. Draft review PR based on `claude/phase6-cs3-one-time-bound-terms`. Plan: [bound-terms plan §9](../../governance/PHASE-6-BOUND-TERMS-PLAN.md).
+- **Release route:** one reviewed PR to `main` carrying CS-3 and O-10. Don't re-merge the closeout branch, and don't deploy CS-3's fallback alone.
+- **Next:**
+  1. Codex reviews §9 (P-1–P-10).
+  2. The owner confirms DEC-2026-063 and answers P-3 and O-11.
+  3. Implementation.
+  4. Codex code review, including CS-4's owed review.
+  5. Finance review (accountant not engaged).
+  6. Owner authorization for the pushes and the merge.
+- Phase 6 is not accepted.
+
 # Agent handoff — 2026-11-06
 
 ## CS-3 one-time bound terms (TRACE-149), 2026-11-06
