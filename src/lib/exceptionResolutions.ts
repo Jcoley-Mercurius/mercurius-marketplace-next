@@ -23,8 +23,11 @@ export type ReplacementState = {
   proposal: {
     id: string; contractor_id: string; provider_name: string | null; starts_at: string; created_at: string; reason: string;
     after_search_deadline: boolean; answer: { accepted: boolean; at: string; reason: string | null } | null;
+    /** TRACE-150 (P-5): the replacement offer's bound terms, when it carries them. */
+    terms?: { id: string; total_cents: number; terms: unknown } | null;
   } | null;
-  expected: { proposal_id: string; contractor_id: string; starts_at: string } | null;
+  /** Includes terms_id and consent_hash when the replacement carries bound terms (TRACE-150). */
+  expected: { proposal_id: string; contractor_id: string; starts_at: string; terms_id?: string; consent_hash?: string } | null;
   admin_expected: { contractor_id: string; proposal_id: string | null } | null;
 };
 

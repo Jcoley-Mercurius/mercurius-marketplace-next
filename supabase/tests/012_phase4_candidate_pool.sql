@@ -27,6 +27,13 @@ update public.service_requests set status='pending',contractor_id=null,matching_
 select is(private.offer_next_for_request_internal('93000000-0000-4000-8000-000000000001'),null::uuid,'selected provider decline pauses fallback for consent');
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"91000000-0000-4000-8000-000000000001"}',true);
+-- TRACE-150 (DEC-2026-063): this request has no submission record, so a fixed candidate is an offer at
+-- other terms; it is offered (with bound terms) only while the owner's offer_terms gate is on. The pool
+-- order is tested with the gate on; SQL 116 covers the gate-off skip.
+reset role;
+update private.money_feature_gates set enabled = true, reason = 'SQL 012: pool order with offers at other terms active'
+  where name = 'offer_terms';
+set local role authenticated;
 select lives_ok($$select public.consent_to_provider_fallback('93000000-0000-4000-8000-000000000001')$$,'consent resumes deterministic ranking');
 reset role;
 select is((select contractor_id from public.job_match_attempts where outcome='pending'),'92000000-0000-4000-8000-000000000001'::uuid,'highest-ranked remaining provider offered');

@@ -361,25 +361,25 @@ select is(pg_temp.observe(format($$select pg_temp.save(pg_temp.content(66, 'Synt
   format($$select to_jsonb(pg_temp.err(format('select pg_temp.accept(%%L)', %L::uuid)))$$, pg_temp.id('oa'))),
   '"22023: Provider is no longer eligible [one_time:offer_mismatch]"'::jsonb, 'an offer at another price is refused, never accepted at it');
 
--- Unchanged paths -----------------------------------------------------------------------------------
--- A request without a pricing-v2 record keeps the earlier rule: commercial-v1 evidence from the current
--- rows, and refused once its package is replaced (constructed directly; hosted has none).
+-- O-10 (TRACE-150, DEC-2026-063): these were CS-3's "unchanged paths" and "OPEN (R-3)" cases ---------
+-- A one-time request that went through matching but has no binding (its submission record removed;
+-- constructed directly, hosted has none) is refused by name (P-4), before and after a revision.
 select is(pg_temp.observe(format($$update public.service_requests set pricing_inputs = null where id = %L$$, pg_temp.id('ru')),
-  format($$select jsonb_build_array(split_part(pg_temp.hash(%L), ':', 1), private.money_source(%L) ? 'tier')$$, pg_temp.id('ru'), pg_temp.id('ru'))),
-  '["commercial-v1", true]'::jsonb, 'a request without a submission record keeps the earlier source (commercial-v1)');
+  format($$select to_jsonb(pg_temp.err(format('select private.money_source(%%L)', %L::uuid)))$$, pg_temp.id('ru'))),
+  '"P0001: This request''s agreed price wasn''t recorded; a new request or quote is required [one_time:terms_missing]"'::jsonb, 'O-10 P-4: a matched request without a binding is refused by name, not priced live');
 select is(pg_temp.observe(format($$update public.service_requests set pricing_inputs = null where id = %L;
     select pg_temp.save(pg_temp.content(66, 'Synthetic plan lawn'), 'cs3-save-legacy-001')$$, pg_temp.id('ru')),
   format($$select to_jsonb(pg_temp.err(format('select private.money_source(%%L)', %L::uuid)))$$, pg_temp.id('ru'))),
-  '"P0001: Selected offering is not eligible"'::jsonb, 'and is refused after a revision, as before');
--- OPEN (plan R-3): a re-offer at the newer revision (here forced by an operator) is accepted and priced
--- by the earlier rule at the newer price. CS-3 binds only an offer of the submitted package and level.
+  '"P0001: This request''s agreed price wasn''t recorded; a new request or quote is required [one_time:terms_missing]"'::jsonb, 'and after a revision');
+-- P-2: an operator's re-offer after a revision is made at the submitted row, level and price (the
+-- same provider's offering is still offered), so it stays on CS-3's bound path: no repricing.
 select is(pg_temp.observe(format($$select pg_temp.save(pg_temp.content(66, 'Synthetic plan lawn'), 'cs3-save-reoff-0001');
     select private.create_job_offer_internal(%L, '97200000-0000-4000-8000-000000000001', null, null, true)$$, pg_temp.id('op')),
   format($$select jsonb_build_array(pg_temp.err(format('select pg_temp.accept(%%L)', %L::uuid)), pg_temp.amounts(%L),
     (select concat_ws('/', s->>'service', split_part(s->>'version', ':', 1)) from private.money_source(%L) s))$$,
     pg_temp.id('op'), pg_temp.id('op'), pg_temp.id('op'))),
-  '["ok", "scheduled/66.00/66.00/66.00/false", "6600/commercial-v1"]'::jsonb,
-  'OPEN (R-3): a re-offer at the newer revision keeps the earlier rule and its price');
+  '["ok", "scheduled/60.00/60.00/60.00/true", "6000/commercial-v2"]'::jsonb,
+  'O-10 P-2: a re-offer after a revision is made and paid at the submitted terms');
 -- Without any catalog change, acceptance and the source are unchanged (applied, not rolled back).
 select is(pg_temp.err(format('select pg_temp.accept(%L)', pg_temp.id('oa'))), 'ok', 'without a revision the request is accepted as before');
 select is(pg_temp.amounts(pg_temp.id('oa')), 'scheduled/65.00/60.00/65.00/true', 'at its bound amounts');

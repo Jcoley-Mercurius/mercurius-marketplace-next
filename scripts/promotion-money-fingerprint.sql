@@ -35,4 +35,12 @@ where (n.nspname, p.proname) in (
   ('public','vendor_accept_job'), ('private','recurring_visit_offer_problem'), ('private','bound_offering_problem'),
   -- CS-3 (TRACE-126): a one-time request is accepted and checked out at the terms bound at its
   -- submission; that rule is one_time_bound_problem (money_source and vendor_accept_job, above).
-  ('private','one_time_bound_problem'));
+  ('private','one_time_bound_problem'),
+  -- O-10 (TRACE-150, DEC-2026-063): an offer at other terms binds its price when it is created
+  -- (create_job_offer_internal writes the request's price from offer_terms_build, chosen by
+  -- one_time_offer_basis); payment needs the homeowner's answer to that exact offer, terms row and
+  -- consent hash (homeowner_respond_offer_terms, or homeowner_respond_replacement for an E6
+  -- replacement), judged by offer_terms_problem against offer_terms_current.
+  ('private','create_job_offer_internal'), ('private','offer_terms_build'), ('private','one_time_offer_basis'),
+  ('private','offer_terms_consent_hash'), ('private','offer_terms_problem'), ('private','offer_terms_current'),
+  ('public','homeowner_respond_offer_terms'), ('public','homeowner_respond_replacement'));
