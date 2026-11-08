@@ -537,3 +537,96 @@ Codex decides P-1, P-2, P-4 to P-10. The owner decides **P-3** and **O-11**.
 4. Two-person finance review (Josh + the accountant, **not engaged**) of CS-4's deployed fingerprint, CS-3 and O-10.
 5. One PR to `main` carrying CS-3 and O-10. Release only after Codex resolves §9.8's deployment compatibility (A, B or another design); under (B), push with the switch off, merge, read back the deployment, then activate, each step with the owner's authorization.
 6. One-time CS-5 (§5), then the A2 human checks. **Phase 6 is not accepted.**
+
+## 10. O-10 implementation record (TRACE-150, 2026-11-08)
+
+**Implemented for review on the owner's instruction (2026-11-08).** It follows DEC-2026-063 (approved with O-11 and P-3) and Codex's review of §9 at `ff98673`. **Not pushed to hosted, not merged, gate not activated.** Each of those needs the owner's separate authorization. The finance review is Josh's sole-owner review (DEC-2026-064); it has **not** been performed. CS-4's missed pre-release gates (§9.1) stay recorded as missed. **TRACE-126 stays open** (item 9 below). Phase 6 is not accepted.
+
+**Branch and base.** `claude/phase6-o10-offer-bound-terms`, stacked on CS-3 (`7d0bdba`) and the §9 records. The release PR to `main` carries CS-3 and O-10 together, so CS-3's live-price path is never deployed alone.
+
+**Migration** `20261117001000_phase6_o10_offer_bound_terms.sql`, additive:
+- the `offer_terms` gate row (off) and its append-only audit;
+- `public.job_offer_terms` and `public.job_offer_terms_responses` (append-only; participants read; no client writes);
+- `private.offer_terms_blocks` and `private.offer_terms_retries`;
+- `awaiting_terms` added to the `matching_status` check;
+- two guard triggers;
+- new helpers and commands;
+- restated, with unchanged signatures: `find_eligible_packages_core`, `create_job_offer_internal`, `offer_next_for_request_internal`, `vendor_accept_job`, `money_source`, `homeowner_respond_replacement`, `job_replacement_state`, `provider_withdrawal_open`.
+
+It writes no request, offer or money data.
+
+### 10.1 Codex's review at `ff98673`: how each point is met
+
+| Codex point | Built | Evidence |
+|---|---|---|
+| Guard offer creation **and** transitions into `awaiting_terms`; serialize switch-off against them | Offer creation (`create_job_offer_internal`), matching (`offer_next_for_request_internal`), provider acceptance and the row trigger `guard_offer_terms_pending` each share-lock the gate row (`private.offer_terms_active(true)`). Switching the gate off updates that row, so it waits for, or is waited on by, each of them. Entering `awaiting_terms` needs the acceptance command's transaction mark **and** the gate on. | SQL 116 gate-off cases; concurrency C20 (accept vs switch-off) and C21 (offer vs switch-off) |
+| Separate identity-bound consent hashes from commercial-content comparisons | `content_hash` = SHA-256 of the commercial terms only; `consent_hash` = SHA-256 of {request, offer, terms row, content hash}. The homeowner's answer and `money_source` use `consent_hash`; the declined-terms check uses `content_hash`. | SQL 116: the content hash is refused as a consent; the earlier consent doesn't carry to new terms |
+| Complete scope and exclusions | The terms (`offer-terms-v1`) carry: provider, service, ZIP, cadence; offering name, description, policy notes and exact revision hash; level; included scope; the answers relied on; every priced line, including the provider's required add-ons; totals. Exclusions: the earlier add-ons not carried (name, quantity, amount, whether the earlier offering required them), no promotion, tax confirmed before payment, tip optional. | SQL 116 "complete scope", "P-3 … disclosed"; unit `offer-terms.test.ts` |
+| Pending-consent restrictions enforced server-side across scheduling, start and status commands | Row trigger `guard_offer_terms_pending`: while `awaiting_terms`, the request changes only through the answer, withdrawal, force and cancellation commands; every other status, schedule, quote or field change is refused. Trigger `guard_offer_terms_operation` refuses every operation except cancellation and provider withdrawal. Payment refuses ("Scheduled commercial parties required", then the consent check). | SQL 116: operator status change, provider start, reschedule request, appointment, direct write and payment all refused |
+| Preserve authorized customer-data disclosure | Disclosure follows assignment (`contractor_id`), as for an open offer; `awaiting_terms` keeps the accepted provider assigned, so nothing widens. A decline or withdrawal unassigns the provider, and it can no longer read the request. It keeps read access only to its own offer's terms record. | SQL 116: the declined provider sees 0 requests and 1 terms record |
+| Recovery for requests blocked while activation is off | A one-time request left without an offer while the gate is off is recorded (`offer_terms_blocks`). `admin_offer_terms_queue` lists it; after activation, `admin_retry_offer_terms_matching` (operator, keyed, reason) runs matching again. Admin page: "Offers at other terms". | SQL 116 recovery cases (refused while off, offered after activation, replayed, leaves the queue) |
+
+### 10.2 Readings P-1 to P-10 as built
+
+1. **P-1, provider first:** acceptance sets `matching_status = 'awaiting_terms'`; status stays `matched`.
+2. **P-2, the same provider's newer revision** is offered at the submitted row, level and prices (`one_time_offer_basis` → `lineage`). It then stays on CS-3's bound path. Matching now lists such a revision for requests priced with add-ons (they were excluded before), but never the bound row itself after an in-place change.
+3. **P-3, add-ons and scope (approved):** add-ons are not carried and are disclosed. A candidate whose terms can't be priced exactly for the request's answers (no single level, a required question unanswered) is skipped. While the gate is on, matching lists other fixed candidates for add-on requests.
+4. **P-4, narrowed:** a one-time fixed request with a submission record or any offer, but neither binding, is refused by name (`one_time:terms_missing`). The earlier live-price path remains only for a row with neither (no record, never offered). Product commands don't create such rows: submission always writes `pricing-v2` when it prices an offering, and matching always creates an offer. Removing it entirely would break 25 money test fixtures that insert scheduled requests directly; that is left as the TRACE-126 residue.
+5. **P-5, E6 replacements:** other-provider replacement offers carry bound terms. `job_replacement_state` shows them and puts `terms_id` and `consent_hash` in the expected answer. `homeowner_respond_replacement` records the terms answer (`via = 'replacement'`) and runs the bound-terms live checks.
+6. **P-6:** separate helpers; CS-3's `one_time_bound_problem` is unchanged.
+7. **P-7:** as 10.1, disclosure row.
+8. **P-8, tax:** the terms say tax is confirmed before payment; the amount comes from the two-person snapshot review, as for every request.
+9. **P-9, provider withdrawal in `awaiting_terms`:** the accepted offer is withdrawn and the request re-matches as an ordinary offer. `provider_withdrawal_open` ignores that withdrawal, so it isn't treated as a replacement.
+10. **P-10, eligibility change at the homeowner's answer:** refused by name, nothing written; decline stays possible; the operations queue shows "not acceptable".
+
+**Decline and re-offer.** Declining withdraws the attempt, unassigns the provider and runs matching. Matching never re-offers a provider with a closed attempt on the request. A force offer whose `content_hash` equals a declined answer's is refused ("The homeowner declined these terms"). Changed terms get a new row, consent hash and answer.
+
+**O-11 (approved).** No automatic timeout. `admin_offer_terms_queue` shows terms unanswered after 24 hours. In-app notifications go to the homeowner (provider accepted, review terms) and to the provider (accepted or declined).
+
+### 10.3 Client
+
+- **Homeowner:** `OfferTermsReview` in the job dialog shows the complete terms, what isn't included, and Accept and Decline. The answer is keyed, a lost response is read back, and stale terms are refused and reloaded. The replacement card shows the bound terms.
+- **Status:** labels, lifecycle and provider status handle `awaiting_terms`.
+- **Vendor jobs:** the vendor sees "Waiting for the homeowner to accept your terms", and the accept dialog says the homeowner accepts first.
+- **Admin requests:** the "Offers at other terms" queue and the amount label.
+- **Types:** `database.types.ts` regenerated from the local schema. This also picks up signatures from earlier migrations that hadn't been regenerated (CS-5's start exception, CS-9's dispute overloads); typecheck is clean.
+
+### 10.4 Evidence (isolated stack, synthetic)
+
+- **Clean replay of 222 migrations:** full SQL suite **107 files / 6,968 tests PASS**.
+- **New SQL 116:** 100/100. It covers gate off and on, recovery, P-2, complete terms and exclusions, the catalog edit after binding, every refusal while pending, identity and staleness, replay and reused keys, payment, decline with no re-offer, changed terms needing fresh consent, an eligibility change, the 24-hour queue, switch-off while pending, provider withdrawal (P-9), force supersede, cancellation, promotion and E6 (P-5).
+- **Rewritten expectations:**
+  - SQL 115: its CS-3 "unchanged paths" and "OPEN (R-3)" cases become the O-10 expectation, 143/143.
+  - SQL 012: pool order with the gate on, 10/10.
+  - SQL 087 and 028 unchanged (pass after one-time scoping).
+- **New `scripts/offer-terms-concurrency.mjs` (CI step):** C14–C21 PASS on 7 runs.
+- **Related CI scripts:** `bound-terms`, `recurring-payment`, `recurring-visit`, `recurring-cadence`, `fulfillment`, `exceptions`, `exception-resolutions`, `support`, `admin-operations`, `pricing` all pass. `test-lifecycle-integration` needs CI's default stack and wasn't run locally.
+- **Money fingerprint:**
+  - CS-3's 49-function list: `52bdfc24…` → `4919122f…`. Exactly `money_source`, `vendor_accept_job` and `find_eligible_packages_core` changed: restoring their CS-3 definitions in a rolled-back transaction gives `52bdfc24…` again.
+  - The list adds 8 functions (`create_job_offer_internal`, `offer_terms_build`, `one_time_offer_basis`, `offer_terms_consent_hash`, `offer_terms_problem`, `offer_terms_current`, `homeowner_respond_offer_terms`, `homeowner_respond_replacement`): new value **`57 | ce502fe7389eb2fdfa972bb38804fcfc`**.
+- **Client checks:** unit 660/660 (4 new); typecheck; lint; secret scan.
+- **Not run:** browser suite, build (CI runs both), screen reader, real devices.
+
+### 10.5 Findings
+
+- **F-O10-1 (pre-existing, not fixed):** a provider save that replaces the revision matching just selected makes offer creation refuse it ("Selected contractor/package is no longer eligible"), and the matching call fails with nothing written. A later matching run binds the new revision. No inconsistent terms are possible (C14).
+- **F-O10-2 (pre-existing):** `scripts/phase6-matching-offers.mjs` (not in CI) fails in its own cleanup on the 6.11A package-delete guard.
+- **F-O10-3:** the TRACE-126 residue (10.2 item 4).
+
+### 10.6 Release sequence (guarded activation, §9.8 B); each step needs the owner's authorization
+
+1. Codex code review of CS-3 and O-10 together (and CS-4's owed review). Josh's sole-owner finance review (DEC-2026-064).
+2. Read-only pre-push check: 0 one-time fixed requests in `pending`/`matched`; 0 pending offers.
+3. Dry run and push `20261116001000`, then `20261117001000`. The gate stays **off**: no request can reach `awaiting_terms`, so the deployed client isn't exposed.
+4. Merge the single PR; read back that the production deployment SHA includes the new client.
+5. Owner activation: `update private.money_feature_gates set enabled = true, reason = '<reason>' where name = 'offer_terms'` (recorded in `money_feature_gate_events`). Then read back the gate and run a synthetic check.
+6. Rollback: switch the gate off first. Before any Vercel rollback past O-10, count `awaiting_terms` requests; any count above 0 means fix forward.
+
+**Rollback state check (read-only, counts only):**
+
+```sql
+select (select count(*) from public.service_requests where matching_status = 'awaiting_terms') as awaiting_terms,
+       (select count(*) from public.job_offer_terms_responses where accepted) as accepted_terms,
+       (select count(*) from private.offer_terms_blocks) as blocked_while_off,
+       (select enabled from private.money_feature_gates where name = 'offer_terms') as gate_on;
+```
