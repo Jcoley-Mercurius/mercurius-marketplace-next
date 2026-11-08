@@ -6,6 +6,8 @@
 
 *2026-11-06 (later): CS-4 (#149) was merged into the closeout branch, now PR #150 to `main`, with no recorded Codex code review or finance review. CS-3 is implemented for review as TRACE-149 (§8); Codex hasn't reviewed §4 or R-2 to R-5. §8 records a finding that changes R-3 (F-C1) and an owner decision (O-10).*
 
+*2026-11-07: #150 merged to `main` (`98fe138`, deployed) with CS-4, and `20261115001000` is on hosted. #151 merged into the closeout branch after that branch had gone to `main`, so CS-3 is **not** on `main` and `20261116001000` is not on hosted. O-10 option (a) with requirements is recorded as DEC-2026-063, **proposed** (no owner confirmation is recorded). §9 records the reconciliation and the proposed O-10 repair for Codex. Nothing in §9 is implemented.*
+
 **Base:** `main` `cbd65a7` (#146). Branch `claude/phase6-closeout-a1-packet`. *2026-11-06: `main` is `02e04a0` (#147 merged).*
 
 **Governing answers:** DEC-2026-060 D-2 (a) "a visit offered at bound terms may be accepted at those terms after a catalog change" (CS-4); D-1 (a) "a one-time fixed request's agreed price is the tier revision and price bound at submission, as visits have been since 6.6c" (CS-3); D-4 (DEC-2026-050 A): start only when paid, with the operator exception, one-time jobs after CS-3. Also: DEC-2026-049 item 6 (bound visit terms, live eligibility refusals kept, no substitution or repricing); items 7–8 stay blocked; DEC-2026-034 (agreed prices unchanged); DEC-2026-039 item 2 and DEC-2026-055 item 2 (in-use versions become new revisions, never rewritten); DEC-2026-041 item 2 (add-ons are part of the commercial source); DEC-2026-042 (matching keeps the priced selection).
@@ -305,3 +307,209 @@ D-1's wording ("the tier revision and price bound at submission") doesn't settle
 4. CS-3's dry run and push of `20261116001000`, then its merge.
 
 The deployed client is unchanged, so each push can precede its merge.
+
+## 9. Reconciliation and the O-10 repair plan (TRACE-150, 2026-11-07)
+
+**Status: PROPOSED, for Codex review. Nothing in this section is implemented.** Every behavior in §9.2–§9.8 is proposed: no function, table, migration, client or test has changed. The decision this plan follows, DEC-2026-063, is **proposed** and still needs the owner's confirmation (see its entry). O-11, P-3 and the other choices in §9.5–§9.6 are proposals too. CS-3's live-price path (§8, "every other one-time request keeps the earlier rule") is an **open repair**, not approved policy. **TRACE-126 stays open** until the complete repair is implemented and verified.
+
+### 9.1 Reconciliation of #150 and #151 (read-only, 2026-11-07)
+
+These are observations, not repairs. Nothing was pushed, merged, re-merged or deployed.
+
+| Item | Found | Source |
+|---|---|---|
+| #150 | Base `main`; merged 2026-11-06 18:45 UTC as `98fe138` by the owner's account. It carried the closeout packet and CS-4 (#149, `c3ce575`). | `gh pr list` |
+| `main` | `98fe138`. Push CI run 42273533761: success. | `gh run list` |
+| Production | Deployment of `98fe138` at 2026-11-06 18:45:48 UTC. **CS-4 is live.** | GitHub deployments |
+| #151 (CS-3) | Base **`claude/phase6-closeout-a1-packet`, not `main`**. Merged 2026-11-07 17:14 UTC as `a26a7fd`, about 22.5 hours after #150 had already taken that branch to `main`. **CS-3 (`ae5157e`, `7d0bdba`) is not on `main` and not deployed.** The closeout branch is now `main` plus CS-3. | `git merge-base --is-ancestor` |
+| CI, CS-3 | PR run 42276023994 at `7d0bdba`: success. Push run 42395324355 at `a26a7fd` was still in progress when read. | `gh run list` |
+| Hosted migrations | `20261115001000` (CS-4) **applied**; `20261116001000` (CS-3) **not applied**. | `supabase migration list --linked` |
+| Hosted functions | Fingerprint `48 \| 88c9a26077e7f8fb07e140f38d839f8c` equals CS-4's recorded value (§7.4), so hosted's fingerprinted functions match `main`. Stored statements: 7, 31,943 bytes, against the file's 31,961. That fits statement splitting but wasn't compared byte for byte. | fingerprint script; `schema_migrations` |
+| CS-4 push record | **None in the repository.** The manifest (row 30), the closure report and TRACE-148 still said "not on hosted". Hosted doesn't store who pushed or when. | grep |
+| Reviews | #149, #150, #151: **no GitHub review and no Codex review recorded**. The only comments are automated (a CodeRabbit "review skipped" and the Supabase preview bot). **No finance review** for CS-4 or CS-3; the accountant isn't engaged. | `gh pr view` |
+| Hosted data | 0 open one-time requests, 0 pending or accepted offers, 0 snapshots, 0 obligations, 0 fallback consents, 0 `pricing-v2` requests. 6 historical fixed requests without `pricing-v2`, all closed. | read-only aggregates |
+
+**CS-4 missed its pre-release gates (recorded 2026-11-07; not satisfied).** §7.4 required, before the merge: a Codex code review, the two-person finance review, and a recorded, owner-authorized push. On 2026-11-06 CS-4 reached `main` and production with none of the three recorded. This record doesn't backdate any review or mark any gate satisfied. Both reviews are still owed, against `#149` (`360e104..84f8d16`) and the deployed fingerprint `48 | 88c9a260…`. No live visit, snapshot or obligation exists. A rollback would itself be a production change, and none is proposed.
+
+**Route for CS-3.** CS-3 has no route to `main`. Re-merging the closeout branch would ship CS-3 alone, together with its open live-price path, so **the closeout branch must not be re-merged**. The implementation release is one reviewed PR to `main` carrying CS-3 and O-10 together. The fallback is never deployed separately.
+
+### 9.2 Proposed requirements (DEC-2026-063, proposed) and how the plan meets each
+
+| # | Requirement as received | Proposed mechanism |
+|---|---|---|
+| Q1 | Preserve submission-bound terms when the offer matches the submitted package and level | CS-3's bound path (implemented on the CS-3 branch, not on `main`). Plus P-2: the same provider's newer revision of the lineage is offered **at the bound row and level**, so it matches. |
+| Q2 | Otherwise, bind the selected provider's complete commercial terms when the offer is created | `create_job_offer_internal` writes an immutable `job_offer_terms` row in the same transaction as the offer (§9.3). |
+| Q3 | Later catalog edits don't reprice the offer; approved live eligibility checks remain | Acceptance and checkout price only from the terms row. Live checks are CS-3's list, with "offered" read per R-1 against the terms' package. They refuse by name and never substitute. |
+| Q4 | A different provider, scope or price needs explicit homeowner acceptance of the complete terms before charging | A keyed homeowner response bound to the exact offer, terms row and terms hash (§9.4). `money_source` refuses an offer-bound request without it, so publication and checkout can't run. |
+| Q5 | Provider acceptance alone isn't homeowner price consent | Provider acceptance leads only to `awaiting_terms` (§9.3), never to `scheduled`. |
+| Q6 | Changed terms need a new offer and fresh acceptance | Terms rows are append-only, and a response names one row and its hash. There's no edit path. A change means a new offer, which gets a new terms row, which needs a new response. |
+| Q7 | No add-ons or promotions carried to another provider without supported, explicitly agreed terms | Offer-bound terms carry **no add-ons and no promotion**. Submitted add-ons not carried are listed as "not included" (P-3, proposed). A candidate with a promotion overlay isn't offer-bound and stays refused at checkout while the promotions gate is closed. |
+
+### 9.3 Proposed design
+
+**Flow (P-1, proposed): provider first, then homeowner.** This is the approved E5/E6 replacement pattern applied to ordinary offers:
+
+offer created with its terms bound → provider accepts (live checks) → `awaiting_terms` → homeowner accepts (live checks again) → `scheduled` → two-person review and publication → explicit checkout.
+
+*Alternative, not recommended: homeowner first.* It changes the matching state machine and vendor offer visibility, and every later expiry or decline costs the homeowner another question.
+
+**`awaiting_terms` is a matching state, not a request status.**
+
+- `service_requests.status` stays in its existing set; the request stays `matched` while it waits.
+- `service_requests.matching_status` gains the value `awaiting_terms`, by widening its check constraint.
+- A new value is needed because `private.replacement_attempt` and the client (`offerStatus.ts`, `appointments.ts`, `serviceRequestStatus.ts`) read `awaiting_homeowner` as "an E5/E6 replacement". Reusing that value would route an ordinary offer into the replacement flow.
+
+**Proposed transitions.** No other writer may set or leave `awaiting_terms`.
+
+| From (`status` / `matching_status`) | Event and actor | To | Records |
+|---|---|---|---|
+| `matched` / `offered`, offer-bound offer pending | Provider accepts (`vendor_accept_job`), live checks pass | `matched` / `awaiting_terms` | attempt `accepted`; request price from the terms; homeowner notified |
+| `matched` / `awaiting_terms` | Homeowner accepts the current terms (`homeowner_respond_offer_terms`), live checks pass | `scheduled` / `matched`, as an ordinary acceptance today | response row (accepted) |
+| `matched` / `awaiting_terms` | Homeowner declines | `pending` / `awaiting_match`, then `offer_next_for_request_internal` moves it to `offered`, `awaiting_consent` or `exhausted` as today | response row (declined); attempt `withdrawn`, reason "Homeowner declined the terms"; provider notified |
+| `matched` / `awaiting_terms` | Provider withdraws (`record_job_operation` `provider_cancel`) | `pending` / `awaiting_match` and re-match, **not** the E5/E6 replacement flow, because nothing was agreed | attempt `withdrawn`; terms row left without a response (closed by the withdrawal); `record_job_operation` and `provider_withdrawal_open` restated so this case isn't a replacement (P-9) |
+| `matched` / `awaiting_terms` | Homeowner or operator cancels (`customer_cancel`) | `cancelled` under the existing assessed command; nothing has been charged | existing operation record |
+| `matched` / `awaiting_terms` | Operator force offer (`_force`) | The accepted attempt is withdrawn and a new offer made | the earlier terms row is superseded; any later response to it is stale |
+| `matched` / `awaiting_terms` | Time passes | **No automatic change** (O-11, proposed); operations sees it after the O-11 window | — |
+
+**Data (proposed, additive):**
+
+- **`public.job_offer_terms`** (one row per offer-bound offer, `offer_id` unique; modeled on `job_replacement_proposals`):
+  - Columns: `id`, `request_id`, `offer_id`, `terms` (canonical JSON, below), `terms_hash`, `created_at`.
+  - RLS: participants read. No client writes; an append-only trigger blocks update and delete.
+- **`public.job_offer_terms_responses`** (modeled on `job_replacement_responses`):
+  - Columns: `terms_id` (**unique**, so one response per terms row), `request_id`, `offer_id`, `terms_hash`, `response_key`, actor, `accepted`, reason, `before_value`, `created_at`.
+  - `unique (request_id, response_key)`.
+- **Constraint:** `service_requests_matching_status_check` widened with `awaiting_terms`.
+
+**Complete commercial terms** (canonical JSON, version `offer-terms-v1`; `terms_hash` = SHA-256 of it):
+
+- **Offer identity:** request, offer id.
+- **Provider and service:** provider, service, ZIP.
+- **Exact revision:** package id, lineage, the package revision hash as recorded at offer creation, level id and label, frequency.
+- **Scope:** the answers the level relies on (and a hash of all answers).
+- **Price:** level price in cents, add-on lines (always empty), add-ons not included (names from `pricing_inputs`), promotion (always null), service subtotal in cents.
+- **Policy:** tax treatment (P-8) and cancellation policy version.
+
+The homeowner sees exactly this content.
+
+**Proposed functions** (same signatures; definer; grants unchanged unless noted):
+
+| Function | Fingerprinted | Proposed change |
+|---|---|---|
+| new `private.offer_terms_build(r, candidate)` | **add** | Builds the terms and hash from the rows read under the offer's locks. No live-eligibility judgment. |
+| new `private.offer_bound_problem(r, offer, terms)` | **add** | CS-3's rule with the terms row as the binding. It recomputes the hash and the package revision hash, and checks that the offer equals the terms. Then provider, service, coverage, provider ZIP, `bound_offering_problem` (terms package and level), answers. Returns a named code or null. |
+| `private.create_job_offer_internal` | **add** (it writes the request's price) | (a) P-2 substitution. (b) A fixed one-time candidate that differs from submission gets a `job_offer_terms` row. (c) A `_force` offer whose terms hash equals a **declined** response's hash for this request is refused (§9.5). Quotes, visits and promotion overlays are unchanged. Locks per §7.2. |
+| `public.vendor_accept_job` | yes | Offer-bound branch: locks, `offer_bound_problem`, then `awaiting_terms` (table above). CS-3, visit and replacement branches unchanged. |
+| new `public.homeowner_respond_offer_terms(_terms_id, _response_key, _accept, _expected, _reason)` | **add**; EXECUTE to `authenticated` | §9.4. |
+| `private.money_source` | yes | Offer-bound path: price and evidence (`commercial-v2`) from the terms row plus the accepted response id. Refused without an accepted response whose hash equals the row's. The fixed one-time live-price path is **removed**: with neither binding, it refuses `terms_missing` (P-4). Quotes and visits byte-identical. |
+| `public.homeowner_respond_replacement` | no → **add** | P-5: accepting an E6 proposal also writes the terms response for that offer's terms row, whose content the proposal shows. E6's agreed-amount rule is unchanged. |
+| `public.record_job_operation`, `private.provider_withdrawal_open` | no | P-9: a provider withdrawal in `awaiting_terms` re-matches as an ordinary offer, not a replacement. |
+| `find_eligible_packages_core`, promotions, split, snapshot, ledger, payout, refund | yes | **Not changed.** |
+
+**Lock order** (§7.2, extended): request advisory lock → request row (`FOR UPDATE` in commands) → `package_promotions` table `SHARE` (`money_source` only) → provider → `job_offer_terms` row → terms tier → terms package → live revision → package questions → catalog → coverage → provider ZIP.
+
+**Client (proposed; MDS components, no new patterns):**
+
+- **Homeowner:**
+  - a terms card in `HomeownerJobDetailDialog`, with Accept and Decline;
+  - the label "Your answer is needed: review this provider's terms" in `serviceRequestStatusLabel` and `offerStatus`;
+  - the "Amount" label for `awaiting_terms`;
+  - `canonicalRequestState` maps `matched`/`awaiting_terms` to matching.
+- **Vendor:** `vendorOfferOutcome` treats `awaiting_terms` as accepted and waiting for the homeowner ("Waiting for the homeowner to accept your terms").
+- **Admin:** shows the state and the binding basis.
+- **Types:** regenerated.
+
+### 9.4 Proposed homeowner consent: exact binding, stale answers, retries, races
+
+`homeowner_respond_offer_terms(_terms_id, _response_key, _accept, _expected, _reason)`, where `_expected = {offer_id, terms_id, terms_hash}` as the homeowner's screen loaded them.
+
+1. **Who.** Only the request's homeowner; anyone else gets `42501`. Anonymous callers have no grant.
+2. **Locks.** Request advisory lock, then the request row `FOR UPDATE`, then the §9.3 order. Every writer that can change the outcome takes the same request locks first: provider acceptance, decline, provider withdrawal, cancellation and force offer.
+3. **Retry (replay).** If a response with this `response_key` exists for the request:
+   - same terms row, intent and reason → return it with `replayed: true` and write nothing;
+   - otherwise → `22023`, "Response key reused with different intent".
+4. **Exactly one answer.** `terms_id` is unique in the responses table. A second answer with a new key gets `22023`, "You already answered these terms". Concurrent accept and decline, from two tabs or two keys, serialize on the request lock: the first commits, and the second sees the response and is refused. The unique index backs this if the lock order is ever broken.
+5. **Stale.** `40001`, "These terms changed since you opened them. Review the current terms.", and nothing is written, when any of these holds:
+   - `_expected` differs from the current offer, terms row or hash;
+   - the offer isn't the request's accepted attempt;
+   - the request isn't `matched`/`awaiting_terms`;
+   - the stored `terms_hash` no longer equals the hash recomputed from `terms`.
+
+   This covers force offers, withdrawals and cancellations that happened in between.
+6. **Exact revision.** The response stores `offer_id`, `terms_id` and `terms_hash`. The hash covers the package revision hash. `money_source` accepts the response only while all three still equal the request's accepted attempt and its terms row. A later offer, even from the same provider at the same price, has a new terms row and needs a new response.
+7. **Changed eligibility.** On accept, `offer_bound_problem` runs under the locks.
+   - If it returns a code, the call fails with that code named, and **nothing is written**. The request stays `awaiting_terms`; the homeowner can still decline, and operations sees the refusal in the queue (P-10).
+   - A concurrent provider suspension or vendor save takes the provider or package lock. It either commits first, so acceptance is refused by name, or after, so acceptance stands at the bound terms (R-1).
+   - Declining runs no eligibility check, so a homeowner is never stuck unable to say no.
+8. **Charging.** Charging stays a separate step: the two-person review, publication and the explicit checkout. They proceed only when step 6 holds. Provider acceptance never satisfies it.
+
+### 9.5 Proposed: declining doesn't bring the same terms back
+
+- **Matching.** `create_job_offer_internal` already refuses, without `_force`, any provider with a `declined`, `expired` or `withdrawn` attempt on the request. A homeowner decline sets the attempt to `withdrawn`, so automatic matching never offers that provider on this request again, at any terms.
+- **Force offers.** An operator force offer that produces the same `terms_hash` as a declined response on this request is refused: "The homeowner declined these terms". Different terms from the same provider can be forced, but they get a new terms row and need a fresh acceptance.
+- **Submission terms aren't recycled.** A decline doesn't revive the submission terms for another provider. The next candidate is either submission-matched (Q1) or bound to its own terms (Q2).
+- **Supply runs out.** If no candidate remains, the request reaches `exhausted`, shown as "Not available yet in your area", as today.
+
+### 9.6 Readings and choices (all proposed)
+
+Codex decides P-1, P-2, P-4 to P-10. The owner decides **P-3** and **O-11**.
+
+| # | Question | Recommended | Alternative |
+|---|---|---|---|
+| P-1 | Order of acceptances | Provider first, then homeowner (E5/E6 pattern) | Homeowner first |
+| P-2 | Same provider's newer revision of the submitted offering | Offer at the bound row and level (R-1; preserved, no new acceptance) | Bind the newer revision's terms and ask the homeowner |
+| **P-3** (owner) | Submitted add-ons on a cross-package offer | Not carried; listed as "not included" in the terms the homeowner accepts | Don't offer cross-package when add-ons were chosen |
+| P-4 | Requests with neither binding (no `pricing-v2`, or an offer made before deployment) | Refuse by name. Hosted has 0 open requests. Part of the repair TRACE-126 needs; it doesn't close TRACE-126 by itself. | Keep the live-price path (contradicts DEC-2026-063 as received) |
+| P-5 | E6 replacement offers | In scope (§9.3) | Leave E6 alone; after P-4 a pre-payment replacement couldn't be paid |
+| P-6 | One helper or two | Two; CS-3's helper untouched | Generalize `one_time_bound_problem` |
+| P-7 | Customer details for a provider who accepted before the homeowner agreed | Same exposure E5/E6 already has; confirm it's the "approved workflow point" (MPS §6.2) | Hide the address until the homeowner accepts |
+| P-8 | Tax in the accepted terms | The terms carry the tax treatment; the amount comes from the reviewed snapshot, shown at checkout | Compute tax at offer creation |
+| P-9 | Provider withdrawal in `awaiting_terms` | Ordinary re-match, not replacement | Treat as E5/E6 replacement |
+| P-10 | Eligibility refusal at homeowner acceptance | Refuse, write nothing, show it in the operations queue | Auto-withdraw and re-match |
+| **O-11** (owner) | Response window; notification | No automatic change; operations sees it after 24 hours; in-app notification as E5 | Email as well; an automatic decline |
+
+### 9.7 Evidence required (for the implementation, not this plan)
+
+- **SQL 116 (new) matrix:**
+  - Binding basis: submission match; same-lineage newer revision; other provider; same provider, other package; operator force; fallback-consented; E6 replacement.
+  - × Change after binding: price, rename, add-on, pause, archive, review, provider suspension, coverage, ZIP, service.
+  - × Steps: provider accept; homeowner accept, decline, stale `_expected`, replay, reused key, second key, other homeowner, provider, anonymous; provider withdrawal; cancel; force with same and different terms.
+  - × Money: publication and checkout.
+  - Assertions: amounts and source hash never change after binding; add-ons and promotions aren't carried; every refusal by name; P-4 refusals; no re-offer after decline.
+- **Rewritten:** SQL 115's "OPEN (R-3)" cases. Recheck 097, 104 and 114. Update the matching tests (phase 1, phase 4 consent) and the exception-resolution tests.
+- **Concurrency C14–C20:**
+  - offer creation vs. vendor save (the hash equals the revision read);
+  - provider accept vs. save;
+  - homeowner accept ×6 with one key (one response);
+  - accept vs. decline with two keys (one wins);
+  - accept vs. provider suspension;
+  - accept vs. force re-offer;
+  - accept vs. provider withdrawal.
+- **Browser:** homeowner accept and decline; vendor waiting state; admin state.
+- **Unit and static checks:** state mapping, types, lint, secret scan.
+- **Fingerprint and replay:** fingerprint before (`49 | 52bdfc24…`, CS-3) and after, each changed function named; a clean replay twice; the rollback state check.
+
+### 9.8 Proposed migration, deployed-client compatibility, rollback
+
+- **Migration.** `20261117001000_phase6_o10_offer_bound_terms.sql`, additive: two tables, one widened check constraint, restated functions, one new public command. It writes no data.
+- **Deployed clients are not compatible with `awaiting_terms`.** On production `98fe138`:
+  - The vendor screen's `vendorOfferOutcome` reports an accepted offer as "gone".
+  - The homeowner sees the generic status "Matched" and has no way to answer.
+  - The admin pages show the raw value. Nothing crashes: `matching_status` is a plain `string` in the types.
+
+  So no request may reach `awaiting_terms` before the new client is deployed. Proposed order, each step with the owner's authorization (DEC-2026-037):
+  1. Read-only pre-push check: 0 one-time fixed requests in `pending`/`matched`, and 0 pending offers. Hosted shows 0 today, and R0 blocks new requests without trial access.
+  2. Dry run and push `20261116001000`, then `20261117001000`.
+  3. Merge the single PR immediately.
+
+  If the pre-push check is above 0, stop and ask the owner.
+- **Rollback.** A forward migration restoring CS-3's definitions. Business effect: `awaiting_terms` requests would have no path forward, and accepted offer-bound requests would lose their binding. A read-only state check counts both first; any count above 0 means fix forward.
+
+### 9.9 Order and gates
+
+1. Codex reviews §9 (P-1–P-10). The owner confirms or amends DEC-2026-063 and answers P-3 and O-11.
+2. Implementation on `claude/phase6-o10-offer-bound-terms`, stacked on CS-3. No implementation starts before step 1.
+3. Codex code review of CS-3 (§8) and O-10 together, plus the owed review of CS-4 (#149).
+4. Two-person finance review (Josh + the accountant, **not engaged**) of CS-4's deployed fingerprint, CS-3 and O-10.
+5. One PR to `main` carrying CS-3 and O-10. Then the §9.8 push order and merge, each with the owner's authorization.
+6. One-time CS-5 (§5), then the A2 human checks. **Phase 6 is not accepted.**
