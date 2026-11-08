@@ -497,12 +497,36 @@ Codex decides P-1, P-2, P-4 to P-10. The owner decides **P-3** and **O-11**.
   - The homeowner sees the generic status "Matched" and has no way to answer.
   - The admin pages show the raw value. Nothing crashes: `matching_status` is a plain `string` in the types.
 
-  So no request may reach `awaiting_terms` before the new client is deployed. Proposed order, each step with the owner's authorization (DEC-2026-037):
-  1. Read-only pre-push check: 0 one-time fixed requests in `pending`/`matched`, and 0 pending offers. Hosted shows 0 today, and R0 blocks new requests without trial access.
-  2. Dry run and push `20261116001000`, then `20261117001000`.
-  3. Merge the single PR immediately.
+  *2026-11-08: **Deployment compatibility is UNRESOLVED.*** The order proposed earlier (a read-only check, push, then merge immediately) does **not** resolve it, because:
+  - Between the push and the new client going live, any one-time request matched to other terms would reach `awaiting_terms` on the old client. The window lasts from the push, through the merge, to Vercel's deployment.
+  - The read-only check shows only that no request is open at the moment it runs. It doesn't stop one from opening afterwards.
+  - R0 isn't a guard here: you can grant trial access at any time.
+  - A Vercel rollback to a pre-O-10 deployment (AGENTS.md) would bring the incompatible client back while the schema stays.
 
-  If the pre-push check is above 0, stop and ask the owner.
+  Two proposals for Codex to choose between (or reject). **Neither is implemented.**
+
+  - **(A) Backward-compatible states.** Don't add a `matching_status` value. After the provider accepts, keep values the deployed client already renders, and mark the wait in a new record: a `job_offer_terms` row with no response.
+    - The request would be `matched`/`matched`. The old vendor client shows "accepted", which is correct.
+    - The old homeowner client would show "provider confirmed" with the amount, which is **misleading**: it suggests the service is booked, and offers no way to answer. Payment stays refused (`money_source`), so nothing is charged at the wrong terms.
+    - Every command that acts on `matched` (appointments, rescheduling, start, publication) would need a terms-pending guard, which widens the slice.
+    - **Not recommended:** it is safe for money but not truthful to the homeowner.
+  - **(B) Guarded activation (recommended).** Deploy the schema and client inactive, then activate on purpose. While inactive, no offer to other terms is created, and the live-price fallback isn't used either.
+    - **Switch:** one operator-only activation record (`private`, default **off**). Changing it takes a keyed, audited command with a reason. No client can write it.
+    - **While off:**
+      - `create_job_offer_internal` doesn't offer a fixed one-time candidate whose terms differ from submission. It skips that candidate and logs the skip, and matching continues to the next, which ends in `exhausted` ("Not available yet in your area") if none remains.
+      - CS-3's submission-bound path works.
+      - P-4 still refuses requests with neither binding.
+      - No request can reach `awaiting_terms`, so the old client never sees it.
+    - **Sequence**, each step with the owner's authorization:
+      1. Read-only pre-push check.
+      2. Dry run and push `20261116001000`, then `20261117001000`, with the switch off.
+      3. Merge the single PR.
+      4. Read back that the production deployment SHA includes the new client.
+      5. Turn the switch on with the recorded command.
+      6. Read back the switch state and run a synthetic check (local, or with a test account, as the owner decides).
+    - **Rollback:** turn the switch off first. Requests already in `awaiting_terms` stay answerable only while the new client is deployed, so a Vercel rollback past O-10 needs the switch off and a count of `awaiting_terms` requests first. Any count above 0 means fix forward.
+    - **Cost:** while off, requests whose top candidate has other terms may end `exhausted` where the old fallback would have priced them. With 0 open requests and R0 in force, that affects no live request today.
+
 - **Rollback.** A forward migration restoring CS-3's definitions. Business effect: `awaiting_terms` requests would have no path forward, and accepted offer-bound requests would lose their binding. A read-only state check counts both first; any count above 0 means fix forward.
 
 ### 9.9 Order and gates
@@ -511,5 +535,5 @@ Codex decides P-1, P-2, P-4 to P-10. The owner decides **P-3** and **O-11**.
 2. Implementation on `claude/phase6-o10-offer-bound-terms`, stacked on CS-3. No implementation starts before step 1.
 3. Codex code review of CS-3 (§8) and O-10 together, plus the owed review of CS-4 (#149).
 4. Two-person finance review (Josh + the accountant, **not engaged**) of CS-4's deployed fingerprint, CS-3 and O-10.
-5. One PR to `main` carrying CS-3 and O-10. Then the §9.8 push order and merge, each with the owner's authorization.
+5. One PR to `main` carrying CS-3 and O-10. Release only after Codex resolves §9.8's deployment compatibility (A, B or another design); under (B), push with the switch off, merge, read back the deployment, then activate, each step with the owner's authorization.
 6. One-time CS-5 (§5), then the A2 human checks. **Phase 6 is not accepted.**

@@ -1,3 +1,22 @@
+# Agent handoff — 2026-11-08
+
+## #152 reconciliation and deployment compatibility (TRACE-150), 2026-11-08
+
+- **#152, verified read-only:**
+  - head `1ff703c95e907377671732c8790e3af0f901dc62`; review range `7d0bdba..1ff703c`.
+  - Marked ready for review at 16:53:50 UTC and merged at 16:54:00 UTC, both by GitHub account `Jcoley-Mercurius`.
+  - Destination **`claude/phase6-cs3-one-time-bound-terms`**, merge commit `f23f1008878dd8ec4015713ed9fa2c4150f2727a`.
+  - 0 reviews and 0 review comments: the merge is not a Codex review. The O-10 plan (§9) is **still pending Codex review**.
+- **Unchanged:**
+  - `main` is `98fe138`. CS-3 and the O-10 plan have **not** reached `main`.
+  - Hosted ends at `20261115001000`; `20261116001000` is not applied.
+  - DEC-2026-063, O-11 and P-3 stay **proposed** until Josh explicitly confirms them.
+  - CS-4's Codex code review and finance review stay **outstanding**, as missed pre-release gates. Nothing is backdated.
+- **Plan §9.8 updated:** pushing and then merging immediately doesn't resolve the risk from the deployed client and `awaiting_terms`. Deployment compatibility is **unresolved**. Two proposals for Codex, neither implemented:
+  - (A) backward-compatible states: safe for money, but misleading to homeowners;
+  - (B) guarded activation (recommended): a switch that is off while the schema deploys, then a recorded activation after the new client is confirmed live.
+- **Next:** Codex reviews §9, including §9.8. Josh confirms or amends DEC-2026-063, P-3 and O-11. No implementation before both.
+
 # Agent handoff — 2026-11-07
 
 ## Reconciliation and O-10 repair plan (TRACE-150, DEC-2026-063 proposed), 2026-11-07
