@@ -1,7 +1,7 @@
 # Finance review sheet: CS-4, CS-3 and O-10 (sole-owner review, DEC-2026-064)
 
 **For:** Josh, as the sole finance reviewer for these three repairs (DEC-2026-064).
-**Status: NOT PERFORMED.** This sheet prepares the review; it records no sign-off. It is not a two-person sign-off and must not be described as one.
+**Status: OWNER REVIEW RECORDED — APPROVED WITH CONDITIONS, 2026-11-09.** Josh approved the review record and conditions below in this conversation ("Yes , I approve"). This is the sole-owner finance review under DEC-2026-064, not a two-person sign-off. Technical clearance and release conditions remain outstanding.
 **Prepared:** 2026-11-08, from the code on `claude/phase6-o10-offer-bound-terms`. **Updated 2026-11-09:** deployment state corrected (all three repairs are now live), and Codex's code review of #154 and its forward fix added. Technical record: [bound-terms plan](PHASE-6-BOUND-TERMS-PLAN.md) §7.4 (CS-4), §8 (CS-3), §10 (O-10) and §11 (review and forward fix).
 
 ## What these repairs decide
@@ -30,7 +30,7 @@ They decide **which price a homeowner pays**. None of them changes the 15% fee, 
 
 ## What to check
 
-Tick each box only when you have checked it yourself. Leave it unticked otherwise.
+The conditional owner approval is recorded below. These technical-verification checkboxes remain unticked: the approval does not claim independent execution of tests or completion of the outstanding Codex reviews. Resolve and record the required evidence before release.
 
 - [ ] **Price source.** Every charge for a one-time request comes from either the price shown at submission or terms the homeowner explicitly accepted. Never from today's catalog price.
 - [ ] **No silent repricing.** A provider editing their catalog after the offer never changes what the homeowner pays (examples 1 and 2).
@@ -71,10 +71,14 @@ If you review before the forward fix is released, record which value you reviewe
 
 The forward fix's hosted push and merge, turning on offers at other terms (the `offer_terms` switch), opening promotions, and Phase 6 acceptance. Each needs your separate authorization.
 
-## Record of the review (fill in when performed)
+## Record of the review
 
-- Reviewed by: Josh (sole owner, DEC-2026-064)
-- Date and time (Eastern):
-- Commit reviewed:
-- Fingerprint reviewed:
-- Outcome (approve / approve with conditions / reject) and conditions:
+- **Reviewed by:** Josh (sole owner, DEC-2026-064).
+- **Date:** 2026-11-09, America/New_York. The exact approval time was not supplied in the conversation.
+- **Commit reviewed:** `e404411376f075e0d42e07713e41909d401b364e`, PR #155, branch `claude/phase6-154-review-forward-fix`.
+- **Fingerprint reviewed:** `58 | af0fae6e0c5b604e9073e10bc060957e` (forward-fix candidate; not a claim about the currently deployed fingerprint).
+- **Outcome:** APPROVE WITH CONDITIONS.
+- **Conditions:** Codex clears the forward fix and the outstanding CS-3/CS-4 reviews; required tests pass; the released money fingerprint matches the reviewed value. A change to the reviewed money definitions or fingerprint requires renewed review.
+- **Scope:** Retrospective finance review of CS-4 and CS-3/O-10, plus the proposed forward fix. The forward fix was not deployed when this approval was recorded. This does not backdate or erase the missed pre-release review gates.
+- **Approval evidence:** Josh was presented with this exact commit, fingerprint, scope and conditions and asked, "Do you approve that finance-review record with those conditions?" Josh replied, "Yes , I approve".
+- **Separate authorizations still required:** Hosted changes, merging, gate activation, opening promotions and Phase 6 acceptance. This approval does not authorize any of those actions.
