@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatCents } from "@/lib/offerTerms";
 
 type Item = {
-  kind: "unanswered" | "not_acceptable" | "blocked_inactive";
+  kind: "unanswered" | "not_acceptable" | "blocked_inactive" | "rematch_failed";
   request_id: string;
   since: string;
   problem?: string | null;
@@ -27,9 +27,18 @@ const problems: Record<string, string> = {
   answers_missing: "a required answer is missing",
 };
 
-function itemText(item: Item) {
+/** Whether operations can retry matching for this item now (the server enforces the same rule). */
+export function canRetryOfferTerms(item: Pick<Item, "kind">, active: boolean | null) {
+  if (item.kind === "rematch_failed") return true;
+  return item.kind === "blocked_inactive" && Boolean(active);
+}
+
+export function itemText(item: Item) {
   if (item.kind === "blocked_inactive") {
     return "Left without an offer while offers at other terms were off. Retry matching once they're active.";
+  }
+  if (item.kind === "rematch_failed") {
+    return "The homeowner declined the provider's terms and the decline is recorded, but finding the next provider failed. No provider is assigned. Retry matching.";
   }
   const total = typeof item.total_cents === "number" ? ` (${formatCents(item.total_cents)})` : "";
   if (item.kind === "not_acceptable") {
@@ -42,7 +51,8 @@ function itemText(item: Item) {
  * TRACE-150 (DEC-2026-063, O-11): offers at other terms that need operations. Unanswered terms after
  * 24 hours and terms the homeowner can no longer accept are shown for follow-up; nothing changes
  * automatically. Requests left without an offer while the offer_terms gate was off can be retried
- * after activation (keyed, with a reason).
+ * after activation (keyed, with a reason). A decline whose next matching run failed keeps the decline
+ * and can be retried at any time (review of #154, finding 1).
  */
 export function AdminOfferTermsQueue({ open }: { open?: (id: string) => void }) {
   const [items, setItems] = useState<Item[] | null>(null);
@@ -89,7 +99,7 @@ export function AdminOfferTermsQueue({ open }: { open?: (id: string) => void }) 
             <p className="text-muted-foreground">{itemText(item)}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {open && <Button type="button" size="sm" variant="outline" aria-label={`Open request ${item.request_id.slice(0, 8)}`} onClick={() => open(item.request_id)}>Open request</Button>}
-              {item.kind === "blocked_inactive" && <ConfirmAction requireReason disabled={!active} triggerLabel="Retry matching" title="Retry matching for this request?"
+              {(item.kind === "blocked_inactive" || item.kind === "rematch_failed") && <ConfirmAction requireReason disabled={!canRetryOfferTerms(item, active)} triggerLabel="Retry matching" title="Retry matching for this request?"
                 entity={`Request ${item.request_id.slice(0, 8)}`}
                 consequence="Matching runs again. Another provider may be offered this request at its own terms; the homeowner accepts them before anything is scheduled or charged."
                 confirmLabel="Retry matching" confirmationTone="commitment" onConfirm={reason => retry(item, reason)} />}

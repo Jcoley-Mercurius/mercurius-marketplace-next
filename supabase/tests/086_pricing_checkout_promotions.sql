@@ -25,6 +25,15 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
  select ('b8630000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'b8610000-0000-4000-8000-000000000001','b8620000-0000-4000-8000-000000000001',
  'Synthetic','Synthetic promo address','scheduled',(select service_id from public.vendor_packages where id='b8640000-0000-4000-8000-000000000001'),'one-time','00086','fixed',
  'b8640000-0000-4000-8000-000000000001','b8650000-0000-4000-8000-000000000001',100 from generate_series(1,4) n;
+-- Review of #154, finding 2 (20261118001000): a fixed one-time request is priced only from bound terms,
+-- so this fixture carries the submission record submit_service_requests writes (pricing-v2, priced by the
+-- catalog's calculation from the package revision) instead of relying on the removed current-catalog price.
+update public.service_requests r set pricing_inputs = jsonb_build_object('version','pricing-v2','package_id',p.id,'lineage_id',p.lineage_id,
+    'revision_number',p.revision_number,'package_revision',private.package_revision_hash(p.id),'frequency',r.frequency,
+    'answers',coalesce(r.package_question_answers,'{}'::jsonb),'priced_at',now())
+  || private.price_selection(private.package_content(p.id),r.frequency,r.package_tier_id::text,r.package_question_answers,'[]'::jsonb),
+  total_amount=coalesce(r.total_amount,t.price)
+ from public.vendor_packages p, public.package_tiers t where p.id=r.package_id and t.id=r.package_tier_id and r.id in (select ('b8630000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,4) n);
 insert into private.r0_lee_zips values ('00086') on conflict do nothing;
 insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
  select 'b8610000-0000-4000-8000-000000000001','00086',service_id,'b8610000-0000-4000-8000-000000000001'
@@ -182,6 +191,15 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
  select pg_temp.req(5),'b8610000-0000-4000-8000-000000000001','b8620000-0000-4000-8000-000000000001','Synthetic','Synthetic promo address','scheduled',
   service_id,'one-time','00086','fixed','b8640000-0000-4000-8000-000000000001','b8650000-0000-4000-8000-000000000001',100
  from public.vendor_packages where id='b8640000-0000-4000-8000-000000000001';
+-- Review of #154, finding 2 (20261118001000): a fixed one-time request is priced only from bound terms,
+-- so this fixture carries the submission record submit_service_requests writes (pricing-v2, priced by the
+-- catalog's calculation from the package revision) instead of relying on the removed current-catalog price.
+update public.service_requests r set pricing_inputs = jsonb_build_object('version','pricing-v2','package_id',p.id,'lineage_id',p.lineage_id,
+    'revision_number',p.revision_number,'package_revision',private.package_revision_hash(p.id),'frequency',r.frequency,
+    'answers',coalesce(r.package_question_answers,'{}'::jsonb),'priced_at',now())
+  || private.price_selection(private.package_content(p.id),r.frequency,r.package_tier_id::text,r.package_question_answers,'[]'::jsonb),
+  total_amount=coalesce(r.total_amount,t.price)
+ from public.vendor_packages p, public.package_tiers t where p.id=r.package_id and t.id=r.package_tier_id and r.id in (pg_temp.req(5));
 select is(private.promotion_reserve('b8660000-0000-4000-8000-000000000001',pg_temp.req(5),null,'synthetic-promo-0006')->>'status', 'reserved', 'reserved for request 5');
 insert into fx(key,id) values ('c-snapshot', pg_temp.publish(pg_temp.req(5), pg_temp.terms(pg_temp.req(5),1000,'Synthetic $10 off: Synthetic vendor terms')));
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"b8610000-0000-4000-8000-000000000001"}',true);

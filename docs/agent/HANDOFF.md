@@ -1,3 +1,28 @@
+# Agent handoff — 2026-11-09
+
+## Forward fix for Codex's #154 review (TRACE-150), 2026-11-09
+
+- **Checkpoint (verified):**
+  - `main` `762d6a4` (#154; CS-3 reached `main` through #153, `6d56b22`). Both are deployed to production. Push CI is green on both.
+  - Hosted ends at `20261117001000` (read-only); 0 terms rows; 0 open fixed one-time requests.
+  - Gate `offer_terms` is off per the 2026-11-09 readback; not re-read.
+- **Branch:** `claude/phase6-154-review-forward-fix` from `762d6a4`. Migration `20261118001000` (additive; 1116/1117 are not edited).
+- **What it fixes:**
+  1. A homeowner's decline survives a failed re-match. The failure is recorded and listed as `rematch_failed`; operations retries it.
+  2. No current-catalog price for any unbound fixed one-time request.
+  3. Required work (P-3) must be established from the records.
+- **Records:** [plan §11](../../governance/PHASE-6-BOUND-TERMS-PLAN.md). The [finance sheet](../../governance/PHASE-6-SOLE-OWNER-FINANCE-SHEET.md) now has corrected deployment state and the review attached (commit and coverage). Manifest row 33 notes the review and row 34 adds the fix; A1 isn't complete.
+- **Evidence:**
+  - Clean replay of 223 migrations: 108 files / 7,024 PASS. SQL 117 53/53.
+  - C14–C22 PASS. C22 is deterministic and fails on O-10's definition, as do 17 assertions of SQL 117.
+  - Fingerprint `57 | ce502fe7…` → `58 | af0fae6e…` (six definitions changed plus one added).
+- **Not done:** hosted push, merge, gate activation (none authorized). Codex review of the fix. Josh's finance review.
+- **Next:**
+  1. Codex reviews the fix PR.
+  2. Josh's finance review.
+  3. Owner-authorized push of `20261118001000`, then the merge.
+- Also proposed for Codex: the same rollback-on-failed-re-match in `vendor_decline_job`, `release_job_match` and `expire_stale_matches` (plan §11.2), as a separate slice. Phase 6 is not accepted.
+
 # Agent handoff — 2026-11-08
 
 ## O-10 implemented with CS-3 for one release (TRACE-150, DEC-2026-063/064), 2026-11-08
