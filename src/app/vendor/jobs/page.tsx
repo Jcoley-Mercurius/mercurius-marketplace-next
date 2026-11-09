@@ -71,6 +71,17 @@ type Action = { id: string; kind: string } | null;
 type Notice = { tone: "success" | "warning" | "error"; title: string; text: string } | null;
 
 // TRACE-099: an offer is actionable only in the stored offer state; the server decides expiry.
+// TRACE-150: request ids whose current offer to this provider carries bound terms.
+async function boundTermRequests(supabase: ReturnType<typeof createClient>, contractorId: string) {
+  const [terms, attempts] = await Promise.all([
+    supabase.from("job_offer_terms").select("request_id, offer_id").eq("contractor_id", contractorId),
+    supabase.from("job_match_attempts").select("id").eq("contractor_id", contractorId).in("outcome", ["pending", "accepted"]),
+  ]);
+  if (terms.error || attempts.error) return null;
+  const current = new Set((attempts.data ?? []).map((attempt) => attempt.id));
+  return new Set((terms.data ?? []).filter((row) => current.has(row.offer_id)).map((row) => row.request_id));
+}
+
 const isIncoming = (job: Job) => isOpenVendorOffer(job) || job.status === "pending";
 const readbackColumns = "status, matching_status, contractor_id, pricing_mode, quote_only, scheduled_start_at";
 const finished = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed", "cancelled"]);
@@ -119,6 +130,14 @@ export default function VendorJobsPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const markBoundTerms = useCallback(async (supabase: ReturnType<typeof createClient>, contractorId: string) => {
+    const bound = await boundTermRequests(supabase, contractorId).catch(() => null);
+    if (!bound) return;
+    // Re-render only when a flag changes, so an unchanged list stays still.
+    const changed = (job: Job) => Boolean(job.bound_terms) !== bound.has(job.id);
+    setJobs((current) => current.some(changed) ? current.map((job) => ({ ...job, bound_terms: bound.has(job.id) })) : current);
+    setSelected((current) => current && changed(current) ? { ...current, bound_terms: bound.has(current.id) } : current);
+  }, []);
   const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!user) return;
     if (!silent) {
@@ -154,23 +173,17 @@ export default function VendorJobsPage() {
           if (profile.full_name) names.set(profile.user_id, profile.full_name);
         }
       }
-      // TRACE-150 (DEC-2026-063): offers at other terms. The provider reads its own offers' bound terms.
-      const bound = new Set<string>();
-      if (liveJobs.length) {
-        const [terms, attempts] = await Promise.all([
-          supabase.from("job_offer_terms").select("request_id, offer_id").eq("contractor_id", contractorResult.data.id),
-          supabase.from("job_match_attempts").select("id").eq("contractor_id", contractorResult.data.id).in("outcome", ["pending", "accepted"]),
-        ]);
-        const current = new Set((attempts.data ?? []).map((attempt) => attempt.id));
-        for (const row of terms.data ?? []) if (current.has(row.offer_id)) bound.add(row.request_id);
-      }
-      const named = liveJobs.map((job) => ({ ...job, homeowner_name: names.get(job.customer_id) ?? null, bound_terms: bound.has(job.id) }));
+const named = liveJobs.map((job) => ({ ...job, homeowner_name: names.get(job.customer_id) ?? null }));
       setJobs(named);
       // An open job dialog follows the reloaded row (quote state changes while it is open).
       setSelected((current) => current ? named.find((job) => job.id === current.id) ?? current : null);
       setNow(Date.now());
       setStaleRefresh(false);
       setMode("live");
+      // TRACE-150 (DEC-2026-063): which of this provider's open or accepted offers carry bound terms the
+      // homeowner accepts first. A secondary read: the list never waits for it, and a failure leaves the
+      // general wording in place (the server still requires the homeowner's acceptance).
+      if (liveJobs.length) void markBoundTerms(supabase, contractorResult.data.id);
     } catch (reason) {
       if (silent) {
         // Keep the last list but say it may be out of date; actions still recheck the server.
@@ -183,7 +196,7 @@ export default function VendorJobsPage() {
       setError(reason instanceof Error ? reason.message : "The jobs queue could not be loaded.");
       setMode("error");
     }
-  }, [user]);
+  }, [user, markBoundTerms]);
 
   useEffect(() => {
     // Loading is intentionally tied to the authenticated vendor identity.
