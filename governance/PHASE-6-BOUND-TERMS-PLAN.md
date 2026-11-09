@@ -605,7 +605,8 @@ It writes no request, offer or money data.
   - CS-3's 49-function list: `52bdfc24…` → `4919122f…`. Exactly `money_source`, `vendor_accept_job` and `find_eligible_packages_core` changed: restoring their CS-3 definitions in a rolled-back transaction gives `52bdfc24…` again.
   - The list adds 8 functions (`create_job_offer_internal`, `offer_terms_build`, `one_time_offer_basis`, `offer_terms_consent_hash`, `offer_terms_problem`, `offer_terms_current`, `homeowner_respond_offer_terms`, `homeowner_respond_replacement`): new value **`57 | ce502fe7389eb2fdfa972bb38804fcfc`**.
 - **Client checks:** unit 660/660 (4 new); typecheck; lint; secret scan.
-- **Not run:** browser suite, build (CI runs both), screen reader, real devices.
+- **Not run locally:** browser suite and build (CI runs both), screen reader, real devices.
+- *2026-11-09: #154's first CI run (`ad2621a`, run 42513542507) failed the browser step. Every spec that opens `/vendor/jobs` failed, because the page waited on the bound-terms read, which the fixtures don't answer. `99f035c` shows the list first and merges the flag in afterwards. CI pull_request run 42627327535 on `99f035c`: application (build, unit, full non-visual browser suite), backend (clean replay, SQL, concurrency including `offer-terms-concurrency.mjs`) and lifecycle all **pass**. Local browser reruns were inconclusive under machine load; CI is the evidence.*
 
 ### 10.5 Findings
 

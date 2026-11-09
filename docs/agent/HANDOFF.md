@@ -12,7 +12,8 @@
   - Fingerprint `57 | ce502fe7…` (CS-3's list: exactly 3 definitions changed).
   - Unit 660/660, types, lint, secret scan.
 - **Finance sheet for Josh:** [PHASE-6-SOLE-OWNER-FINANCE-SHEET.md](../../governance/PHASE-6-SOLE-OWNER-FINANCE-SHEET.md).
-- **Not done:** hosted pushes, merge, gate activation (each needs the owner's authorization); browser suite and build (CI). TRACE-126 stays open (P-4 narrowed). CS-4's Codex and finance reviews are still owed.
+- **Not done:** hosted pushes, merge, gate activation (each needs the owner's authorization). TRACE-126 stays open (P-4 narrowed). CS-4's Codex and finance reviews are still owed.
+- **2026-11-09:** release PR #154 head `99f035c` (vendor jobs list no longer waits on the bound-terms read). CI run 42627327535: application, backend and lifecycle pass.
 - **Next:**
   1. Codex code review of the release PR (CS-3 + O-10).
   2. Josh's finance review.
