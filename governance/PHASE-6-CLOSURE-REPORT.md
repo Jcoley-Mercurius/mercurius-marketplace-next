@@ -329,3 +329,8 @@ The original recommendation is kept below.
 - [ ] Final candidate SHA fixed; CI green on it; full SQL suite on a clean replay; fingerprint recorded with every change explained.
 - [ ] A2 human checks performed and recorded on that SHA (screen reader, real devices, 200% zoom and 320 px reflow, keyboard, `@visual` on Windows or approved Linux baselines), light mode only.
 - [ ] The owner records Phase 6 acceptance. Phase 7 is authorized only by that record.
+
+
+## 11. Codex integrated A1 review checkpoint — 2026-11-09
+
+[Combined Codex source review](PHASE-6-CODEX-A1-REVIEW.md) supplies the missing review record for manifest rows **1–34**, explicitly including CS-4 #149, CS-3 #153, #147 and the #155 forward fix at e404411. Earlier “no review” entries are historical. The record requirement is supplied; the combined review-and-fix gate remains unchecked because **A1-F01 (TRACE-136 admin/lifecycle lock inversion)** needs a bounded additive repair. The approved one-time CS-5 extension remains unbuilt. #155 source review is cleared and exact-commit CI is green, but its hosted release and gate activation are separate owner actions. Josh's conditional finance approval is already recorded in the finance sheet under DEC-2026-064; it does not erase missed release gates. Final-candidate automated evidence, A2 and written owner acceptance are still required. This checkpoint accepts no phase and performs no external action.
