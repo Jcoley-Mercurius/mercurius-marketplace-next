@@ -40,6 +40,15 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
  select ('73000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'71000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000001',
  'Synthetic','Synthetic source address','scheduled',(select service_id from public.vendor_packages where id='75000000-0000-4000-8000-000000000001'),'one-time','00000','fixed',
  '75000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000001' from generate_series(1,4)n;
+-- Review of #154, finding 2 (20261118001000): a fixed one-time request is priced only from bound terms,
+-- so this fixture carries the submission record submit_service_requests writes (pricing-v2, priced by the
+-- catalog's calculation from the package revision) instead of relying on the removed current-catalog price.
+update public.service_requests r set pricing_inputs = jsonb_build_object('version','pricing-v2','package_id',p.id,'lineage_id',p.lineage_id,
+    'revision_number',p.revision_number,'package_revision',private.package_revision_hash(p.id),'frequency',r.frequency,
+    'answers',coalesce(r.package_question_answers,'{}'::jsonb),'priced_at',now())
+  || private.price_selection(private.package_content(p.id),r.frequency,r.package_tier_id::text,r.package_question_answers,'[]'::jsonb),
+  total_amount=coalesce(r.total_amount,t.price)
+ from public.vendor_packages p, public.package_tiers t where p.id=r.package_id and t.id=r.package_tier_id and r.id in (select ('73000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,4) n);
 insert into private.r0_lee_zips values ('00000');
 insert into private.r0_trial_admissions(homeowner_id,zip_code,service_id,granted_by)
 select '71000000-0000-4000-8000-000000000001','00000',service_id,
@@ -116,15 +125,21 @@ select throws_ok($$select pg_temp.publish_source('73000000-0000-4000-8000-000000
 update source_fixture set id=pg_temp.publish_source('73000000-0000-4000-8000-000000000002',terms) where key='fixed-old';
 select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=110 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
-select throws_ok($$select public.money_prepare_checkout((select id from source_fixture where key='fixed-old'),'full')$$,'P0001','Commercial source changed; review current terms','Changed offering price blocks stale checkout');
-select throws_ok($$select pg_temp.publish_source('73000000-0000-4000-8000-000000000002',(select terms from source_fixture where key='fixed-old'))$$,'P0001','Commercial source changed; review current terms','Stale approved source cannot be published after price edit');
-insert into source_fixture(key,terms) values('fixed-new',pg_temp.source_terms('73000000-0000-4000-8000-000000000002')||'{"service":11000,"subtotal":11000,"total":12700}');
+-- Review of #154, finding 2: a one-time request is priced only from its bound terms. An in-place change to
+-- the bound level is refused by name; it never reprices the request (the earlier rule repriced it to $110).
+select throws_ok($$select public.money_prepare_checkout((select id from source_fixture where key='fixed-old'),'full')$$,'P0001','Offering changed since the request; a new request or quote is required','Changed offering price blocks stale checkout (refused by name, never repriced)');
+select throws_ok($$select pg_temp.publish_source('73000000-0000-4000-8000-000000000002',(select terms from source_fixture where key='fixed-old'))$$,'P0001','Offering changed since the request; a new request or quote is required','Stale approved source cannot be published after price edit');
+select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000002')$$,'P0001','Offering changed since the request; a new request or quote is required','No source at the edited $110 price either');
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=100 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'owner maintenance restores the bound level (applied under owner maintenance)');
+-- A new review of the same agreement (a different tip) is a separate snapshot at the bound price.
+insert into source_fixture(key,terms) values('fixed-new',pg_temp.source_terms('73000000-0000-4000-8000-000000000002')||'{"tip":2000,"total":12700}');
 update source_fixture set id=pg_temp.publish_source('73000000-0000-4000-8000-000000000002',terms) where key='fixed-new';
 select is((select service from public.money_snapshots where id=(select id from source_fixture where key='fixed-old')),10000::bigint,'Old price snapshot remains immutable');
-select is((select revision from public.money_snapshots where id=(select id from source_fixture where key='fixed-new')),2,'Price revision has separate lineage');
-select is((public.money_prepare_checkout((select id from source_fixture where key='fixed-new'),'full')).amount,12700::bigint,'Fresh checkout uses reviewed current offering');
+select is((select revision from public.money_snapshots where id=(select id from source_fixture where key='fixed-new')),2,'A new review has separate lineage');
+select is((public.money_prepare_checkout((select id from source_fixture where key='fixed-new'),'full')).amount,12700::bigint,'Fresh checkout uses the newly reviewed snapshot at the bound price');
 select is(pg_temp.publish_source('73000000-0000-4000-8000-000000000002',(select terms from source_fixture where key='fixed-new')),(select id from source_fixture where key='fixed-new'),'Publication retry after checkout does not create another invoice');
-insert into source_fixture(key,terms) values('fixed-deposit',pg_temp.source_terms('73000000-0000-4000-8000-000000000004')||'{"service":11000,"subtotal":11000,"total":12700}');
+insert into source_fixture(key,terms) values('fixed-deposit',pg_temp.source_terms('73000000-0000-4000-8000-000000000004')||'{"tip":2000,"total":12700}');
 update source_fixture set id=pg_temp.publish_source('73000000-0000-4000-8000-000000000004',terms) where key='fixed-deposit';
 insert into source_fixture(key,id) select 'fixed-deposit-attempt',(public.money_prepare_checkout((select id from source_fixture where key='fixed-deposit'),'deposit')).id;
 select public.money_receive_event('evt_source_deposit','capture',jsonb_build_object('attempt_id',(select id from source_fixture where key='fixed-deposit-attempt'),'payment_id','pi_source_deposit','amount',3000,'currency','usd'));
@@ -133,6 +148,8 @@ update public.service_requests set status='vendor_completed' where id='73000000-
 select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=120 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 select is((public.money_prepare_checkout((select id from source_fixture where key='fixed-deposit'),'balance')).amount,9700::bigint,'Catalog price change cannot reprice or strand an agreed deposit balance');
+select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=100 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
+  'owner maintenance restores the bound level (applied under owner maintenance)');
 update public.vendor_packages set is_active=false where id='75000000-0000-4000-8000-000000000001';
 select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Selected offering is not eligible','Withdrawn offering cannot authorize a new commercial agreement');
 select is((public.money_prepare_checkout((select id from source_fixture where key='fixed-new'),'full')).amount,12700::bigint,'Existing agreement keeps its reserved amount despite later catalog withdrawal');
@@ -142,12 +159,14 @@ select throws_ok($$select private.money_source('73000000-0000-4000-8000-00000000
 update public.contractor_service_zips set zip_code='00000' where contractor_id='72000000-0000-4000-8000-000000000001';
 select is(pg_temp.edit_in_place($sql$update public.package_tiers set rule_question_key='size',rule_min=10,rule_max=20 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
-select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Offering answers do not match selected tier','Missing tier qualifier cannot authorize price');
+-- Review of #154, finding 2: the bound level changed in place, so the request is refused by name whatever
+-- its answers (the earlier rule priced it once the answers matched the edited level).
+select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Offering changed since the request; a new request or quote is required','A tier qualifier added in place cannot authorize price');
 update public.service_requests set package_question_answers='{"size":{"answer":"15"}}' where id='73000000-0000-4000-8000-000000000003';
-select lives_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'Matching tier qualifier accepted');
+select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Offering changed since the request; a new request or quote is required','Answers matching the edited level do not repair a changed bound level');
 select is(pg_temp.edit_in_place($sql$update public.package_tiers set price=100.001 where id='76000000-0000-4000-8000-000000000001'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
-select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Source price must be positive whole cents','Fractional cents never silently round');
+select throws_ok($$select private.money_source('73000000-0000-4000-8000-000000000003')$$,'P0001','Offering changed since the request; a new request or quote is required','Fractional cents never silently round (the changed bound level is refused)');
 insert into public.request_quotes(id,request_id,revision,amount,sender_id,reason,sent_at,expires_at,status)
  values('74000000-0000-4000-8000-000000000003','73000000-0000-4000-8000-000000000003',1,117,'71000000-0000-4000-8000-000000000003','Synthetic old quote',now()-interval '2 days',now()-interval '1 day','submitted');
 update public.service_requests set current_quote_id='74000000-0000-4000-8000-000000000003',quote_revision=1,quote_status='submitted' where id='73000000-0000-4000-8000-000000000003';

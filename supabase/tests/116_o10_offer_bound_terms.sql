@@ -38,10 +38,10 @@ insert into public.contractors(id,user_id,name,is_active,marketing_enabled) valu
 insert into public.contractor_service_zips(contractor_id,zip_code)
   select ('98200000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'00098' from generate_series(1,4) n;
 insert into public.vendor_packages(id,contractor_id,service_id,name,description,pricing_mode,default_frequency,is_active,needs_review,included_scope,policy_notes) values
- ('98400000-0000-4000-8000-000000000001','98200000-0000-4000-8000-000000000001','synthetic-o10-lawn','Synthetic submitted lawn',null,'fixed','weekly',true,false,'{}',null),
+ ('98400000-0000-4000-8000-000000000001','98200000-0000-4000-8000-000000000001','synthetic-o10-lawn','Synthetic submitted lawn',null,'fixed','weekly',true,false,'{Mowing}',null),
  ('98400000-0000-4000-8000-000000000002','98200000-0000-4000-8000-000000000002','synthetic-o10-lawn','Synthetic other lawn','Mow and haul','fixed','one-time',true,false,'{Mowing,Edging}','Synthetic policy notes'),
  ('98400000-0000-4000-8000-000000000003','98200000-0000-4000-8000-000000000003','synthetic-o10-lawn','Synthetic scoped lawn',null,'fixed','one-time',true,false,'{}',null),
- ('98400000-0000-4000-8000-000000000004','98200000-0000-4000-8000-000000000004','synthetic-o10-lawn','Synthetic replacement lawn',null,'fixed','one-time',true,false,'{}',null);
+ ('98400000-0000-4000-8000-000000000004','98200000-0000-4000-8000-000000000004','synthetic-o10-lawn','Synthetic replacement lawn',null,'fixed','one-time',true,false,'{Mowing}',null);
 insert into public.package_tiers(id,package_id,name,price,frequency,sort_order,rule_conditions) values
  ('98500000-0000-4000-8000-000000000001','98400000-0000-4000-8000-000000000001','Weekly',40,'weekly',0,'[]'),
  ('98500000-0000-4000-8000-000000000002','98400000-0000-4000-8000-000000000001','One time',60,'one-time',1,'[]'),
@@ -51,6 +51,8 @@ insert into public.package_tiers(id,package_id,name,price,frequency,sort_order,r
 insert into public.package_addons(id,package_id,name,price,price_kind,unit_label,min_quantity,max_quantity,is_required,frequencies,sort_order) values
  ('98600000-0000-4000-8000-000000000001','98400000-0000-4000-8000-000000000001','Edge trimming',5,'exact','visit',0,1,false,'{weekly,one-time}',0),
  ('98600000-0000-4000-8000-000000000002','98400000-0000-4000-8000-000000000002','Haul away',10,'exact','visit',1,1,true,'{one-time}',0);
+-- Required work (20261118001000, finding 3): the submitted offering names its included work (Mowing),
+-- which P2 and the replacement P4 include; without it no candidate at other terms is offered.
 -- P3's offering needs an answer the request doesn't give: it can't meet the request's scope (P-3).
 insert into public.package_qualifying_questions(package_id,question_key,question_label,input_type,is_required)
   values ('98400000-0000-4000-8000-000000000003','gate_code','Gate code','text',true);
@@ -112,7 +114,8 @@ create function pg_temp.save(p_user integer, p_lineage uuid, p_content jsonb, p_
     pg_temp.head(p_lineage), private.package_revision_hash(pg_temp.head(p_lineage)), p_content, p_key)) $$;
 create function pg_temp.p1_content(p_one numeric) returns jsonb language sql as $$
   select jsonb_build_object('service_id','synthetic-o10-lawn',
-    'package', jsonb_build_object('name','Synthetic submitted lawn','description',null,'pricing_mode','fixed','default_frequency','weekly'),
+    'package', jsonb_build_object('name','Synthetic submitted lawn','description',null,'pricing_mode','fixed','default_frequency','weekly',
+      'included_scope',jsonb_build_array('Mowing')),
     'questions','[]'::jsonb,
     'tiers', jsonb_build_array(jsonb_build_object('name','Weekly','price',40,'frequency','weekly'),
       jsonb_build_object('name','One time','price',p_one,'frequency','one-time')),

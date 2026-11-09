@@ -18,6 +18,15 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
  values('d5900000-0000-4000-8000-000000000041','d5900000-0000-4000-8000-000000000001','d5900000-0000-4000-8000-000000000011',
    'Synthetic','Synthetic beta address','scheduled',(select service_id from public.vendor_packages where id='d5900000-0000-4000-8000-000000000021'),
    'one-time','00000','fixed','d5900000-0000-4000-8000-000000000021','d5900000-0000-4000-8000-000000000031');
+-- Review of #154, finding 2 (20261118001000): a fixed one-time request is priced only from bound terms,
+-- so this fixture carries the submission record submit_service_requests writes (pricing-v2, priced by the
+-- catalog's calculation from the package revision) instead of relying on the removed current-catalog price.
+update public.service_requests r set pricing_inputs = jsonb_build_object('version','pricing-v2','package_id',p.id,'lineage_id',p.lineage_id,
+    'revision_number',p.revision_number,'package_revision',private.package_revision_hash(p.id),'frequency',r.frequency,
+    'answers',coalesce(r.package_question_answers,'{}'::jsonb),'priced_at',now())
+  || private.price_selection(private.package_content(p.id),r.frequency,r.package_tier_id::text,r.package_question_answers,'[]'::jsonb),
+  total_amount=coalesce(r.total_amount,t.price)
+ from public.vendor_packages p, public.package_tiers t where p.id=r.package_id and t.id=r.package_tier_id and r.id in ('d5900000-0000-4000-8000-000000000041');
 
 -- TRACE-134 (6.11B): legacy package promotions cannot be enabled on any path; this fixture keeps
 -- characterizing an existing overlay under owner maintenance (the closing trigger disabled for it).
