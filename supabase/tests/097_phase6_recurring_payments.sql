@@ -3,8 +3,8 @@
 -- acceptance), through the existing two-person snapshot and the homeowner's own checkout. Live
 -- eligibility refusals name the exception; nothing is substituted or repriced. The operations
 -- queue opens at appointment − 24 h (or at a later acceptance); failure and unknown outcomes are the
--- shared G6 classification. The one-time path is characterized unchanged (separate corrective
--- issue). Synthetic data only; amounts are test examples, not prices.
+-- shared G6 classification. The one-time path's bound terms are CS-3 (TRACE-126; SQL 115); its
+-- in-place cases are kept here. Synthetic data only; amounts are test examples, not prices.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -240,21 +240,22 @@ select is(pg_temp.edit_in_place($sql$update public.package_addons set price = 5 
 select is(pg_temp.edit_in_place($sql$update public.vendor_packages set name = 'Synthetic plan lawn', description = null where id = '97400000-0000-4000-8000-000000000001'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 
--- One-time regression (unchanged path; DEC-2026-034 exposure is a separate corrective issue) -------
--- These expectations characterize the known one-time behavior. They change only with that issue.
-select is((pg_temp.src(pg_temp.id('r1'))->>'service')::bigint, 6000::bigint, 'a one-time request is priced from its tier');
-select ok(pg_temp.src(pg_temp.id('r1')) ? 'tier' and pg_temp.src(pg_temp.id('r1')) ? 'package', 'with the current package and tier rows in its evidence');
+-- One-time path: CS-3 (TRACE-126, D-1) binds the level and price recorded at submission. The cases
+-- below are owner-maintenance in-place edits; the ordinary replacement path is SQL 115.
+select is((pg_temp.src(pg_temp.id('r1'))->>'service')::bigint, 6000::bigint, 'a one-time request is priced from its bound tier');
+select ok(pg_temp.src(pg_temp.id('r1')) ? 'bound' and not (pg_temp.src(pg_temp.id('r1')) ? 'tier') and pg_temp.src(pg_temp.id('r1'))->>'version' like 'commercial-v2:%',
+  'CS-3 (R-4): with only the bound record in its evidence (commercial-v2)');
 select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 66 where id = '97500000-0000-4000-8000-000000000003'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
-select is((pg_temp.src(pg_temp.id('r1'))->>'service')::bigint, 6600::bigint,
-  'KNOWN EXPOSURE (one-time): an in-place tier correction changes the unpublished source price');
+select throws_ok($$select pg_temp.src(pg_temp.id('r1'))$$, 'P0001', 'Offering changed since the request; a new request or quote is required',
+  'CS-3 (TRACE-126): an in-place tier correction no longer reprices the source; it is refused by name');
 select is(pg_temp.edit_in_place($sql$update public.package_tiers set price = 60 where id = '97500000-0000-4000-8000-000000000003'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 insert into fx values ('r1snap', pg_temp.publish(pg_temp.id('r1'), 6000, 0));
 select is(pg_temp.edit_in_place($sql$update public.vendor_packages set description = 'Synthetic one-time edit' where id = '97400000-0000-4000-8000-000000000001'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
-select throws_ok($$select pg_temp.checkout(1, pg_temp.id('r1snap'))$$, 'P0001', 'Commercial source changed; review current terms',
-  'KNOWN EXPOSURE (one-time): a non-price package edit refuses checkout of a published snapshot');
+select throws_ok($$select pg_temp.checkout(1, pg_temp.id('r1snap'))$$, 'P0001', 'Offering changed since the request; a new request or quote is required',
+  'CS-3: a non-price in-place edit of the bound package still refuses checkout of a published snapshot, now by name');
 select is(pg_temp.edit_in_place($sql$update public.vendor_packages set description = null where id = '97400000-0000-4000-8000-000000000001'$sql$), 'refused',
   'TRACE-134: the version is in use, so this edit is refused in place (applied under owner maintenance below)');
 

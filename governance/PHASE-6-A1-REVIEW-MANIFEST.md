@@ -44,8 +44,11 @@ Rows 22–26 are the stack's own diffs. `0a173bd` (#145) and `cbd65a7` (#146) br
 | # | Item | Range | Governing requirement | Evidence | Review status |
 |---|---|---|---|---|---|
 | 27 | TRACE-146 onboarding decision sets `is_active` (#147; *merged 2026-11-06 as `02e04a0`*) | `cbd65a7..bd40701` (3 commits, 9 files) | DEC-2026-061; DEC-2026-057 item 3 | §3 below | **none**; migration already on hosted |
-| 28 | This closeout packet (TRACE-147) | branch `claude/phase6-closeout-a1-packet` from `cbd65a7` | closure report §9 | probe, lock-order demonstration, this manifest | **none** |
+| 28 | This closeout packet (TRACE-147; *#148 merged 2026-11-06 as `61a441a`*) | branch `claude/phase6-closeout-a1-packet` from `cbd65a7` | closure report §9 | probe, lock-order demonstration, this manifest | **none** |
 | 29 | **CS-4 / CS-3 plan** (must be cleared before any money function changes). *2026-11-06: CS-4 architecture cleared with five amendments (plan §7); this is a plan review, not a code review* | [PHASE-6-BOUND-TERMS-PLAN.md](PHASE-6-BOUND-TERMS-PLAN.md) | DEC-2026-060 D-1, D-2, D-4; DEC-2026-049 item 6 | probe + lock-order evidence | **plan review requested** |
+| 30 | **CS-4 code**, TRACE-148 (#149; *merged 2026-11-06 into the closeout branch as `c3ce575`, not into `main`; reaches `main` with #150*) | `360e104..84f8d16` (2 commits) | DEC-2026-060 D-2; DEC-2026-062; plan §7 | plan §7.4 | **none**; finance review none; `20261115001000` **not** on hosted. *2026-11-07: #150 merged to `main` as `98fe138` and deployed; `20261115001000` **is** on hosted (fingerprint `48 \| 88c9a260…` matches); no push record in the repository; Codex code review and finance review still none; pre-release gates missed, not satisfied (plan §9.1)* |
+| 31 | **CS-3 code and plan §8**, TRACE-149 (stacked on #150) | branch `claude/phase6-cs3-one-time-bound-terms` from `c3ce575` | DEC-2026-060 D-1; DEC-2026-062; plan §4, §8 (R-2 to R-5 as built; F-C1; O-10) | plan §8 | **none** (plan §4 and §8 reviewed with the code); finance review none; `20261116001000` **not** on hosted. *2026-11-07: #151 merged into the closeout branch (`a26a7fd`) after that branch had already gone to `main`; CS-3 is **not** on `main` (plan §9.1)* |
+| 32 | **O-10 repair plan**, TRACE-150 (DEC-2026-063, proposed) | plan §9 on branch `claude/phase6-o10-offer-bound-terms` from `7d0bdba` | DEC-2026-063; DEC-2026-060 D-1; DEC-2026-062; DEC-2026-053 E5/E6 | plan §9.1 readback | **plan review requested** (P-1 to P-10); owner: confirm DEC-2026-063, answer P-3 and O-11 (proposed) |
 
 ## 3. Reconciliation done for this packet (2026-11-05)
 
@@ -70,5 +73,6 @@ Rows 22–26 are the stack's own diffs. `0a173bd` (#145) and `cbd65a7` (#146) br
 1. Review rows 1–27 (one review per row, or one integrated review naming every range) and record it in the repository with the range covered. Rows 8 and 29 touch money paths.
 2. Clear, amend or reject the CS-4/CS-3 plan (row 29), including R-1 to R-5. Implementation of either money change waits for this.
 3. Review this packet's record changes (row 28).
+4. *(2026-11-06)* Code-review CS-4 (row 30) and CS-3 with its plan items (row 31). Both change money functions and also need the two-person finance review before reaching `main`.
 
 Findings go to bounded forward-fix slices. A fix to a surface covered by a human-check script invalidates that script's result (closure report §4.5 A2).

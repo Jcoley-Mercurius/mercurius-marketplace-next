@@ -84,7 +84,9 @@ insert into public.service_requests(id,customer_id,service_type,address,contract
     service_catalog_id,frequency,zip_code,pricing_mode,total_amount,pricing_inputs)
   values ('c1042000-0000-4000-8000-000000000001','c1040000-0000-4000-8000-000000000004','Synthetic offerings service','1 Synthetic Way',
     pg_temp.vendor('a'),(select id from ids where name='p'),(select id from ids where name='tier'),'scheduled','synthetic-vo-svc','monthly','33901',
-    'fixed',100,jsonb_build_object('package_id',(select id from ids where name='p'),'package_revision',pg_temp.rev((select id from ids where name='p')),'total_cents',10000));
+    'fixed',100,jsonb_build_object('version','pricing-v2','status','exact','package_id',(select id from ids where name='p'),
+      'tier_id',(select id from ids where name='tier'),'frequency','monthly','package_revision',pg_temp.rev((select id from ids where name='p')),
+      'total_cents',10000,'lines',jsonb_build_array(jsonb_build_object('kind','level','amount_cents',10000))));
 set local session_replication_role = origin;
 create temp table before as select pg_temp.rev((select id from ids where name='p')) as hash;
 grant select on before to authenticated;
@@ -161,11 +163,11 @@ select is((select is_active::text || '/' || (select price from public.package_ti
   'false/100', 'the replaced version is paused with its price unchanged');
 select is(pg_temp.binding(), 'true/true/true/100.00', 'the request still names the version and price it was priced from');
 select is(pg_temp.matched('33901'), 'Synthetic offerings vendor A:120,Synthetic offerings vendor B:100', 'matching offers the new revision');
--- TRACE-126 (open, unchanged): an unpaid request priced from a version replaced afterwards is not
--- re-priced; its checkout source is refused because that version is no longer live (as after an
--- operator replacement). The request keeps its stored terms.
-select throws_ok($$select private.money_source('c1042000-0000-4000-8000-000000000001')$$, 'P0001', 'Selected offering is not eligible',
-  'TRACE-126 (open): the replaced version cannot be checked out; nothing is re-priced');
+-- CS-3 (TRACE-126, D-1): an unpaid request priced from a version replaced afterwards is checked out at
+-- the version and price bound at submission while the offering's live revision still offers the
+-- cadence (R-1). Nothing is re-priced: the new revision's $120 is not read.
+select is((select concat_ws('/', s->>'service', split_part(s->>'version', ':', 1)) from private.money_source('c1042000-0000-4000-8000-000000000001') s),
+  '10000/commercial-v2', 'CS-3 (TRACE-126): the replaced version is checked out at its bound $100; nothing is re-priced');
 
 -- In place: a paused version no one has used is rewritten, not versioned; drafts publish and pause.
 select pg_temp.as_user(2);
