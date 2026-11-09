@@ -623,6 +623,13 @@ It writes no request, offer or money data.
 5. Owner activation: `update private.money_feature_gates set enabled = true, reason = '<reason>' where name = 'offer_terms'` (recorded in `money_feature_gate_events`). Then read back the gate and run a synthetic check.
 6. Rollback: switch the gate off first. Before any Vercel rollback past O-10, count `awaiting_terms` requests; any count above 0 means fix forward.
 
+*2026-11-09, hosted (owner-authorized: "push any migrations that need to be pushed"):*
+- *`20261116001000` (CS-3) was **already applied** on hosted, pushed by someone else; the repository has no record of who or when. Hosted's CS-3 fingerprint, `49 | 52bdfc24…` on CS-3's list, matches the branch. It was not pushed again.*
+- *Pre-push check: 0 open requests, 0 open fixed one-time requests, 0 pending or accepted offers, 0 snapshots, 0 obligations.*
+- *Dry run listed only `20261117001000`; the push applied it.*
+- *Readback: hosted ends at `20261117001000`; fingerprint `57 | ce502fe7…`, identical to the branch; gate `offer_terms` **off** with one audit row; 0 terms rows, answers, blocks and `awaiting_terms` requests; both guard triggers present; the constraint is widened; the answer command is signed-in only; no client writes terms or calls the internal rules.*
+- *The push came before Codex's code review and the finance review, which the sequence in §10.6 put first, on the owner's instruction. Both reviews are still owed. The PR is not merged and the gate is not activated.*
+
 **Rollback state check (read-only, counts only):**
 
 ```sql
