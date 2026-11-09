@@ -34,6 +34,7 @@ export type ProviderStatusKind =
   | "offer_pending"
   | "consent_needed"
   | "replacement_answer_needed"
+  | "terms_answer_needed"
   | "unavailable"
   | "quote_follow_up"
   | "accepted"
@@ -101,6 +102,17 @@ export function providerStatus(input: ProviderStatusInput): ProviderStatus {
         line: "Replacement provider found",
         explanation: "Your provider withdrew and a replacement accepted. Mercurius proposes the provider and an appointment time; nothing is scheduled until you accept both.",
         nextAction: "Accept or decline the proposed replacement in the appointment details.",
+        assigned: false,
+      };
+    }
+    // TRACE-150 (DEC-2026-063): a provider accepted terms other than the ones priced at submission.
+    // Nothing is scheduled or charged until the homeowner accepts those exact terms.
+    if (matching === "awaiting_terms") {
+      return {
+        kind: "terms_answer_needed",
+        line: "Review this provider's terms",
+        explanation: "A provider accepted your request at terms that differ from the price you were shown. Nothing is scheduled or charged until you accept them.",
+        nextAction: "Review the provider, price, scope and what isn't included, then accept or decline.",
         assigned: false,
       };
     }
@@ -186,7 +198,7 @@ export type VendorOfferRow = {
 };
 
 export type VendorOfferOutcome =
-  | { kind: "accepted"; quote: boolean; appointment: string | null; awaitingHomeowner?: boolean }
+  | { kind: "accepted"; quote: boolean; appointment: string | null; awaitingHomeowner?: boolean; awaitingTerms?: boolean }
   | { kind: "still_open" }
   | { kind: "gone" }
   | { kind: "unknown" };
@@ -204,6 +216,8 @@ export function vendorOfferOutcome(row: VendorOfferRow | null, contractorId: str
   }
   // TRACE-132 (E5): a replacement's acceptance waits for the homeowner; the earlier time isn't inherited.
   if (row.matching_status === "awaiting_homeowner") return { kind: "accepted", quote: isQuoteWork(row), appointment: null, awaitingHomeowner: true };
+  // TRACE-150: accepted at bound terms; the homeowner answers before anything is scheduled.
+  if (row.matching_status === "awaiting_terms") return { kind: "accepted", quote: false, appointment: null, awaitingTerms: true };
   if (row.matching_status === "offered" && ["matched", "quoted"].includes(row.status)) return { kind: "still_open" };
   return { kind: "gone" };
 }

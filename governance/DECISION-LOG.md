@@ -269,13 +269,35 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-064 — Sole-owner finance review for CS-4 and the CS-3/O-10 closeout repairs (exception to DEC-2026-060)
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-08 (America/New_York). **Date:** 2026-11-08.
+
+**Owner's words (implementation session, 2026-11-08):** "Record Josh's explicit exception to the Phase 6 release-review requirement: Josh will perform the sole-owner finance review for CS-4 and the CS-3/O-10 closeout repairs. Do not describe this as two-person sign-off or mark the review completed. Preserve the history of CS-4's missed release gates. This exception does not modify runtime dual-authorization commands, tax requirements or promotion-activation gates."
+
+**What it settles.** DEC-2026-060 named two finance reviewers (Josh + the accountant) for the Phase 6 money-path repairs. For **CS-4 (TRACE-148), CS-3 (TRACE-149) and O-10 (TRACE-150)** only, the finance review is performed by Josh alone.
+
+**What it is not.**
+- It is **not** a two-person sign-off and must never be recorded as one.
+- It does **not** record any review as done. As of 2026-11-08 the review has not been performed for any of the three.
+- It does not change CS-4's history. CS-4 reached `main` and production on 2026-11-06 without its Codex code review, finance review or a recorded push (plan §9.1). Those gates stay recorded as missed, with their dates, and a review performed later is recorded as performed later.
+- It does **not** change runtime dual authorization (two-person snapshot publication, money authorities, refund and ACH approvals), tax requirements, or the promotions activation gate (still closed pending its own finance review).
+
+**Amends:** DEC-2026-060 (finance reviewers) for these three slices. **Not changed:** every other Phase 6 gate; the accountant's engagement for other finance reviews; DEC-2026-063.
+
 ### DEC-2026-063 — One-time offers at other terms: bind the offer's terms, with homeowner acceptance (O-10, TRACE-126/150)
 
-**Status:** **PROPOSED**, awaiting the owner's confirmation. **Date:** 2026-11-07 (America/New_York).
+**Status:** **APPROVED**, 2026-11-08 (America/New_York), with O-11 and P-3. **Date:** 2026-11-07 (proposed); 2026-11-08 (approved).
 
-**Source.** On 2026-11-07, the text below arrived in the implementation session as pasted content, worded as an approval ("I approve O-10 option (a) …"). The session doesn't show who wrote it, and **no owner confirmation is recorded**. It is recorded as the proposed decision, not as owner approval. A recommendation from Codex or Claude is not owner approval either. The status becomes APPROVED only when the owner (Josh) confirms it, with the date and wording recorded here.
+**Source of approval.** The owner's instruction in the implementation session on 2026-11-08: "Josh has approved O-10, O-11 and P-3 exactly as Codex recommended". It restated them as:
+- "Preserve submission-bound terms where applicable; otherwise bind complete provider terms at offer creation."
+- "Provider accepts first; homeowner explicitly accepts changed terms before scheduling or payment."
+- "No automatic response timeout. Operations sees unanswered terms after 24 hours. In-app notifications for this slice."
+- "Do not transfer add-ons or promotions automatically. Clearly disclose omitted optional add-ons and obtain homeowner agreement. Skip candidates unable to meet required scope."
 
-**Proposed text, as received:** "I approve O-10 option (a), with these requirements:
+*2026-11-07: this entry was recorded as PROPOSED because the earlier approval text had no recorded owner confirmation. That record is kept below.*
+
+**Text received 2026-11-07 (requirements):** "I approve O-10 option (a), with these requirements:
 - Preserve submission-bound terms when the offer matches the submitted package and level.
 - Otherwise, bind the selected provider's complete commercial terms when the offer is created.
 - Later catalog edits must not reprice that offer. Approved live eligibility checks remain.
@@ -284,15 +306,15 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 - Changed terms require a new offer and fresh homeowner acceptance.
 - Do not transfer add-ons or promotions to another provider without supported, explicitly agreed terms."
 
-It continues: CS-3's current fallback (the accepted offer's current price) is an open repair, not approved permanent policy and not full TRACE-126 closure; "No production changes or Phase 6 acceptance are authorized by this decision."
+It continued: CS-3's current fallback (the accepted offer's current price) is an open repair, not approved permanent policy and not full TRACE-126 closure; "No production changes or Phase 6 acceptance are authorized by this decision."
 
-**What it would settle.** Decision O-10 ([bound-terms plan](PHASE-6-BOUND-TERMS-PLAN.md) §8; closure report §10.5): one-time fixed requests offered at a package or level other than the one priced at submission. It would read DEC-2026-060 D-1 together with R-1 (DEC-2026-062).
+**What it settles.** Decision O-10 ([bound-terms plan](PHASE-6-BOUND-TERMS-PLAN.md) §8; closure report §10.5): one-time fixed requests offered at a package or level other than the one priced at submission. It reads DEC-2026-060 D-1 together with R-1 (DEC-2026-062). O-11 and P-3 are settled as quoted above.
 
-**Scope.** Only a plan was prepared against it (plan §9, TRACE-150), for Codex review. It authorizes no implementation, hosted migration push, merge, production change, payment activation or Phase 6 acceptance. The money-path change will need the two-person finance review (Josh + the accountant, DEC-2026-060) before merge. Plan choices P-3 and O-11 stay proposed and open.
+**Scope.** It authorized implementation (TRACE-150, plan §10), on the owner's 2026-11-08 instruction. It does not authorize a hosted migration push, a merge, a production change, activation of the `offer_terms` gate, payment activation or Phase 6 acceptance; each needs the owner's separate authorization. The finance review is DEC-2026-064's sole-owner review.
 
-**Would amend / read:** DEC-2026-060 D-1; plan R-3 (superseded by option (a) if confirmed). **Not changed:** DEC-2026-062; DEC-2026-053 E5/E6; DEC-2026-038/041/042 (the promotions gate stays closed); DEC-2026-049 items 7–8; fee, tax, capture, payout and refund rules.
+**Amends / reads:** DEC-2026-060 D-1; plan R-3 (superseded by option (a)). **Not changed:** DEC-2026-062; DEC-2026-053 E5/E6 (a replacement still works only for the agreed amount); DEC-2026-038/041/042 (the promotions gate stays closed); DEC-2026-049 items 7–8; fee, tax, capture, payout and refund rules.
 
-**Impact if confirmed.** MPS: §6.2/§6.5 gain a homeowner terms acceptance for other-terms offers. MDS: a homeowner terms review state (existing components). MTS: one additive migration. Data/payment/security: fingerprinted functions change; the finance review is required.
+**Impact.** MPS: §6.2/§6.5 gain a homeowner terms acceptance for other-terms offers. MDS: a homeowner terms review state (existing components). MTS: migration `20261117001000`. Data/payment/security: fingerprinted functions change (plan §10); the finance review is required.
 
 ### DEC-2026-062 — Bound terms stay acceptable and payable while the offering is still offered (R-1, TRACE-127/126)
 

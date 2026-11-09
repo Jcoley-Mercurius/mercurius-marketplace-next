@@ -8,6 +8,7 @@ import { CancelPendingRequest } from "@/components/dashboard/CancelPendingReques
 import { CancellationOutcome } from "@/components/dashboard/CancellationOutcome";
 import { describeAssessment, type Assessment } from "@/lib/cancellation";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
+import { OfferTermsReview } from "@/components/dashboard/OfferTermsReview";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
 import { FulfillmentPanel } from "@/components/dashboard/FulfillmentPanel";
 import { formatAppointment } from "@/lib/appointments";
@@ -375,6 +376,22 @@ export function HomeownerJobDetailDialog({
     }
   }
 
+  // TRACE-150: the stored answer decides the outcome (OfferTermsReview reads it back).
+  async function afterTermsAnswer(accepted: boolean) {
+    toast.success(accepted ? "Terms accepted" : "Terms declined", {
+      description: accepted ? "Your service is scheduled. Mercurius confirms the total before you pay at checkout."
+        : "That provider is no longer assigned. The request's current status is shown on your dashboard.",
+    });
+    onOpenChange(false);
+    try {
+      await onRefresh();
+    } catch (error) {
+      toast.warning("Answer saved, but the dashboard could not refresh", {
+        description: error instanceof Error ? error.message : "Refresh the page to see the latest status.",
+      });
+    }
+  }
+
   function respondToQuote(approve: boolean) {
     const supabase = createClient();
     return runAction(
@@ -450,6 +467,8 @@ export function HomeownerJobDetailDialog({
           {providerState.nextAction && <p className="text-sm font-medium">{providerState.nextAction}</p>}
           {providerState.kind === "consent_needed" && <ConfirmAction disabled={!actionsEnabled || !!busyAction} confirmationTone="commitment" triggerLabel="Allow another provider" title="Allow another provider?" entity={job.service_type} consequence="Mercurius may offer this request to one eligible provider at a time instead of your preferred provider. If none accepts, it will show as not available yet in your area." confirmLabel="Allow other providers" onConfirm={consentToFallback} />}
         </section>
+
+        {providerState.kind === "terms_answer_needed" && <OfferTermsReview key={`terms-${job.id}-${job.matching_status}`} jobId={job.id} enabled={actionsEnabled && !busyAction} onAnswered={afterTermsAnswer} />}
 
         {isRecurringPlan(job) && <RecurringVisitsPanel key={`visits-${job.id}-${job.status}`} seriesId={job.id} role="homeowner" />}
         {showFulfillment && <FulfillmentPanel key={`fulfillment-${job.id}-${job.status}`} jobId={job.id} />}

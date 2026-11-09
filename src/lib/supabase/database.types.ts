@@ -444,6 +444,7 @@ export type Database = {
           job_id: string
           raised_at: string
           reason: string | null
+          reason_category: string | null
           resolution_notes: string | null
           resolution_version: number
           resolved_at: string | null
@@ -460,6 +461,7 @@ export type Database = {
           job_id: string
           raised_at?: string
           reason?: string | null
+          reason_category?: string | null
           resolution_notes?: string | null
           resolution_version?: number
           resolved_at?: string | null
@@ -476,6 +478,7 @@ export type Database = {
           job_id?: string
           raised_at?: string
           reason?: string | null
+          reason_category?: string | null
           resolution_notes?: string | null
           resolution_version?: number
           resolved_at?: string | null
@@ -933,6 +936,160 @@ export type Database = {
             columns: ["service_request_id"]
             isOneToOne: false
             referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_offer_terms: {
+        Row: {
+          addon_cents: number
+          consent_hash: string
+          content_hash: string
+          contractor_id: string
+          created_at: string
+          id: string
+          level_cents: number
+          offer_id: string
+          package_id: string
+          package_tier_id: string
+          request_id: string
+          terms: Json
+          total_cents: number
+        }
+        Insert: {
+          addon_cents: number
+          consent_hash: string
+          content_hash: string
+          contractor_id: string
+          created_at?: string
+          id: string
+          level_cents: number
+          offer_id: string
+          package_id: string
+          package_tier_id: string
+          request_id: string
+          terms: Json
+          total_cents: number
+        }
+        Update: {
+          addon_cents?: number
+          consent_hash?: string
+          content_hash?: string
+          contractor_id?: string
+          created_at?: string
+          id?: string
+          level_cents?: number
+          offer_id?: string
+          package_id?: string
+          package_tier_id?: string
+          request_id?: string
+          terms?: Json
+          total_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_offer_terms_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offer_terms_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: true
+            referencedRelation: "job_match_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offer_terms_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offer_terms_package_tier_id_fkey"
+            columns: ["package_tier_id"]
+            isOneToOne: false
+            referencedRelation: "package_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offer_terms_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_offer_terms_responses: {
+        Row: {
+          accepted: boolean
+          actor_id: string
+          before_value: Json
+          consent_hash: string
+          content_hash: string
+          created_at: string
+          id: string
+          offer_id: string
+          reason: string | null
+          request_id: string
+          response_key: string
+          terms_id: string
+          via: string
+        }
+        Insert: {
+          accepted: boolean
+          actor_id: string
+          before_value: Json
+          consent_hash: string
+          content_hash: string
+          created_at?: string
+          id?: string
+          offer_id: string
+          reason?: string | null
+          request_id: string
+          response_key: string
+          terms_id: string
+          via?: string
+        }
+        Update: {
+          accepted?: boolean
+          actor_id?: string
+          before_value?: Json
+          consent_hash?: string
+          content_hash?: string
+          created_at?: string
+          id?: string
+          offer_id?: string
+          reason?: string | null
+          request_id?: string
+          response_key?: string
+          terms_id?: string
+          via?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_offer_terms_responses_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_match_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offer_terms_responses_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offer_terms_responses_terms_id_fkey"
+            columns: ["terms_id"]
+            isOneToOne: true
+            referencedRelation: "job_offer_terms"
             referencedColumns: ["id"]
           },
         ]
@@ -7229,6 +7386,7 @@ export type Database = {
           phone: string
         }[]
       }
+      admin_offer_terms_queue: { Args: never; Returns: Json }
       admin_open_quote_exception: {
         Args: { _job_id: string; _reason: string }
         Returns: string
@@ -7364,6 +7522,10 @@ export type Database = {
         Args: { p_offer: string; p_reason: string }
         Returns: Json
       }
+      admin_retry_offer_terms_matching: {
+        Args: { _reason: string; _request_id: string; _retry_key: string }
+        Returns: Json
+      }
       admin_return_quote_proposal: {
         Args: { _proposal_id: string; _reason: string }
         Returns: undefined
@@ -7446,6 +7608,10 @@ export type Database = {
           _reason: string
           _series_id: string
         }
+        Returns: Json
+      }
+      admin_start_visit_payment_exception: {
+        Args: { _job_id: string; _operation_key: string; _reason: string }
         Returns: Json
       }
       admin_support_queue: {
@@ -7663,21 +7829,43 @@ export type Database = {
         Returns: Json
       }
       homeowner_confirm_job: { Args: { _job_id: string }; Returns: undefined }
-      homeowner_dispute_completion: {
-        Args: { _completed_at: string; _job_id: string; _reason: string }
-        Returns: Json
-      }
+      homeowner_dispute_completion:
+        | {
+            Args: { _completed_at: string; _job_id: string; _reason: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _category: string
+              _completed_at: string
+              _job_id: string
+              _reason: string
+            }
+            Returns: Json
+          }
       homeowner_promotion_options: { Args: { p_payload: Json }; Returns: Json }
-      homeowner_raise_dispute: {
-        Args: { _job_id: string; _reason: string }
-        Returns: string
-      }
+      homeowner_raise_dispute:
+        | { Args: { _job_id: string; _reason: string }; Returns: string }
+        | {
+            Args: { _category: string; _job_id: string; _reason: string }
+            Returns: string
+          }
       homeowner_request_plan_stop: {
         Args: { _reason: string; _request_key: string; _series_id: string }
         Returns: Json
       }
       homeowner_request_promotion: {
         Args: { p_code?: string; p_request: string }
+        Returns: Json
+      }
+      homeowner_respond_offer_terms: {
+        Args: {
+          _accept: boolean
+          _expected: Json
+          _reason?: string
+          _response_key: string
+          _terms_id: string
+        }
         Returns: Json
       }
       homeowner_respond_replacement: {

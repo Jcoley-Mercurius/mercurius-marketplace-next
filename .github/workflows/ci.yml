@@ -116,6 +116,8 @@ jobs:
         run: node scripts/recurring-payment-concurrency.mjs
       - name: Concurrent bound-terms visit acceptance, publication and checkout against catalog revisions (TRACE-127)
         run: node scripts/bound-terms-concurrency.mjs
+      - name: Concurrent offers at other terms, homeowner answers and gate switch-off (TRACE-150)
+        run: node scripts/offer-terms-concurrency.mjs
       - name: Concurrent fulfillment start, confirmation, dispute and follow-up
         run: node scripts/fulfillment-concurrency.mjs
       - name: Concurrent cancellation, checkout, capture, refund, withdrawal and plan commands

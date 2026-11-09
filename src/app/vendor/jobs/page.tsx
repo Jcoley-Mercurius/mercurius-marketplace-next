@@ -39,6 +39,8 @@ type Job = {
   service_catalog_id?: string | null;
   scheduled_start_at?: string | null;
   matching_status?: string;
+  /** TRACE-150: this provider's open or accepted offer carries bound terms the homeowner must accept. */
+  bound_terms?: boolean;
   pricing_mode: string | null;
   quote_only: boolean | null;
   payment_status: string | null;
@@ -69,6 +71,17 @@ type Action = { id: string; kind: string } | null;
 type Notice = { tone: "success" | "warning" | "error"; title: string; text: string } | null;
 
 // TRACE-099: an offer is actionable only in the stored offer state; the server decides expiry.
+// TRACE-150: request ids whose current offer to this provider carries bound terms.
+async function boundTermRequests(supabase: ReturnType<typeof createClient>, contractorId: string) {
+  const [terms, attempts] = await Promise.all([
+    supabase.from("job_offer_terms").select("request_id, offer_id").eq("contractor_id", contractorId),
+    supabase.from("job_match_attempts").select("id").eq("contractor_id", contractorId).in("outcome", ["pending", "accepted"]),
+  ]);
+  if (terms.error || attempts.error) return null;
+  const current = new Set((attempts.data ?? []).map((attempt) => attempt.id));
+  return new Set((terms.data ?? []).filter((row) => current.has(row.offer_id)).map((row) => row.request_id));
+}
+
 const isIncoming = (job: Job) => isOpenVendorOffer(job) || job.status === "pending";
 const readbackColumns = "status, matching_status, contractor_id, pricing_mode, quote_only, scheduled_start_at";
 const finished = new Set(["completed", "closed", "reviewed", "resolved", "homeowner_confirmed", "cancelled"]);
@@ -117,6 +130,14 @@ export default function VendorJobsPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const markBoundTerms = useCallback(async (supabase: ReturnType<typeof createClient>, contractorId: string) => {
+    const bound = await boundTermRequests(supabase, contractorId).catch(() => null);
+    if (!bound) return;
+    // Re-render only when a flag changes, so an unchanged list stays still.
+    const changed = (job: Job) => Boolean(job.bound_terms) !== bound.has(job.id);
+    setJobs((current) => current.some(changed) ? current.map((job) => ({ ...job, bound_terms: bound.has(job.id) })) : current);
+    setSelected((current) => current && changed(current) ? { ...current, bound_terms: bound.has(current.id) } : current);
+  }, []);
   const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!user) return;
     if (!silent) {
@@ -152,13 +173,17 @@ export default function VendorJobsPage() {
           if (profile.full_name) names.set(profile.user_id, profile.full_name);
         }
       }
-      const named = liveJobs.map((job) => ({ ...job, homeowner_name: names.get(job.customer_id) ?? null }));
+const named = liveJobs.map((job) => ({ ...job, homeowner_name: names.get(job.customer_id) ?? null }));
       setJobs(named);
       // An open job dialog follows the reloaded row (quote state changes while it is open).
       setSelected((current) => current ? named.find((job) => job.id === current.id) ?? current : null);
       setNow(Date.now());
       setStaleRefresh(false);
       setMode("live");
+      // TRACE-150 (DEC-2026-063): which of this provider's open or accepted offers carry bound terms the
+      // homeowner accepts first. A secondary read: the list never waits for it, and a failure leaves the
+      // general wording in place (the server still requires the homeowner's acceptance).
+      if (liveJobs.length) void markBoundTerms(supabase, contractorResult.data.id);
     } catch (reason) {
       if (silent) {
         // Keep the last list but say it may be out of date; actions still recheck the server.
@@ -171,7 +196,7 @@ export default function VendorJobsPage() {
       setError(reason instanceof Error ? reason.message : "The jobs queue could not be loaded.");
       setMode("error");
     }
-  }, [user]);
+  }, [user, markBoundTerms]);
 
   useEffect(() => {
     // Loading is intentionally tied to the authenticated vendor identity.
@@ -224,6 +249,7 @@ export default function VendorJobsPage() {
           `${job.service_type} is now in Active Jobs.`,
           outcome.quote ? "This is quote work, so the price isn’t set yet." : null,
           outcome.awaitingHomeowner ? "You’re the replacement provider. The homeowner accepts you and an appointment time before anything is scheduled."
+            : outcome.awaitingTerms ? "Waiting for the homeowner to accept your terms. Nothing is scheduled until they do."
             : outcome.appointment ? `Appointment: ${outcome.appointment}.` : "No appointment time is recorded yet.",
         ].filter(Boolean).join(" ") });
         return true;
@@ -384,13 +410,14 @@ function RequestCard({ job, now, action, error, recheck, view, accept, decline }
           ? "Mercurius is still preparing this request. You can respond once it’s offered to you."
           : closed ? "The response window has closed. Mercurius will move this request on; refresh to see your current offers."
           : quote ? "Quote work: accepting commits you to this request; the price is set later by quote."
+          : job.bound_terms ? "Accepting commits you to these terms. The homeowner accepts them before anything is scheduled."
           : "Accepting commits you to this request at the fixed price shown."}</p>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
           <ConfirmAction triggerLabel="Decline" title="Decline this offer?" entity={entity}
             consequence="It won’t be offered to you again. Mercurius may offer it to another eligible provider, ask the homeowner how to proceed, or tell them it isn’t available yet."
             confirmLabel="Decline offer" disabled={!canRespond} onConfirm={decline} />
           <ConfirmAction triggerLabel="Accept offer" triggerVariant="commitment" confirmationTone="commitment" title="Accept this offer?" entity={entity}
-            consequence={`${quote ? "This is quote work: the price isn’t set until a quote is agreed." : job.total_amount !== null ? `You agree to the fixed price of ${money(job.total_amount)}.` : "You agree to the fixed price on this request."} ${isRecurringPlan(job) ? " This is a recurring plan: Mercurius offers each visit to you separately at this price, and you accept each one." : ""} The request moves to Active Jobs as scheduled, with no appointment time until one is recorded. If you cancel later, Mercurius rematches the homeowner and records a provider cancellation.`}
+            consequence={`${quote ? "This is quote work: the price isn’t set until a quote is agreed." : job.total_amount !== null ? `You agree to the fixed price of ${money(job.total_amount)}.` : "You agree to the fixed price on this request."} ${isRecurringPlan(job) ? " This is a recurring plan: Mercurius offers each visit to you separately at this price, and you accept each one." : ""} ${job.bound_terms ? "These terms differ from the price the homeowner was shown, so the homeowner accepts them before the request is scheduled. If they decline, the request is no longer assigned to you." : "The request moves to Active Jobs as scheduled, with no appointment time until one is recorded."} If you cancel later, Mercurius rematches the homeowner and records a provider cancellation.`}
             confirmLabel="Accept offer" disabled={!canRespond} onConfirm={accept} />
         </div>
       </CardFooter>
@@ -413,7 +440,7 @@ function JobCard({ job, busy, view, start, complete }: {
         <div className="mb-4 flex flex-wrap items-center gap-3"><h3 className="font-heading text-lg font-semibold">{job.service_type}</h3><Status status={job.status} /></div>
         <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
           <span className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.address}, {job.city}, {job.state}</span>
-          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.matching_status === "awaiting_homeowner" ? "Waiting for the homeowner to accept you and a time" : job.scheduled_start_at ? `Appointment: ${formatAppointment(job.scheduled_start_at)}` : job.status === "scheduled" ? "No appointment time recorded yet" : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}${job.preferred_time ? " · " + job.preferred_time : ""}` : "No preferred date"}</span>
+          <span className="flex items-start gap-2"><Calendar className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.matching_status === "awaiting_homeowner" ? "Waiting for the homeowner to accept you and a time" : job.matching_status === "awaiting_terms" ? "Waiting for the homeowner to accept your terms" : job.scheduled_start_at ? `Appointment: ${formatAppointment(job.scheduled_start_at)}` : job.status === "scheduled" ? "No appointment time recorded yet" : job.preferred_date ? `Preferred: ${formatDate(job.preferred_date)}${job.preferred_time ? " · " + job.preferred_time : ""}` : "No preferred date"}</span>
           <span className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{job.homeowner_name ?? "Homeowner"}</span>
         </div>
       </div>

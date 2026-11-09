@@ -18,6 +18,8 @@ const requestStates = {
 export function canonicalRequestState(status: StoredStatus, matchingStatus?: string): RequestState {
   if (status === "pending" && ["sourcing", "exhausted"].includes(matchingStatus ?? "")) return "unavailable";
   if (status === "matched" && matchingStatus === "matched") return "provider_confirmed";
+  // TRACE-150: a provider accepted bound terms; nothing is confirmed until the homeowner accepts them.
+  if (status === "matched" && matchingStatus === "awaiting_terms") return "matching";
   if (status === "pending" && ["awaiting_match", "offered", "awaiting_consent"].includes(matchingStatus ?? "")) return "matching";
   return requestStates[status];
 }

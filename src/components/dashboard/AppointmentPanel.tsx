@@ -10,6 +10,7 @@ import { actorLabel, appointmentState, easternParts, formatAppointment, historyL
 import { createClient } from "@/lib/supabase/client";
 import { proposalAnswerLine, replacementLine, requestFeeLine, type RescheduleInitiator } from "@/lib/exceptionResolutions";
 import { LaterWaiver } from "@/components/admin/LaterWaiver";
+import { offerTermsView } from "@/lib/offerTerms";
 
 const requestStatuses = new Set(["pending", "matched", "quoted", "scheduled", "in_progress"]);
 const emptyEntry: EasternDateTimeValue = { date: "", time: "", choice: "" };
@@ -193,6 +194,15 @@ export function AppointmentPanel({ jobId, role, readOnly = false, onChanged }: {
     {replacementText && <div className="space-y-2 rounded-lg border p-3 text-sm" data-testid="replacement">
       <p className="font-medium">{replacementText.heading}</p>
       <p className="text-muted-foreground">{replacementText.detail}</p>
+      {replacement?.proposal?.terms && (() => {
+        // TRACE-150 (P-5): the replacement's bound terms, which accepting the replacement accepts.
+        const view = offerTermsView({ id: replacement.proposal.terms.id, consent_hash: "", total_cents: replacement.proposal.terms.total_cents, terms: replacement.proposal.terms.terms });
+        return <div className="space-y-1" data-testid="replacement-terms">
+          <p>{view.offering}{view.level ? ` · ${view.level}` : ""}: service total {view.total}</p>
+          {view.included.length > 0 && <p className="text-muted-foreground">Included: {view.included.join(", ")}</p>}
+          {view.omitted.length > 0 && <p className="text-muted-foreground">Not included: {view.omitted.join("; ")}</p>}
+        </div>;
+      })()}
       {!readOnly && role === "homeowner" && replacement?.state === "awaiting_homeowner" && replacement.proposal && <div className="flex flex-wrap gap-2">
         <ConfirmAction triggerLabel="Accept replacement" triggerVariant="commitment" confirmationTone="commitment" title="Accept this provider and time?"
           entity={`${replacement.proposal.provider_name ?? "Replacement provider"} · ${formatAppointment(replacement.proposal.starts_at)}`}

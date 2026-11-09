@@ -1,3 +1,46 @@
+# Agent handoff — 2026-11-08
+
+## O-10 implemented with CS-3 for one release (TRACE-150, DEC-2026-063/064), 2026-11-08
+
+- **Decisions:**
+  - DEC-2026-063 approved with O-11 and P-3; the source is the owner's 2026-11-08 instruction.
+  - DEC-2026-064: Josh performs the sole-owner finance review for CS-4, CS-3 and O-10. It is **not** two-person and **not** performed. Runtime dual authorization, tax and the promotions gate are unchanged.
+- **Built:** migration `20261117001000`, client states, `scripts/offer-terms-concurrency.mjs` (CI). Record: [plan §10](../../governance/PHASE-6-BOUND-TERMS-PLAN.md).
+- **Evidence:**
+  - Clean replay of 222 migrations: 107 files / 6,968 PASS; SQL 116 100/100.
+  - Concurrency C14–C21 PASS ×7.
+  - Fingerprint `57 | ce502fe7…` (CS-3's list: exactly 3 definitions changed).
+  - Unit 660/660, types, lint, secret scan.
+- **Finance sheet for Josh:** [PHASE-6-SOLE-OWNER-FINANCE-SHEET.md](../../governance/PHASE-6-SOLE-OWNER-FINANCE-SHEET.md).
+- **Not done:** hosted pushes, merge, gate activation (each needs the owner's authorization). TRACE-126 stays open (P-4 narrowed). CS-4's Codex and finance reviews are still owed.
+- **2026-11-09, hosted:**
+  - `20261117001000` pushed on the owner's instruction, before the Codex and finance reviews.
+  - `20261116001000` (CS-3) was already applied, with no push record.
+  - Readback: fingerprint `57 | ce502fe7…` matches; gate off; no terms or `awaiting_terms` rows.
+  - Next: reviews, then merge #154 (owner), then activation (owner).
+- **2026-11-09:** release PR #154 head `99f035c` (vendor jobs list no longer waits on the bound-terms read). CI run 42627327535: application, backend and lifecycle pass.
+- **Next:**
+  1. Codex code review of the release PR (CS-3 + O-10).
+  2. Josh's finance review.
+  3. The guarded release sequence in plan §10.6.
+
+## #152 reconciliation and deployment compatibility (TRACE-150), 2026-11-08
+
+- **#152, verified read-only:**
+  - head `1ff703c95e907377671732c8790e3af0f901dc62`; review range `7d0bdba..1ff703c`.
+  - Marked ready for review at 16:53:50 UTC and merged at 16:54:00 UTC, both by GitHub account `Jcoley-Mercurius`.
+  - Destination **`claude/phase6-cs3-one-time-bound-terms`**, merge commit `f23f1008878dd8ec4015713ed9fa2c4150f2727a`.
+  - 0 reviews and 0 review comments: the merge is not a Codex review. The O-10 plan (§9) is **still pending Codex review**.
+- **Unchanged:**
+  - `main` is `98fe138`. CS-3 and the O-10 plan have **not** reached `main`.
+  - Hosted ends at `20261115001000`; `20261116001000` is not applied.
+  - DEC-2026-063, O-11 and P-3 stay **proposed** until Josh explicitly confirms them.
+  - CS-4's Codex code review and finance review stay **outstanding**, as missed pre-release gates. Nothing is backdated.
+- **Plan §9.8 updated:** pushing and then merging immediately doesn't resolve the risk from the deployed client and `awaiting_terms`. Deployment compatibility is **unresolved**. Two proposals for Codex, neither implemented:
+  - (A) backward-compatible states: safe for money, but misleading to homeowners;
+  - (B) guarded activation (recommended): a switch that is off while the schema deploys, then a recorded activation after the new client is confirmed live.
+- **Next:** Codex reviews §9, including §9.8. Josh confirms or amends DEC-2026-063, P-3 and O-11. No implementation before both.
+
 # Agent handoff — 2026-11-07
 
 ## Reconciliation and O-10 repair plan (TRACE-150, DEC-2026-063 proposed), 2026-11-07
