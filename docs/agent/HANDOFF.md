@@ -8,7 +8,8 @@
   - `phase4-completion-integrity` fixture repaired, 62/62.
   - Unit 664/664, types, lint, secrets. Fingerprint unchanged `58 | af0fae6e…`.
 - **Hosted, read-only:** 225/225 through `20261120001000`; `20261121001000` pending; 0 exception rows, 0 scheduled jobs, 0 open checkouts.
-- **Not done:** Codex review of the combined range; owner-authorized dry run and push of `20261121001000`, then the merge. `offer_terms` activation is separate. Phase 6 is not accepted.
+- **Hosted (owner instruction, 2026-11-10):** `20261121001000` pushed after a dry run. Readback: head `20261121001000` (226/226); restated hashes equal local; fingerprint `58 | af0fae6e…`; gates off; 0 exception rows.
+- **Not done:** Codex review of the combined range (#160), then the merge. `offer_terms` activation is separate. Phase 6 is not accepted.
 
 # CS-5 one-time extension — 2026-11-09
 

@@ -212,6 +212,15 @@ Source: [Codex review of #157/#158](PHASE-6-PR157-158-CODEX-REVIEW.md) (on PR #1
   | `guard_fulfillment_start` | `bb5410ea4c21993a5b58a9da5ccb3775` | `bb5410ea4c21993a5b58a9da5ccb3775` (unchanged) |
 
   After an authorized push, the hosted readback should equal the local column.
+- **Hosted push (owner instruction, 2026-11-10).** The dry run listed only `20261121001000`, which was then applied. Readback:
+  - migration history: 226/226, head `20261121001000`, nothing local-only or remote-only;
+  - all five definition hashes equal the local column above;
+  - money fingerprint `58 | af0fae6e0c5b604e9073e10bc060957e` unchanged;
+  - `offer_terms` and `promotions_checkout` off;
+  - `start_exception_hard_stop` not executable by `authenticated`; the exception command is executable by `authenticated` and not by `anon`;
+  - 0 exception rows.
+
+  The fix is live on production before merge, and the admin client from #158 ships with the merge of #160. Codex review is still outstanding.
 - **Hosted (read-only, 2026-11-10).** `migration list`: 225 of 225 applied through `20261120001000`; only `20261121001000` is pending; nothing is remote-only. Aggregates: 0 exception rows, 0 scheduled jobs, 0 open checkouts, so no live job was exposed. Not pushed.
 - **For Codex:**
   1. A retried exception (same key) after a later hold or block is refused, not replayed. 1113 and 1120 behaved the same for a later hold.
