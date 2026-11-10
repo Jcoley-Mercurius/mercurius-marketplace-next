@@ -1,5 +1,7 @@
 # Phase 6 combined Codex source review — A1 rows 1–34
 
+**Current checkpoint, 2026-11-10:** [Codex review of #157/#158](PHASE-6-PR157-158-CODEX-REVIEW.md) clears #157's A1-F01 implementation at `99243ee` (integrated to main at `82b566d`). The original OPEN disposition below is historical. #158 is **changes required**: CS5-F01 identifies processing/unknown labels bypassing held/blocked-source exclusions for an unpaid start exception. #158 merged into the old #157 branch, not main. Its migration is already recorded on hosted. Final CS-5 integration/fix, the out-of-CI integrity fixture repair, final candidate/A2 and owner acceptance remain outstanding. No production action is authorized or performed by this record.
+
 **Reviewer:** Codex, architect/reviewer, at Josh's explicit request. **Recorded:** 2026-11-09 (UTC; no approval time inferred).
 **Outcome:** Review coverage recorded for all 34 manifest rows, including explicit retrospective code reviews of CS-4 (#149, integrated through #150) and CS-3 (#151, integrated through #153). **Changes required before Phase 6 acceptance: A1-F01 and the already-approved one-time CS-5 extension.** PR #155's reviewed forward fix addresses the three recorded #154 findings. Phase 6 is not accepted; Phase 7 is not authorized.
 
