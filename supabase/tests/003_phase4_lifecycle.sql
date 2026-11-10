@@ -94,6 +94,13 @@ select throws_ok($$select public.homeowner_confirm_job('43000000-0000-4000-8000-
 select throws_ok($$select public.transition_job_status('43000000-0000-4000-8000-000000000003','in_progress')$$,'42501',null,'homeowner cannot claim to start vendor work');
 select throws_ok($$insert into public.job_events(job_id,event_type) values ('43000000-0000-4000-8000-000000000003','confirmation_received')$$,'42501',null,'browser cannot forge job audit');
 reset role;
+-- CS-5 one-time extension (20261120001000): work restarts only on a paid one-time job. Job 4 is paid in
+-- full (synthetic reviewed snapshot, captured).
+insert into public.money_obligations(id, service_request_id, customer_id, contractor_id) values ('43900000-0000-4000-8000-000000000001', '43000000-0000-4000-8000-000000000004', '41000000-0000-4000-8000-000000000001', '42000000-0000-4000-8000-000000000001');
+insert into public.money_snapshots(id, obligation_id, revision, service, addons, discount, adjustment, subtotal, tax, tip, deposit, total, currency,
+  source_version, policy_version, tax_evidence, created_by, approved_by, reason, expires_at)
+  values ('43900000-0000-4000-8000-000000000002', '43900000-0000-4000-8000-000000000001', 1, 6000, 0, 0, 0, 6000, 0, 0, 0, 6000, 'usd', 'synthetic-source', 'CFG-005', 'synthetic-tax', '41000000-0000-4000-8000-000000000004', '41000000-0000-4000-8000-000000000002', 'Synthetic paid fixture', now() + interval '2 days');
+update public.money_obligations set current_snapshot_id = '43900000-0000-4000-8000-000000000002', captured = 6000 where id = '43900000-0000-4000-8000-000000000001';
 update public.service_requests set status='in_progress',photo_proof_urls='{}'
  where id='43000000-0000-4000-8000-000000000004';
 -- TRACE-097: completion evidence must be a stored job-photos object uploaded by the provider.

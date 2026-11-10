@@ -4,7 +4,7 @@
 -- bound to the completion they reviewed; payout keeps the confirmation + 48 h and hold guards. The
 -- unpaid-start matrix follows DEC-2026-050 A (approved by DEC-2026-060 D-4; CS-5 / TRACE-145): a
 -- recurring visit starts only when paid, with an operator exception for ready, processing, failed and
--- unknown; one-time jobs are not gated until TRACE-126. Synthetic data only.
+-- unknown; one-time jobs likewise since 20261120001000 (CS-5 one-time extension). Synthetic data only.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -89,7 +89,8 @@ create function pg_temp.terms(request uuid, service bigint) returns jsonb langua
     'deposit',0,'total',service,'currency','usd','source_version',private.money_source(request)->>'version','policy_version','CFG-005',
     'tax_evidence','synthetic-tax-decision','reason','Synthetic visit review','expires_at',now()+interval '2 days') $$;
 create function pg_temp.publish(request uuid) returns uuid language plpgsql as $$
-declare terms jsonb:=pg_temp.terms(request, 4000); prior text:=current_setting('request.jwt.claims',true);
+-- The service amount is the commercial source's (a visit's $40 or a one-time job's $60).
+declare terms jsonb:=pg_temp.terms(request, (private.money_source(request)->>'service')::bigint); prior text:=current_setting('request.jwt.claims',true);
 begin
   perform set_config('request.jwt.claims','{"role":"authenticated","sub":"98100000-0000-4000-8000-000000000006"}',true);
   perform public.money_approve_review('98100000-0000-4000-8000-000000000005',
@@ -108,7 +109,8 @@ end $$;
 create function pg_temp.paid(p_visit uuid, p_n integer, p_homeowner integer default 1) returns void language plpgsql as $$
 declare attempt uuid := pg_temp.checkout(pg_temp.publish(p_visit), p_homeowner);
 begin
-  perform pg_temp.event('evt_ff_cap_'||p_n,'capture',jsonb_build_object('attempt_id',attempt,'payment_id','pi_ff_'||p_n,'amount',4000,'currency','usd'));
+  perform pg_temp.event('evt_ff_cap_'||p_n,'capture',jsonb_build_object('attempt_id',attempt,'payment_id','pi_ff_'||p_n,
+    'amount',(select amount from public.money_checkout_attempts where id = attempt),'currency','usd'));
 end $$;
 -- A stored completion photo uploaded by p_uploader into p_job's folder.
 create function pg_temp.photo(p_uploader integer, p_job uuid, p_name text) returns text language plpgsql as $$
@@ -430,7 +432,7 @@ select throws_ok($$select pg_temp.except(3, pg_temp.id('m_ready'), 25)$$, '42501
 select throws_ok($$select pg_temp.except(1, pg_temp.id('m_ready'), 25)$$, '42501', null, 'CS-5: nor the homeowner');
 select throws_ok($$select pg_temp.except(5, pg_temp.id('m_ready'), 25, '  ')$$, '22023', 'Enter the reason work may start before payment', 'CS-5: an exception needs a reason');
 select throws_ok($$select pg_temp.except(5, pg_temp.id('m_held'), 25)$$, '22023', null, 'CS-5: no exception for a held visit');
-select throws_ok($$select pg_temp.except(5, pg_temp.id('r1'), 25)$$, '22023', 'A payment exception applies only to a recurring visit', 'CS-5: the exception is for recurring visits only');
+select throws_ok($$select pg_temp.except(5, pg_temp.id('s1'), 25)$$, '22023', 'A payment exception applies only to a recurring visit or a one-time job', 'CS-5: no exception for a plan itself');
 select is(pg_temp.except(5, pg_temp.id(k), 25 + n::int)->>'payment_exception', 'true', 'CS-5: operations start '||k||' with a recorded exception')
   from unnest(array['m_ready','m_proc','m_fail','m_unk']) with ordinality as t(k, n);
 select is(pg_temp.except(5, pg_temp.id('m_ready'), 26)->>'outcome', 'replayed', 'CS-5: a retried exception replays the start');
@@ -449,8 +451,65 @@ select is(pg_temp.started_payment(pg_temp.id('m_ready')), 'ready', 'recorded at 
 select is(pg_temp.started_payment(pg_temp.id('m_proc')), 'processing', 'recorded at start: processing');
 select is(pg_temp.started_payment(pg_temp.id('m_fail')), 'failed', 'recorded at start: confirmed failure');
 select is(pg_temp.started_payment(pg_temp.id('m_unk')), 'unknown', 'recorded at start: unknown outcome');
-select is(pg_temp.start(3, pg_temp.id('r1'), 30)->>'outcome', 'started', 'one-time jobs are not gated until TRACE-126 (DEC-2026-050 A): an unpaid one-time job still starts');
-select is(pg_temp.started_payment(pg_temp.id('r1')), 'no_obligation', 'recorded at start: no payment record');
+
+-- CS-5 one-time extension (20261120001000; DEC-2026-050 A; plan §5): one-time jobs are gated the same way.
+-- R1 is accepted and has no reviewed price yet; O-jobs are one-time jobs at the submitted offering.
+insert into fx values ('o_ready', pg_temp.submit(1,'ff-o1-000000000001','one-time','98500000-0000-4000-8000-000000000003',60));
+insert into fx values ('o_proc', pg_temp.submit(1,'ff-o2-000000000001','one-time','98500000-0000-4000-8000-000000000003',60));
+insert into fx values ('o_fail', pg_temp.submit(1,'ff-o3-000000000001','one-time','98500000-0000-4000-8000-000000000003',60));
+insert into fx values ('o_unk', pg_temp.submit(2,'ff-o4-000000000001','one-time','98500000-0000-4000-8000-000000000003',60));
+insert into fx values ('o_held', pg_temp.submit(2,'ff-o5-000000000001','one-time','98500000-0000-4000-8000-000000000003',60));
+insert into fx values ('o_blk', pg_temp.submit(2,'ff-o6-000000000001','one-time','98500000-0000-4000-8000-000000000003',60));
+insert into fx values ('o_paid', pg_temp.submit(2,'ff-o7-000000000001','one-time','98500000-0000-4000-8000-000000000003',60));
+select pg_temp.accept_plan(pg_temp.id(k)) from unnest(array['o_ready','o_proc','o_fail','o_unk','o_held','o_blk','o_paid']) k;
+select pg_temp.publish(pg_temp.id('o_ready'));
+select pg_temp.checkout(pg_temp.publish(pg_temp.id('o_proc')));
+insert into fx values ('o_fail_a', pg_temp.checkout(pg_temp.publish(pg_temp.id('o_fail'))));
+select pg_temp.event('evt_ff_exp_ofail','checkout_expired',jsonb_build_object('attempt_id',pg_temp.id('o_fail_a'),'session_id','cs_ff_ofail'));
+insert into fx values ('o_unk_a', pg_temp.checkout(pg_temp.publish(pg_temp.id('o_unk')), 2));
+select public.money_flag_checkout(pg_temp.id('o_unk_a'), 'synthetic_lost_response');
+select pg_temp.publish(pg_temp.id('o_held'));
+update public.money_obligations set dispute_open = true where service_request_id = pg_temp.id('o_held');
+select pg_temp.paid(pg_temp.id('o_paid'), 61, 2);
+-- Terms blocked: the job no longer carries the price it was submitted at (CS-3's own check).
+update public.service_requests set total_amount = 61 where id = pg_temp.id('o_blk');
+select is(private.one_time_job_payment(r, now())->>'state', s, 'CS-5 one-time: '||k||' is '||s)
+  from public.service_requests r join (values ('r1','review_pending'),('o_ready','ready'),('o_proc','processing'),('o_fail','failed'),
+    ('o_unk','unknown'),('o_held','review_pending'),('o_blk','review_pending'),('o_paid','paid')) as t(k, s) on r.id = pg_temp.id(t.k);
+select is(private.one_time_job_payment(r, now())->>'reason', s, 'CS-5 one-time: '||k||' waits because '||s)
+  from public.service_requests r join (values ('r1','no_snapshot'),('o_held','held'),('o_blk','source_blocked')) as t(k, s) on r.id = pg_temp.id(t.k);
+select throws_ok(format('select pg_temp.start(3, %L, %s)', pg_temp.id(k), 60 + n::int), '22023', msg, 'CS-5 one-time: the provider cannot start a job that is '||k)
+  from (values ('r1', 1, 'This job''s price hasn''t been reviewed and paid yet. Work can start once it''s paid.'),
+               ('o_ready', 2, 'This job isn''t paid yet. Work can start once the homeowner pays for it.'),
+               ('o_proc', 3, 'The homeowner''s payment for this job is still processing. Wait for the outcome before you start work.'),
+               ('o_fail', 4, 'The homeowner''s payment for this job didn''t go through. Work can start once it''s paid.'),
+               ('o_unk', 5, 'Mercurius is confirming this job''s payment. Work can start once it''s confirmed.'),
+               ('o_held', 6, 'This job''s payment is on hold. Mercurius will contact you before work starts.'),
+               ('o_blk', 7, 'This job''s agreed terms can''t be confirmed, so it can''t be paid or started yet. Mercurius will contact you.')) as t(k, n, msg);
+select throws_ok($$select pg_temp.start(5, pg_temp.id('o_ready'), 68, 'Synthetic operator start')$$, '22023',
+  'This job isn''t paid yet. Work can start once the homeowner pays for it.', 'CS-5 one-time: an operator''s start is gated too');
+select throws_ok($$select pg_temp.run(5, format('select public.transition_job_status(%L,''in_progress'',''Synthetic override'')', pg_temp.id('o_ready')))$$,
+  '22023', 'This job isn''t paid yet. Work can start once the homeowner pays for it.', 'CS-5 one-time: operations cannot bypass the gate through the lifecycle command');
+select throws_ok(format($q$select pg_temp.call(5, format('select public.admin_transition_job_status_expected(%%L,%%L,%%L,''in_progress'',''Synthetic status change'')', %L, (select updated_at from public.service_requests where id = %L), pg_temp.k(69)))$q$,
+  pg_temp.id('o_ready'), pg_temp.id('o_ready')), '22023', 'This job isn''t paid yet. Work can start once the homeowner pays for it.',
+  'CS-5 one-time: nor through the admin status change');
+select throws_ok($$select pg_temp.except(3, pg_temp.id('o_ready'), 70)$$, '42501', null, 'CS-5 one-time: the provider cannot record a payment exception');
+select throws_ok(format('select pg_temp.except(5, %L, %s)', pg_temp.id(k), 70 + n::int), '22023',
+  'This job can''t start before payment: it needs review, is held or its terms are blocked', 'CS-5 one-time: no exception for '||k)
+  from unnest(array['r1','o_held','o_blk']) with ordinality as t(k, n);
+select is(pg_temp.except(5, pg_temp.id(k), 75 + n::int)->>'payment_exception', 'true', 'CS-5 one-time: operations start '||k||' with a recorded exception')
+  from unnest(array['o_ready','o_proc','o_fail','o_unk']) with ordinality as t(k, n);
+select is(pg_temp.except(5, pg_temp.id('o_ready'), 76)->>'outcome', 'replayed', 'CS-5 one-time: a retried exception replays the start');
+select is((select count(*)::int from private.visit_start_payment_exceptions where job_id = pg_temp.id('o_ready')), 1, 'CS-5 one-time: and records one exception');
+select is((select row(actor_id, reason, payment_state)::text from private.visit_start_payment_exceptions where job_id = pg_temp.id('o_fail')),
+  row(pg_temp.u(5), 'Synthetic: homeowner paying on site', 'failed')::text, 'CS-5 one-time: the exception keeps the actor, reason and payment state');
+select is(pg_temp.started_payment(pg_temp.id(k)), k_state, 'CS-5 one-time: recorded at start: '||k_state)
+  from (values ('o_ready','ready'),('o_proc','processing'),('o_fail','failed'),('o_unk','unknown')) as t(k, k_state);
+select is(pg_temp.start(3, pg_temp.id('o_paid'), 80)->>'outcome', 'started', 'CS-5 one-time: a paid job starts');
+select is(pg_temp.started_payment(pg_temp.id('o_paid')), 'paid', 'CS-5 one-time: recorded at start: paid');
+select is((select metadata->>'payment_exception' from public.job_events where job_id = pg_temp.id('o_paid') and metadata->>'to' = 'in_progress'), 'false',
+  'CS-5 one-time: a paid start records no exception');
+select is(pg_temp.st(pg_temp.id(k)), 'scheduled', 'CS-5 one-time: '||k||' stays scheduled') from unnest(array['r1','o_held','o_blk']) k;
 
 -- Stopping the plan never cancels or rewrites an existing visit ------------------------------------------
 insert into fx values ('v6', pg_temp.visit(pg_temp.id('s3'), 16, 10));
@@ -518,6 +577,196 @@ select is(pg_temp.item(pg_temp.id('v9'), 'confirmation_overdue'), null, 'which c
 update public.service_requests set status = 'vendor_completed', vendor_completed_at = now() - interval '1 day', photo_proof_urls = '{synthetic-legacy}'
  where id = pg_temp.id('v8');
 select isnt(pg_temp.item(pg_temp.id('v8'), 'evidence_unverified'), null, 'a completion without recorded evidence is queued');
+
+-- CS5-F01 (20261121001000; Codex review of #158): an unpaid start exception requires no hold, valid terms
+-- and a valid reviewed price, whatever the display state. Processing and unknown outcomes are still shown
+-- first; they never hide these exclusions, at the operator command or at the start itself. --------------
+-- status / exception rows / start events: a denied attempt leaves 'scheduled/0/0'.
+create function pg_temp.trace(p_job uuid) returns text language sql as $$
+  select concat_ws('/', (select status::text from public.service_requests where id = p_job),
+    (select count(*) from private.visit_start_payment_exceptions where job_id = p_job),
+    (select count(*) from public.job_events where job_id = p_job and metadata->>'to' = 'in_progress')) $$;
+create function pg_temp.pay(p_job uuid) returns jsonb language sql as $$
+  select case when r.recurrence_parent_id is null then private.one_time_job_payment(r, now()) else private.recurring_visit_payment(r, now()) end
+  from public.service_requests r where r.id = p_job $$;
+create function pg_temp.label(p_job uuid) returns text language sql as $$
+  select concat_ws('/', pg_temp.pay(p_job)->>'state', pg_temp.pay(p_job)->>'reason') $$;
+create function pg_temp.stop(p_job uuid) returns text language sql as $$
+  select private.start_exception_hard_stop(r, now()) from public.service_requests r where r.id = p_job $$;
+create function pg_temp.one_time(p_key text, p_user integer) returns uuid language plpgsql as $$
+declare id uuid := pg_temp.submit(p_user, 'ff-'||p_key||'-000000000001', 'one-time', '98500000-0000-4000-8000-000000000003', 60);
+begin
+  perform pg_temp.accept_plan(id);
+  return id;
+end $$;
+-- A synthetic partial capture (the database owner records captured < total; no webhook does it directly).
+create function pg_temp.partial(p_job uuid) returns void language sql as $$
+  update public.money_obligations set captured = 1000 where service_request_id = p_job $$;
+-- Terms blocked on a one-time job: it no longer carries the price it was submitted at (CS-3's own check).
+create function pg_temp.reprice(p_job uuid) returns void language sql as $$
+  update public.service_requests set total_amount = 61 where id = p_job $$;
+-- Terms blocked on a visit: its property no longer matches the plan terms (terms_inconsistent).
+create function pg_temp.move(p_job uuid) returns void language sql as $$
+  update public.service_requests set address = '2 Synthetic Way' where id = p_job $$;
+create function pg_temp.hold(p_job uuid) returns void language sql as $$
+  update public.money_obligations set dispute_open = true where service_request_id = p_job $$;
+create function pg_temp.publish_short(request uuid, p_life interval) returns uuid language plpgsql as $$
+declare terms jsonb := pg_temp.terms(request, (private.money_source(request)->>'service')::bigint) || jsonb_build_object('expires_at', now() + p_life);
+  prior text := current_setting('request.jwt.claims', true);
+begin
+  perform set_config('request.jwt.claims','{"role":"authenticated","sub":"98100000-0000-4000-8000-000000000006"}',true);
+  perform public.money_approve_review('98100000-0000-4000-8000-000000000005',
+    jsonb_build_object('operation','snapshot','request',request,'terms',terms),'Independent visit review');
+  perform set_config('request.jwt.claims',coalesce(prior,''),true);
+  return public.money_publish_snapshot(request,terms,'98100000-0000-4000-8000-000000000005','98100000-0000-4000-8000-000000000006');
+end $$;
+-- Every refusal path for an unpaid job: provider start, operator start, the lifecycle command, the admin
+-- status change and the operator exception. Each is refused and nothing changes.
+create function pg_temp.denied(p_label text, p_job uuid, p_key integer, p_start_message text, p_visit boolean default false) returns setof text language plpgsql as $f$
+declare except_message text := case when p_visit then 'This visit can''t start before payment: it needs review, is held or its terms are blocked'
+  else 'This job can''t start before payment: it needs review, is held or its terms are blocked' end;
+begin
+  return next throws_ok(format('select pg_temp.except(5, %L, %s)', p_job, p_key), '22023', except_message, p_label||': the operator exception is refused');
+  return next throws_ok(format('select pg_temp.start(3, %L, %s)', p_job, p_key + 1), '22023', p_start_message, p_label||': the provider cannot start it');
+  return next throws_ok(format('select pg_temp.start(5, %L, %s, ''Synthetic operator start'')', p_job, p_key + 2), '22023', p_start_message, p_label||': nor can operations');
+  return next throws_ok(format('select pg_temp.run(5, %L)', format('select public.transition_job_status(%L,''in_progress'',''Synthetic override'')', p_job)),
+    '22023', p_start_message, p_label||': nor the lifecycle command');
+  return next throws_ok(format('select pg_temp.call(5, %L)', format('select public.admin_transition_job_status_expected(%L,%L,%L,''in_progress'',''Synthetic status change'')',
+    p_job, (select updated_at from public.service_requests where id = p_job), pg_temp.k(p_key + 3))), '22023', p_start_message, p_label||': nor the admin status change');
+  return next is(pg_temp.trace(p_job), 'scheduled/0/0', p_label||': no status change, exception row or start event');
+end $f$;
+
+-- 1. One-time jobs: processing, unknown (unresolved) and unknown (partial capture), each combined with a
+--    hold and with blocked terms. The label still shows the payment outcome; the exception is refused.
+insert into fx select 'f_'||k, pg_temp.one_time(k, 1) from unnest(array['ph','uh','xh','pb','ub','xb','pe']) k;
+select pg_temp.checkout(pg_temp.publish(pg_temp.id(k))) from unnest(array['f_ph','f_pb','f_xh','f_xb','f_uh','f_ub']) k;
+select public.money_flag_checkout(a.id, 'synthetic_lost_response') from public.money_checkout_attempts a join public.money_obligations o on o.id = a.obligation_id
+  where o.service_request_id in (pg_temp.id('f_uh'), pg_temp.id('f_ub'));
+select pg_temp.partial(pg_temp.id(k)) from unnest(array['f_xh','f_xb']) k;
+select pg_temp.hold(pg_temp.id(k)) from unnest(array['f_ph','f_uh','f_xh']) k;
+select pg_temp.reprice(pg_temp.id(k)) from unnest(array['f_pb','f_ub','f_xb']) k;
+-- Reviewed price expiring while a checkout is open: checkout needs 31 minutes left, and its session can
+-- outlive that window. Prepared with 40 minutes left, it is checked 15 minutes later (the classifier and
+-- the hard stop take the time; a start uses now(), which one test transaction cannot move).
+select pg_temp.checkout(pg_temp.publish_short(pg_temp.id('f_pe'), interval '40 minutes'));
+select is(r.l || '|' || coalesce(r.s, 'none'), 'processing|snapshot_expired', 'CS5-F01: 15 minutes later the job still shows processing; its reviewed price is expiring')
+  from (select private.one_time_job_payment(x, now() + interval '15 minutes')->>'state' as l, private.start_exception_hard_stop(x, now() + interval '15 minutes') as s
+    from public.service_requests x where x.id = pg_temp.id('f_pe')) r;
+select is(pg_temp.stop(pg_temp.id('f_pe')), null, 'CS5-F01: and now, with 40 minutes left, it has no hard stop');
+select is(pg_temp.label(pg_temp.id(k)), l, 'CS5-F01: '||k||' is shown as '||l) from (values
+  ('f_ph','processing'),('f_pb','processing'),('f_uh','unknown'),('f_ub','unknown'),('f_xh','unknown/partial_capture'),('f_xb','unknown/partial_capture'),
+  ('f_pe','processing')) as t(k, l);
+select is(pg_temp.stop(pg_temp.id(k)), s, 'CS5-F01: '||k||' has the hard stop '||s) from (values
+  ('f_ph','held'),('f_uh','held'),('f_xh','held'),('f_pb','source_blocked'),('f_ub','source_blocked'),('f_xb','source_blocked')) as t(k, s);
+select * from pg_temp.denied('CS5-F01 processing + held', pg_temp.id('f_ph'), 200,
+  'The homeowner''s payment for this job is still processing. Wait for the outcome before you start work.');
+select * from pg_temp.denied('CS5-F01 unresolved + held', pg_temp.id('f_uh'), 205, 'Mercurius is confirming this job''s payment. Work can start once it''s confirmed.');
+select * from pg_temp.denied('CS5-F01 partial capture + held', pg_temp.id('f_xh'), 210, 'Mercurius is confirming this job''s payment. Work can start once it''s confirmed.');
+select * from pg_temp.denied('CS5-F01 processing + terms blocked', pg_temp.id('f_pb'), 215,
+  'The homeowner''s payment for this job is still processing. Wait for the outcome before you start work.');
+select * from pg_temp.denied('CS5-F01 unresolved + terms blocked', pg_temp.id('f_ub'), 220, 'Mercurius is confirming this job''s payment. Work can start once it''s confirmed.');
+select * from pg_temp.denied('CS5-F01 partial capture + terms blocked', pg_temp.id('f_xb'), 225, 'Mercurius is confirming this job''s payment. Work can start once it''s confirmed.');
+
+-- 2. The start itself re-checks: an exception row written in this transaction (as the operator command
+--    would) is not honored for a held or blocked job, on any start path. The refusal names the hard stop.
+insert into private.visit_start_payment_exceptions(job_id, actor_id, reason, payment_state, operation_key)
+  select pg_temp.id(k), pg_temp.u(5), 'Synthetic fixture: an exception row in this transaction', s, pg_temp.k(240 + n::int)
+  from (values ('f_ph','processing',1),('f_ub','unknown',2)) as t(k, s, n);
+select throws_ok(format('select pg_temp.start(3, %L, %s)', pg_temp.id(k), 245 + n::int), '22023', msg, 'CS5-F01: the start re-checks '||k||' and refuses it')
+  from (values ('f_ph', 1, 'This job''s payment is on hold. Mercurius will contact you before work starts.'),
+               ('f_ub', 2, 'This job''s agreed terms can''t be confirmed, so it can''t be paid or started yet. Mercurius will contact you.')) as t(k, n, msg);
+select throws_ok(format('select pg_temp.run(5, %L)', format('select public.transition_job_status(%L,''in_progress'',''Synthetic override'')', pg_temp.id('f_ph'))),
+  '22023', 'This job''s payment is on hold. Mercurius will contact you before work starts.', 'CS5-F01: so does the lifecycle command');
+select is(pg_temp.trace(pg_temp.id(k)), 'scheduled/1/0', 'CS5-F01: '||k||' is not started') from unnest(array['f_ph','f_ub']) k;
+
+-- 3. Recurring visits (the same priority in recurring_visit_payment): processing + held and unknown +
+--    terms blocked are refused the same way; the approved recurring policy is unchanged otherwise.
+insert into fx values ('g_ph', pg_temp.visit(pg_temp.id('s1'), 250, 23));
+insert into fx values ('g_ub', pg_temp.visit(pg_temp.id('s1'), 251, 24));
+select pg_temp.accept(pg_temp.id(k)) from unnest(array['g_ph','g_ub']) k;
+select pg_temp.checkout(pg_temp.publish(pg_temp.id('g_ph')));
+insert into fx values ('g_ub_a', pg_temp.checkout(pg_temp.publish(pg_temp.id('g_ub'))));
+select public.money_flag_checkout(pg_temp.id('g_ub_a'), 'synthetic_lost_response');
+select pg_temp.hold(pg_temp.id('g_ph'));
+select pg_temp.move(pg_temp.id('g_ub'));
+select is(pg_temp.label(pg_temp.id('g_ph')) || '|' || pg_temp.stop(pg_temp.id('g_ph')), 'processing|held', 'CS5-F01: a processing visit on hold');
+select is(pg_temp.label(pg_temp.id('g_ub')) || '|' || pg_temp.stop(pg_temp.id('g_ub')), 'unknown|source_blocked', 'CS5-F01: an unresolved visit with blocked terms');
+select * from pg_temp.denied('CS5-F01 visit processing + held', pg_temp.id('g_ph'), 255,
+  'The homeowner''s payment for this visit is still processing. Wait for the outcome before you start work.', true);
+select * from pg_temp.denied('CS5-F01 visit unresolved + terms blocked', pg_temp.id('g_ub'), 260,
+  'Mercurius is confirming this visit''s payment. Work can start once it''s confirmed.', true);
+
+-- 4. Live eligibility through the real commands, after checkout preparation: the provider pauses the
+--    package, then (restored) the provider is suspended through the onboarding decision. Both one-time jobs
+--    and a visit keep their payment label and are refused; once restored, the exception applies again.
+insert into fx select 'h_'||k, pg_temp.one_time(k, 1) from unnest(array['lp','lu','lr']) k;
+insert into fx values ('h_lv', pg_temp.visit(pg_temp.id('s1'), 265, 25));
+select pg_temp.accept(pg_temp.id('h_lv'));
+select pg_temp.checkout(pg_temp.publish(pg_temp.id(k))) from unnest(array['h_lp','h_lv']) k;
+insert into fx values ('h_lu_a', pg_temp.checkout(pg_temp.publish(pg_temp.id('h_lu'))));
+select public.money_flag_checkout(pg_temp.id('h_lu_a'), 'synthetic_lost_response');
+select pg_temp.publish(pg_temp.id('h_lr'));
+select is(pg_temp.stop(pg_temp.id(k)), null, 'CS5-F01 precondition: '||k||' has no hard stop') from unnest(array['h_lp','h_lu','h_lr','h_lv']) k;
+create function pg_temp.pkg_active(p_active boolean) returns jsonb language sql as $$
+  select pg_temp.call(3, format('select to_jsonb(public.vendor_set_package_active(%L,%L,%L))', '98400000-0000-4000-8000-000000000001', p_active,
+    (select updated_at from public.vendor_packages where id = '98400000-0000-4000-8000-000000000001'))) $$;
+create function pg_temp.live(p_label text, p_base integer) returns setof text language plpgsql as $f$
+begin
+  return next is(pg_temp.label(pg_temp.id('h_lp')) || '|' || pg_temp.label(pg_temp.id('h_lu')) || '|' || pg_temp.label(pg_temp.id('h_lv')),
+    'processing|unknown|processing', p_label||': the payment labels are unchanged');
+  return next is(pg_temp.stop(pg_temp.id('h_lp')) || '|' || pg_temp.stop(pg_temp.id('h_lu')) || '|' || pg_temp.stop(pg_temp.id('h_lr')) || '|' || pg_temp.stop(pg_temp.id('h_lv')),
+    'source_blocked|source_blocked|source_blocked|source_blocked', p_label||': every job and the visit is terms-blocked');
+  return query select * from pg_temp.denied(p_label||' (processing)', pg_temp.id('h_lp'), p_base,
+    'The homeowner''s payment for this job is still processing. Wait for the outcome before you start work.');
+  return query select * from pg_temp.denied(p_label||' (unresolved)', pg_temp.id('h_lu'), p_base + 5, 'Mercurius is confirming this job''s payment. Work can start once it''s confirmed.');
+  return query select * from pg_temp.denied(p_label||' (ready)', pg_temp.id('h_lr'), p_base + 10,
+    'This job''s agreed terms can''t be confirmed, so it can''t be paid or started yet. Mercurius will contact you.');
+  return query select * from pg_temp.denied(p_label||' (visit processing)', pg_temp.id('h_lv'), p_base + 15,
+    'The homeowner''s payment for this visit is still processing. Wait for the outcome before you start work.', true);
+end $f$;
+select pg_temp.pkg_active(false);
+select * from pg_temp.live('CS5-F01 provider pauses the package', 270);
+select pg_temp.pkg_active(true);
+select is(pg_temp.stop(pg_temp.id('h_lp')), null, 'CS5-F01: republished, the package is valid again');
+-- The provider's onboarding record (DEC-2026-061), activated through the real decision, then suspended.
+insert into public.vendor_applications(id, business_name, first_name, last_name, email, phone, contractor_id)
+  values ('98600000-0000-4000-8000-000000000001', 'Synthetic plan provider', 'Test', 'Fulfillment', 'fulfillment-onboarding@example.invalid', 'synthetic',
+    '98200000-0000-4000-8000-000000000001');
+select pg_temp.call(5, format('select to_jsonb(public.vendor_begin_review(%L,%L))', '98200000-0000-4000-8000-000000000001',
+  (select id from public.vendor_application_versions where application_id = '98600000-0000-4000-8000-000000000001' order by revision desc limit 1)));
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"98100000-0000-4000-8000-000000000005"}',true);
+select public.vendor_record_evidence('98200000-0000-4000-8000-000000000001', k, 'synthetic-rule', 'private-synthetic-'||k||'-'||gen_random_uuid(),
+  now() - interval '1 hour', now() + interval '1 year', null)
+  from unnest(array['identity','agreement','coverage','license','insurance','bank_authorization','profile_pricing','availability','test_notification']) k;
+select set_config('request.jwt.claims','',true);
+create function pg_temp.onboard(p_action text, p_key text) returns jsonb language sql as $$
+  select pg_temp.call(5, format('select to_jsonb(public.vendor_decide_onboarding(%L,%s,%L,%L,%L))', '98200000-0000-4000-8000-000000000001',
+    (select revision from public.vendor_onboarding where contractor_id = '98200000-0000-4000-8000-000000000001'), p_action, 'Synthetic '||p_action, p_key)) $$;
+select pg_temp.onboard('activate', 'ff-onboard-activate-1');
+select pg_temp.onboard('suspend', 'ff-onboard-suspend-1');
+select is((select is_active from public.contractors where id = '98200000-0000-4000-8000-000000000001'), false, 'CS5-F01: the provider is suspended');
+select * from pg_temp.live('CS5-F01 provider suspended', 300);
+select pg_temp.onboard('activate', 'ff-onboard-activate-2');
+select is(pg_temp.except(5, pg_temp.id(k), 330 + n::int)->>'payment_exception', 'true', 'CS5-F01 control: restored, operations start '||k||' with an exception')
+  from unnest(array['h_lp','h_lu','h_lr','h_lv']) with ordinality as t(k, n);
+select is(pg_temp.started_payment(pg_temp.id(k)), s, 'CS5-F01 control: '||k||' recorded at start as '||s)
+  from (values ('h_lp','processing'),('h_lu','unknown'),('h_lr','ready'),('h_lv','processing')) as t(k, s);
+
+-- 5. Parity: for every job and visit in this file that the classifiers place in their final branch (ready,
+--    failed or waiting for review), the hard stop is the classifier's own review reason (none when ready
+--    or failed).
+select is(coalesce(private.start_exception_hard_stop(r, now()), 'none'), coalesce(p->>'reason', 'none'),
+    'CS5-F01 parity: '||fx.key||' ('||(p->>'state')||')')
+  from fx join public.service_requests r on r.id = fx.id
+  cross join lateral (select case when r.recurrence_parent_id is null then private.one_time_job_payment(r, now())
+    else private.recurring_visit_payment(r, now()) end as p) x
+  where (r.recurrence_parent_id is not null or coalesce(r.frequency, 'one-time') = 'one-time')
+    and p->>'state' in ('ready', 'failed', 'review_pending')
+  order by fx.key;
+select ok((select count(*) from fx join public.service_requests r on r.id = fx.id
+  where (r.recurrence_parent_id is not null or coalesce(r.frequency, 'one-time') = 'one-time')
+    and (case when r.recurrence_parent_id is null then private.one_time_job_payment(r, now()) else private.recurring_visit_payment(r, now()) end)->>'state'
+      in ('ready', 'failed', 'review_pending')) >= 8, 'CS5-F01 parity covers at least eight jobs and visits');
 
 select * from finish();
 rollback;

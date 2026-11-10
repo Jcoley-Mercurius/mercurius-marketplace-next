@@ -147,6 +147,14 @@ const transition = (who, req, key, to = 'matched') => sql(as(who,
     insert into public.contractors(id, user_id, name, is_active) values ('${vendorContractor}', '${vendorUser}', 'Synthetic A9 provider', true);
     insert into public.service_requests(id, customer_id, contractor_id, service_type, address, city, state, zip_code, frequency, status, matching_status)
       values ('${job}', '${homeowner}', '${vendorContractor}', 'house-cleaning', '1 Synthetic Way', 'Fort Myers', 'FL', '33901', 'one-time', 'scheduled', 'matched');
+    -- CS-5 one-time extension (20261120001000): one-time work starts only when paid; this job is paid in full.
+    insert into public.money_obligations(service_request_id, customer_id, contractor_id) values ('${job}', '${homeowner}', '${vendorContractor}');
+    insert into public.money_snapshots(obligation_id, revision, service, addons, discount, adjustment, subtotal, tax, tip, deposit, total, currency,
+      source_version, policy_version, tax_evidence, created_by, approved_by, reason, expires_at)
+      select id, 1, 6000, 0, 0, 0, 6000, 0, 0, 0, 6000, 'usd', 'synthetic-source', 'CFG-005', 'synthetic-tax', '${adminA}', '${adminB}',
+        'Synthetic paid fixture', now() + interval '2 days' from public.money_obligations where service_request_id = '${job}';
+    update public.money_obligations o set current_snapshot_id = s.id, captured = s.total from public.money_snapshots s
+      where s.obligation_id = o.id and o.service_request_id = '${job}';
     commit;`);
   const version = await sql(`select updated_at from public.service_requests where id = '${job}'`);
   const lockKey = `hashtextextended('${job}', 0)`;

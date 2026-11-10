@@ -1,3 +1,29 @@
+# CS5-F01 forward fix and CS-5 integration to main — 2026-11-10
+
+- **Base:** `main` `82b566d` (#157). #158 merged into the old #157 branch (`edd7de4`), **not** `main`. Codex review of #157/#158 is on PR #159: #157 cleared; #158 has CS5-F01.
+- **Branch:** `claude/phase6-cs5-f01-integration` from `main`. It carries #158's range `99243ee..f5df38d`, byte-identical to its diff against `main`, plus migration `20261121001000`. The fix: an unpaid start exception requires no hold, valid terms and a valid reviewed price, checked independently of the processing/unknown label at the command and at the start, for one-time jobs and visits. Record: [plan §5.2](../../governance/PHASE-6-BOUND-TERMS-PLAN.md), TRACE-145.
+- **Evidence:**
+  - Clean replay 226 migrations / 109 files / 7,225 PASS. The new SQL 098 cases fail 89 on the old definitions.
+  - C14–C18 pass 3/3; C14 fails 2/2 on the old definitions. All 37 concurrency scripts pass.
+  - `phase4-completion-integrity` fixture repaired, 62/62.
+  - Unit 664/664, types, lint, secrets. Fingerprint unchanged `58 | af0fae6e…`.
+- **Hosted, read-only:** 225/225 through `20261120001000`; `20261121001000` pending; 0 exception rows, 0 scheduled jobs, 0 open checkouts.
+- **Hosted (owner instruction, 2026-11-10):** `20261121001000` pushed after a dry run. Readback: head `20261121001000` (226/226); restated hashes equal local; fingerprint `58 | af0fae6e…`; gates off; 0 exception rows.
+- **Not done:** Codex review of the combined range (#160), then the merge. `offer_terms` activation is separate. Phase 6 is not accepted.
+
+# CS-5 one-time extension — 2026-11-09
+
+- **Branch:** `claude/phase6-cs5-one-time-start-gate`, stacked on `claude/phase6-a1-f01-admin-lock-order` (#157). Migration `20261120001000`: one-time jobs start only when paid on every start path; the operator exception extends to one-time jobs; admin request view "Start without payment". Record: [plan §5.1](../../governance/PHASE-6-BOUND-TERMS-PLAN.md), TRACE-145.
+- **Evidence:**
+  - Clean replay 225 migrations / 109 files / 7,070 PASS.
+  - C9 and C10 (both orders), plus 37 runnable CI concurrency scripts PASS.
+  - Unit 664/664, types, lint.
+  - Fingerprint unchanged `58 | af0fae6e…`.
+- **Hosted, read-only 2026-11-09:** fingerprint `58 | af0fae6e0c5b604e9073e10bc060957e`, which equals the finance-reviewed value. `offer_terms` and `promotions_checkout` are off. Migration history ends at `20261118001000`.
+- **Hosted (owner instruction, 2026-11-09):** both migrations pushed and read back (see A1-F01 entry). The one-time start gate is live before merge.
+- **Not done:** Codex review of #157 and this PR; merges. Decisions for Codex: plan §5.1 (quote jobs can't start; rework restarts gated).
+- **Pre-existing, not CI:** `scripts/phase4-completion-integrity.mjs` fails on the TRACE-128 accepted-assignment guard (its fixture predates it).
+
 # A1-F01 admin lock order — 2026-11-09
 
 - **Base:** `main` `9493017` (#156). Hosted ends at `20261118001000` (read-only `migration list`, 2026-11-09). No open PRs at start.

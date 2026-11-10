@@ -262,6 +262,24 @@ select is(pg_temp.err(5, format('select public.admin_send_itemized_quote(%L,''[{
 select is(pg_temp.err(1, format('select public.homeowner_respond_to_quote(%L,true,(select current_quote_id from public.service_requests where id=%L))', pg_temp.id('j2'), pg_temp.id('j2'))),
   '22023', 'J2 quote (GAP, DEC-2026-015 §4): approval is refused while tax is pending; no command confirms tax');
 select is(pg_temp.obligation(pg_temp.id('j2')), null, 'J2 quote: no payment obligation exists for the unapproved quote');
+-- CS-5 one-time and CS5-F01 (20261120001000, 20261121001000; Codex reading of plan §5.1): while the quote
+-- can't be approved (tax pending, DEC-2026-015 §4), the scheduled quote job can't start on any path, and no
+-- operator exception bypasses the quote gate, even one recorded in the same transaction.
+select is(private.one_time_job_payment(r, now())->>'state' || '/' || (private.one_time_job_payment(r, now())->>'problem'), 'review_pending/quote_not_accepted',
+  'J2 quote start: the scheduled job waits on its unaccepted quote') from public.service_requests r where id = pg_temp.id('j2');
+select throws_ok(format('select pg_temp.call(3, %L)', format('select public.start_job(%L,%L,null)', pg_temp.id('j2'), pg_temp.k(190))), '22023',
+  'This job''s agreed terms can''t be confirmed, so it can''t be paid or started yet. Mercurius will contact you.', 'J2 quote start: the provider cannot start it');
+select throws_ok(format('select pg_temp.call(5, %L)', format('select public.start_job(%L,%L,''Synthetic operator start'')', pg_temp.id('j2'), pg_temp.k(191))), '22023',
+  'This job''s agreed terms can''t be confirmed, so it can''t be paid or started yet. Mercurius will contact you.', 'J2 quote start: nor can operations');
+select throws_ok(format('select pg_temp.call(5, %L)', format('select public.admin_start_visit_payment_exception(%L,%L,''Synthetic: paying on site'')', pg_temp.id('j2'), pg_temp.k(192))), '22023',
+  'This job can''t start before payment: it needs review, is held or its terms are blocked', 'J2 quote start: no payment exception for an unaccepted quote');
+insert into private.visit_start_payment_exceptions(job_id, actor_id, reason, payment_state, operation_key)
+  values (pg_temp.id('j2'), pg_temp.u(5), 'Synthetic fixture: an exception row in this transaction', 'ready', pg_temp.k(193));
+select throws_ok(format('select pg_temp.call(3, %L)', format('select public.start_job(%L,%L,null)', pg_temp.id('j2'), pg_temp.k(194))), '22023',
+  'This job''s agreed terms can''t be confirmed, so it can''t be paid or started yet. Mercurius will contact you.',
+  'J2 quote start: an exception row in the same transaction is not honored for an unaccepted quote');
+select is((select status::text from public.service_requests where id = pg_temp.id('j2')) || '/' ||
+  (select count(*) from public.job_events where job_id = pg_temp.id('j2') and metadata->>'to' = 'in_progress'), 'scheduled/0', 'J2 quote start: nothing started');
 
 -- J3 Recurring plan: two visits, each its own identity, payment, evidence and confirmation --------
 insert into fx values ('plan', pg_temp.submit(1, 'ij-plan-0000000001', pg_temp.lawn('weekly','10950000-0000-4000-8000-000000000001',40)));
