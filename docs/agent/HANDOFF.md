@@ -3,7 +3,8 @@
 - **Base:** `main` `9493017` (#156). Hosted ends at `20261118001000` (read-only `migration list`, 2026-11-09). No open PRs at start.
 - **Branch:** `claude/phase6-a1-f01-admin-lock-order`. Migration `20261119001000` restates only `admin_transition_job_status_expected`: request advisory lock before the row lock. Nothing else changed.
 - **Evidence:** A9 in `scripts/admin-operations-concurrency.mjs` deadlocks 3/3 on the old definition and passes 5/5 after; SQL 118 6/6; clean replay 224 migrations / 109 files / 7,030 PASS; admin, fulfillment, exceptions, exception-resolution, support, recurring-payment, offer-terms and bound-terms concurrency PASS; fingerprint unchanged `58 | af0fae6e…`. Record: [A1 review §2](../../governance/PHASE-6-CODEX-A1-REVIEW.md), TRACE-136.
-- **Not done:** Codex review, hosted push, merge. A9's job is an unpaid one-time job; the CS-5 one-time extension must make that fixture paid.
+- **Hosted (owner instruction, 2026-11-09):** `20261119001000` and `20261120001000` pushed after a dry run; readback head `20261120001000`, fingerprint `58 | af0fae6e…`, gates off, restated definitions match local.
+- **Not done:** Codex review, merge. A9's job is an unpaid one-time job; the CS-5 one-time extension must make that fixture paid.
 - **Next:** one-time CS-5 extension (plan §5) as a separate PR.
 
 # Codex A1 review checkpoint — 2026-11-09
