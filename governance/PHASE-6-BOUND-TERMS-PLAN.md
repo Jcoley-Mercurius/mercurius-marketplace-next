@@ -160,6 +160,64 @@ Branch `claude/phase6-cs5-one-time-start-gate`, stacked on the A1-F01 branch (#1
   1. **Quote jobs count as one-time jobs.** No quote can be approved while tax is pending (closure report Q-1), so no quote job can be paid. Because it has no reviewed snapshot, it also can't get an exception. So no quote job can start.
   2. **Rework restarts are gated, as for visits.** Restarting work after rework on an unpaid job (one started under an exception) is refused. No exception exists for a restart, because the exception command starts only from `scheduled`.
 
+### 5.2 CS5-F01 forward fix (TRACE-145, 2026-11-10; awaiting Codex review)
+
+Source: [Codex review of #157/#158](PHASE-6-PR157-158-CODEX-REVIEW.md) (on PR #159), finding CS5-F01. #158 merged into the old #157 branch, not `main`. This fix ships in one integration PR to `main` with #158's exact changes.
+
+- **Defect (reproduced).** Both classifiers rank `unknown` and `processing` above held, terms and snapshot. The exception command and the start guard took the label as eligibility, so an open checkout or an unresolved outcome hid a hold, blocked terms or an expiring reviewed price, and the exception was accepted. Run on the previous definitions, SQL 098's new cases fail 89 assertions, and concurrency C14 fails 2/2: a pause committed first still lets the exception start the job.
+- **Recurring visits.** `recurring_visit_payment` has the same order (20261027001000), and the recurring exception (20261113001000) had the same exposure. The approved recurring policy already excludes held, terms-blocked and unreviewed visits (DEC-2026-050 A), so the fix applies to both. Parity is tested (below).
+- **Migration `20261121001000_phase6_cs5_f01_exception_hard_stops.sql`** (additive; 1113 and 1120 are recorded applied and not edited):
+  - `private.start_exception_hard_stop(r, p_at)` returns `held`, `source_blocked`, `no_snapshot`, `snapshot_expired` or null. Each is checked directly, never inferred from the label. The checks:
+    - the obligation's dispute or refund;
+    - the lock-free source check (`recurring_visit_source_check` or `one_time_source_problem`);
+    - the current snapshot, present and not expiring within 31 minutes.
+
+    These are the classifiers' own review reasons, in their order.
+  - `admin_start_visit_payment_exception` refuses an unpaid exception when a hard stop exists, before the exception row is written. The lock order (advisory, then row), authorization, reason, keyed append-only row and start through `start_job` are unchanged.
+  - `visit_start_payment_block` and `one_time_start_payment_block` (the start guard, on every path to `in_progress`) honor a same-transaction exception only without a hard stop, and check again at the start. The refusal is the hard stop's existing text.
+  - Unchanged:
+    - the display state, its priority, queues and the payment recorded at start;
+    - the paid start, which needs no exception;
+    - the exception stays scheduled-only;
+    - rework, payout, prices and every money function.
+
+    No table locks are added.
+- **Quote reading (Codex).** No start or exception bypasses the quote gate: while a quote can't be approved (tax pending), its scheduled job can't start. This holds only while that gate stands; it is not a claim that quote jobs can never start.
+- **Rework reading (Codex).** Every restart rechecks payment. An exception from an earlier transaction is not reusable, the exception command stays scheduled-only, and paid rework restarts.
+- **Evidence (isolated stack, synthetic).** Clean replay of 226 migrations: **109 files / 7,225 PASS**. That is 155 more than #158's 7,070: SQL 098 +149, SQL 109 +6. All 37 locally runnable CI concurrency scripts pass. Unit 664/664, typecheck, lint, secret scan.
+  - **SQL 098 CS5-F01**:
+    - combined states, each with the five refusal paths (exception, provider start, operator start, lifecycle command, admin status change) and an unchanged status/exception/start trace:
+      - processing, unresolved and partial capture, each with a hold and with blocked terms (one-time jobs);
+      - processing with a hold, and unresolved with blocked terms (visits);
+    - the real provider package pause and the real onboarding suspension after checkout preparation, for processing, unresolved and ready jobs and a processing visit; once restored, the exception applies again;
+    - a same-transaction exception row not honored for held or blocked jobs;
+    - an expiring reviewed price under an open checkout, at the predicate level (one test transaction can't move `now()`);
+    - parity: for every fixture in the classifiers' final branch, the hard stop equals the classifier's review reason.
+  - **SQL 109 J2**: the real quote journey's scheduled job can't start (provider, operations), gets no exception, and a same-transaction exception row isn't honored.
+  - **Concurrency (`bound-terms-concurrency`)**:
+    - C14: exception ∥ package pause;
+    - C15: exception ∥ provider suspension;
+    - C16: visit exception ∥ package pause.
+
+    Each runs both forced orders plus races. The exception and start apply first, or both are refused with nothing recorded, and never with a deadlock. C17: an unpaid exception start, then completion; the rework restart is refused, and so is a rework exception. C18: the paid rework control restarts.
+  - **`phase4-completion-integrity.mjs`** (outside CI): its fixture now uses matched and paid jobs, as the TRACE-128 guard and CS-5 require. Every assertion is unchanged; 62/62.
+- **Fingerprint.** `58 | af0fae6e0c5b604e9073e10bc060957e`, unchanged, because no listed money function changed. That alone doesn't prove this permission boundary. The tests above do. Definition hashes (md5 of `pg_get_functiondef`), local clean replay versus hosted now (read-only):
+
+  | Function | Local (with `20261121001000`) | Hosted now |
+  |---|---|---|
+  | `start_exception_hard_stop` | `dd15a45ea7a8ce2dfc65efe66562a698` | absent |
+  | `visit_start_payment_block` | `1a4b93552e5ef2d1f824f97b3af85e22` | `9bcf83616555ba0d8c0e71a3ac2c3e25` |
+  | `one_time_start_payment_block` | `6976a17f6bdfb4bcf4b296da2f726d5a` | `48889c61b19b9e35ee57eb132ecd5ba0` |
+  | `admin_start_visit_payment_exception` | `82a336e4eeab82aaf727680424fede94` | `7b4bfeba5cc71365fcb8566510329e50` |
+  | `guard_fulfillment_start` | `bb5410ea4c21993a5b58a9da5ccb3775` | `bb5410ea4c21993a5b58a9da5ccb3775` (unchanged) |
+
+  After an authorized push, the hosted readback should equal the local column.
+- **Hosted (read-only, 2026-11-10).** `migration list`: 225 of 225 applied through `20261120001000`; only `20261121001000` is pending; nothing is remote-only. Aggregates: 0 exception rows, 0 scheduled jobs, 0 open checkouts, so no live job was exposed. Not pushed.
+- **For Codex:**
+  1. A retried exception (same key) after a later hold or block is refused, not replayed. 1113 and 1120 behaved the same for a later hold.
+  2. The predicate-level expiry case.
+  3. Recurring is covered by the same predicate, not by a policy change.
+
 ## 6. Order and gates
 
 1. Codex clears this plan, including R-1 to R-5. The owner confirms R-1 (and R-3 if the alternative is chosen).
