@@ -151,6 +151,11 @@ Branch `claude/phase6-cs5-one-time-start-gate`, stacked on the A1-F01 branch (#1
     - Fulfillment and admin A9 fixtures are now paid jobs.
     - All 37 locally runnable CI concurrency scripts pass. `test-lifecycle-integration.mjs` needs the edge-function server, so CI runs it.
   - Unit 664/664, typecheck, lint.
+- **Hosted push (owner instruction, 2026-11-09):**
+  - Beforehand, hosted had 0 scheduled one-time jobs (read-only), so the gate blocked no waiting job.
+  - `20261119001000` and `20261120001000` were applied after a dry run.
+  - Readback: head `20261120001000`; `guard_fulfillment_start`, `one_time_job_payment` and `admin_start_visit_payment_exception` definition hashes equal the local clean replay; fingerprint `58 | af0fae6e…` unchanged; gates off.
+  - The gate is live on production before merge. The admin "Start without payment" button ships with the merge.
 - **Decisions for Codex:**
   1. **Quote jobs count as one-time jobs.** No quote can be approved while tax is pending (closure report Q-1), so no quote job can be paid. Because it has no reviewed snapshot, it also can't get an exception. So no quote job can start.
   2. **Rework restarts are gated, as for visits.** Restarting work after rework on an unpaid job (one started under an exception) is refused. No exception exists for a restart, because the exception command starts only from `scheduled`.

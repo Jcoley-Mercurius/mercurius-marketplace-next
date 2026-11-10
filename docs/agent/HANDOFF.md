@@ -7,7 +7,8 @@
   - Unit 664/664, types, lint.
   - Fingerprint unchanged `58 | af0fae6e…`.
 - **Hosted, read-only 2026-11-09:** fingerprint `58 | af0fae6e0c5b604e9073e10bc060957e`, which equals the finance-reviewed value. `offer_terms` and `promotions_checkout` are off. Migration history ends at `20261118001000`.
-- **Not done:** Codex review of #157 and this PR; hosted pushes (`20261119001000`, then `20261120001000`); merges. Decisions for Codex: plan §5.1 (quote jobs can't start; rework restarts gated).
+- **Hosted (owner instruction, 2026-11-09):** both migrations pushed and read back (see A1-F01 entry). The one-time start gate is live before merge.
+- **Not done:** Codex review of #157 and this PR; merges. Decisions for Codex: plan §5.1 (quote jobs can't start; rework restarts gated).
 - **Pre-existing, not CI:** `scripts/phase4-completion-integrity.mjs` fails on the TRACE-128 accepted-assignment guard (its fixture predates it).
 
 # A1-F01 admin lock order — 2026-11-09
