@@ -3,6 +3,7 @@
 import { JobOperations } from "@/components/dashboard/JobOperations";
 import { CancellationOutcome } from "@/components/dashboard/CancellationOutcome";
 import { AdminCancellationQueue } from "@/components/admin/AdminCancellationQueue";
+import { AdminStartBeforePayment } from "@/components/admin/AdminStartBeforePayment";
 import { AdminOfferTermsQueue } from "@/components/admin/AdminOfferTermsQueue";
 import { AppointmentPanel } from "@/components/dashboard/AppointmentPanel";
 import { RecurringVisitsPanel } from "@/components/dashboard/RecurringVisitsPanel";
@@ -464,6 +465,7 @@ function RequestDialog(props: {
     {request.recurrence_parent_id && <p className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">This is one visit of a recurring plan. Its provider acceptance, work, evidence and payment are its own; the plan’s other visits are unaffected.</p>}
     <AppointmentPanel key={`appointment-${request.id}-${request.status}`} jobId={request.id} role="admin" onChanged={props.saved} />
     {!isRecurringPlan(request) && <FulfillmentPanel key={`fulfillment-${request.id}-${request.status}`} jobId={request.id} />}
+    <AdminStartBeforePayment key={`start-${request.id}-${request.status}`} request={request} onStarted={props.saved} />
     {["pending", "matched", "quoted", "scheduled", "in_progress"].includes(request.status) && <JobOperations key={request.id} jobId={request.id} role="admin" onSaved={props.saved} />}
     {["pending", "cancelled"].includes(request.status) && <CancellationOutcome key={`refund-${request.id}-${request.status}`} jobId={request.id} role="admin" />}
     <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Status</h3><div className="flex flex-wrap gap-2">{adminTransitionTargets(request.status).filter(status => !isRecurringPlan(request) || !planWorkStatuses.has(status)).map((status) => <ConfirmAction key={status} disabled={busy || request.status === status} requireReason triggerLabel={label(status)} title="Change request status?" entity={`${request.service_type} · ${request.id.slice(0, 8)}`} consequence={`Change this request to ${label(status)}. Your reason will be recorded in its history.`} confirmLabel={`Change to ${label(status)}`} describeError={(error) => error instanceof AdminActionError ? error.message : undefined} onConfirm={reason => props.changeStatus(request, status, reason)} />)}</div><p className="mt-2 text-xs text-muted-foreground">The server state machine validates every transition. Invalid or unsafe transitions are rejected without changing the request.</p></section>
