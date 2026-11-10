@@ -1,3 +1,11 @@
+# Codex A1 review checkpoint — 2026-11-09
+
+- Combined source review of manifest **rows 1–34** recorded in [PHASE-6-CODEX-A1-REVIEW](../../governance/PHASE-6-CODEX-A1-REVIEW.md); exact historical ranges included. CS-4 #149 and CS-3 #153 reviews explicitly covered. This is retrospective, not backdated pre-release approval.
+- #155 forward-fix code reviewed at `e404411`; source clearance recorded. CI run `42666460377` green: SQL clean replay 108 files / 7,024; browser 676. Independent checkout: lint/types/secrets/build and 662 unit tests pass. SQL/concurrency evidence is inspected CI, not a local rerun.
+- **New A1-F01, TRACE-136:** admin status command takes request row before lifecycle advisory lock; start/cancel take advisory before row. Bounded additive repair and deterministic regression specified in the review. Approach cleared; implementation still needs review.
+- **Next for Claude:** A1-F01 bounded fix, then one-time CS-5 extension under plan §5; separate reviewable slices. Current #155 release/gate activation still require the owner's separate authorizations. Josh's conditional finance approval is already recorded at `ff9c976`; do not ask for a duplicate review unless the reviewed money definitions/fingerprint change.
+- No hosted action, merge, activation or production operation performed by this review. A2/final candidate and Josh's Phase 6 acceptance remain outstanding. Phase 7 not authorized.
+
 # Agent handoff — 2026-11-09
 
 ## Forward fix for Codex's #154 review (TRACE-150), 2026-11-09
