@@ -610,9 +610,9 @@ It writes no request, offer or money data.
 
 ### 10.5 Findings
 
-- **F-O10-1 (pre-existing, not fixed):** a provider save that replaces the revision matching just selected makes offer creation refuse it ("Selected contractor/package is no longer eligible"), and the matching call fails with nothing written. A later matching run binds the new revision. No inconsistent terms are possible (C14).
+- **F-O10-1 (pre-existing, not fixed):** a provider save that replaces the revision matching just selected makes offer creation refuse it ("Selected contractor/package is no longer eligible"), and the matching call fails with nothing written. A later matching run binds the new revision. No inconsistent terms are possible (C14). *2026-11-09 (§11.2): after a homeowner's decline this failure also rolled back the decline (Codex finding 1). A failed re-match after a decline now keeps the decline and is recorded for operations. The refusal itself is unchanged.*
 - **F-O10-2 (pre-existing):** `scripts/phase6-matching-offers.mjs` (not in CI) fails in its own cleanup on the 6.11A package-delete guard.
-- **F-O10-3:** the TRACE-126 residue (10.2 item 4).
+- **F-O10-3:** the TRACE-126 residue (10.2 item 4). *2026-11-09: removed in code by the forward fix (§11.3); not yet on hosted.*
 
 ### 10.6 Release sequence (guarded activation, §9.8 B); each step needs the owner's authorization
 
@@ -638,3 +638,83 @@ select (select count(*) from public.service_requests where matching_status = 'aw
        (select count(*) from private.offer_terms_blocks) as blocked_while_off,
        (select enabled from private.money_feature_gates where name = 'offer_terms') as gate_on;
 ```
+
+## 11. Codex review of #154 and the forward fix (TRACE-150, 2026-11-09)
+
+**Status: implemented for review.** Branch `claude/phase6-154-review-forward-fix` from `main` `762d6a4`. Migration `20261118001000_phase6_o10_review_forward_fix.sql` (additive). `20261116001000` and `20261117001000` are applied on hosted and are **not edited**. **Not pushed to hosted, not merged; the `offer_terms` gate stays off.** Each of those needs the owner's separate authorization. Phase 6 is not accepted.
+
+### 11.1 The review this answers
+
+| Item | Record |
+|---|---|
+| Reviewer and source | Codex, as relayed in the owner's implementation instruction of 2026-11-09. No GitHub review is recorded on #154 (0 reviews). |
+| Commit reviewed | `main` at `762d6a480509c7e7bbe73cfdece309d865d4d20d` (merge of #154, 2026-11-09 16:43 UTC; production deployment of that SHA succeeded 16:44 UTC). |
+| Coverage | PR #154: `6d56b22..762d6a4` (head `551c76f`; 27 files, +3,342/−47), meaning migration `20261117001000`, the O-10 client, SQL 116, `offer-terms-concurrency.mjs` and the records. Findings 1 and 2 also reach CS-3's `money_source` path. |
+| Not covered by this record | Whether the review also covered #153 (CS-3, `98fe138..6d56b22`) or CS-4 (#149, `360e104..84f8d16`) is not stated. Those code reviews stay **owed** until Codex records them. **This is not the A1 review**, and it closes no other manifest row. |
+| Findings | (1) a homeowner's recorded decline is lost when the re-match after it fails; (2) the current-catalog-price path remains for unbound one-time requests; (3) the required-scope rule (P-3) isn't enforced, because exact pricing and answered questions don't prove scope. |
+
+### 11.2 Finding 1: the decline survives a failed re-match
+
+- **Defect, reproduced.** `homeowner_respond_offer_terms` (and the E6 `homeowner_respond_replacement`) wrote the decline, withdrew the offer and unassigned the provider, then ran matching in the same transaction. When matching raised, everything rolled back: the request was left in `awaiting_terms` with the declined provider still assigned, and the homeowner's decline was lost. The realistic cause is F-O10-1: a provider save committing between matching's selection and offer creation. The race is now reproduced deterministically:
+  - C22 in `offer-terms-concurrency.mjs` fails on O-10's definition with "Selected contractor/package is no longer eligible";
+  - SQL 117 fails 17 assertions on it.
+- **Fix.** `private.offer_terms_rematch(request, terms, via)` runs matching in a subtransaction. On any error, only the matching work rolls back:
+  - The decline, the withdrawn offer and the unassignment are kept.
+  - The request is `pending`/`awaiting_match` with `needs_admin_review`.
+  - The failure is recorded in `private.offer_terms_rematch_failures`: append-only, with the error, the terms and the last attempt number. It is also logged on the request, and operators are notified.
+- **Not actionable again.** The offer is withdrawn and the terms row is answered. The provider's acceptance gets "No open offer"; a second homeowner answer gets "You already answered these terms". Matching and retries never re-offer a provider with a closed attempt, and a force offer of the same content is refused.
+- **Recovery.**
+  - `admin_offer_terms_queue` lists the request as `rematch_failed` while it waits unassigned with no later attempt.
+  - `admin_retry_offer_terms_matching` retries it with a key and a reason, whether or not the gate is on. With the gate off, matching still skips offers at other terms and records a gate block.
+  - Admin screen: "Offers at other terms" shows the item with Retry matching.
+- **Also changed.** A gate block counts as retried only by a retry made strictly after it. A retry of a failed re-match can record a block in its own transaction (same `now()`), and that block must stay listed.
+- **Not changed (recorded, outside this brief).** `vendor_decline_job`, `release_job_match` and `expire_stale_matches` also re-match in the same transaction as the provider's decline or the expiry, so a failed re-match rolls back that action too. They are older paths, not homeowner declines. Proposed for Codex as a separate slice.
+
+### 11.3 Finding 2: no current-catalog price for one-time requests
+
+- `money_source`: a fixed one-time request (no quote, not a recurring visit) is priced only from its submission record (CS-3) or the accepted offer's terms (O-10). With neither, preview, publication and checkout refuse it by name: `one_time:terms_missing`, "This request's agreed price wasn't recorded; a new request or quote is required". The narrowed P-4 residue (F-O10-3) is removed. The earlier rule remains only for a fixed request that is neither one-time nor a recurring visit, which no product command prices.
+- Older money fixtures that inserted scheduled one-time requests directly now carry the record `submit_service_requests` writes (pricing-v2, priced by `price_selection` from the package revision): SQL 023, 059 and 086. SQL 023's "in-place price edit" section characterized the removed rule (the request repriced to $110). It now asserts the bound-terms rule: the edit is refused by name at checkout, publication and preview, never priced. Owner maintenance then restores the bound level. Its second snapshot is a new review at the bound price.
+- SQL 117 shows the refusal by name at preview, at publication and at checkout of an already published snapshot, both for a request whose record was removed and for a row with neither a record nor an offer.
+
+### 11.4 Finding 3: required scope (P-3)
+
+`private.offer_terms_required_work`, called by `offer_terms_build`, decides whether a candidate at other terms meets the request's required work. It reads only authoritative records:
+- the submission record;
+- the submitted package's level and add-on rows, which are immutable once in use (6.11A);
+- their pricing-template links;
+- the candidate's own level, lines and included work.
+
+A candidate is offered only when all of these hold. Otherwise it is skipped (`required_work`, with what is missing named), and a force offer is refused: "This offering doesn't establish the work this request requires" (`offer_terms:required_work`).
+
+1. **Submission record:** pricing-v2, exact. Without it nothing establishes the work asked for.
+2. **Level:** a level submitted from a pricing template needs the same template level. A custom submitted level must name its included work.
+3. **Included work:** every item the submitted offering and level included is included by the candidate, using the catalog's own normalized comparison, as `price_selection` uses.
+4. **Required add-ons:** each add-on the submitted offering required is met by a candidate line of the same template add-on, at least the same quantity, or is named in the candidate's included work.
+
+Optional add-ons the candidate doesn't meet are still omitted and disclosed (P-3, unchanged); the disclosure now lists only optional ones. The terms are `offer-terms-v2` and carry the evidence under `scope.required_work`. No terms rows exist on hosted (read-only, 2026-11-09).
+
+**Consequences for Codex to confirm (conservative by design):**
+- Custom offerings with no named included work can't be offered to another provider.
+- A request without a submission record can't be offered a fixed candidate at other terms. Quote providers are unaffected.
+- Text comparison of included work is exact after trimming and lower-casing, so "Edging" doesn't meet "Edge trimming".
+
+SQL 116's fixtures now name the submitted offering's included work, as does SQL 012's request (a submission record for provider 1). The concurrency fixtures were updated the same way.
+
+### 11.5 Evidence (isolated stack, synthetic)
+
+- **Clean replay of 223 migrations; full SQL suite 108 files / 7,024 PASS.** SQL 117 (new) 53/53; SQL 116 100/100; SQL 012, 023, 059 and 086 pass with the updated fixtures.
+- **Regression proof:** with O-10's `homeowner_respond_offer_terms` loaded (in a rolled-back transaction, or restored afterwards), SQL 117 fails 17 assertions and C22 fails, as described in 11.2.
+- **Concurrency:** `offer-terms-concurrency.mjs` C14–C22 PASS (C22 new and deterministic: a test-only statement trigger holds the decline inside offer creation on an advisory lock until the provider's save has committed; removed afterwards). Related scripts PASS on the same replay: `bound-terms`, `pricing`, `recurring-payment`, `recurring-visit`, `recurring-cadence`, `fulfillment`, `exceptions`, `exception-resolutions`, `support`, `admin-operations`.
+- **Money fingerprint:**
+  - Before (`main` `762d6a4`, as recorded on hosted 2026-11-09): `57 | ce502fe7389eb2fdfa972bb38804fcfc`.
+  - After, on the same 57-function list: `57 | 9a33e03b09303fc1acf77c519ce5f756`. Restoring the O-10 definitions of exactly six functions in a rolled-back transaction gives `ce502fe7…` again, so exactly these changed: `money_source` (finding 2), `offer_terms_build`, `one_time_offer_basis` and `create_job_offer_internal` (finding 3), `homeowner_respond_offer_terms` and `homeowner_respond_replacement` (finding 1). `find_eligible_packages_core`, `vendor_accept_job`, `offer_terms_problem` and `one_time_bound_problem` are unchanged.
+  - The list adds `offer_terms_required_work`: new value **`58 | af0fae6e0c5b604e9073e10bc060957e`**. `offer_terms_rematch` isn't listed: it decides no price, only whether matching's failure undoes the decline.
+- **Client:** unit 662/662 (2 new: the queue item and its retry rule); typecheck; lint; secret scan. Not run locally: browser suite and build (CI runs both).
+
+### 11.6 Release (each step needs the owner's authorization; none is authorized here)
+
+1. Codex reviews this fix (`762d6a4..` this branch's head).
+2. Josh's sole-owner finance review (DEC-2026-064) on the new fingerprint (finance sheet).
+3. Read-only pre-push check (0 open fixed one-time requests without a record; 0 terms rows); dry run; push `20261118001000`. It is additive. Between the push and the new client going live, the deployed admin screen would show a `rematch_failed` item with its generic "waited more than 24 hours" text and no retry button. That item can only arise from a decline of bound terms, and no terms exist while the gate is off (hosted: 0 terms rows), so with the gate off nothing is exposed. Money refusals are named for every client.
+4. Merge; read back the production deployment.
+5. Activation of `offer_terms` stays a separate owner decision (§10.6).

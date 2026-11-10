@@ -43,4 +43,7 @@ where (n.nspname, p.proname) in (
   -- replacement), judged by offer_terms_problem against offer_terms_current.
   ('private','create_job_offer_internal'), ('private','offer_terms_build'), ('private','one_time_offer_basis'),
   ('private','offer_terms_consent_hash'), ('private','offer_terms_problem'), ('private','offer_terms_current'),
-  ('public','homeowner_respond_offer_terms'), ('public','homeowner_respond_replacement'));
+  ('public','homeowner_respond_offer_terms'), ('public','homeowner_respond_replacement'),
+  -- Review of #154 (20261118001000, TRACE-150): which candidate's terms may be bound now also needs the
+  -- request's required work established (offer_terms_required_work, called by offer_terms_build).
+  ('private','offer_terms_required_work'));
