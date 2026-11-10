@@ -42,6 +42,13 @@ insert into public.service_requests(id, customer_id, contractor_id, service_type
  (pg_temp.j(1), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic completion', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id limit 1), 'matched'),
  (pg_temp.j(2), pg_temp.u(5), '97200000-0000-4000-8000-000000000001', 'Synthetic other job', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id limit 1), 'matched'),
  (pg_temp.j(4), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic baseline job', 'Synthetic fixture', 'in_progress', (select id from public.services_catalog order by id offset 1 limit 1), 'matched');
+-- CS-5 one-time extension (20261120001000): work restarts after rework only on a paid one-time job. Job 1
+-- is paid in full (synthetic reviewed snapshot, captured).
+insert into public.money_obligations(id, service_request_id, customer_id, contractor_id) values ('97900000-0000-4000-8000-000000000001', pg_temp.j(1), pg_temp.u(1), '97200000-0000-4000-8000-000000000001');
+insert into public.money_snapshots(id, obligation_id, revision, service, addons, discount, adjustment, subtotal, tax, tip, deposit, total, currency,
+  source_version, policy_version, tax_evidence, created_by, approved_by, reason, expires_at)
+  values ('97900000-0000-4000-8000-000000000002', '97900000-0000-4000-8000-000000000001', 1, 6000, 0, 0, 0, 6000, 0, 0, 0, 6000, 'usd', 'synthetic-source', 'CFG-005', 'synthetic-tax', pg_temp.u(4), pg_temp.u(5), 'Synthetic paid fixture', now() + interval '2 days');
+update public.money_obligations set current_snapshot_id = '97900000-0000-4000-8000-000000000002', captured = 6000 where id = '97900000-0000-4000-8000-000000000001';
 -- Legacy completion from before verification: a reference that names no stored object.
 insert into public.service_requests(id, customer_id, contractor_id, service_type, address, status, service_catalog_id, vendor_completed_at, confirmation_sent_at, photo_proof_urls) values
  (pg_temp.j(3), pg_temp.u(1), '97200000-0000-4000-8000-000000000001', 'Synthetic legacy job', 'Synthetic fixture', 'vendor_completed', (select id from public.services_catalog order by id limit 1), now() - interval '1 day', now() - interval '1 day', array['synthetic-legacy-proof']);

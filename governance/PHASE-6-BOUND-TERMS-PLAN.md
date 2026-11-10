@@ -112,6 +112,54 @@ DEC-2026-050 A for one-time jobs: start only when paid (captured ≥ the reviewe
 - **Codex to confirm:** custom-quote jobs fall under "one-time jobs". No quote can be approved while tax is pending (closure report Q-1), so after this slice no quote job can start. That matches "paid-only", but it should be stated.
 - Evidence: SQL 098 one-time cases ("one-time jobs are not gated until TRACE-126") rewritten; cross-role; concurrency of start vs. capture event.
 
+### 5.1 Implementation record (TRACE-145, 2026-11-09; awaiting Codex review)
+
+Branch `claude/phase6-cs5-one-time-start-gate`, stacked on the A1-F01 branch (#157). Migration `20261120001000_phase6_cs5_one_time_start_gate.sql` (additive; nothing applied is edited).
+
+- **Payment state.** `private.one_time_job_payment` classifies a one-time job into the six approved states. It uses the same order as `recurring_visit_payment` and the same shared G6 classification (`money_payment_exceptions`):
+  1. `paid` (captured ≥ snapshot total);
+  2. `unknown` (unresolved or partial capture);
+  3. `processing` (open checkout);
+  4. `review_pending`, with `held` (dispute or refund), `source_blocked`, `no_snapshot` or `snapshot_expired`;
+  5. `failed`;
+  6. `ready`.
+- **Terms blocked.** `private.one_time_source_problem` uses the commercial source's existing lock-free checks:
+  - the accepted quote's validity (as `money_source`);
+  - CS-3's `one_time_bound_problem` for the submitted offering;
+  - O-10's `offer_terms_problem` for accepted terms;
+  - otherwise `terms_missing`, the request `money_source` refuses by name.
+
+  `money_source` itself isn't called, because it takes table share locks that a start must not take.
+- **Every start path.** `guard_fulfillment_start` now gates one-time jobs as well as visits. It is a trigger on every update to `in_progress`, so it covers the provider's start, the operator's start, `transition_job_status`, the admin status change and rework restarts. A recurring plan row keeps its own guard.
+- **Operator exception.** `admin_start_visit_payment_exception` now accepts one-time jobs. It writes the same keyed, append-only row in the same transaction. Ready, processing, failed and unknown jobs only; never held, terms-blocked or unreviewed. It now takes the request advisory lock and then the row before reading the state. The admin request view shows "Start without payment" on accepted, scheduled one-time jobs; the server decides.
+- **Recorded at start.** `fulfillment_payment_state` reports the six states for one-time jobs (it was `no_obligation`/`unpaid`/`partial`/`paid`).
+- **Money.** No money function changes. The fingerprint is `58 | af0fae6e0c5b604e9073e10bc060957e` before and after (local, clean replay). None of the new or restated functions is on the list.
+- **Evidence (isolated stack, synthetic):**
+  - Clean replay of 225 migrations: **109 files / 7,070 PASS**.
+  - SQL 098 has new one-time cases:
+    - each of the eight states;
+    - the provider's refusal text for every unpaid state;
+    - an operator's start, the lifecycle command and the admin status change are all refused;
+    - exceptions for ready, processing, failed and unknown, each with its state recorded;
+    - no exception for unreviewed, held or terms-blocked jobs, or for a plan;
+    - replay;
+    - a paid job starts with no exception recorded.
+  - SQL 003 and 062 rework fixtures now use paid jobs.
+  - Concurrency:
+    - **C9**: start ∥ capture, both orders. On the previous guard C9 fails, because a start applies without payment.
+    - **C10**: exception ∥ capture, both orders.
+    - Fulfillment and admin A9 fixtures are now paid jobs.
+    - All 37 locally runnable CI concurrency scripts pass. `test-lifecycle-integration.mjs` needs the edge-function server, so CI runs it.
+  - Unit 664/664, typecheck, lint.
+- **Hosted push (owner instruction, 2026-11-09):**
+  - Beforehand, hosted had 0 scheduled one-time jobs (read-only), so the gate blocked no waiting job.
+  - `20261119001000` and `20261120001000` were applied after a dry run.
+  - Readback: head `20261120001000`; `guard_fulfillment_start`, `one_time_job_payment` and `admin_start_visit_payment_exception` definition hashes equal the local clean replay; fingerprint `58 | af0fae6e…` unchanged; gates off.
+  - The gate is live on production before merge. The admin "Start without payment" button ships with the merge.
+- **Decisions for Codex:**
+  1. **Quote jobs count as one-time jobs.** No quote can be approved while tax is pending (closure report Q-1), so no quote job can be paid. Because it has no reviewed snapshot, it also can't get an exception. So no quote job can start.
+  2. **Rework restarts are gated, as for visits.** Restarting work after rework on an unpaid job (one started under an exception) is refused. No exception exists for a restart, because the exception command starts only from `scheduled`.
+
 ## 6. Order and gates
 
 1. Codex clears this plan, including R-1 to R-5. The owner confirms R-1 (and R-3 if the alternative is chosen).
