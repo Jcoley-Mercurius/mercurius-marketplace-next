@@ -4,6 +4,7 @@
 -- 108_admin_operations.sql. The deadlock itself is reproduced deterministically by A9 in
 -- scripts/admin-operations-concurrency.mjs (two connections); here the definition's order and grants are checked.
 begin;
+create extension if not exists pgtap with schema extensions;
 select plan(6);
 
 create temp table src as
