@@ -24,7 +24,7 @@ This is an integrated, risk-focused source review of the named historical diffs 
 - SQL 118 (6/6): advisory lock precedes the row lock, replay/stale check stay under the row lock, grants unchanged. SQL 108 (authorization, stale, replay, history) passes unchanged.
 - Clean replay of 224 migrations: **109 files / 7,030 PASS**. Concurrency: admin A1–A9, fulfillment, exceptions C1–C8, exception resolutions R1–R8, support S1–S7, recurring payment, offer terms C14–C22 and bound terms all PASS.
 - Money fingerprint unchanged: **`58 | af0fae6e0c5b604e9073e10bc060957e`** (local, after the migration).
-- Not done: hosted push, merge (owner authorizations).
+- **Hosted push (owner instruction, 2026-11-09):** dry run listed `20261119001000` and `20261120001000` only; both applied. Readback: head `20261120001000` (225 migrations); `admin_transition_job_status_expected` definition hash equals the local clean replay (`e267de2d…`); money fingerprint `58 | af0fae6e0c5b604e9073e10bc060957e` unchanged; `offer_terms` and `promotions_checkout` off. Codex review and merge still outstanding; the finding stays OPEN until reviewed and released.
 
 `public.admin_transition_job_status_expected` in `supabase/migrations/20261109001000_phase6_admin_operations_review_fixes.sql` locks the `service_requests` row at line 153, then calls `public.transition_job_status` at line 160. The wrapper enters `private.transition_job_status`, whose final definition in `20261101001000_phase6_exceptions.sql` takes the request advisory lock at line 319 before locking the request row. `public.start_job` in `20261113001000_phase6_cs5_start_payment_gate.sql` and cancellation commands also take advisory lock then row.
 
