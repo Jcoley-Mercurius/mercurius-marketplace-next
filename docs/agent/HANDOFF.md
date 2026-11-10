@@ -1,3 +1,15 @@
+# CS-5 one-time extension — 2026-11-09
+
+- **Branch:** `claude/phase6-cs5-one-time-start-gate`, stacked on `claude/phase6-a1-f01-admin-lock-order` (#157). Migration `20261120001000`: one-time jobs start only when paid on every start path; the operator exception extends to one-time jobs; admin request view "Start without payment". Record: [plan §5.1](../../governance/PHASE-6-BOUND-TERMS-PLAN.md), TRACE-145.
+- **Evidence:**
+  - Clean replay 225 migrations / 109 files / 7,070 PASS.
+  - C9 and C10 (both orders), plus 37 runnable CI concurrency scripts PASS.
+  - Unit 664/664, types, lint.
+  - Fingerprint unchanged `58 | af0fae6e…`.
+- **Hosted, read-only 2026-11-09:** fingerprint `58 | af0fae6e0c5b604e9073e10bc060957e`, which equals the finance-reviewed value. `offer_terms` and `promotions_checkout` are off. Migration history ends at `20261118001000`.
+- **Not done:** Codex review of #157 and this PR; hosted pushes (`20261119001000`, then `20261120001000`); merges. Decisions for Codex: plan §5.1 (quote jobs can't start; rework restarts gated).
+- **Pre-existing, not CI:** `scripts/phase4-completion-integrity.mjs` fails on the TRACE-128 accepted-assignment guard (its fixture predates it).
+
 # A1-F01 admin lock order — 2026-11-09
 
 - **Base:** `main` `9493017` (#156). Hosted ends at `20261118001000` (read-only `migration list`, 2026-11-09). No open PRs at start.
