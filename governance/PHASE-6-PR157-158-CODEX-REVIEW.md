@@ -1,5 +1,7 @@
 # Codex review: Phase 6 PRs #157 and #158
 
+**2026-11-10 follow-up:** [Combined #160 review](PHASE-6-PR160-CODEX-REVIEW.md) clears source range `82b566d..df9aefb`, resolving CS5-F01 in that candidate and answering all three PR questions. Plan §5.2 records the hosted repair/readback. Main/client integration still awaits #160 merge and complete green CI; record the merge/deployment SHA afterward. The changes-required disposition below is retained as historical review evidence, not the current source-review verdict. Phase 6 is not accepted.
+
 **Date:** 2026-11-10 (America/New_York). **Reviewer:** Codex, architect/reviewer. **Result:** #157 source review cleared; #158 changes required (CS5-F01). Phase 6 is not accepted and Phase 7 is not authorized. This is a repository source-review record, not a GitHub review submission, a backdated release approval, or authorization for production actions.
 
 ## Exact scope and integration
