@@ -1,6 +1,7 @@
 # Phase 7.1 application-notification tracing (TRACE-151) — 2026-11-10
 
-- **Base:** `main` `88d4e09` (#160). Main CI 42880366052 was green. PR #161 (Phase 6 acceptance and Phase 7 authorization) is still an open draft and was not merged here.
+- **Base:** `main` `88d4e09` (#160). Main CI 42880366052 was green. Later reconciled with `main` `9067f96` after #161 (Phase 6 acceptance) merged; the acceptance entry below is preserved unchanged.
+- **Review follow-up (Codex):** the troubleshooting guidance now treats missing logs as inconclusive, with the ledger as the authority (record §7, §11). Pre-fix head CI 42937904890 succeeded; the final-head CI result is on PR #162.
 - **Branch:** `claude/phase7-1-application-notification-tracing`. Record: [PHASE-7-APPLICATION-NOTIFICATION-TRACING](../../governance/PHASE-7-APPLICATION-NOTIFICATION-TRACING.md).
 - **Built:**
   - A server-only allowlisted JSON logger (`src/lib/observability/operationalLog.ts`).
@@ -15,13 +16,12 @@
   - Notification concurrency PASS 3/3.
   - Local fingerprint `58 | af0fae6e…` unchanged.
 - **Not done:**
-  - Exact-head CI and Codex review.
+  - Codex re-review and merge.
   - Preview log readback.
-  - CFG-011 90-day log retention is not met (no drain; host retention unverified) and needs an owner decision.
+  - CFG-011 90-day log retention is not met (no drain; host retention unverified). It stays open, assigned to 7.6.
   - No merge, deploy, hosted push or real email.
 - **Carried, unchanged:** A2 human verification and the final schema, fingerprint and completion-integrity checks stay in the booking-readiness register.
 - **Local note:** `npm run test:unit` also collects the gitignored stray `.phase5-local/wt/tests`, whose 48 files fail to import. Run with `--exclude '.phase5-local/**'`.
-
 # Phase 6 accepted; Phase 7 authorized — 2026-11-10
 
 - **Owner acceptance:** Josh explicitly accepted Phase 6 and authorized Phase 7 in the closing conversation. Record: [PHASE-6-ACCEPTANCE](../../governance/PHASE-6-ACCEPTANCE.md). This closes the implementation phase with documented verification exceptions; it does not claim A2 was performed.

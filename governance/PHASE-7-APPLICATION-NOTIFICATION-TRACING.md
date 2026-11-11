@@ -3,7 +3,7 @@
 **Status:** IMPLEMENTED FOR REVIEW (Codex). Not merged, not deployed. No hosted, production, email or setting change.
 **Base:** `main` `88d4e09c89b6499a2ca4e0612eab117829c7dc35` (#160). Main CI 42880366052 completed successfully.
 **Branch:** `claude/phase7-1-application-notification-tracing`.
-**Authority:** owner's Phase 7.1 instruction (2026-11-10), under the Phase 7 authorization recorded in PR #161 (`governance/PHASE-6-ACCEPTANCE.md` on `codex/phase6-pr160-review`, still open and unmerged). Roadmap Phase 7: "PII-safe structured logs, and correlation IDs". MTS §5 module boundaries (`observability/` holds the logger and correlation IDs), §11 detective controls ("structured JSON logs with request/correlation IDs"). CFG-011 operational logs: 90 days, no secrets or unnecessary personal data.
+**Authority:** owner's Phase 7.1 instruction (2026-11-10), under the Phase 7 authorization in [PHASE-6-ACCEPTANCE](PHASE-6-ACCEPTANCE.md) (PR #161, merged to `main` as `9067f96`). Roadmap Phase 7: "PII-safe structured logs, and correlation IDs". MTS §5 module boundaries (`observability/` holds the logger and correlation IDs), §11 detective controls ("structured JSON logs with request/correlation IDs"). CFG-011 operational logs: 90 days, no secrets or unnecessary personal data.
 
 > The instruction mentions a "reconciled Phase 7 brief supplied with this prompt". No such brief was attached, and none exists on `main` or on #161. This record treats the 7.1 instruction itself as the slice brief.
 
@@ -126,7 +126,7 @@ The `npm run test:unit` default glob also collects `.phase5-local/wt/tests`, a g
 - **Logging failure is harmless.** With every console method throwing, the response stays 201, the row is saved, the claim and record still happen, the ledger reaches `sent`, and the operator resend still succeeds.
 
 **Not performed:**
-- Exact-head CI (pending the PR).
+- Exact-head CI on the final head after the review fixes. See §11; the result is recorded on PR #162.
 - Preview or production log readback in Vercel.
 - Real Resend.
 - Browser and visual suites. There is no UI change, so no UI acceptance is claimed.
@@ -134,30 +134,32 @@ The `npm run test:unit` default glob also collects `.phase5-local/wt/tests`, a g
 
 ## 7. Operator troubleshooting example (synthetic)
 
+**The durable notification ledger is the authority; logs only help explain it.** Logging is best effort by design: a failing log sink is swallowed, so a line can be missing while the work it describes completed. **Missing logs are inconclusive. Read the durable notification ledger before deciding whether an attempt occurred or whether resend is permitted.** Never infer the ledger state, an attempt count or resend permission from log events alone.
+
 An operator sees application `11111111-1111-4111-8111-111111111111` with notification state **failed** in Admin → Recruiting.
 
-1. In the Vercel runtime logs for the deployment, search for `"application_id":"11111111-1111-4111-8111-111111111111"`.
-2. The submission request shows:
+1. **Read the ledger first.** Admin → Recruiting shows the state, attempt count and redacted `last_error`, which come from `private.r0_application_notifications` and its events. Only the database decides whether a resend is permitted. `r0_request_application_notification_resend` refuses states it does not allow, and requires confirmation for `unknown` and `untracked`.
+2. **Then look for explanation in the logs.** In the Vercel runtime logs for the deployment, search for `"application_id":"11111111-1111-4111-8111-111111111111"`. Lines from the submission request, when present, might read:
    ```
    {"event":"application_submission.saved","route":"vendor_application_submit","correlation_id":"5e1f2c3d-…","outcome":"saved","duration_ms":412,…}
    {"event":"application_notification.claimed","correlation_id":"5e1f2c3d-…","attempt":1,"mode":"initial",…}
    {"event":"application_notification.provider_result","correlation_id":"5e1f2c3d-…","attempt":1,"outcome":"failed","error_code":"provider_refused","duration_ms":180,…}
    {"event":"application_notification.recorded","correlation_id":"5e1f2c3d-…","attempt":1,"outcome":"failed",…}
    ```
-   `provider_refused` means Resend definitely refused, so nothing was sent. The ledger's redacted `last_error` gives the provider detail in the admin view.
-3. The operator chooses **Resend**. The new request has its own correlation ID:
+   `provider_refused` is consistent with the ledger's `failed`: Resend answered with a definite refusal for that attempt. The ledger's `last_error` holds the provider detail.
+3. **The operator chooses Resend.** The database decides whether that is allowed. The new request has its own correlation ID, and its lines, when present, might read:
    ```
    {"event":"application_notification_resend.requested","route":"application_notification_resend","correlation_id":"9c0d…","outcome":"resend_requested",…}
    {"event":"application_notification.provider_result","correlation_id":"9c0d…","attempt":2,"mode":"resend","outcome":"sent",…}
    {"event":"application_notification_resend.completed","correlation_id":"9c0d…","attempt":2,"outcome":"sent",…}
    ```
-4. `sent` is provider acceptance only, so the operator confirms the email is in the owner inbox.
+4. **Confirm in the ledger and the inbox.** The ledger should now show `sent` at attempt 2. `sent` is provider acceptance only, so the operator still confirms the email is in the owner inbox.
 
-**Reading the other outcomes:**
-- `unknown` with `provider_server_error`, `provider_conflict` or `provider_timeout_or_network`: the email may have been accepted. Check the inbox before confirming a resend.
-- `record_failed` / `unrecorded`: the send happened but its result wasn't saved. The ledger shows `unknown` after 10 minutes.
-- `claim_failed` followed by `background_failed`: nothing was sent. The ledger shows `missed` after 10 minutes.
-- No delivery lines after `saved`: the post-response work did not run. The ledger also shows `missed`.
+**What log lines can and cannot tell you** (always check the ledger):
+- `unknown`, with `provider_server_error`, `provider_conflict` or `provider_timeout_or_network`: the email may have been accepted. Check the inbox before confirming a resend.
+- `record_failed` / `unrecorded`: an attempt was made but its outcome may not have been saved. The ledger state, not the log, says what was recorded.
+- `claim_failed` followed by `background_failed`: the claim call reported an error. The ledger says whether an attempt was claimed.
+- **Missing lines** (for example, `saved` with no delivery lines after it): inconclusive. The work may have run with its lines lost. Read the ledger.
 
 ## 8. Retention (CFG-011) — gap, not enforced here
 
@@ -167,7 +169,7 @@ The logger writes to the host's runtime log stream. It does **not** enforce or e
 - So CFG-011's 90-day operational-log retention is **not yet met** for these lines.
 - The durable record of each attempt remains the database ledger (`private.r0_application_notification_events`) under its existing retention.
 
-Closing the gap needs an owner decision on a drain or exporter and its retention, and a verified readback. That belongs to a later Phase 7 slice. No hosted setting was changed.
+CFG-011 stays **open**, assigned to the later Phase 7.6 observability and retention work. Closing it needs an owner decision on a drain or exporter and its retention, and a verified readback. This slice does not claim 90-day retention is satisfied. No hosted setting was changed.
 
 ## 9. Rollback
 
@@ -180,5 +182,12 @@ Revert the slice commits. There is no migration, data, setting or flag. Revertin
 3. **New CI step and script.** `application-notification-concurrency.mjs` runs after the R0 interest script and before the clean reset. Its fixture IDs (`7a5…`) do not collide with existing scripts.
 4. **The ledger still stores the provider error detail.** It is SQL-redacted of addresses and truncated, unchanged by design. Logs do not carry it.
 5. **Only the three paths are instrumented.** Other routes keep their existing `console` logging until later slices.
-6. **Retention gap** (§8) and preview log readback remain open.
+6. **Retention gap** (§8): CFG-011 stays open, assigned to 7.6. Preview log readback also remains open.
 7. **Carried register unchanged.** A2 human verification and the final deployed schema, fingerprint and completion-integrity checks stay open in the booking-readiness register. This slice neither performs nor waives them.
+
+## 11. Review follow-up before merge (Codex, 2026-11-10)
+
+1. **Troubleshooting corrected (§7).** The earlier text said missing delivery lines proved the post-response work did not run. That was wrong: the logger swallows sink failures, and Codex reproduced a `saved` line with no delivery lines while the downstream action completed. §7 now makes the durable ledger the authority, treats missing logs as inconclusive, and no longer derives ledger state or resend permission from log events. There is no code change: swallowing failures is the intended contract (§5).
+2. **Reconciled with `main` `9067f96`** (#161 merged). The only conflict was in `docs/agent/HANDOFF.md`, where both sides added a top entry. Both entries were kept; main's Phase 6 acceptance entry is byte-identical, and `governance/PHASE-6-ACCEPTANCE.md` came in from `main` unchanged.
+3. **CI.** Pre-fix head `9f1d199`: run 42937904890 succeeded. The final-head run is recorded on PR #162.
+4. CFG-011 stays open and is assigned to 7.6 (§8). Carried human and booking-readiness checks are unchanged.
