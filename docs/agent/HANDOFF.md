@@ -1,3 +1,27 @@
+# Phase 7.1 application-notification tracing (TRACE-151) — 2026-11-10
+
+- **Base:** `main` `88d4e09` (#160). Main CI 42880366052 was green. PR #161 (Phase 6 acceptance and Phase 7 authorization) is still an open draft and was not merged here.
+- **Branch:** `claude/phase7-1-application-notification-tracing`. Record: [PHASE-7-APPLICATION-NOTIFICATION-TRACING](../../governance/PHASE-7-APPLICATION-NOTIFICATION-TRACING.md).
+- **Built:**
+  - A server-only allowlisted JSON logger (`src/lib/observability/operationalLog.ts`).
+  - A server correlation ID per request in the submission and resend routes, carried into `after()` and the delivery helper.
+  - Raw and ad hoc logging replaced in those three paths.
+  - A new real-database concurrency script, added as a CI step.
+  - No SQL, UI, permission, shared-sender or email-content change.
+- **Evidence:**
+  - Unit 709/709 (45 new) and mutation checks.
+  - Types, lint, secrets, build.
+  - Clean replay of 226 migrations, 109 files / 7,225 PASS.
+  - Notification concurrency PASS 3/3.
+  - Local fingerprint `58 | af0fae6e…` unchanged.
+- **Not done:**
+  - Exact-head CI and Codex review.
+  - Preview log readback.
+  - CFG-011 90-day log retention is not met (no drain; host retention unverified) and needs an owner decision.
+  - No merge, deploy, hosted push or real email.
+- **Carried, unchanged:** A2 human verification and the final schema, fingerprint and completion-integrity checks stay in the booking-readiness register.
+- **Local note:** `npm run test:unit` also collects the gitignored stray `.phase5-local/wt/tests`, whose 48 files fail to import. Run with `--exclude '.phase5-local/**'`.
+
 # CS5-F01 forward fix and CS-5 integration to main — 2026-11-10
 
 - **Base:** `main` `82b566d` (#157). #158 merged into the old #157 branch (`edd7de4`), **not** `main`. Codex review of #157/#158 is on PR #159: #157 cleared; #158 has CS5-F01.
