@@ -90,6 +90,8 @@ jobs:
         run: node scripts/phase5-intake-limit-concurrency.mjs
       - name: Concurrent early-access joins, consent, linkage and retention
         run: node scripts/r0-interest-concurrency.mjs
+      - name: Concurrent application-notification claims, outcomes and operator resends
+        run: node scripts/application-notification-concurrency.mjs
       - name: Concurrent promotion redemptions, price approvals and publication
         run: node scripts/pricing-concurrency.mjs
       - name: Concurrent finance operator commands
