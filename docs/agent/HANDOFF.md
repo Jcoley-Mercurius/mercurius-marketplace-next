@@ -22,6 +22,15 @@
 - **Carried, unchanged:** A2 human verification and the final schema, fingerprint and completion-integrity checks stay in the booking-readiness register.
 - **Local note:** `npm run test:unit` also collects the gitignored stray `.phase5-local/wt/tests`, whose 48 files fail to import. Run with `--exclude '.phase5-local/**'`.
 
+# Phase 6 accepted; Phase 7 authorized — 2026-11-10
+
+- **Owner acceptance:** Josh explicitly accepted Phase 6 and authorized Phase 7 in the closing conversation. Record: [PHASE-6-ACCEPTANCE](../../governance/PHASE-6-ACCEPTANCE.md). This closes the implementation phase with documented verification exceptions; it does not claim A2 was performed.
+- **Main:** `88d4e09` (#160 merged). Exact-head PR CI `42875556384` passed; merge CI `42880366052` still running when recorded. Verify its outcome and deployment at Phase 7 entry. No production action performed by this acceptance turn.
+- **Reviews:** A1 rows 1–34 recorded; #157 cleared; #160 source review clears CS5-F01 at `df9aefb`. Review record and owner acceptance are carried by documentation PR #161; do not require the owner to repeat the acceptance.
+- **Carry forward honestly:** A2 screen reader/devices/keyboard/zoom/reflow/visual checks remain unperformed/unrecorded; confirm final candidate, completion-integrity evidence, deployment/schema alignment and fingerprint before booking activation. No blank check is marked passed.
+- **No inferred owner answers:** W-6/O-3, O-9 and unnamed deferral gates stay open. Deferred tax/finance/payment-kernel/dark-mode items retain their existing gates. `offer_terms` and promotions stay off absent separate authorization.
+- **Next chat:** inspect current main and the acceptance exceptions; reconcile the existing Phase 7 characterization and approved scope, then start its first bounded slice. Phase 7 engineering is authorized; booking/private-beta activation is not.
+
 # CS5-F01 forward fix and CS-5 integration to main — 2026-11-10
 
 - **Base:** `main` `82b566d` (#157). #158 merged into the old #157 branch (`edd7de4`), **not** `main`. Codex review of #157/#158 is on PR #159: #157 cleared; #158 has CS5-F01.
