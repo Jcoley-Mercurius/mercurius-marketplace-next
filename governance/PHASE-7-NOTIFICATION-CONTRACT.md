@@ -1,12 +1,16 @@
 # Phase 7.2A — Notification contract characterization (TRACE-152)
 
 **Status:** CHARACTERIZATION FOR REVIEW (Codex). Documentation only. It approves no policy, implements nothing and activates nothing.
-**Matrix version:** NM-1, 2026-11-10 (America/New_York), inspected at `main` `9067f96c25a60bb9abd505737e50ca62578b56d6`.
-**Branch:** `claude/phase7-2a-notification-contract`, from `main` `9067f96`.
-**Authority:** the owner's Phase 7.2A instruction (2026-11-10), under the Phase 7 authorization in [PHASE-6-ACCEPTANCE](PHASE-6-ACCEPTANCE.md). Roadmap Phase 7: "Implement the approved notification matrix and consent distinctions." MPS §10 notification contract.
-**Pending dependency:** PR #162 (Phase 7.1, TRACE-151), open draft at `8d35dc5`. It was inspected read-only. It is **not** part of this baseline (§10).
+**Matrix version:** NM-1 (revision 2, after Codex review).
+**Checkpoints:**
+- **Original inspection (history):** 2026-11-10 (America/New_York), `main` `9067f96c25a60bb9abd505737e50ca62578b56d6`.
+- **Reconciliation (current):** 2026-11-11, `main` `11c05b0ca35fd716d5bd26ffb3778d60fcc5fe24`. This is the #162 merge, so 7.1 (TRACE-151) is on `main`. Every source reference below is rechecked at this checkpoint.
 
-This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HANDOFF.md`, which #162 also changes.
+**Branch:** `claude/phase7-2a-notification-contract`, from `main` `9067f96`, with `11c05b0` merged in (`6977130`).
+**Authority:** the owner's Phase 7.2A instruction (2026-11-10), under the Phase 7 authorization in [PHASE-6-ACCEPTANCE](PHASE-6-ACCEPTANCE.md). Roadmap Phase 7: "Implement the approved notification matrix and consent distinctions." MPS §10 notification contract.
+**7.1:** PR #162 (TRACE-151) **merged** as `11c05b0`. It was inspected read-only before merge and is now part of the baseline (§10).
+
+This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HANDOFF.md`.
 
 ---
 
@@ -14,14 +18,25 @@ This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HAND
 
 1. **There is one product notification channel: in-app rows in `public.notifications`.** 33 live database functions write them. Every row is written in the same transaction as its business change. No row is ever sent anywhere else.
 2. **Only homeowners can read their rows.** The bell and `/notifications` page are homeowner-only ([Header.tsx:103](../src/components/layout/Header.tsx#L103), [roles.ts:67](../src/lib/auth/roles.ts#L67)). Rows written for **vendors** (offers, quote results, DEC-2026-063 terms answers, appointments, pricing) and for **admins** have no screen that lists them.
-3. **DEC-2026-063 (O-11) approves in-app notifications** to the homeowner (provider accepted, review terms) and to the provider (homeowner accepted or declined). All three producers exist in source. None has a test that asserts its row. The provider's notice cannot be read in the app. All three are unreachable in production while the `offer_terms` gate is off, and this document treats the gate as off.
-4. **Email exists only for operator and onboarding mail**, through Resend: the vendor-application owner email (durable ledger, TRACE-104; 7.1 pending), the price-approval notice to an unlinked vendor (durable ledger, DEC-2026-041 item 6), and the contact-form and renewal-document owner emails (**no ledger**, against MTS §5's durable-attempt rule). Auth sends invitation, verification and recovery mail. No homeowner or vendor transactional email exists, and no marketing message is produced.
+3. **DEC-2026-063 (O-11) approves in-app notifications** to the homeowner (provider accepted, review terms) and to the provider (homeowner accepted or declined). All three producers exist in source. None has a test that asserts its row. The provider's notice cannot be read in the app. This document treats the `offer_terms` gate as off.
+   - **Off prevents new entries.** No new other-terms offer is made, and a provider cannot accept one, so no request newly enters `awaiting_terms` (N-QTE-09).
+   - **Off does not stop answers.** A homeowner can still answer terms a provider accepted before switch-off ([SQL 116:338](../supabase/tests/116_o10_offer_bound_terms.sql#L338)). That answer writes the provider notice (N-QTE-10), and a decline can lead to N-QTE-11.
+4. **Email covers account, invitation, operator and price-draft mail only:**
+   - Owner inbox, through Resend:
+     - the vendor-application email (durable ledger, TRACE-104; traced by 7.1);
+     - the contact-form and renewal-document emails (**no ledger**, against MTS §5's durable-attempt rule).
+   - Vendors: the price-approval notice to an unlinked vendor's contact email (durable ledger, DEC-2026-041 item 6), and provider invitations (Supabase Auth).
+   - Homeowners: account verification and password recovery (Supabase Auth).
+   - **No service-lifecycle email exists.** Nothing about requests, offers, quotes, appointments, fulfillment, cancellations, payments or payouts is emailed to a homeowner or vendor.
+   - No marketing message is produced.
 5. **No approved authority defines channels, fallback, reminder timing or retry** for the MPS §10 events. Only two decisions name a channel: DEC-2026-063 (in-app) and DEC-2026-041 item 6 (email to the contact on file). DEC-2026-010 keeps email and reminder timing inactive.
-6. **Recommended 7.2B (proposal, §9):** a vendor in-app notification readback for rows that are already recorded, with DEC-2026-063 producer evidence. It changes UI and tests only. It needs no migration, no producer change and no change to 7.1's files.
+6. **Recommended 7.2B (proposal, §9):** a vendor in-app notification readback for rows that are already recorded, with DEC-2026-063 producer evidence. It changes UI and tests only. It needs no migration, no producer change and no change to 7.1's files. It does need explicit choices on list bounds, unread-count wording and mark-all scope (§9). It also depends on the free-text disclosure decision (G3-05).
 
 ---
 
 ## 1. Baseline verification
+
+**Original inspection checkpoint (2026-11-10), kept as history:**
 
 | Item | Observation (2026-11-10) |
 |---|---|
@@ -29,7 +44,17 @@ This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HAND
 | #161 | MERGED |
 | #162 | OPEN, draft, head `8d35dc59e7af9ed97a39d75eeecc3370e74cdb8a`, matching Codex's checkpoint. Not modified, merged or cherry-picked |
 | Main CI, #160 merge `88d4e09` | Run 42880366052 **success**. This reconciles the "still running" note in PHASE-6-ACCEPTANCE |
-| Main CI, #161 merge `9067f96` | Run 42943958221 **failure**: backend and lifecycle passed; application had 675 passed and **1 failed**, `tests/e2e/mds.spec.ts:50` ("public mobile menu has one trigger, a name, scroll access, trap and restoration"). #161 changed documentation only. #162's head, which contains `9067f96`, passed run 42945085368. **Not diagnosed and not re-run here.** Treat it as a possible flake until it is re-run; it stays open in the booking-readiness register |
+| Main CI, #161 merge `9067f96` | Run 42943958221 **failure**. Backend and lifecycle passed. Application had 675 passed and **1 failed**: `tests/e2e/mds.spec.ts:50` ("public mobile menu has one trigger, a name, scroll access, trap and restoration"). #161 changed documentation only. #162's head, which contains `9067f96`, passed run 42945085368. **Never diagnosed or re-run.** It stays historical and undiagnosed |
+
+**Reconciliation checkpoint (2026-11-11), current:**
+
+| Item | Observation (2026-11-11) |
+|---|---|
+| `origin/main` | `11c05b0ca35fd716d5bd26ffb3778d60fcc5fe24`: the #162 merge, matching Codex's checkpoint |
+| #162 (7.1) | MERGED. It changed no `supabase/` file, so the producer inventory (§2) is unchanged. Its changed files were `src/lib/applicationNotifications.ts`, both application routes, the new `src/lib/observability/operationalLog.ts`, the tracing unit test, the concurrency script and its CI step |
+| Main CI `11c05b0` | Run [42952294566](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/42952294566) **success**. The newer run passed. The earlier `mds.spec.ts:50` failure was **not** diagnosed or repaired; it is only not reproduced on the newer run |
+| #163 | Head `69771301a65bc27b4abf4284d2b15adbce0b545d` (merge of `11c05b0` into this branch), MERGEABLE. Run 43050572595 was cancelled; run 43050562731 was still running. Neither is counted as a pass. The final head's result is recorded in the PR |
+| Review | Codex reviewed the earlier head outside GitHub. This revision addresses those findings (§14) |
 | Working tree | The main checkout was clean on the 7.1 branch. This slice uses a separate worktree. The ignored `.phase5-local/wt` worktree was left untouched |
 | Phase 6 | Owner-accepted 2026-11-10 with verification exceptions (PHASE-6-ACCEPTANCE §"Verification exceptions"). They are carried unchanged in §11. Historical "Phase 6 unaccepted" statements are not treated as blockers |
 | Phase 7 brief | None exists on `main` or #162. The 7.1 record says the same. This document uses the 7.2A instruction as its brief |
@@ -38,6 +63,7 @@ This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HAND
 
 ## 2. Method and evidence rules
 
+- **Reconciliation recheck (2026-11-11).** `git diff 9067f96 11c05b0` touches no `supabase/` path, so the migration set and every database reference are unchanged. The three 7.1-changed references were moved to their new lines (§14, finding 1). Every other `src/` reference was rechecked at `11c05b0`.
 - **Producer discovery.** A clean local replay of all 226 migrations (the isolated Phase 5 stack) was read with `pg_proc`. The applied versions were checked against `main`'s migration directory and matched exactly. #162 has no `supabase/` diff. Every function in `public` or `private` whose body calls `notify_user(` or inserts into `public.notifications` was listed (33 producers plus `notify_user`). Each was located in its **last** `CREATE [OR REPLACE] FUNCTION` and checked against the live body. Source references below point to that definition at `9067f96`. Two-argument dispute functions are the bodies called by the three-argument wrappers the UI uses (cs9 and 6.10).
 - **Email and Auth discovery.** I searched `src/` and `supabase/functions/` for `api.resend.com`, `sendOwnerNotification`, `sendNotificationEmail`, `inviteUserByEmail`, `signUp`, `resetPasswordForEmail` and `generateLink`, and for every `functions.invoke` caller.
 - **Readback discovery.** I searched for every reader of `public.notifications` (one hook, [useNotifications.ts](../src/hooks/useNotifications.ts)) and every place it is mounted.
@@ -102,7 +128,7 @@ This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HAND
 | Writer | `public.notify_user` is a SECURITY DEFINER single `INSERT` ([20260727111646…sql:8](../supabase/migrations/20260727111646_ef9c181b-ed2a-4fe4-924c-cf2c2447f394.sql#L8)). EXECUTE is limited to `postgres` and `service_role` (local `proacl`). Four producers `INSERT` directly: `create_job_offer_internal`, `admin_send_package_draft`, `admin_send_promotion_for_vendor_approval`, `admin_suspend_package` |
 | Recipient choice | Always derived server-side from the locked record: `service_requests.customer_id`, `contractors.user_id` of the assigned or offered provider, or **every** `user_roles.role = 'admin'`. No client-supplied recipient. **Exception:** the policy "Admins can insert notifications" lets an admin `INSERT` any row for any user directly, with no audit event ([20260427132942…sql:34](../supabase/migrations/20260427132942_eab3d799-a97e-41ee-acba-ff9e3b420183.sql#L34)) |
 | Isolation (RLS) | SELECT own (`auth.uid() = user_id`) or admin. UPDATE own (any column, not only `read_at`). DELETE own. Local grants: `authenticated` SELECT/INSERT/UPDATE/DELETE, with INSERT restricted to admins by policy. `anon` has no grant |
-| Transaction | Written inside the business command's transaction. SQL 003 forces a notification insert failure and shows the lifecycle batch, flag, audit and run record all roll back ([003_phase4_lifecycle.sql:62](../supabase/tests/003_phase4_lifecycle.sql#L62)). By construction this holds for every producer, but it is tested only there |
+| Transaction | Written inside the business command's transaction. SQL 003 forces a notification insert failure and shows the lifecycle batch, flag, audit and run record all roll back ([003_phase4_lifecycle.sql:63](../supabase/tests/003_phase4_lifecycle.sql#L63)). By construction this holds for every producer, but it is tested only there |
 | Dedupe | **No dedupe key and no unique constraint** on the table. Duplicate prevention relies entirely on each command's guard: per-request advisory lock + `FOR UPDATE`, operation or response keys with replay that returns before notifying, version checks, or duplicate-transition refusal. A replayed command writes no second row where it returns early; this is listed per event |
 | Realtime | Table in `supabase_realtime`, `REPLICA IDENTITY FULL`. The hook subscribes per user and shows "Live notification updates are temporarily unavailable" on channel error ([useNotifications.ts:103](../src/hooks/useNotifications.ts#L103)). The isolated local stack excludes realtime |
 | Readback | **Homeowner:** bell ([Header.tsx:185](../src/components/layout/Header.tsx#L185)), sidebar, `/notifications` ([page.tsx:19](../src/app/%28homeowner%29/notifications/page.tsx#L19)) with loading, empty, error-with-retry, mark read and mark all read. The link is sanitized to a local path; a request-related row opens `/dashboard?job=<id>` ([page.tsx:181](../src/app/%28homeowner%29/notifications/page.tsx#L181)). **Vendor:** none (no nav item in [VendorSidebar.tsx:13](../src/components/vendor/VendorSidebar.tsx#L13); `/notifications` redirects non-homeowners). **Admin:** none. Operators work from queues |
@@ -113,7 +139,7 @@ This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HAND
 
 | Path | Transport | Durable record | Idempotency | Recovery |
 |---|---|---|---|---|
-| Vendor application → owner (APP-01) | Next route `after()` → `sendOwnerNotification` → Resend | `private.r0_application_notifications` + events; row created by trigger in the application's transaction ([20260929003000…sql:19](../supabase/migrations/20260929003000_r0_vendor_readiness.sql#L19), [:85](../supabase/migrations/20260929003000_r0_vendor_readiness.sql#L85)) | Row-locked claim; `vendor-application-notification:<id>:<attempt>` key ([applicationNotifications.ts:57](../src/lib/applicationNotifications.ts#L57)) | Operator resend at `/admin/recruiting`; unknown or untracked needs confirmation |
+| Vendor application → owner (APP-01) | Next route `after()` → `sendOwnerNotification` → Resend | `private.r0_application_notifications` + events; row created by trigger in the application's transaction ([20260929003000…sql:19](../supabase/migrations/20260929003000_r0_vendor_readiness.sql#L19), [:85](../supabase/migrations/20260929003000_r0_vendor_readiness.sql#L85)) | Row-locked claim; `vendor-application-notification:<id>:<attempt>` key ([applicationNotifications.ts:65](../src/lib/applicationNotifications.ts#L65)) | Operator resend at `/admin/recruiting`; unknown or untracked needs confirmation |
 | Price draft → unlinked vendor's email (PRC-01) | `/api/admin/package-draft-emails` → `sendNotificationEmail` to the contact on file | `private.package_draft_email_notices`, `unique (draft_id, revision)` ([20261018004000…sql:83](../supabase/migrations/20261018004000_pricing_owner_decisions.sql#L83)) | `package-draft-email:<draft>:<attempt>` ([draftEmailNotices.ts:47](../src/lib/draftEmailNotices.ts#L47)) | Operator resend; unknown needs confirmation |
 | Contact form → owner (SUP-04) | `after()` → `sendOwnerNotification` ([contact-submissions/route.ts:113](../src/app/api/contact-submissions/route.ts#L113)) | **None** (the submission row is stored; the email attempt is not) | None | None. Failure is `console.error` only |
 | Renewal document → owner (APP-05) | `after()` → `sendOwnerNotification` ([renewal-documents/submit/route.ts:55](../src/app/api/renewal-documents/submit/route.ts#L55)) | **None** | None | None |
@@ -139,13 +165,13 @@ Event IDs are stable: `N-<family>-<nn>`. Unless a row says otherwise:
 - **timing** is immediate, in the business transaction;
 - **gate** is none beyond the R0/R1 transaction gates (CFG-014; R1 is not open, so request-path events cannot occur for non-admitted homeowners in production).
 
-Source references are at `9067f96`. "Admins" means every account holding the admin role. Admin rows have no readback (§4.1), so the admin part of any event is **UNDOCUMENTED / write-only** unless noted.
+Source references are rechecked at `11c05b0` (database references are byte-identical to `9067f96`). "Admins" means every account holding the admin role. Admin rows have no readback (§4.1), so the admin part of any event is **UNDOCUMENTED / write-only** unless noted.
 
 ### 5.0 Index
 
 | ID | Event | Recipients | Status (by recipient where it differs) |
 |---|---|---|---|
-| N-APP-01 | Vendor application saved | Owner inbox (email) | ALIGNED in source; hosted UNKNOWN; 7.1 pending |
+| N-APP-01 | Vendor application saved | Owner inbox (email) | ALIGNED in source (7.1 tracing merged); hosted UNKNOWN |
 | N-APP-02 | Vendor application saved | Admins | UNDOCUMENTED |
 | N-APP-03 | Provider invitation | Invited provider (Auth email) | INCOMPLETE (hosted delivery unproven) |
 | N-APP-04 | Homeowner verification / recovery | Account holder (Auth email) | UNKNOWN (Auth-owned) |
@@ -166,9 +192,9 @@ Source references are at `9067f96`. "Admins" means every account holding the adm
 | N-QTE-06 | Quote expires (24 h) | Homeowner | INCOMPLETE (scheduler inactive; untested title) |
 | N-QTE-07 | Legacy `quoted` transition | Homeowner | DORMANT |
 | N-QTE-08 | Quote accepted | Provider / homeowner | ABSENT (approval blocked by tax gate) |
-| N-QTE-09 | Provider accepts at other terms | Homeowner | INCOMPLETE (untested); gated off |
-| N-QTE-10 | Homeowner accepts / declines terms | Provider | INCOMPLETE (no vendor readback, untested); gated off |
-| N-QTE-11 | Re-match after decline fails | Admins | UNDOCUMENTED channel; gated off |
+| N-QTE-09 | Provider accepts at other terms | Homeowner | INCOMPLETE (untested); gate off blocks new entries |
+| N-QTE-10 | Homeowner accepts / declines terms | Provider | INCOMPLETE (no vendor readback, untested); **still producible with the gate off** for terms accepted before switch-off |
+| N-QTE-11 | Re-match after decline fails | Admins | UNDOCUMENTED channel; producible with the gate off after such a decline |
 | N-QTE-12 | Terms unanswered 24 h | Operations (queue) | ALIGNED (queue, not a message) |
 | N-APT-01 | Operator records appointment | Homeowner; provider | Homeowner ALIGNED; provider INCOMPLETE |
 | N-APT-02 | Reschedule request recorded | Homeowner; provider; admins | INCOMPLETE |
@@ -209,7 +235,7 @@ Source references are at `9067f96`. "Admins" means every account holding the adm
 
 | ID | Trigger → recipient · isolation | Authority | Producer → record | Dedupe / txn / concurrency | Copy / meaning · readback · tests | Status and gap |
 |---|---|---|---|---|---|---|
-| N-APP-01 | Vendor application row committed (public applicant) → owner inbox (`OWNER_NOTIFICATION_EMAIL` or the fallback) | TRACE-104; roadmap R0.4 missed-email detection; MTS §5 l.78; CFG-011 logs (7.1) | [vendor-applications/route.ts:355](../src/app/api/vendor-applications/route.ts#L355) `after()` → [applicationNotifications.ts:65](../src/lib/applicationNotifications.ts#L65) → ledger (§4.2) | Pending row in the application transaction; row-locked claim; outcome only for the current claim; Resend idempotency key. 7.1 adds a real-database concurrency script (8 claims → 1) | Readback `/admin/recruiting` with state, attempt and redacted error; "Sent means Resend accepted it". Tests: SQL 071, `vendor-readiness.test.ts`, `vendor-readiness.spec.ts`; 7.1 tracing tests pending | ALIGNED in source. Hosted delivery, SPF/DKIM and inbox arrival **not verified**. 7.1 (#162) changes this path |
+| N-APP-01 | Vendor application row committed (public applicant) → owner inbox (`OWNER_NOTIFICATION_EMAIL` or the fallback) | TRACE-104; roadmap R0.4 missed-email detection; MTS §5 l.78; CFG-011 logs (7.1) | [vendor-applications/route.ts:393](../src/app/api/vendor-applications/route.ts#L393) `after()`, carrying the server correlation ID → [applicationNotifications.ts:92](../src/lib/applicationNotifications.ts#L92) → ledger (§4.2) | Pending row in the application transaction; row-locked claim; outcome only for the current claim; Resend idempotency key. On `main` (7.1): [scripts/application-notification-concurrency.mjs](../scripts/application-notification-concurrency.mjs) as a CI step: 8 concurrent claims → 1; 4 outcome records → 1; 6 operator resends → 1 attempt; 9 mixed claims → 1 | Readback `/admin/recruiting` with state, attempt and redacted error; "Sent means Resend accepted it". Tests: SQL 071, `vendor-readiness.test.ts`, `vendor-readiness.spec.ts`, and from 7.1 [application-notification-tracing.test.ts](../tests/unit/application-notification-tracing.test.ts) (45 tests). Logs: [operationalLog.ts](../src/lib/observability/operationalLog.ts) (`mercurius.oplog.v1`, allowlisted, never throws). **Missing log lines are inconclusive; the ledger decides** | ALIGNED in source. Hosted delivery, SPF/DKIM, inbox arrival and preview/production log readback **not verified**. CFG-011 90-day log retention not met (§11) |
 | N-APP-02 | Same insert → all admins | None names admin in-app delivery | Trigger `trg_notify_admins_new_vendor_application` → `notify_admins_new_vendor_application` ([20261004001000…sql:66](../supabase/migrations/20261004001000_r0_legacy_provider_review.sql#L66)) | One row per admin per insert; skipped for legacy intake | Body names the business and category. No admin readback. SQL 053, 074 (counts) | UNDOCUMENTED (write-only) |
 | N-APP-03 | Operator sends invitation → invited email address | MPS §8, §10 account/invite; TRACE-071/104; DEC-2026-029 | `vendor-invite` Edge ([index.ts:270](../supabase/functions/vendor-invite/index.ts#L270)) | Durable reservation prevents a second send (Phase 5) | Phase 5 tests (`invitation-operations.spec.ts`, SQL 037 and others) | INCOMPLETE: hosted SMTP and template delivery are owner work, not proven (R0-VENDOR-READINESS line 74). Characterized in Phase 5 records, not re-inspected here |
 | N-APP-04 | Sign-up or password recovery → that email | MPS §10 account verification | Supabase Auth ([AuthProvider.tsx:73](../src/components/providers/AuthProvider.tsx#L73)) | Auth-owned | Auth templates | UNKNOWN (outside the app; out of 7.2 scope) |
@@ -240,9 +266,9 @@ Source references are at `9067f96`. "Admins" means every account holding the adm
 | N-QTE-06 | 24 h after send, batch expires the quote → homeowner | DEC-2026-008; MPS §10 quote expiring | `private.expire_request_quotes` ([20260904001000…sql:124](../supabase/migrations/20260904001000_phase4_quote_revisions.sql#L124)), called only by `run_lifecycle_batch` | Conditional update `status='submitted'`; batch run-ID replay | "This does not cancel the service." Untested title | INCOMPLETE. **Scheduler inactive** (no `cron.job`; worker disabled, PHASE-6-FULFILLMENT F7), so expiry and its notice happen only if an operator runs the worker |
 | N-QTE-07 | Transition to `quoted` → homeowner | — | `private.transition_job_status` ([20261101001000…sql:513](../supabase/migrations/20261101001000_phase6_exceptions.sql#L513)) | — | Shows a dollar amount | DORMANT: the same function refuses `quoted` first ("Use the canonical quote … workflow") |
 | N-QTE-08 | Homeowner approves a quote → provider and admins | MPS §10 quote accepted | — | — | — | ABSENT. Approval is refused while tax is pending (closure report Q-1), so it cannot occur yet |
-| N-QTE-09 | Provider accepts an offer bound to other terms; request enters `awaiting_terms` → homeowner | **DEC-2026-063**; plan §699 | `vendor_accept_job` ([20261117001000…sql:949](../supabase/migrations/20261117001000_phase6_o10_offer_bound_terms.sql#L949)) | Request lock. The gate row is share-locked when entering `awaiting_terms` | "Review this provider's terms — … Nothing is scheduled or charged until you accept them." Link `/dashboard` + request → terms review. **No test asserts the row** | INCOMPLETE (evidence). **Gate `offer_terms` OFF**: no such offer can exist in production |
-| N-QTE-10 | Homeowner's keyed accept or decline of that terms row → the terms' provider | **DEC-2026-063**; plan §699 | `homeowner_respond_offer_terms` ([20261118001000…sql:926](../supabase/migrations/20261118001000_phase6_o10_review_forward_fix.sql#L926)) | Request lock. `(request, response_key)` replay returns **before** notifying. "Already answered" refusal. `_expected` = terms ID + `consent_hash` | Accept: "… The service is scheduled." Decline: "… no longer assigned to you." **No vendor readback; no test asserts the row** | INCOMPLETE: approved notice not readable by its recipient (G1-01) and untested (G2-01). Gated off |
-| N-QTE-11 | The re-match after a decline fails (recorded) → admins | DEC-2026-063 forward fix (plan §11) | `private.offer_terms_rematch` ([20261118001000…sql:77](../supabase/migrations/20261118001000_phase6_o10_review_forward_fix.sql#L77)) | Failure row append-only | Retry from Offers at other terms (queue). No admin readback | UNDOCUMENTED channel; queue is the authority. Gated off |
+| N-QTE-09 | Provider accepts an offer bound to other terms; request enters `awaiting_terms` → homeowner | **DEC-2026-063**; plan §699 | `vendor_accept_job` ([20261117001000…sql:949](../supabase/migrations/20261117001000_phase6_o10_offer_bound_terms.sql#L949)) | Request lock. The gate row is share-locked when entering `awaiting_terms` | "Review this provider's terms — … Nothing is scheduled or charged until you accept them." Link `/dashboard` + request → terms review. **No test asserts the row** | INCOMPLETE (evidence). **Gate `offer_terms` off:** no new other-terms offer is created ([20261117001000…sql:464](../supabase/migrations/20261117001000_phase6_o10_offer_bound_terms.sql#L464)), and a pending one can't be accepted ([…sql:849](../supabase/migrations/20261117001000_phase6_o10_offer_bound_terms.sql#L849), `offer_terms:inactive`; SQL 116:335). So while it is off, this row is not written. Requests already in `awaiting_terms` stay there |
+| N-QTE-10 | Homeowner's keyed accept or decline of that terms row → the terms' provider | **DEC-2026-063**; plan §699 | `homeowner_respond_offer_terms` ([20261118001000…sql:926](../supabase/migrations/20261118001000_phase6_o10_review_forward_fix.sql#L926)) | Request lock. `(request, response_key)` replay returns **before** notifying. "Already answered" refusal. `_expected` = terms ID + `consent_hash` | Accept: "… The service is scheduled." Decline: "… no longer assigned to you." **No vendor readback; no test asserts the row** | INCOMPLETE: approved notice not readable by its recipient (G1-01) and untested (G2-01). **Not gated:** this function has no gate check. Terms the provider accepted before switch-off can still be answered ([SQL 116:338](../supabase/tests/116_o10_offer_bound_terms.sql#L338)), and the answer writes this row. Whether any such request exists in production was **not checked** (no hosted query) |
+| N-QTE-11 | The re-match after a decline fails (recorded) → admins | DEC-2026-063 forward fix (plan §11) | `private.offer_terms_rematch` ([20261118001000…sql:77](../supabase/migrations/20261118001000_phase6_o10_review_forward_fix.sql#L77)) | Failure row append-only | Retry from Offers at other terms (queue). No admin readback | UNDOCUMENTED channel; queue is the authority. **Not gated:** it follows any decline under N-QTE-10. The operator retry runs "whether or not the offer_terms gate is on" ([20261118001000…sql:11](../supabase/migrations/20261118001000_phase6_o10_review_forward_fix.sql#L11)) |
 | N-QTE-12 | Terms unanswered for 24 h → operations | DEC-2026-063 ("Operations sees unanswered terms after 24 hours") | `admin_offer_terms_queue` ([AdminOfferTermsQueue.tsx:47](../src/components/admin/AdminOfferTermsQueue.tsx#L47)) | Read-only queue; "Nothing changes automatically" | Not a message, by decision. No automatic timeout or reminder | ALIGNED |
 
 ### 5.4 Appointments and rescheduling (APT)
@@ -264,7 +290,7 @@ All `transition_job_status` rows: per-request advisory lock + `FOR UPDATE`; same
 | N-FUL-03 | → `homeowner_confirmed` → provider | MPS §10 | Same (:535) | Same | "Payout is handled separately." No vendor readback | INCOMPLETE |
 | N-FUL-04 | → `completed` → homeowner and provider | MPS §10 | Same (:540, :545) | Same | Untested titles; no vendor readback | INCOMPLETE |
 | N-FUL-05 | Batch: completion notice due → homeowner | DEC-2026-006; MPS §10 confirmation reminder | `run_lifecycle_batch` ([20260904007000…sql:38](../supabase/migrations/20260904007000_phase4_confirmation_schedule.sql#L38)) | Global advisory lock; run-ID replay; `confirmation_sent_at` | SQL 003:55–60 | INCOMPLETE: scheduler inactive (DEC-2026-003/004/010) |
-| N-FUL-06 | Batch: 72 h without answer → admins + homeowner | DEC-2026-006 | Same (:64, :69) | Same; failure rolls back (SQL 003:62–76) | "do not treat silence as confirmation". SQL 003:60 | Homeowner ALIGNED in source; admins UNDOCUMENTED; inactive |
+| N-FUL-06 | Batch: 72 h without answer → admins + homeowner | DEC-2026-006 | Same (:64, :69) | Same; failure rolls back (SQL 003:63–76) | "do not treat silence as confirmation". SQL 003:60 | Homeowner ALIGNED in source; admins UNDOCUMENTED; inactive |
 | N-FUL-07 | Exception recorded (`no_show`, `unable_to_complete`, `customer_unavailable`, `partial_completion`) → homeowner, provider, admins | MPS §6.4; DEC-2026-053 E9/E10 | `record_job_operation` (:356) | As N-APT-02 | "Service update — <kind>: <actor's reason>". Link `/notifications` | INCOMPLETE; G3-05 |
 | N-FUL-08 | Any other transition to `scheduled` → homeowner | — | `transition_job_status` (:526) | Transition guards | "Your job is confirmed and scheduled" | UNDOCUMENTED (reachable through admin transitions; overlaps N-REQ-03) |
 | N-FUL-09 | Homeowner raises a dispute within 48 h → homeowner; admins | MPS §6.6, §10; DEC-2026-009/054 | `homeowner_raise_dispute(uuid,text)` ([20260904002000…sql:43](../supabase/migrations/20260904002000_phase4_dispute_tickets.sql#L43), [:45](../supabase/migrations/20260904002000_phase4_dispute_tickets.sql#L45)) via the cs9 wrapper | Request lock; `disputed` transition guard | Homeowner "Dispute received"; admins get the homeowner's reason. **Provider is not notified** (consistent with DEC-2026-054: providers don't see homeowner tickets) | Homeowner INCOMPLETE (untested title) |
@@ -340,13 +366,13 @@ The only explicit channel decisions are DEC-2026-063 (in-app, offer terms) and D
 | Gap | Events | Authority | Notes |
 |---|---|---|---|
 | **G1-01** Vendors cannot read in-app notifications addressed to them | N-QTE-10 (DEC-2026-063 provider notice) and every vendor row: N-REQ-01, N-QTE-02/04, N-APT-01..03, N-FUL-03/04/07, N-CXL-01/02/05, N-PRC-01..04 | DEC-2026-063 / plan §699 ("In-app notifications … to the provider"); DEC-2026-041 item 6 (in-app notice when linked); MTS §6 l.150 (visible to participants) | No migration needed: RLS already lets a vendor read and mark their own rows. Includes the `/notifications` and `/vendor/requests` link targets that a vendor cannot open. **Proposed for 7.2B** |
-| **G1-02** Contact-form and renewal-document owner emails have no durable attempt record, idempotency key or recovery | N-SUP-04, N-APP-05 | MTS §5 l.78; R0-VENDOR-READINESS "follow-up" | Shares the sender and outcome helpers with N-APP-01, which #162 changes. Plan after #162 merges (§10) |
+| **G1-02** Contact-form and renewal-document owner emails have no durable attempt record, idempotency key or recovery | N-SUP-04, N-APP-05 | MTS §5 l.78; R0-VENDOR-READINESS "follow-up" | Shares the sender and outcome helpers with N-APP-01. 7.1 (#162) is now merged, so it can be planned on `main` with 7.1's logger (§10) |
 
 ### 7.2 Category 2 — implemented, evidence inadequate
 
 | Gap | Events | Missing evidence |
 |---|---|---|
-| **G2-01** DEC-2026-063 producers have no assertion of their rows | N-QTE-09, N-QTE-10, N-QTE-11 | Row per recipient; no row to other parties; key replay writes none; concurrent responses write one; gate off writes none. Folded into 7.2B |
+| **G2-01** DEC-2026-063 producers have no assertion of their rows | N-QTE-09, N-QTE-10, N-QTE-11 | Row per recipient; no row to other parties; key replay writes none; concurrent responses write one. Gate off: no N-QTE-09 row, but an answer to terms accepted before switch-off still writes N-QTE-10 (and N-QTE-11 on a failed re-match). Folded into 7.2B |
 | **G2-02** Many titles have no test | N-FUL-01/03/04, N-FUL-09/10, N-QTE-02/06, N-CXL-03/05/06, N-REC-02/03, N-SUP-03, N-APT-02/03 | Per-event recipient and isolation assertions |
 | **G2-03** CFG-006 consistency of notifications | N-CXL-01, N-APT-02, N-CXL-06 | Boundary and waiver tests that compare notice content with policy outcome. Today the notices are silent on refund outcome |
 | **G2-04** Homeowner notification UI has no browser test | §4.1 | Loading, empty, error/retry, mark read, mark all, realtime-unavailable, keyboard, axe, 320 px |
@@ -361,7 +387,7 @@ The only explicit channel decisions are DEC-2026-063 (in-app, offer terms) and D
 | G3-02 | Reminders (offer expiry, quote expiring, confirmation reminder) and quiet hours: none approved; DEC-2026-010 keeps timing inactive |
 | G3-03 | Admin in-app rows: keep writing them, build an admin readback, or stop them. Queues are the approved operator surface |
 | G3-04 | Customer cancellation writes two notices per participant (N-CXL-01). Keep both, or one with an approved text |
-| G3-05 | Free text in recipient notices: operator reasons and notes (appointments, dispute notes, waivers, stop closures) and the **actor's** reason in `record_job_operation` go verbatim to the other party. Approve, restrict, or template |
+| G3-05 | Free text in recipient notices: operator reasons and notes (appointments, dispute notes, waivers, stop closures) and the **actor's** reason in `record_job_operation` go verbatim to the other party. Approve, restrict, or template. **Also a 7.2B dependency:** vendor readback would show these reasons to vendors for the first time (N-APT-01..03, N-FUL-07, N-CXL-01/02). A date cutoff (G3-07) does not help, because new notices carry the same text |
 | G3-06 | Notification retention class (CFG-011 "platform messages" 3 years?) and whether recipients may delete rows |
 | G3-07 | Showing historical vendor rows when vendor readback ships (rows from earlier producers may carry outdated copy) (7.2B decision B2) |
 | G3-08 | MPS §8 "Test notification received": what the test notification is, and on which channel |
@@ -383,7 +409,7 @@ The only explicit channel decisions are DEC-2026-063 (in-app, offer terms) and D
 ### G1-01 / G2-01 (vendor readback with DEC-2026-063 evidence; proposed 7.2B)
 
 1. **Committed trigger.** A vendor sees only rows that already exist. A row appears only after its business transaction commits. A rolled-back command shows nothing (SQL 003's pattern for one DEC-2026-063 producer).
-2. **Authorized recipient.** The signed-in vendor lists rows where `user_id = auth.uid()`, newest first, with unread count and title, body and time.
+2. **Authorized recipient.** The signed-in vendor lists rows where `user_id = auth.uid()`, newest first, showing title, body and time. The list bound and the unread-count wording follow the choices in §9 R1–R4.
 3. **Cross-account denial.**
    - In SQL: vendor A cannot select, update or delete vendor B's or a homeowner's rows; `anon` gets nothing; a vendor cannot set `read_at` on another user's row.
    - In the browser: a non-vendor is not shown the vendor page, and the homeowner page stays homeowner-only.
@@ -393,14 +419,19 @@ The only explicit channel decisions are DEC-2026-063 (in-app, offer terms) and D
    - Replaying the same `response_key` writes no new row.
    - N concurrent responses with different keys produce one response and one provider row.
    - No row goes to another provider.
-   - With the gate off, none of the three rows can be produced.
+   - **Gate off (preserve SQL 116:332–339):**
+     - no new other-terms offer, no provider acceptance into `awaiting_terms`, no N-QTE-09 row;
+     - a homeowner answer to terms accepted **before** switch-off still succeeds and writes exactly one N-QTE-10 row;
+     - a decline whose re-match fails writes N-QTE-11.
+     
+     Tests must assert this behavior and must not expect "no rows while off".
 5. **Safe copy.** No new copy in producers. The page shows stored text as text, never as HTML. Links resolve only to local paths:
    - a vendor `/vendor/*` link is kept;
    - `/notifications`, `/vendor/requests` or a non-vendor link on a request-related row goes to `/vendor/jobs`;
    - anything else goes to `/vendor`;
    - external, protocol-relative and backslash links are dropped.
    Homeowner destinations are unchanged.
-6. **Durable state.** Opening a row sets `read_at` once (`is null` guard). Mark all sets only the caller's unread rows. A failed update shows an error and reloads. No other column changes.
+6. **Durable state.** Opening a row sets `read_at` once (`is null` guard). Mark all sets only the caller's rows, within the scope chosen under §9 R3. A failed update shows an error and reloads. No other column changes.
 7. **Recovery.** A load failure shows an error with retry. A realtime failure shows the existing "temporarily unavailable" notice; refresh still works.
 8. **UI states and accessibility** (MDS; light mode only, DEC-2026-026):
    - loading with an accessible name;
@@ -413,7 +444,7 @@ The only explicit channel decisions are DEC-2026-063 (in-app, offer terms) and D
    - no horizontal scroll at 320 px.
    A2 human checks stay carried.
 
-### G1-02 (owner-email ledger; after #162)
+### G1-02 (owner-email ledger; proposed 7.2C, 7.1 now merged)
 
 - An attempt record is created atomically with the contact submission or renewal record, and an owner email is claimed at most once per permitted attempt.
 - A Resend idempotency key per attempt.
@@ -439,57 +470,87 @@ For each CFG-006 boundary (72 h, 24 h; reschedule 48 h, 24 h) and each waiver, t
 
 **Alternatives not chosen first:**
 - G2-05 copy fix: restates a fingerprinted function, so it needs a finance-scoped review.
-- G1-02 ledger: depends on #162 and needs a migration; proposed as 7.2C after #162 merges.
+- G1-02 ledger: needs a migration and the hosted push procedure. Proposed as 7.2C; its 7.1 dependency is now satisfied.
 - Admin readback: no authority (G3-03).
 - Table hardening: migration; later.
 
 **Scope.**
-1. New page `src/app/vendor/notifications/page.tsx`. It sits inside the existing vendor layout and role guard, reuses `useNotifications` and `NotificationItem`, and offers mark read and mark all read.
-2. `src/components/vendor/VendorSidebar.tsx`: a "Notifications" nav item.
+1. New page `src/app/vendor/notifications/page.tsx`. It sits inside the existing vendor layout and role guard, uses `NotificationItem`, and offers mark read and mark all read. It is built on `useNotifications` only as far as the readback choices below allow.
+2. `src/components/vendor/VendorSidebar.tsx`: a "Notifications" nav item. **Codex's B1 architectural recommendation:** place it immediately after Jobs & Requests, before Messages.
 3. New `src/lib/notificationDestination.ts`: role-aware link mapping (§8 item 5), extracted from `src/app/(homeowner)/notifications/page.tsx`, which then imports it with identical homeowner results.
 4. No SQL, migration, producer, copy, grant, realtime, email or flag change. The `offer_terms` gate stays off.
+
+**Existing hook behavior (characterized, unchanged by 7.2A).** Reusing `useNotifications` as it is does **not** show a vendor every historical notice.
+- **List.** It loads only the newest `limit` rows ([useNotifications.ts:50](../src/hooks/useNotifications.ts#L50)): 20 in the header ([Header.tsx:109](../src/components/layout/Header.tsx#L109)), 100 on the homeowner page ([page.tsx:69](../src/app/%28homeowner%29/notifications/page.tsx#L69)). There is no pagination.
+- **Unread count.** Computed from the loaded rows only ([useNotifications.ts:164](../src/hooks/useNotifications.ts#L164)). Unread rows beyond the limit are not counted, and the page's "N unread updates" wording can understate.
+- **Mark all.** Updates **every** unread row for the caller, with no limit ([useNotifications.ts:153](../src/hooks/useNotifications.ts#L153)), including rows the user never saw.
+
+**Readback choices for 7.2B.** These are proposed implementation choices, not approved product policy; Codex or the owner confirm them before implementation.
+
+| Choice | Options | Proposal |
+|---|---|---|
+| R1 List bound | (a) an explicit bounded list (e.g. newest 100) with wording that says older notices aren't shown; (b) keyset pagination ("Load older") on `created_at, id` | (b), or (a) if it is labelled, so nothing is silently hidden |
+| R2 Unread count | (a) count of loaded rows, worded "unread in this list"; (b) an exact count from a separate `count`/`head` query on `read_at is null` | (b), so the nav and page say the true number; with R4 it counts only in-scope rows |
+| R3 Mark all scope | (a) every unread row, as today; (b) only rows loaded and visible; (c) every unread row within the cutoff window (R4) | (b) or (c); "all" must never mark rows outside what the page says it covers. Wording follows the choice |
+| R4 Historical cutoff (B2) | none, or a `created_at >= cutoff` read filter | Owner decision. If chosen, the **same** filter applies to listing, unread count and mark all. Rows before the cutoff are neither shown, counted nor marked read. It changes no data |
+
+The homeowner page keeps its current behavior unless Codex asks for the same corrections there. That would be a separate, explicit change.
+
+**Free-text dependency (G3-05).** Several vendor notices carry an actor's or operator's reason verbatim (N-APT-01..03, N-FUL-07, N-CXL-01/02). Vendor readback would show this text to vendors for the first time. A date cutoff hides old rows but **does not** cover new notices produced with the same reason text. G3-05 should be answered before or with 7.2B. Possible answers:
+- accept the disclosure;
+- restrict what reasons may contain;
+- template the producers' copy (a producer change, so a separate slice).
 
 **Tests.**
 - `tests/unit/notification-destination.test.ts`: homeowner parity, vendor mapping and unsafe links.
 - `supabase/tests/119_vendor_notification_readback.sql`:
   - RLS isolation, §8 item 3;
-  - DEC-2026-063 rows, §8 item 4, with the gate enabled only inside the test transaction as SQL 116 does.
+  - DEC-2026-063 rows, §8 item 4, with the gate toggled only inside the test transaction as SQL 116 does, **including the switch-off case**: a pending answer still writes the provider row.
 - Optional: notification-count assertions added to `scripts/offer-terms-concurrency.mjs`.
-- `tests/e2e/vendor-notifications.spec.ts`: §8 items 5–8, with the repository's existing Supabase stubs.
+- `tests/e2e/vendor-notifications.spec.ts`: §8 items 5–8 with the repository's existing Supabase stubs. It also covers R1–R4 as chosen:
+  - more rows than the bound;
+  - exact unread count;
+  - mark-all scope;
+  - cutoff, if any.
 - Full unit, SQL and browser suites; typecheck, lint, secret scan, build.
 
 **Dependencies.**
-- None on #162 (no shared files). The only expected conflict is the adjacent TRACEABILITY row; whichever merges second keeps both.
-- If #162 merges first, rebase and re-run.
+- 7.1 (#162) is merged, and 7.2B shares no file with it. Build from the then-current `main`.
+- B1 confirmed, B2 answered, R1–R4 chosen, and G3-05 answered or accepted as a known disclosure.
 - A2 human checks remain carried.
 
 **Rollout.**
 - Merge to `main` deploys to production (DEC-2026-037).
 - No hosted migration push.
-- Vendors immediately see **every** existing row addressed to them, including rows from earlier producers that may carry outdated copy (for example, the dormant 24-hour offer text if it ever ran in hosted).
+- Vendors see their existing rows **within the chosen bound and cutoff** (R1, R4). Without a cutoff that includes rows from earlier producers, which may carry outdated copy (for example, the dormant 24-hour offer text, if it ever ran in hosted).
 
 **Rollback.** Revert the commit. Read markers set by vendors stay; they are harmless.
 
 **Decisions needed before implementation.**
-- **B1 (Codex/owner):** confirm the vendor portal nav placement under the MDS portal pattern.
-- **B2 (owner, G3-07):** show all historical vendor rows, or only rows created after a cutoff date. A cutoff is a read filter, not a data change. Recommended: authorize one read-only, aggregate, PII-free hosted count of vendor rows by `type`, `title` and month before choosing.
-- Neither decision changes channels or policy.
+- **B1 (architecture): Codex recommends "Notifications" immediately after Jobs & Requests, before Messages.** It is recorded as Codex's recommendation for 7.2B.
+- **B2 (owner, G3-07): NOT DECIDED.** Show all historical vendor rows, or only rows created after a cutoff date (R4). A cutoff is a read filter, not a data change.
+  - Proposed input: one read-only hosted aggregate of vendor-recipient rows, **counts by `type` and month only**.
+  - It must not read or return titles, bodies, links, user or provider identities, request IDs or any free text.
+  - It needs the owner's authorization and **has not been run**.
+- **R1–R4** (above): implementation choices for Codex/owner confirmation.
+- **G3-05:** owner decision on free-text disclosure (above).
+- None of these decisions changes channels or delivery policy.
 
 ---
 
-## 10. 7.1 (#162) dependency
+## 10. 7.1 (#162) — merged
 
-- #162 changes N-APP-01 only:
+- **History.** At the original checkpoint #162 was open (§1). This record said that if it merged during review, the new `main` SHA would be recorded and N-APP-01 rechecked. It merged as `11c05b0`.
+- **What it changed:** N-APP-01 only:
   - `src/lib/applicationNotifications.ts`;
   - the two application routes;
-  - a new `src/lib/observability/operationalLog.ts`;
-  - a CI concurrency step.
-- It also allocates TRACE-151 and edits `docs/agent/HANDOFF.md`.
-- Its outcome classification (sent, failed, unknown, unrecorded) and ledger are unchanged, so N-APP-01's row above holds for both `main` and #162.
-- This slice touches none of those files. The proposed 7.2B touches none of them either.
-- G1-02 (7.2C) would reuse the shared sender and `outcomeState`, and should use 7.1's logger. It must be planned and verified **after** #162 merges, against the combined candidate.
+  - the new `src/lib/observability/operationalLog.ts`;
+  - `tests/unit/application-notification-tracing.test.ts`;
+  - `scripts/application-notification-concurrency.mjs` and its CI step.
+- **What it left alone:** the outcome classification (sent, failed, unknown, unrecorded) and the ledger. N-APP-01 is updated with the moved references and the new evidence (§5.1). No other row changes.
+- **Overlap with this slice.** This slice touches none of those files, and the proposed 7.2B touches none of them either. TRACE-151 and TRACE-152 are both kept, in ID order.
+- **7.2C.** G1-02 would reuse the shared sender and `outcomeState` ([applicationNotifications.ts:87](../src/lib/applicationNotifications.ts#L87)), and should use 7.1's logger. Its 7.1 dependency is now satisfied. It must be verified on the combined `main`.
 - **Missing operational logs are inconclusive.** The durable notification ledger decides whether an attempt occurred and whether recovery is permitted (7.1 §7). The same rule applies to in-app rows: the `public.notifications` row and the business record are the evidence, never a log line.
-- If #162 merges during review of this slice, record the new `main` SHA here and re-check N-APP-01's references.
 
 ---
 
@@ -498,7 +559,7 @@ For each CFG-006 boundary (72 h, 24 h; reschedule 48 h, 24 h) and each waiver, t
 - **CFG-011:** 90-day operational-log retention not met (no drain or exporter; host retention unverified). Assigned to the later 7.6 observability and retention slice.
 - **A2 human verification** (screen reader, real devices, keyboard, 200% zoom and 320 px reflow, `@visual` on Windows): NOT PERFORMED; booking-readiness register.
 - **Final applicable schema and grants, money fingerprint and completion-integrity checks** on the final candidate: open; booking-readiness register.
-- **Main CI `9067f96` one failed browser test** (§1): to be re-run or diagnosed before relying on `main` as a verified baseline.
+- **Main CI `9067f96`, one failed browser test** (`mds.spec.ts:50`, §1): historical and **undiagnosed**. Newer main CI on `11c05b0` passed (42952294566). That is not a diagnosis or a repair; a recurrence should be investigated.
 - `offer_terms` and promotions gates **off**. No activation inferred.
 - DEC-2026-064 stays limited to CS-4, CS-3 and O-10 finance review. No new finance review, human test, hosted alignment or release acceptance is claimed.
 - No channel, quiet hours, reminder timing, fallback, suppression, escalation or retry policy was invented. Commission and fees are untouched.
@@ -509,11 +570,11 @@ For each CFG-006 boundary (72 h, 24 h; reschedule 48 h, 24 h) and each waiver, t
 
 | Check | Result |
 |---|---|
-| Diff contains documentation only | PASS: `governance/PHASE-7-NOTIFICATION-CONTRACT.md` (new) and one appended `governance/TRACEABILITY.md` row; no other path |
+| Diff contains documentation only | PASS: `governance/PHASE-7-NOTIFICATION-CONTRACT.md` (new) and the TRACE-152 `governance/TRACEABILITY.md` row; no other path (against `main` `11c05b0`) |
 | Matrix complete against discovered producers | Every one of the 33 live producer functions maps to at least one event: create_job_offer_internal (REQ-01), create_recurring_visit_core (REC-01), expire_request_quotes (QTE-06), offer_terms_rematch (QTE-11), transition_job_status (QTE-07, FUL-01..04, FUL-08, CXL-01), admin_close_plan_stop_request (REC-03), admin_propose_replacement (CXL-04), admin_publish_package_draft (PRC-04), admin_record_appointment (APT-01), admin_record_waiver_adjustment (CXL-06), admin_resolve_dispute (FUL-10), admin_return_quote_proposal (QTE-02), admin_send_itemized_quote (QTE-03/04), admin_send_package_draft (PRC-01), admin_send_promotion_for_vendor_approval (PRC-02), admin_suspend_package (PRC-03), appeal_dispute_resolution (FUL-11), homeowner_raise_dispute (FUL-09), homeowner_request_plan_stop (REC-02), homeowner_respond_offer_terms (QTE-10), homeowner_respond_replacement (CXL-05), homeowner_respond_to_quote (QTE-05), moderate_job_review (FUL-12), notify_admins_new_vendor_application (APP-02), open_support_ticket (SUP-01), post_support_message (SUP-02/03), record_job_operation (APT-02, FUL-07, CXL-01/02), record_match_offer (REQ-05), respond_to_reschedule_request (APT-03), run_lifecycle_batch (FUL-05/06), vendor_accept_job (REQ-03, QTE-09, CXL-03), vendor_propose_quote (QTE-01). All six email or Auth paths map to APP-01/03/04/05/06, SUP-04 and PRC-01 |
 | Source references | Each migration reference was checked to fall inside the last `CREATE [OR REPLACE] FUNCTION` block and to contain the live title (scripted comparison with `pg_get_functiondef` on the local replay). Links were checked to resolve to existing files |
 | Consistency with decisions | DEC-2026-063 producers and gate; DEC-2026-041 item 6; DEC-2026-006/008/010; CFG-006/009/011/015; DEC-2026-053 E5/E8/E11; DEC-2026-049 items 4–5 |
-| Link check | 65 relative links resolve to existing files and in-range lines; each linked migration line is a notification write, table, trigger or policy definition. 21 further unlinked `file:line` citations were checked to be `notify_user(` calls |
+| Link check (rerun at `11c05b0`) | Every relative link resolves to an existing file and an in-range line; each linked migration line is a notification write, gate check, table, trigger or policy definition; each linked `src/` line was read to carry the cited construct. 21 further unlinked `file:line` citations were checked to be `notify_user(` calls. Counts are in the PR |
 | `node scripts/scan-secrets.mjs` (`npm run scan:secrets`) | PASS: "no known credential patterns detected" |
 | **Not performed** | Application tests, build, lint or typecheck (no code changed; none claimed). Any hosted query, log readback or Resend check. Re-running main CI. Browser rendering of any notification UI |
 
@@ -521,12 +582,32 @@ For each CFG-006 boundary (72 h, 24 h; reschedule 48 h, 24 h) and each waiver, t
 
 ## 13. Handoff (7.2A)
 
-- **Base:** `main` `9067f96`. **Head:** the commit on `claude/phase7-2a-notification-contract` named in the PR.
+- **Base:** `main` `11c05b0` (original inspection at `9067f96`). **Head:** the commit on `claude/phase7-2a-notification-contract` named in the PR.
 - **Scope:** characterization and planning only (TRACE-152).
 - **Evidence:** §2–§6 and §12.
-- **Unresolved gates:** §11, plus owner decisions G3-01..09 and 7.2B decisions B1 and B2.
+- **Unresolved gates:** §11, plus:
+  - owner decisions G3-01..09;
+  - B2 (not decided);
+  - R1–R4 confirmation;
+  - G3-05 before or with 7.2B.
+  B1 has Codex's recommendation.
 - **Next action:**
-  1. Codex reviews this matrix.
-  2. If 7.2B is accepted, the owner answers B2 (and B1 if Codex asks).
-  3. Implement 7.2B from the then-current `main`.
-  4. Plan G1-02 after #162 merges.
+  1. Codex's final review of this revision.
+  2. The owner answers B2, authorizes or declines the type-and-month count, and answers G3-05.
+  3. Codex or the owner confirm R1–R4.
+  4. Implement 7.2B from the then-current `main`.
+  5. Plan G1-02 (7.2C).
+
+---
+
+## 14. Codex review findings (earlier head `b5f2fe2`, reviewed outside GitHub) and resolutions
+
+| # | Finding | Resolution in this revision |
+|---|---|---|
+| 1 | Baseline and 7.1 references stale after #162 merged | Reconciliation checkpoint `11c05b0` recorded beside the original `9067f96` (header, §1). 7.1 marked merged (§10). N-APP-01 now cites 7.1's logger, concurrency script and tracing tests. References moved: idempotency key `applicationNotifications.ts` 57 → 65; delivery helper 65 → 92; `vendor-applications/route.ts` `after()` 355 → 393. The `9067f96` CI failure is kept historical and undiagnosed; newer main CI recorded as passing, without a claim of diagnosis or repair. TRACE-151 ordered before TRACE-152 |
+| 2 | Blanket "none of the three DEC-2026-063 notices can be produced while `offer_terms` is off" was wrong | Removed (§0, index, §5.3, G2-01, §8 item 4). Off prevents new other-terms offers and new entry into `awaiting_terms` (N-QTE-09). An answer to terms accepted before switch-off still succeeds and writes N-QTE-10, and can lead to N-QTE-11. Verified against SQL 116:332–339 and the live functions: `homeowner_respond_offer_terms` has no gate check; `vendor_accept_job` refuses with `offer_terms:inactive`. Proposed tests must preserve this |
+| 3 | "Reusing the hook exposes every historical notice" was inaccurate | §9 characterizes the hook: a bounded list (limit), unread count from loaded rows only, mark all over every unread row. Proposed choices R1 (bound or pagination), R2 (count and wording), R3 (mark-all scope) and R4 (cutoff applied to list, count and mark all) are listed as unresolved proposals |
+| 4 | "No homeowner or vendor transactional email exists" was inaccurate | §0 now separates the absent service-lifecycle email from the existing account (Auth), invitation (Auth) and price-draft (unlinked vendor) email |
+| 5 | Proposed hosted aggregate included titles | Now counts by `type` and month only, with titles, bodies, links, identities, request IDs and free text excluded. Not run; owner authorization pending (§9 B2) |
+| 6 | Free-text disclosure is a 7.2B dependency that a cutoff does not solve | Recorded in G3-05 and §9 |
+| 7 | B1 recommendation | Recorded: Notifications immediately after Jobs & Requests, before Messages (§9). B2 stays an owner decision, not approved |
