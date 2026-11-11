@@ -5,7 +5,10 @@
 // acceptance with only two outcomes: accepted at the bound terms first, or refused with the named
 // exception. No race may deadlock. One-time requests are submitted through the real submission command,
 // so their bound record is the one a homeowner's submission writes. Run only against a disposable local
-// or isolated database with 20261115001000 and 20261116001000 applied. Synthetic fixtures only; they are removed at the end (history and money rows
+// or isolated database with 20261115001000 and 20261116001000 applied. Phase 4 (CS5-F01, 20261121001000): an
+// operator's unpaid-start exception on a job or visit whose checkout is open races the provider pausing the
+// package or being suspended: the exception and its start apply first, or both are refused with nothing
+// recorded; then an unpaid-exception start is not reusable for a rework restart, while paid rework restarts. Synthetic fixtures only; they are removed at the end (history and money rows
 // are append-only, so cleanup bypasses triggers as postgres).
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -46,6 +49,11 @@ const deadlock = /deadlock detected/;
 
 async function cleanup() {
   await sql(`set session_replication_role = replica;
+    delete from private.visit_start_payment_exceptions where job_id in ${ours};
+    delete from public.job_completion_evidence where job_id in ${ours};
+    delete from public.job_operations where job_id in ${ours};
+    delete from public.job_status_rejections where job_id in ${ours};
+    delete from storage.objects where bucket_id = 'job-photos' and name like '${vendorUser}/%';
     delete from public.money_webhook_events where payload->>'attempt_id' in (select id::text from public.money_checkout_attempts where obligation_id in ${obligations});
     delete from public.money_commercial_sources where snapshot_id in (select id from public.money_snapshots where obligation_id in ${obligations});
     do $$ declare t text; begin
@@ -372,7 +380,112 @@ try {
     await accept(request);
     assert.equal(await amounts(request), BOUND_ONE_TIME, 'C13: after republishing, acceptance succeeds at the bound terms');
   }
-  console.log('PASS: ordinary revisions racing acceptance, checkout and publication all succeed at the bound terms with unchanged source hashes, for recurring visits and one-time requests; six parallel acceptances give one; vendor pause, provider suspension, archive and operator suspension races accept first at the bound terms or refuse as no longer eligible; no race deadlocks.');
+} finally {
+  await cleanup();
+}
+
+try {
+  // Phase 4 (CS5-F01, 20261121001000). Open checkouts (processing) on accepted one-time jobs and visits.
+  await setup();
+  const visitsF = [];
+  for (let day = 2; day <= 4; day += 1) visitsF.push(await createVisit(day));
+  const requests = [];
+  for (let n = 0; n < 10; n += 1) requests.push(await submitOneTime());
+  for (const job of [...requests, ...visitsF]) await accept(job);
+  const visitIds = new Set(visitsF);
+  const isVisit = (job) => visitIds.has(job);
+  const processing = async (job) => {
+    const snapshot = await publish(job, await approvedTerms(job, isVisit(job) ? 4000 : 6000));
+    await sql(as(homeowner, `select (public.money_prepare_checkout('${snapshot}','full')).id`));
+    return job;
+  };
+  const except = (job) => sql(as(operator, `select public.admin_start_visit_payment_exception('${job}','${randomUUID()}','Synthetic: paying on site')->>'payment_exception'`));
+  const startAs = (who, job, reason = null) => sql(as(who, `select public.start_job('${job}','${randomUUID()}',${reason ? `'${reason}'` : 'null'})->>'outcome'`));
+  const trace = (job) => sql(`select concat_ws('/', status, (select count(*) from private.visit_start_payment_exceptions where job_id = r.id),
+    (select count(*) from public.job_events where job_id = r.id and metadata->>'to' = 'in_progress')) from public.service_requests r where id = '${job}'`);
+  const label = (job) => sql(`select (case when r.recurrence_parent_id is null then private.one_time_job_payment(r, now())
+    else private.recurring_visit_payment(r, now()) end)->>'state' from public.service_requests r where id = '${job}'`);
+  const refusal = /can't start before payment|agreed terms can't be confirmed|price hasn't been reviewed/;
+  const pause = async () => {
+    const [id, stamp] = (await liveHead()).split('|');
+    return () => sql(as(vendorUser, `select public.vendor_set_package_active('${id}', false, '${stamp}')::text`));
+  };
+  const republish = async () => {
+    const [id, stamp] = (await sql(`select id || '|' || updated_at from public.vendor_packages where lineage_id = '${pkg}' order by revision_number desc limit 1`)).split('|');
+    await sql(as(vendorUser, `select public.vendor_set_package_active('${id}', true, '${stamp}')::text`));
+  };
+  const suspend = async () => {
+    const rev = await revision();
+    return () => sql(as(operator, `select public.vendor_decide_onboarding('${contractor}', ${rev}, 'suspend', 'Synthetic suspend', '${randomUUID()}')`));
+  };
+  // Rounds 0 and 1 force each order; the rest race.
+  async function exceptionRace(name, jobs, prepare, restore) {
+    const orders = new Set();
+    for (let i = 0; i < jobs.length; i += 1) {
+      const job = await processing(jobs[i]);
+      const change = await prepare();
+      const [excepted, changed] = i === 0 ? [await Promise.allSettled([change()]), await Promise.allSettled([except(job)])].map((r) => r[0]).reverse()
+        : i === 1 ? [await Promise.allSettled([except(job)]), await Promise.allSettled([change()])].map((r) => r[0])
+          : await Promise.allSettled([except(job), change()]);
+      noDeadlock([excepted, changed], `${name} round ${i}`);
+      assert.equal(changed.status, 'fulfilled', `${name} round ${i}: the provider command applies (${changed.reason?.message ?? ''})`);
+      if (excepted.status === 'fulfilled') {
+        assert.equal(excepted.value, 'true', `${name} round ${i}: the start records an exception`);
+        assert.equal(await trace(job), 'in_progress/1/1', `${name} round ${i}: exception first; one exception row and one start`);
+        orders.add('exception-first');
+      } else {
+        assert.match(excepted.reason.message, refusal, `${name} round ${i}: refused only for the hard stop (${excepted.reason.message})`);
+        assert.equal(await trace(job), 'scheduled/0/0', `${name} round ${i}: nothing recorded`);
+        assert.equal(await label(job), 'processing', `${name} round ${i}: the job still shows processing`);
+        await assert.rejects(startAs(vendorUser, job), /still processing/, `${name} round ${i}: the provider cannot start it either`);
+        assert.equal(await trace(job), 'scheduled/0/0', `${name} round ${i}: still nothing recorded`);
+        orders.add('change-first');
+      }
+      await restore();
+    }
+    assert.equal(orders.size, 2, `${name}: both orders exercised`);
+  }
+  // C14. One-time exception ∥ the provider pausing the package.
+  await exceptionRace('C14 exception vs package pause', requests.splice(0, 4), pause, republish);
+  // C15. One-time exception ∥ the provider's suspension through the onboarding decision.
+  await exceptionRace('C15 exception vs provider suspension', requests.splice(0, 4), suspend, reactivate);
+  // C16. Recurring visit exception ∥ the provider pausing the package (the same rule for visits).
+  await exceptionRace('C16 visit exception vs package pause', visitsF.splice(0, 3), pause, republish);
+
+  // C17 (sequential, separate transactions). An unpaid job started under an exception, completed and returned
+  // for rework can't restart: the earlier exception is not reusable, and the exception command is scheduled-only.
+  const complete = async (job) => {
+    await sql(`insert into storage.objects(bucket_id, name, owner) values ('job-photos', '${vendorUser}/${job}/proof.png', '${vendorUser}')`);
+    await sql(as(vendorUser, `select public.vendor_complete_job('${job}', array['${vendorUser}/${job}/proof.png'])`));
+    assert.equal(await sql(`select status from public.service_requests where id = '${job}'`), 'vendor_completed');
+  };
+  const rework = (job) => sql(as(operator, `select public.transition_job_status('${job}','in_progress','Synthetic rework')`));
+  {
+    const job = requests.shift();
+    await publish(job, await approvedTerms(job, 6000));
+    assert.equal(await label(job), 'ready');
+    assert.equal(await except(job), 'true', 'C17: the unpaid job starts under an exception');
+    await complete(job);
+    await assert.rejects(rework(job), /isn't paid yet/, 'C17: the rework restart is refused while unpaid');
+    await assert.rejects(sql(as(operator, `select public.admin_start_visit_payment_exception('${job}','${randomUUID()}','Synthetic: rework on site')`)),
+      /no longer waiting to start/, 'C17: no exception for a rework restart');
+    assert.equal(await trace(job), 'vendor_completed/1/1', 'C17: unchanged; one exception row and one start');
+  }
+  // C18. Paid rework control: a paid job restarts for rework.
+  {
+    const job = requests.shift();
+    const snapshot = await publish(job, await approvedTerms(job, 6000));
+    const attempt = await sql(as(homeowner, `select (public.money_prepare_checkout('${snapshot}','full')).id`));
+    const event = `evt_${randomUUID().replaceAll('-', '')}`;
+    await sql(`select public.money_receive_event('${event}', 'capture', '${JSON.stringify({ attempt_id: attempt, payment_id: `pi_${attempt.replaceAll('-', '')}`, amount: 6000, currency: 'usd' })}')`);
+    assert.equal(await sql(`select public.money_process_event('${event}')`), 'processed');
+    assert.equal(await label(job), 'paid');
+    assert.equal(await startAs(vendorUser, job), 'started', 'C18: the paid job starts');
+    await complete(job);
+    await rework(job);
+    assert.equal(await trace(job), 'in_progress/0/2', 'C18: paid rework restarts; no exception');
+  }
+  console.log('PASS: ordinary revisions racing acceptance, checkout and publication all succeed at the bound terms with unchanged source hashes, for recurring visits and one-time requests; six parallel acceptances give one; vendor pause, provider suspension, archive and operator suspension races accept first at the bound terms or refuse as no longer eligible; unpaid-start exceptions racing a pause or suspension apply first or are refused with nothing recorded (C14–C16); an exception start is not reusable for rework, paid rework restarts (C17–C18); no race deadlocks.');
 } finally {
   await cleanup();
 }

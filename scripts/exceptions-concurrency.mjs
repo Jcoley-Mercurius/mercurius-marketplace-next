@@ -3,6 +3,8 @@
 // C3 one key repeated; C4 two keys from one read; C5 homeowner cancellation ∥ provider withdrawal;
 // C6 homeowner cancellation ∥ no-replacement decision; C7 cancellation refund authorization and
 // settlement ∥ outcome readbacks; C8 visit cancellation ∥ Stop future visits ∥ plan-row cancellation.
+// CS-5 one-time extension (TRACE-145, 20261120001000): C9 provider start ∥ capture of the open checkout;
+// C10 operator payment exception ∥ capture. A start applies only on a paid job or under a recorded exception.
 // Run only against a disposable local or isolated database with 20261101001000 applied. Fixtures are
 // synthetic, use fresh ids each run and are left in place (money evidence is append-only); reset the
 // database before delivery, as CI does.
@@ -222,5 +224,54 @@ for (let i = 0; i < 3; i += 1) {
   assert.equal(await sql(`select private.recurring_plan_state('${plan}')`), 'ended');
 }
 
+// C9 (CS-5 one-time): provider start ∥ capture of the open checkout. The capture always applies. The start
+// applies only if the capture came first (recorded as paid); otherwise it is refused as still processing
+// and a retry after the capture starts the work. Never a deadlock or any other error.
+const start = (job, who, key = randomUUID(), reason = null) => sql(as(who, `select public.start_job('${job}', '${key}', ${reason ? `'${reason}'` : 'null'})->>'outcome'`));
+const startedPayment = (job) => sql(`select metadata#>>'{payment_at_start,state}' from public.job_events where job_id = '${job}' and metadata->>'to' = 'in_progress' order by created_at desc limit 1`);
+const c9orders = new Set();
+for (let i = 0; i < 4; i += 1) {
+  const { id, snapshot } = await payable();
+  const attempt = await prepare(snapshot);
+  await sql(`select public.money_attach_checkout('${attempt}', 'cs_c9_${i}${attempt.slice(0, 8)}', 'https://checkout.stripe.com/c/pay/cs_c9_${i}')`);
+  const pay = () => capture(attempt, `pi_${attempt.replaceAll('-', '')}`);
+  const [started, captured] = i === 0 ? [await settled([pay()]), await settled([start(id, vendorUser)])].map((r) => r[0]).reverse()
+    : i === 1 ? [await settled([start(id, vendorUser)]), await settled([pay()])].map((r) => r[0])
+      : await settled([start(id, vendorUser), pay()]);
+  assert.equal(captured.status, 'fulfilled'); assert.equal(captured.value, 'processed', 'C9: the capture is recorded');
+  if (started.status === 'fulfilled') {
+    assert.equal(started.value, 'started'); assert.equal(await startedPayment(id), 'paid', 'C9: a start that applied saw the payment');
+    c9orders.add('capture-first');
+  } else {
+    assert.match(started.reason.message, /still processing/, `C9: refused only as processing (${started.reason.message})`);
+    assert.equal(await start(id, vendorUser), 'started', 'C9: the retry after the capture starts the work');
+    assert.equal(await startedPayment(id), 'paid');
+    c9orders.add('start-first');
+  }
+  assert.equal(await status(id), 'in_progress');
+}
+
+// C10 (CS-5 one-time): operator payment exception ∥ capture. Both apply; the work starts once. The exception
+// row exists exactly when the start recorded one (processing); if the capture came first the start is paid.
+const c10orders = new Set();
+for (let i = 0; i < 4; i += 1) {
+  const { id, snapshot } = await payable();
+  const attempt = await prepare(snapshot);
+  await sql(`select public.money_attach_checkout('${attempt}', 'cs_c10_${i}${attempt.slice(0, 8)}', 'https://checkout.stripe.com/c/pay/cs_c10_${i}')`);
+  const pay = () => capture(attempt, `pi_${attempt.replaceAll('-', '')}`);
+  const except = () => sql(as(operator, `select (public.admin_start_visit_payment_exception('${id}', '${randomUUID()}', 'Synthetic: paying on site')->>'payment_exception')`));
+  const [excepted, captured] = i === 0 ? [await settled([pay()]), await settled([except()])].map((r) => r[0]).reverse()
+    : i === 1 ? [await settled([except()]), await settled([pay()])].map((r) => r[0])
+      : await settled([except(), pay()]);
+  assert.equal(captured.status, 'fulfilled'); assert.equal(captured.value, 'processed', 'C10: the capture is recorded');
+  assert.equal(excepted.status, 'fulfilled', `C10: the operator's start applies (${excepted.reason?.message ?? ''})`);
+  const rows = await sql(`select count(*) from private.visit_start_payment_exceptions where job_id = '${id}'`);
+  assert.equal(rows, excepted.value === 'true' ? '1' : '0', 'C10: an exception row exactly when the start recorded one');
+  assert.equal(await startedPayment(id), excepted.value === 'true' ? 'processing' : 'paid', 'C10: the start records the payment state it saw');
+  assert.equal(await sql(`select count(*) from public.job_events where job_id = '${id}' and metadata->>'to' = 'in_progress'`), '1', 'C10: one start');
+  c10orders.add(excepted.value === 'true' ? 'exception-first' : 'capture-first');
+}
+
 assert.equal(c1orders.size, 2, 'C1: both orders exercised'); assert.equal(c2orders.size, 2, 'C2: both orders exercised');
-console.log(`exceptions concurrency: C1–C8 passed (C1 orders: ${[...c1orders].join(', ')}; C2 orders: ${[...c2orders].join(', ')})`);
+assert.equal(c9orders.size, 2, 'C9: both orders exercised'); assert.equal(c10orders.size, 2, 'C10: both orders exercised');
+console.log(`exceptions concurrency: C1–C10 passed (C1 orders: ${[...c1orders].join(', ')}; C2 orders: ${[...c2orders].join(', ')}; C9 orders: ${[...c9orders].join(', ')}; C10 orders: ${[...c10orders].join(', ')})`);

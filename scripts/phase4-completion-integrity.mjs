@@ -88,7 +88,8 @@ const id = (group, n) => `e9${group}00000-0000-4000-8000-${String(n).padStart(12
 const homeowner = id(7, 1),
   provider = id(7, 2),
   otherProvider = id(7, 3),
-  admin = id(7, 4);
+  admin = id(7, 4),
+  approver = id(7, 5);
 const contractor = id(8, 1),
   otherContractor = id(8, 2);
 const job = (n) => id(9, n);
@@ -103,13 +104,23 @@ const status = (j) => sql(`select status from public.service_requests where id='
 await sql(`begin;
 insert into auth.users(id,raw_user_meta_data) values ('${homeowner}','{"full_name":"Synthetic completion owner"}'),
  ('${provider}','{"full_name":"Synthetic completion provider"}'),('${otherProvider}','{"full_name":"Synthetic other provider"}'),
- ('${admin}','{"full_name":"Synthetic completion admin"}');
-insert into public.user_roles(user_id,role) values ('${provider}','vendor'),('${otherProvider}','vendor'),('${admin}','admin');
+ ('${admin}','{"full_name":"Synthetic completion admin"}'),('${approver}','{"full_name":"Synthetic completion approver"}');
+insert into public.user_roles(user_id,role) values ('${provider}','vendor'),('${otherProvider}','vendor'),('${admin}','admin'),('${approver}','admin');
 insert into public.contractors(id,user_id,name) values ('${contractor}','${provider}','Synthetic completion provider'),
  ('${otherContractor}','${otherProvider}','Synthetic other provider');
-insert into public.service_requests(id,customer_id,contractor_id,service_type,address,status,service_catalog_id)
- select ('${job(0).slice(0, -12)}' || lpad(n::text,12,'0'))::uuid,'${homeowner}','${contractor}','Synthetic completion '||n,'Synthetic fixture','in_progress',
+-- Each job is accepted by its provider (matched; the TRACE-128 guard) and paid in full (a synthetic reviewed
+-- snapshot, captured), so a rework restart passes the CS-5 start gate (20261120001000) as a real paid job would.
+insert into public.service_requests(id,customer_id,contractor_id,service_type,address,status,matching_status,service_catalog_id)
+ select ('${job(0).slice(0, -12)}' || lpad(n::text,12,'0'))::uuid,'${homeowner}','${contractor}','Synthetic completion '||n,'Synthetic fixture','in_progress','matched',
  (select id from public.services_catalog order by id limit 1) from generate_series(1,8) n;
+insert into public.money_obligations(service_request_id,customer_id,contractor_id)
+ select id,customer_id,contractor_id from public.service_requests where id::text like '${job(0).slice(0, -12)}%';
+insert into public.money_snapshots(obligation_id,revision,service,addons,discount,adjustment,subtotal,tax,tip,deposit,total,currency,
+ source_version,policy_version,tax_evidence,created_by,approved_by,reason,expires_at)
+ select o.id,1,6000,0,0,0,6000,0,0,0,6000,'usd','synthetic-source','CFG-005','synthetic-tax','${admin}','${approver}','Synthetic paid fixture',now()+interval '2 days'
+ from public.money_obligations o where o.service_request_id::text like '${job(0).slice(0, -12)}%';
+update public.money_obligations o set current_snapshot_id=s.id,captured=s.total from public.money_snapshots s
+ where s.obligation_id=o.id and o.service_request_id::text like '${job(0).slice(0, -12)}%';
 insert into public.completion_evidence_rules(service_id,version,minimum_photos,actor_id,reason)
  select (select id from public.services_catalog order by id limit 1),coalesce(max(version),0)+1,2,'${admin}','Synthetic two-photo rule'
  from public.completion_evidence_rules where service_id=(select id from public.services_catalog order by id limit 1);

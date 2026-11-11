@@ -46,6 +46,8 @@ async function cleanup() {
     delete from public.support_tickets where job_id like 'c9830000-%';
     delete from public.job_status_rejections where job_id::text like 'c9830000-%';
     delete from storage.objects where bucket_id = 'job-photos' and name like 'c9810000-%';
+    delete from public.money_snapshots where obligation_id in (select id from public.money_obligations where service_request_id::text like 'c9830000-%');
+    delete from public.money_obligations where service_request_id::text like 'c9830000-%';
     delete from public.service_requests where id::text like 'c9830000-%';
     delete from public.contractors where id = '${contractor}';
     delete from public.user_roles where user_id::text like 'c9810000-%';
@@ -65,6 +67,16 @@ await sql(`
   insert into public.service_requests(id, customer_id, service_type, address, frequency, zip_code, status, matching_status, contractor_id)
     select ('c9830000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, '${homeowner}', 'Synthetic service', 'Synthetic address', 'one-time', '00000',
       'scheduled', 'matched', '${contractor}' from generate_series(1, 20) n;
+  -- CS-5 one-time extension (20261120001000): one-time work starts only when paid. Each job is paid in
+  -- full (synthetic reviewed snapshot, captured).
+  insert into public.money_obligations(service_request_id, customer_id, contractor_id)
+    select id, customer_id, contractor_id from public.service_requests where id::text like 'c9830000-%';
+  insert into public.money_snapshots(obligation_id, revision, service, addons, discount, adjustment, subtotal, tax, tip, deposit, total, currency,
+    source_version, policy_version, tax_evidence, created_by, approved_by, reason, expires_at)
+    select o.id, 1, 6000, 0, 0, 0, 6000, 0, 0, 0, 6000, 'usd', 'synthetic-source', 'CFG-005', 'synthetic-tax', '${operators[0]}', '${operators[1]}',
+      'Synthetic paid fixture', now() + interval '2 days' from public.money_obligations o where o.service_request_id::text like 'c9830000-%';
+  update public.money_obligations o set current_snapshot_id = s.id, captured = s.total from public.money_snapshots s
+    where s.obligation_id = o.id and o.service_request_id::text like 'c9830000-%';
   insert into storage.objects(bucket_id, name, owner)
     select 'job-photos', '${vendorUser}/c9830000-0000-4000-8000-' || lpad(n::text, 12, '0') || '/proof.png', '${vendorUser}' from generate_series(1, 14) n;`);
 for (let n = 1; n <= 14; n += 1) {
