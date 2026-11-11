@@ -18,6 +18,12 @@ import {
   UnsupportedServiceAreaError,
 } from "@/lib/vendorServiceAreas";
 import {
+  createCorrelationId,
+  elapsedSince,
+  logOperationalEvent,
+  type OperationalErrorCode,
+} from "@/lib/observability/operationalLog";
+import {
   INTAKE_REFUSAL_MESSAGE,
   intakeClientIp,
   intakeGuardRefusal,
@@ -285,12 +291,36 @@ function parseDocuments(value: unknown): VendorDocumentDescriptor[] {
   });
 }
 
+const ROUTE = "vendor_application_submit" as const;
+
+const refusalCode: Record<string, OperationalErrorCode> = {
+  trap: "intake_trap",
+  too_fast: "intake_too_fast",
+  email_limit: "intake_email_limit",
+  ip_limit: "intake_ip_limit",
+};
+
 export async function POST(request: Request) {
+  // TRACE-151: server-generated for this request only; any client-sent request or
+  // correlation header is ignored.
+  const correlationId = createCorrelationId();
+  const startedAt = Date.now();
+  const trace = { route: ROUTE, correlationId } as const;
+  const refused = (reason: string) =>
+    logOperationalEvent({
+      ...trace,
+      event: "application_submission.refused",
+      outcome: "refused",
+      errorCode: refusalCode[reason] ?? "unexpected",
+      durationMs: elapsedSince(startedAt),
+    });
+  // Set once the row is saved, so a later failure in this request still names it.
+  let savedApplicationId: string | null = null;
   try {
     const body = recordValue(await request.json());
     const refusal = intakeGuardRefusal(body.intake);
     if (refusal) {
-      console.warn("Vendor application refused", { reason: refusal });
+      refused(refusal);
       return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
     }
     const application = parseApplication(body.application);
@@ -305,7 +335,7 @@ export async function POST(request: Request) {
       intakeClientIp(request.headers),
     );
     if (limit !== "accepted") {
-      console.warn("Vendor application refused", { reason: limit });
+      refused(limit);
       return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
     }
 
@@ -318,6 +348,7 @@ export async function POST(request: Request) {
         document_urls: [],
       });
     if (applicationError) throw applicationError;
+    savedApplicationId = applicationId;
 
     const uploads: Array<{
       clientId: string;
@@ -333,7 +364,13 @@ export async function POST(request: Request) {
         .createSignedUploadUrl(path, { upsert: false });
 
       if (error) {
-        console.error("Unable to create vendor document upload URL", error);
+        logOperationalEvent({
+          ...trace,
+          applicationId,
+          event: "application_submission.upload_url_failed",
+          outcome: "failed",
+          error,
+        });
         uploadWarning =
           "Your application was saved, but secure document upload is temporarily unavailable.";
         continue;
@@ -352,15 +389,28 @@ export async function POST(request: Request) {
 
     // TRACE-104: the application row and its delivery record were saved together. The
     // email is best effort after the response; any failure stays visible to operators.
+    // TRACE-151: the same correlation ID follows the request into its post-response work.
     after(async () => {
       try {
-        await deliverApplicationNotification(supabase, applicationId, "initial");
+        await deliverApplicationNotification(supabase, applicationId, "initial", undefined, trace);
       } catch (error) {
-        console.error("Vendor application owner notification could not start", {
+        logOperationalEvent({
+          ...trace,
           applicationId,
-          message: error instanceof Error ? error.message : "Unknown error",
+          mode: "initial",
+          event: "application_notification.background_failed",
+          outcome: "failed",
+          error,
         });
       }
+    });
+
+    logOperationalEvent({
+      ...trace,
+      applicationId,
+      event: "application_submission.saved",
+      outcome: "saved",
+      durationMs: elapsedSince(startedAt),
     });
 
     return NextResponse.json(
@@ -374,9 +424,23 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (error instanceof RequestValidationError) {
+      logOperationalEvent({
+        ...trace,
+        event: "application_submission.refused",
+        outcome: "invalid",
+        errorCode: "validation_failed",
+        durationMs: elapsedSince(startedAt),
+      });
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    console.error("Vendor application submission failed", error);
+    logOperationalEvent({
+      ...trace,
+      applicationId: savedApplicationId,
+      event: "application_submission.failed",
+      outcome: "failed",
+      error,
+      durationMs: elapsedSince(startedAt),
+    });
     return NextResponse.json(
       {
         error:
