@@ -5,7 +5,8 @@
 - **Built:** additive migration `20261122001000` (ledger, events, contact trigger, guarded functions); contact route delivers through the ledger in `after()`; `/api/admin/owner-emails` resend; `/admin/owner-emails` under Trust & Support; `oplog.v2` with v1 unchanged. Record: [PHASE-7-OWNER-EMAIL-LEDGER-7-2C-1](../../governance/PHASE-7-OWNER-EMAIL-LEDGER-7-2C-1.md).
 - **Evidence:** SQL 120 207/207 with 6 mutations; full SQL 111/7,518 on clean replay; unit 861 with 5 mutations; browser 15/15 with a mutation; owner-email and application concurrency PASS; fingerprint `58 | af0fae6e…` before and after; lint, types, secrets, build. The full local browser suite stalled at 48/702 on this host (34 failures, all in untouched specs; not diagnosed); exact-head CI decides.
 - **Local gotchas:** run `node scripts/prepare-phase5-local.mjs` before `phase5-db.sh reset` to pick up new migrations; exclude `.phase5-local/**` from local vitest and eslint.
-- **Not done:** Codex review, hosted push and readback (owner authorization), merge, deploy, real email, 7.2C-2. Main CI 43214230785's intermittent a11y failure stays separate.
+- **Hosted:** on the owner's instruction (2026-11-12), migration `20261122001000` was pushed after a dry run showed only it. The read-only readback matches local; fingerprint `58 | af0fae6e…`. **The push-to-deploy window is open:** contacts saved before the deploy become `missed` rows that need attested per-row handling.
+- **Not done:** Codex review, merge, deploy, real email, 7.2C-2. Main CI 43214230785's intermittent a11y failure stays separate.
 - **Next:** Codex review of the 7.2C-1 PR.
 
 # Phase 7.2C plan revision after Codex review (TRACE-154) — 2026-11-12

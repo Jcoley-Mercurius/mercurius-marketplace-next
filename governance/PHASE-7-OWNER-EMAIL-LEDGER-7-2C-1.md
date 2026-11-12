@@ -1,6 +1,6 @@
 # Phase 7.2C-1 — Owner-email ledger, contact-submission delivery and operator recovery (TRACE-154)
 
-**Status:** IMPLEMENTED LOCALLY FOR CODEX REVIEW (2026-11-12). Draft PR against `main`. Not pushed to the hosted database, not merged, not deployed, not activated.
+**Status:** IMPLEMENTED; **MIGRATION PUSHED TO HOSTED 2026-11-12** on the owner's instruction (§6.1). Draft PR against `main` for Codex review. Not merged, not deployed, not activated.
 **Branch:** `claude/phase7-2c1-owner-email-ledger`, created from the reviewed plan head `fedaf5f419e49349371e4a183987e05d5036f722`. Plan PR #165 merged during implementation (`9b487bf4…`, documentation only), so the branch was rebased onto that `main`. The PR diff is implementation plus this slice's records.
 **`main` at this checkpoint:** `9b487bf91e1420881b77579f20894edc33dd3494` (#165 merge). Previous application code base: `3eb8ff4` (#164); #165 changed documentation only.
 **Plan:** [PHASE-7-OWNER-EMAIL-LEDGER-PLAN](PHASE-7-OWNER-EMAIL-LEDGER-PLAN.md), with its §0.2 clarifications.
@@ -82,9 +82,23 @@ These are within the plan's intent but differ in detail from its proposed SQL or
 
 **Rollback.** App-only: `vercel promote` the previous deployment. Old code keeps emailing, and new contact rows become `missed` noise. If that lasts more than briefly, a forward migration drops the trigger. Ledger tables and rows are kept as evidence. A schema defect is fixed forward, never by a destructive rollback.
 
+## 6.1 Hosted migration (performed 2026-11-12, owner-authorized)
+
+The owner instructed the push on 2026-11-12, after exact-head CI passed on `2ddc6cb` (pull_request run 43301270388). Steps 2 and 3 of §6 were performed; nothing else was.
+
+| Step | Result |
+|---|---|
+| `supabase db push --linked --dry-run` | Exactly one pending migration: `20261122001000_phase7_owner_email_ledger.sql` |
+| `supabase db push --linked` | Applied `20261122001000` |
+| Read-only readback | Latest migration `20261122001000`. Both tables present with RLS on, 14 checks, 7 indexes, 0 client table privileges. `owner_email_contact_create` enabled (`O`). No renewal trigger. Function ACLs: claim and record → `service_role`; resend, acknowledge, overview and contact detail → `authenticated`; private helpers owner only. Ledger and event rows: 0 at readback |
+| Unchanged definitions (hosted) | Application ledger `10 \| 5f14532aa26ed5400e73e210379aa4f8`; `vendor_submit_renewal_document` `8c8942365d8f9d34bdcd1d839f86c472`; `contact_submissions` ACL unchanged. All equal to local |
+| Money fingerprint (hosted) | `58 \| af0fae6e0c5b604e9073e10bc060957e` |
+
+No row contents were read; only counts. **Push-to-deploy window now open:** the deployed (old) route keeps emailing without claims. Each contact saved before this PR deploys gets a `pending` row that reads `missed` after 10 minutes and needs per-row attested handling (§6 step 5). Not merged, not deployed.
+
 ## 7. Unresolved and carried
 
-- Codex review of this implementation, the owner's authorization for the hosted push and readback, merge and deploy.
+- Codex review of this implementation, merge and deploy. (The hosted push and readback are done, §6.1.)
 - Real-email verification with the controlled mailbox (plan §6.4): separate and owner-authorized.
 - 7.2C-2 (renewal trigger and route) is not started.
 - Main CI run 43214230785's intermittent `request.spec.ts:837` accessibility failure is outside this slice. It is not repaired or retried here (plan §1.1).
