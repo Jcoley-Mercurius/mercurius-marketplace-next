@@ -269,6 +269,36 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-066 — Operators may open a tracked contact submission on demand (7.2C O-1)
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-12 (America/New_York). **Date:** 2026-11-12.
+
+**Source of approval.** The owner's Phase 7.2C revision instruction (2026-11-12) states that Josh explicitly approved all recommendations in Codex's plan review on 2026-11-12. The owner-policy part of that approval is O-1:
+
+> Admins may open a tracked contact submission's stored name, email, phone, subject and message **on demand for operational handling**. Require server-side operator authorization. Contact content must not appear in queue summaries, operational logs, analytics or URLs. This does not authorize a hosted push, real email or release.
+
+**What it settles.**
+- **Who.** Admins (operators under `vendor_require_operator()`), checked in the database, not only by the page.
+- **What.** Only contact submissions that have an owner-email ledger row (tracked). Untracked history is not opened from the new surface.
+- **When.** On demand, for operational handling. Nothing is prefetched or listed.
+- **Where content must not appear.** Queue summaries (rows show the fixed label "Contact submission", a time and a reference), operational logs, analytics and URLs.
+
+**Technical decisions in the same review (Codex, architecture, not owner policy).** These were settled by Codex as C-1..C-8 and are recorded in the [plan](PHASE-7-OWNER-EMAIL-LEDGER-PLAN.md) §0.1 and §9.2, not here:
+- a shared ledger, two slices, contact first;
+- inbox-check confirmation for uncertain outcomes, enumerated error categories;
+- `oplog.v2`, with `v1` preserved;
+- the saved timestamp and the current business name;
+- `/admin/owner-emails` under Support;
+- bounded pages with exact attention counts.
+
+**What it is not.**
+- It does not authorize a hosted migration push, a production query, real email, a merge, a deployment or a release.
+- It does not create a support inbox (no reply, assignment or status).
+- It does not change recipients, email content, consent, rate limits or retention. No retention class for contact submissions is decided.
+- It does not authorize a backfill or a historical resend.
+
+**Implementation:** TRACE-154 (plan), then 7.2C-1. **Reads:** the MPS role table: admin "support need only" for customer contact details ([PROPOSED-MPS.md:81](../mps/PROPOSED-MPS.md#L81)) and "least-privilege support role" for support records ([:89](../mps/PROPOSED-MPS.md#L89)); CFG-011; the existing "Admins can view submissions" policy (TRACE-087). **Not changed:** DEC-2026-010; the application ledger (TRACE-104).
+
 ### DEC-2026-065 — Vendor notification readback: all historical notices, standard wording (7.2B B2, G3-05, G3-07)
 
 **Status:** **APPROVED** by the owner (Josh), 2026-11-11 (America/New_York). **Date:** 2026-11-11.
