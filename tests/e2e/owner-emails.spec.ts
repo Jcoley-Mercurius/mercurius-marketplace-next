@@ -343,6 +343,8 @@ test("a lost acknowledgement response reads back the committed state without cla
   await expect.poll(() => store.overviewCalls.length).toBeGreaterThan(before);
   await expect(rows(page)).toHaveCount(0);
   await expect(page.getByText("Acknowledged", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Acknowledgement not confirmed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not acknowledged", { exact: true })).toHaveCount(0);
   expect(store.ackCalls).toHaveLength(1);
 });
 

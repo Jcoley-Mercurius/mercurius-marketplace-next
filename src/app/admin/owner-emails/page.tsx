@@ -158,13 +158,14 @@ export default function AdminOwnerEmailsPage() {
       ackError = result.error;
     } catch {
       const message = "The acknowledgement result could not be confirmed. Review the refreshed state before acting again.";
-      toast.error("Acknowledgement result unknown", { description: message });
+      toast.error("Acknowledgement not confirmed", { description: message });
       throw new Error(message);
     } finally {
       await reload();
     }
     if (ackError) {
-      toast.error("Not acknowledged", { description: ackError.message });
+      // Supabase may return a transport error instead of throwing after a commit.
+      toast.error("Acknowledgement not confirmed", { description: ackError.message });
       throw new Error(ackError.message);
     }
     toast.success("Acknowledged", { description: "No email was sent. The submission stays saved." });

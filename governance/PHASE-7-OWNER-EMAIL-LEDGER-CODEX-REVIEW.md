@@ -8,7 +8,7 @@ Read the migration, contact and resend routes, shared delivery helper, logger, o
 
 Two findings were corrected without changing the hosted migration:
 
-1. **Refresh after a lost operator-action response.** `fetch` could reject before the resend handler reached its reload. Both resend and acknowledgement now perform the readback in `finally`; a thrown transport error reports uncertainty and never claims success. Browser regressions simulate a committed command whose response is lost and verify fresh state with no automatic repeat command.
+1. **Refresh after a lost operator-action response.** `fetch` could reject before the resend handler reached its reload. Both resend and acknowledgement now perform the readback in `finally`; a thrown transport error reports uncertainty and never claims success. Supabase can also return a transport error without throwing: acknowledgement errors say "Acknowledgement not confirmed", never assert rollback. Browser regressions simulate a committed command whose response is lost and verify fresh state, truthful wording and no automatic repeat command.
 2. **Truthful missed-state label.** The inherited label "Never sent" was false for an old-release send during the migration-to-deploy window. Owner emails now say "No recorded attempt"; the vendor-application label remains unchanged. Browser evidence asserts the corrected label and rejects the old one.
 
 ## Independent verification
