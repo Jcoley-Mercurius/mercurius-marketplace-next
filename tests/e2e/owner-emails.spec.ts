@@ -204,7 +204,8 @@ test("labels each state and error category with its next action", async ({ page 
   await expect(rowFor(page, 2)).toContainText("Email is not configured. No email was sent. Configuration needs fixing before a resend.");
   await expect(rowFor(page, 3)).toContainText("Result unknown");
   await expect(rowFor(page, 3)).toContainText("Check the owner inbox and Resend log before resending.");
-  await expect(rowFor(page, 4)).toContainText("Never sent");
+  await expect(rowFor(page, 4)).toContainText("No recorded attempt");
+  await expect(rowFor(page, 4)).not.toContainText("Never sent");
   await expect(rowFor(page, 4)).toContainText("A previous release may have sent it.");
   await expect(rowFor(page, 5)).toContainText("Resend requested");
 });
@@ -292,6 +293,57 @@ test("acknowledging an uncertain email needs a reason and the inbox-check attest
   await direct.getByRole("button", { name: "Acknowledge", exact: true }).click();
   await expect.poll(() => store.ackCalls.length).toBe(2);
   expect(store.ackCalls[1]).toMatchObject({ p_inbox_checked: false });
+});
+
+test("a lost resend response refreshes a committed uncertain outcome without retrying or claiming success", async ({ page }) => {
+  const target = row(1, "failed");
+  const store = new Store([target]);
+  await open(page, store);
+  await expect(rows(page)).toHaveCount(1);
+  await page.route("http://127.0.0.1:3103/api/admin/owner-emails", async (route) => {
+    store.resendCalls.push(route.request().postDataJSON());
+    // The command committed, but the browser did not receive its response.
+    target.state = "unknown";
+    target.attempts += 1;
+    target.last_error_code = "provider_timeout_or_network";
+    await route.abort("failed");
+  });
+  const before = store.overviewCalls.length;
+  await rowFor(page, 1).getByRole("button", { name: "Resend email" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Resend the owner email?" });
+  await dialog.getByRole("button", { name: "Resend", exact: true }).click();
+  await expect.poll(() => store.overviewCalls.length).toBeGreaterThan(before);
+  await expect(rowFor(page, 1)).toContainText("Result unknown");
+  await expect(dialog.getByRole("alert")).toContainText("Review the refreshed state");
+  await expect(dialog.getByRole("checkbox")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Resend", exact: true })).toBeDisabled();
+  await expect(page.getByText("Resend result unknown", { exact: true })).toBeVisible();
+  await expect(page.getByText("Resend recorded", { exact: true })).toHaveCount(0);
+  expect(store.resendCalls).toHaveLength(1);
+});
+
+test("a lost acknowledgement response reads back the committed state without claiming success", async ({ page }) => {
+  const target = row(1, "failed");
+  const store = new Store([target]);
+  await open(page, store);
+  await expect(rows(page)).toHaveCount(1);
+  await page.route("http://127.0.0.1:55831/rest/v1/rpc/owner_email_acknowledge", async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+    store.ackCalls.push(route.request().postDataJSON());
+    target.state = "acknowledged";
+    target.acknowledged_at = "2026-11-12T16:01:00+00:00";
+    target.acknowledged_reason = "Read the saved submission";
+    await route.abort("failed");
+  });
+  const before = store.overviewCalls.length;
+  await rowFor(page, 1).getByRole("button", { name: "Acknowledge" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Acknowledge without email?" });
+  await dialog.getByLabel("Reason").fill("Read the saved submission");
+  await dialog.getByRole("button", { name: "Acknowledge", exact: true }).click();
+  await expect.poll(() => store.overviewCalls.length).toBeGreaterThan(before);
+  await expect(rows(page)).toHaveCount(0);
+  await expect(page.getByText("Acknowledged", { exact: true })).toHaveCount(0);
+  expect(store.ackCalls).toHaveLength(1);
 });
 
 test("contact detail loads only on demand, keeps the URL, and is discarded on close", async ({ page }) => {

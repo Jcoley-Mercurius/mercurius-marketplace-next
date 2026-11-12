@@ -120,13 +120,24 @@ export default function AdminOwnerEmailsPage() {
   if (!data) return <AdminLoading label="Loading owner emails..." />;
 
   const resend = async (item: OwnerEmailItem, attested: boolean) => {
-    const response = await fetch("/api/admin/owner-emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: item.kind, sourceId: item.source_id, confirmNoEmail: attested }),
-    });
-    const body = (await response.json().catch(() => null)) as { error?: string; message?: string; state?: string } | null;
-    await reload();
+    let response: Response;
+    let body: { error?: string; message?: string; state?: string } | null;
+    try {
+      response = await fetch("/api/admin/owner-emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: item.kind, sourceId: item.source_id, confirmNoEmail: attested }),
+      });
+      body = await response.json().catch(() => null);
+    } catch {
+      const message = "The resend result could not be confirmed. Review the refreshed state before acting again.";
+      toast.error("Resend result unknown", { description: message });
+      throw new Error(message);
+    } finally {
+      // A lost response may follow a committed claim or send. Always read the ledger,
+      // including when fetch rejects before an HTTP response is available.
+      await reload();
+    }
     if (!response.ok) {
       const message = body?.error ?? body?.message ?? "Refresh and try again.";
       toast.error("Email was not resent", { description: message });
@@ -136,13 +147,22 @@ export default function AdminOwnerEmailsPage() {
   };
 
   const acknowledge = async (item: OwnerEmailItem, text: string, attested: boolean) => {
-    const { error: ackError } = await createClient().rpc("owner_email_acknowledge", {
-      p_kind: item.kind,
-      p_source: item.source_id,
-      p_reason: text,
-      p_inbox_checked: attested,
-    });
-    await reload();
+    let ackError: { message: string } | null;
+    try {
+      const result = await createClient().rpc("owner_email_acknowledge", {
+        p_kind: item.kind,
+        p_source: item.source_id,
+        p_reason: text,
+        p_inbox_checked: attested,
+      });
+      ackError = result.error;
+    } catch {
+      const message = "The acknowledgement result could not be confirmed. Review the refreshed state before acting again.";
+      toast.error("Acknowledgement result unknown", { description: message });
+      throw new Error(message);
+    } finally {
+      await reload();
+    }
     if (ackError) {
       toast.error("Not acknowledged", { description: ackError.message });
       throw new Error(ackError.message);

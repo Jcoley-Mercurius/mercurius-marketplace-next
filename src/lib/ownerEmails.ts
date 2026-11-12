@@ -55,6 +55,9 @@ export type ContactSubmissionDetail = {
 export const OWNER_EMAIL_PAGE_SIZE = 50;
 
 export function ownerEmailStateLabel(state: OwnerEmailState): string {
+  // A previous release may have sent without claiming the ledger row during rollout.
+  // `missed` proves there is no recorded attempt, not that no email was sent.
+  if (state === "missed") return "No recorded attempt";
   return notificationStateLabel[state] ?? state;
 }
 
