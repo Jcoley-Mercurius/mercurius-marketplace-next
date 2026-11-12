@@ -269,6 +269,28 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-065 — Vendor notification readback: all historical notices, standard wording (7.2B B2, G3-05, G3-07)
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-11 (America/New_York). **Date:** 2026-11-11.
+
+**Source of approval.** The owner's Phase 7.2B implementation instruction (2026-11-11), which states: "Josh approved:
+1. **Historical notices:** vendors may access all historical notices addressed to their own account. No date cutoff.
+2. **Disclosure:** use standard notification wording with links. Do not automatically expose raw customer or operator reasons."
+
+**What it settles.**
+- **B2 / G3-07 (historical rows):** no cutoff. A vendor can reach every notice whose recipient is their own account, of any age. There is no read filter by date.
+- **G3-05 (free text), for the vendor readback:** the vendor page shows controlled standard wording and a validated link for each recognized event, never the stored title or body. Customer and operator reasons, notes and other free text in a stored notice are not shown to the vendor. The stored records are unchanged.
+
+**Implementation choices confirmed by Codex in the same instruction (architecture, not product policy):** Notifications sits immediately after Jobs & Requests and before Messages (B1); "Load older" pagination (R1 (b)); an exact unread count over the caller's eligible notices (R2 (b)); the bulk action is "Mark visible as read" and affects only loaded, displayed unread rows (R3 (b)). R4 (cutoff) is answered by item 1: none.
+
+**What it is not.**
+- It does not authorize a production database query (including the type-and-month aggregate proposed in contract §9), data cleanup, a change of recipients, a new channel, email, payments, payouts or automation.
+- It does not change any producer or stored notification content. Homeowner notifications keep their current display.
+- It does not decide G3-05 for homeowners, the producers' own copy, or whether reasons should be written into notices at all; those stay open.
+- A notice's link confers no permission. Every destination page checks access itself.
+
+**Implementation:** TRACE-153 ([record](PHASE-7-VENDOR-NOTIFICATION-READBACK.md)). **Reads:** DEC-2026-063 (O-11 in-app notices); DEC-2026-041 item 6. **Not changed:** DEC-2026-010 (email and reminder timing stay inactive); the `offer_terms` gate (off).
+
 ### DEC-2026-064 — Sole-owner finance review for CS-4 and the CS-3/O-10 closeout repairs (exception to DEC-2026-060)
 
 **Status:** **APPROVED** by the owner (Josh), 2026-11-08 (America/New_York). **Date:** 2026-11-08.

@@ -9,6 +9,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { defaultPathForRoles, fetchRoles } from "@/lib/auth/roles";
+import { notificationDestination } from "@/lib/notificationDestination";
 import {
   type AppNotification,
   useNotifications,
@@ -75,7 +76,7 @@ export default function NotificationsPage() {
         description: updateError.message,
       });
     }
-    router.push(notificationDestination(notification));
+    router.push(notificationDestination(notification, "homeowner"));
   }
 
   async function handleMarkAllRead() {
@@ -176,31 +177,6 @@ export default function NotificationsPage() {
           )}
     </div>
   );
-}
-
-function notificationDestination(notification: AppNotification) {
-  const safeLink = safeLocalLink(notification.link);
-  if (
-    notification.related_request_id &&
-    (!safeLink || safeLink === "/dashboard" || safeLink.startsWith("/dashboard?"))
-  ) {
-    return `/dashboard?job=${encodeURIComponent(notification.related_request_id)}`;
-  }
-  return safeLink ?? "/dashboard";
-}
-
-function safeLocalLink(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
-    return null;
-  }
-
-  try {
-    const url = new URL(value, "https://mercurius.local");
-    if (url.origin !== "https://mercurius.local") return null;
-    return `${url.pathname}${url.search}${url.hash}`;
-  } catch {
-    return null;
-  }
 }
 
 function FullPageLoading() {
