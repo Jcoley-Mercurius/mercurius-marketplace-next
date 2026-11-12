@@ -1,3 +1,27 @@
+# Phase 7.2C plan revision after Codex review (TRACE-154) — 2026-11-12
+
+- **Base:** `main` `3eb8ff4` (unchanged). The revision is on the same branch and PR (#165, draft), after `89edfae`. Documentation only.
+- **Owner:** O-1 **approved** by Josh 2026-11-12 → [DEC-2026-066](../../governance/DECISION-LOG.md). Admins may open a tracked contact submission on demand, with server-side authorization. No content in queue summaries, logs, analytics or URLs. Not a push, email or release authorization.
+- **Codex (technical):** C-1..C-8 settled, including `oplog.v2` with `v1` preserved and bounded "Load older" pages with exact attention counts. Plan §0.1 and §9.2.
+- **Findings resolved:**
+  - R-1: fixed "Contact submission" label plus a reference.
+  - R-2: missing name versus claim failure; the failure path is recorded as changed.
+  - R-3: restricted administrative data; events cascade with their source; no new retention.
+  - R-4: an old-application test; `missed` never claimed automatically; inbox attestation required for resend and acknowledge.
+- **Main CI:** run 43214230785 **failed**. The failing test is `request.spec.ts:837` (axe contrast on the confirmation checkout button). It is intermittent: the same test failed on `main` in run 42874195409 with identical colours. Recommended as a separate CI-stability change (plan §1.1). Not repaired here.
+- **Next:** Codex final plan review (open choices in plan §9.3). Then 7.2C-1 from the then-current `main`. Each hosted push needs the owner's authorization.
+
+# Phase 7.2C owner-email ledger plan (TRACE-154) — 2026-11-12
+
+- **Base:** `main` `3eb8ff4` (#164, 7.2B merged 2026-11-12). #164 PR-head CI passed; main merge CI run 43214230785 was in progress at this checkpoint. **No Codex review of 7.2B is recorded**; merge is not review acceptance, and Codex owns the retrospective review. The 7.2B record and its TRACE-153 row now carry a dated factual status.
+- **Branch:** `claude/phase7-2c-owner-email-ledger-plan`. Draft planning PR for Codex. Record: [PHASE-7-OWNER-EMAIL-LEDGER-PLAN](../../governance/PHASE-7-OWNER-EMAIL-LEDGER-PLAN.md). Documentation only.
+- **Recommended:** a small shared `private.owner_email_notifications` ledger, created by `AFTER INSERT` triggers in the business record's transaction, with the TRACE-104 claim/record/resend/acknowledge rules. The application ledger is unchanged, and no fingerprinted function is restated. Historical records stay untracked and are not sendable.
+- **Slices:** 7.2C-1 (ledger, contact path, `/admin/owner-emails`) first; 7.2C-2 (renewal trigger and route).
+- **Finding:** contact submissions have no admin readback (R0 D10 said otherwise).
+- **Decisions:** owner O-1 (may operators open a contact submission's stored content?). Codex C-1..C-8.
+- **Not done:** no code, migration, CI, hosted query or email. No test run (no code changed).
+- **Next:** Codex plan review and O-1. Then implement 7.2C-1 from the then-current `main`. The hosted push needs the owner's authorization.
+
 # Phase 7.2B vendor notification readback (TRACE-153) — 2026-11-11
 
 - **Base:** `main` `f205b59` (#163). Main CI 43067601866 succeeded (backend, lifecycle, application).
