@@ -133,6 +133,9 @@ async function pendingTerms(request) {
   assert.match(await state(request), /^matched\/awaiting_terms\//, 'the request waits for the homeowner');
   return request;
 }
+// TRACE-153 (7.2B, contract G2-01): DEC-2026-063 notices per request, by title and recipient.
+const notices = (request, title, recipient = null) => sql(`select count(*) from public.notifications
+  where related_request_id = '${request}' and title = '${title.replace(/'/g, "''")}'${recipient ? ` and user_id = '${recipient}'` : ''}`);
 function noDeadlock(results, label) {
   for (const r of results) if (r.status === 'rejected') assert.doesNotMatch(r.reason.message, deadlock, `${label}: no deadlock`);
 }
@@ -182,6 +185,8 @@ try {
     assert.equal(results[0].status, 'fulfilled', `C15 round ${round}: acceptance succeeds (${results[0].reason?.message ?? ''})`);
     assert.equal(results[1].status, 'fulfilled', `C15 round ${round}: the save succeeds (${results[1].reason?.message ?? ''})`);
     assert.equal(await state(request), `matched/awaiting_terms/${p2}/${before}`, `C15 round ${round}: at the bound total, waiting for the homeowner`);
+    assert.equal(await notices(request, "Review this provider's terms", homeowner), '1', `C15 round ${round}: one terms notice, to the homeowner`);
+    assert.equal(await notices(request, "Review this provider's terms"), '1', `C15 round ${round}: and to no one else`);
     requests.unshift(request);
   }
 
@@ -195,6 +200,8 @@ try {
     assert.equal(results.filter((r) => r.status === 'fulfilled' && JSON.parse(r.value).replayed === false).length, 1, 'C16: exactly one is not a replay');
     assert.equal(await sql(`select count(*) from public.job_offer_terms_responses where request_id = '${request}'`), '1', 'C16: one recorded answer');
     assert.match(await state(request), /^scheduled\/matched\//, 'C16: scheduled');
+    assert.equal(await notices(request, 'Homeowner accepted your terms', p2User), '1', 'C16: one provider notice for six same-key calls');
+    assert.equal(await notices(request, 'Homeowner accepted your terms'), '1', 'C16: and to no one else');
   }
 
   // C17. Accept racing decline with different keys, three rounds: exactly one wins; the state matches it.
@@ -207,6 +214,10 @@ try {
     for (const r of results.filter((x) => x.status === 'rejected')) assert.match(r.reason.message, /You already answered these terms|These terms changed since you opened them/, `C17 round ${round}: the other is refused`);
     const won = JSON.parse(ok[0].value).accepted;
     assert.match(await state(request), won ? /^scheduled\/matched\// : /^pending\/(exhausted|awaiting_match|offered)\//, `C17 round ${round}: the state follows the winning answer`);
+    const [winner, loser] = won ? ['Homeowner accepted your terms', 'Homeowner declined your terms'] : ['Homeowner declined your terms', 'Homeowner accepted your terms'];
+    assert.equal(await notices(request, winner, p2User), '1', `C17 round ${round}: one provider notice for the winning answer`);
+    assert.equal(await notices(request, winner), '1', `C17 round ${round}: to the provider only`);
+    assert.equal(await notices(request, loser), '0', `C17 round ${round}: none for the refused answer`);
   }
 
   // Make two more requests wait for the homeowner.
@@ -319,6 +330,11 @@ try {
     assert.equal(await sql(`select message from private.offer_terms_rematch_failures where request_id = '${request}'`),
       'Selected contractor/package is no longer eligible for this request', 'C22: the save landed between selection and offer creation; the failure is recorded');
     assert.equal(await sql(`select accepted::text from public.job_offer_terms_responses where request_id = '${request}'`), 'false', 'C22: the decline is recorded');
+    assert.equal(await notices(request, 'Homeowner declined your terms', p2User), '1', 'C22: one decline notice to the provider');
+    const admins = await sql(`select count(*) from public.user_roles where role = 'admin'`);
+    assert.equal(await notices(request, 'Matching after a decline needs attention'), admins, 'C22: one N-QTE-11 notice per admin');
+    assert.equal(await sql(`select count(*) from public.notifications n where related_request_id = '${request}' and title = 'Matching after a decline needs attention'
+      and not exists (select 1 from public.user_roles r where r.user_id = n.user_id and r.role = 'admin')`), '0', 'C22: none to a non-admin');
     assert.match(await state(request), /^pending\/awaiting_match\/-\//, 'C22: P2 stays unassigned; the request waits for operations');
     assert.equal(await sql(`select outcome from public.job_match_attempts where service_request_id = '${request}' and contractor_id = '${p2}'`), 'withdrawn', 'C22: the declined offer stays withdrawn');
     await assert.rejects(accept(p2User, request), /No open offer is available to accept/, 'C22: the declined offer is not actionable');
@@ -327,7 +343,7 @@ try {
     await sql(as(operator, `select public.admin_retry_offer_terms_matching('${request}', '${randomUUID()}', 'Synthetic C22 retry')::text`));
     assert.match(await state(request), new RegExp(`^matched/offered/${p1}/60\\.00$`), 'C22: the retry offers P1\'s live revision at the submitted $60, never P2');
   }
-  console.log('PASS: terms bound at offer creation are the revision read; acceptance after a racing save stays at the bound price; one key gives one answer; accept and decline, suspension and force offer each resolve to one orderly outcome; switching the gate off serializes with offer creation and with entering awaiting_terms; a decline survives a re-match that a racing save makes fail; no race deadlocks.');
+  console.log('PASS: terms bound at offer creation are the revision read; acceptance after a racing save stays at the bound price; one key gives one answer; accept and decline, suspension and force offer each resolve to one orderly outcome; switching the gate off serializes with offer creation and with entering awaiting_terms; a decline survives a re-match that a racing save makes fail; no race deadlocks; each answer writes exactly one provider notice and each provider acceptance one homeowner notice (TRACE-153).');
 } finally {
   await cleanup();
 }

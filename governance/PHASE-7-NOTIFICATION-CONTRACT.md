@@ -536,6 +536,15 @@ The homeowner page keeps its current behavior unless Codex asks for the same cor
 - **G3-05:** owner decision on free-text disclosure (above).
 - None of these decisions changes channels or delivery policy.
 
+
+**Update 2026-11-11 (7.2B, TRACE-153).** The text above is kept as proposed. Since then:
+- the owner answered B2/G3-07 (all historical vendor notices, no cutoff) and G3-05 for the vendor readback (standard wording with links, no raw reasons): [DEC-2026-065](DECISION-LOG.md);
+- Codex confirmed B1, R1 (b), R2 (b) and R3 (b) ("Mark visible as read");
+- the type-and-month hosted aggregate was **not** run and is not authorized.
+
+Implementation and evidence: [PHASE-7-VENDOR-NOTIFICATION-READBACK](PHASE-7-VENDOR-NOTIFICATION-READBACK.md). Two differences from the scope list above:
+- the vendor page uses its own hook and row component, so homeowner behavior is unchanged;
+- item 5's "shows stored text" is superseded by DEC-2026-065: the vendor page shows controlled wording only.
 ---
 
 ## 10. 7.1 (#162) — merged

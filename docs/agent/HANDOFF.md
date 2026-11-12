@@ -1,3 +1,25 @@
+# Phase 7.2B vendor notification readback (TRACE-153) — 2026-11-11
+
+- **Base:** `main` `f205b59` (#163). Main CI 43067601866 succeeded (backend, lifecycle, application).
+- **Branch:** `claude/phase7-2b-vendor-notification-readback`. Draft PR for Codex. Record: [PHASE-7-VENDOR-NOTIFICATION-READBACK](../../governance/PHASE-7-VENDOR-NOTIFICATION-READBACK.md).
+- **Owner decision:** [DEC-2026-065](../../governance/DECISION-LOG.md): all historical vendor notices; standard wording with links, no raw reasons. Codex confirmed B1, R1 (b), R2 (b) and R3 (b).
+- **Built:**
+  - `/vendor/notifications` and its nav item;
+  - a vendor-only hook (keyset "Load older", exact unread count, guarded mark read and "Mark visible as read", no optimistic writes);
+  - controlled vendor wording;
+  - the role-aware destination helper (homeowner results unchanged).
+  No migration, producer, grant, email or gate change.
+- **Evidence:**
+  - unit 807/807;
+  - SQL 119, 86/86, with mutations;
+  - offer-terms concurrency PASS with notice counts;
+  - a real local PostgREST keyset check;
+  - browser `vendor-notifications.spec.ts` 11/11, with mutations;
+  - full SQL suite on a clean replay: 110 files / 7,311 PASS.
+  The full local browser suite had 658 passed and 29 failed, all in untouched specs under load (not diagnosed; CI decides).
+- **Not done:** Codex review, merge, deploy. No hosted query (the type-and-month aggregate was not run). A2 human checks are carried. Homeowner hover contrast (4.35:1) is recorded for G2-04 and not changed.
+- **Next:** Codex review of 7.2B; then 7.2C (G1-02 owner-email ledger) from the then-current `main`.
+
 # Phase 7.1 application-notification tracing (TRACE-151) — 2026-11-10
 
 - **Base:** `main` `88d4e09` (#160). Main CI 42880366052 was green. Later reconciled with `main` `9067f96` after #161 (Phase 6 acceptance) merged; the acceptance entry below is preserved unchanged.
