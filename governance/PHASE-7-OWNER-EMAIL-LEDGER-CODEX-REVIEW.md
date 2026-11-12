@@ -22,6 +22,8 @@ Two findings were corrected without changing the hosted migration:
 
 ## Release boundary
 
+CI run 43324010996, attempt 1 at `7949b7a`, passed backend and lifecycle and 703/704 application browser tests. The new lost-resend test queried the background row by role while its alert dialog was still open. The test now checks the error, new attestation, disabled confirm button and single command with the dialog open, then closes it before checking the refreshed row. No assertion was removed. Attempt 2 of that old head was already running when this correction was prepared; only a full passing run on the corrected head can authorize release.
+
 Final-head CI, unchanged head/main and hosted compatibility must be checked before merge. The migration is already hosted: do not apply it again. Record the merge/deployment SHA and perform a fresh rollout-window count after production is READY. Any uncertain row requires actual per-row inbox/provider evidence and the appropriate attestation; counts alone never authorize acknowledgement or resend. Real-email verification is separate and has not been performed.
 
 The prior intermittent main accessibility failure remains historical and undiagnosed; newer green runs do not establish a repair. A2, CFG-011 retention and final booking-readiness schema/grants, fingerprint and completion-integrity checks remain carried. No payments, booking, offer-terms/promotions gate or automation activation.

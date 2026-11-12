@@ -313,13 +313,17 @@ test("a lost resend response refreshes a committed uncertain outcome without ret
   const dialog = page.getByRole("alertdialog", { name: "Resend the owner email?" });
   await dialog.getByRole("button", { name: "Resend", exact: true }).click();
   await expect.poll(() => store.overviewCalls.length).toBeGreaterThan(before);
-  await expect(rowFor(page, 1)).toContainText("Result unknown");
   await expect(dialog.getByRole("alert")).toContainText("Review the refreshed state");
   await expect(dialog.getByRole("checkbox")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Resend", exact: true })).toBeDisabled();
   await expect(page.getByText("Resend result unknown", { exact: true })).toBeVisible();
   await expect(page.getByText("Resend recorded", { exact: true })).toHaveCount(0);
   expect(store.resendCalls).toHaveLength(1);
+  // The open alert dialog hides the background list from role selectors. Check the
+  // refreshed row after closing it, as an operator would; keep the dialog checks above.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(rowFor(page, 1)).toContainText("Result unknown");
 });
 
 test("a lost acknowledgement response reads back the committed state without claiming success", async ({ page }) => {
