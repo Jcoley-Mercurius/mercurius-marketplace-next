@@ -1,3 +1,14 @@
+# Phase 7.2C owner-email ledger plan (TRACE-154) — 2026-11-12
+
+- **Base:** `main` `3eb8ff4` (#164, 7.2B merged 2026-11-12). #164 PR-head CI passed; main merge CI run 43214230785 was in progress at this checkpoint. **No Codex review of 7.2B is recorded**; merge is not review acceptance, and Codex owns the retrospective review. The 7.2B record and its TRACE-153 row now carry a dated factual status.
+- **Branch:** `claude/phase7-2c-owner-email-ledger-plan`. Draft planning PR for Codex. Record: [PHASE-7-OWNER-EMAIL-LEDGER-PLAN](../../governance/PHASE-7-OWNER-EMAIL-LEDGER-PLAN.md). Documentation only.
+- **Recommended:** a small shared `private.owner_email_notifications` ledger, created by `AFTER INSERT` triggers in the business record's transaction, with the TRACE-104 claim/record/resend/acknowledge rules. The application ledger is unchanged, and no fingerprinted function is restated. Historical records stay untracked and are not sendable.
+- **Slices:** 7.2C-1 (ledger, contact path, `/admin/owner-emails`) first; 7.2C-2 (renewal trigger and route).
+- **Finding:** contact submissions have no admin readback (R0 D10 said otherwise).
+- **Decisions:** owner O-1 (may operators open a contact submission's stored content?). Codex C-1..C-8.
+- **Not done:** no code, migration, CI, hosted query or email. No test run (no code changed).
+- **Next:** Codex plan review and O-1. Then implement 7.2C-1 from the then-current `main`. The hosted push needs the owner's authorization.
+
 # Phase 7.2B vendor notification readback (TRACE-153) — 2026-11-11
 
 - **Base:** `main` `f205b59` (#163). Main CI 43067601866 succeeded (backend, lifecycle, application).

@@ -1,6 +1,7 @@
 # Phase 7.2B — Vendor in-app notification readback (TRACE-153)
 
 **Status:** IMPLEMENTED FOR REVIEW (Codex). Draft PR. Not merged, not deployed, nothing activated.
+**Status update (2026-11-12, factual):** PR #164 was **merged** to `main` as `3eb8ff4521c17bdf009247792f5a93d742c626d8` (2026-11-12T12:01:51Z). PR-head CI on `137dd24` passed (backend, lifecycle, application). Main merge CI run 43214230785 was still in progress when this line was written. **No Codex review of 7.2B is recorded**; merging is not review acceptance, and Codex owns the retrospective review. Merging to `main` deploys (DEC-2026-037); no deployment SHA was verified for this line. The status above is kept as history.
 **Base:** `main` `f205b5980986fecbf70df4825d2d25eed25adee5` (#163 merge). Main CI run 43067601866 on that commit: **success** (backend, lifecycle and application jobs), checked 2026-11-11 before this record was written.
 **Branch:** `claude/phase7-2b-vendor-notification-readback`, from that `main`.
 **Authority:** [PHASE-7-NOTIFICATION-CONTRACT](PHASE-7-NOTIFICATION-CONTRACT.md) §8 (G1-01/G2-01) and §9; owner decision [DEC-2026-065](DECISION-LOG.md) (2026-11-11); Codex's 7.2B implementation choices in the same instruction; DEC-2026-063 (O-11); DEC-2026-041 item 6; MTS §6 l.150; MDS accessibility rules.
