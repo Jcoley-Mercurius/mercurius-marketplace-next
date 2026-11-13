@@ -1,3 +1,35 @@
+# Phase 7.3A plan revision after Codex review #5891386779 (TRACE-155) — 2026-11-13 ET
+
+- **Base:** rebased onto `main` `8a9603b` (#167 merged 12:54 UTC; #167 exact-head CI 43424109360 and main merge CI 43429080720 success). Draft PR #168, documentation only. Earlier `24dd455` baseline kept in plan §1.1.
+- **Evidence kept separate (plan §1.2):**
+  - No GitHub review is recorded on #167.
+  - The hosted push of `20261123001000` is #167's own record, not re-verified.
+  - The GitHub `Production` deployment status `success` is metadata, not a Vercel READY readback.
+  - The post-deploy renewal-window reconciliation is not recorded.
+  - The 7.2C-2 record's status line is stale and was not edited here.
+- **R1–R5 resolved** (plan §18):
+  - R1: bounded byte-stream read with cancellation and bounded headers.
+  - R2: durable cascading FK linkage, finite expiry, logical expiry, purge-on-receipt and operator purge. No arming before EO-2 is decided and enforcement is tested.
+  - R3: fact sets with deterministic rules; complaint and inconclusive bounces never count as "not delivered".
+  - R4: conflicted receipts excluded; durable flag before 2xx.
+  - R5: inspected `svix@2.9.1` source. `verify` returns `undefined` with `jsonParse: false`; authentication failures throw `WebhookVerificationError` → 400; other exceptions → 500; no handwritten fallback.
+- **Codex directions EC-1..EC-10** recorded (§15.2). EO-1..EO-8 remain unapproved proposals.
+- **Conflicts:** handoff and TRACEABILITY both kept (`main`'s 7.2C entries and TRACE-154 row unchanged).
+- **Not done:** no code, dependency, hosted action, registration or email; no tests (documentation only). 7.3B not cleared.
+- **Next:** Codex re-review (open points §15.3); the owner answers EO-2/3/7 when convenient.
+
+# Phase 7.3A email delivery evidence plan (TRACE-155) — 2026-11-13 ET
+
+- **Base:** `main` `24dd455` (#166); main CI 43343682357 success. Branch `claude/phase7-3a-email-evidence-plan` (separate worktree), draft documentation-only PR. Record: [PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md).
+- **#167 (not touched):** head is `7dbdf5a`, one commit past `f5305c2`. It records the owner-authorized hosted push of `20261123001000`, which was not re-verified here. CI on `f5305c2` passed; CI on `7dbdf5a` was in progress. Unmerged; renewal email is still untracked in deployed code.
+- **Finding:** `sent` = Resend accepted the API request. There is no Resend webhook, and no delivery, bounce, complaint or suppression evidence. Provider IDs are stored only on `sent`. Auth SMTP mail has no local record.
+- **Recommended:** a separate minimal provider-evidence store, matched at read time by email ID, then by send-time tags (never by recipient), ranked by precedence. Ledgers, claims, attestations and `sent` are unchanged.
+- **First slice proposed:** 7.3B, a dormant signed `POST /api/webhooks/resend` with duplicate-safe receipts. No tags, UI, suppression or hosted change.
+- **Decisions:** owner EO-1..EO-8; EO-2 retention, EO-3 events and EO-7 Auth-mail receipts are needed before arming. Codex EC-1..EC-10.
+- **Not done:** no code, migration, CI, hosted query, provider or DNS action, or email. No test run (documentation only).
+- **Carried:** CFG-011, A2, retrospective 7.2B review, real-email verification, final booking-readiness checks, intermittent a11y failure, gates off.
+- **Next:** Codex reviews the plan; the owner answers EO-2/3/7 when convenient; Claude implements 7.3B from the then-current `main`.
+
 # Phase 7.2C-2 renewal owner-email ledger implementation (TRACE-154) — 2026-11-12 ET
 
 - **Base:** `main` `24dd455` (#166). Main merge CI 43343682357 **succeeded** (backend, lifecycle, application) before any application or database edit. Branch `codex/phase7-2c2-renewal-handoff`, draft PR #167.
