@@ -1,3 +1,15 @@
+# Phase 7.3A email delivery evidence plan (TRACE-155) — 2026-11-13 ET
+
+- **Base:** `main` `24dd455` (#166); main CI 43343682357 success. Branch `claude/phase7-3a-email-evidence-plan` (separate worktree), draft documentation-only PR. Record: [PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md).
+- **#167 (not touched):** head is `7dbdf5a`, one commit past `f5305c2`. It records the owner-authorized hosted push of `20261123001000`, which was not re-verified here. CI on `f5305c2` passed; CI on `7dbdf5a` was in progress. Unmerged; renewal email is still untracked in deployed code.
+- **Finding:** `sent` = Resend accepted the API request. There is no Resend webhook, and no delivery, bounce, complaint or suppression evidence. Provider IDs are stored only on `sent`. Auth SMTP mail has no local record.
+- **Recommended:** a separate minimal provider-evidence store, matched at read time by email ID, then by send-time tags (never by recipient), ranked by precedence. Ledgers, claims, attestations and `sent` are unchanged.
+- **First slice proposed:** 7.3B, a dormant signed `POST /api/webhooks/resend` with duplicate-safe receipts. No tags, UI, suppression or hosted change.
+- **Decisions:** owner EO-1..EO-8; EO-2 retention, EO-3 events and EO-7 Auth-mail receipts are needed before arming. Codex EC-1..EC-10.
+- **Not done:** no code, migration, CI, hosted query, provider or DNS action, or email. No test run (documentation only).
+- **Carried:** CFG-011, A2, retrospective 7.2B review, real-email verification, final booking-readiness checks, intermittent a11y failure, gates off.
+- **Next:** Codex reviews the plan; the owner answers EO-2/3/7 when convenient; Claude implements 7.3B from the then-current `main`.
+
 # Phase 7.2C-1 owner-email ledger implementation (TRACE-154) — 2026-11-12
 
 - **Base:** branched from the Codex-cleared plan head `fedaf5f`. #165 merged during implementation (`main` `9b487bf`, docs only), and the branch was rebased onto it. Branch `claude/phase7-2c1-owner-email-ledger`, draft PR against `main`.
