@@ -1,3 +1,12 @@
+# Phase 7.2C-1 release / 7.2C-2 handoff (TRACE-154) — 2026-11-12 ET
+
+- **Verified main:** `24dd455acd520a21da14b0305a92383fbedfcccf`, #166 merged. Reviewed head `02f17c6`; PR CI 43333421014 passed all jobs (861 unit / 704 browser). Merge and PR head have the same Git tree.
+- **Production:** `dpl_7jx9gTgj2tEz1MkqnhMNLxU6pD81` READY at the main merge, 8:17:38 PM ET. Hosted migration head `20261122001000`, contact trigger enabled, no renewal-email trigger. Fresh post-deploy ledger/events: **0 / 0**; no per-row recovery needed or performed.
+- **Main CI:** 43343682357 still running at this checkpoint; verify the current result before application/database work. Public HTTP smoke-check command did not run because automatic approval review hit the tool-usage quota. Real-email/inbox verification remains separate.
+- **Next:** Claude implements [7.2C-2](../../governance/PHASE-7-OWNER-EMAIL-LEDGER-7-2C-2.md) on this draft PR's branch: renewal trigger, route/builder, resend kind, queue filters/links and tests. The current diff is documentation only. No renewal hosted push, release or email authorized.
+- **Evidence:** [Codex checkpoint](../../governance/PHASE-7-OWNER-EMAIL-LEDGER-CODEX-REVIEW.md); [7.2C-1 record](../../governance/PHASE-7-OWNER-EMAIL-LEDGER-7-2C-1.md) §6.2.
+- **Carried:** A2, CFG-011, retrospective 7.2B review, final schema/grants/fingerprint/completion-integrity checks, older intermittent accessibility failure and all transaction/automation gates. No Phase 7 acceptance.
+
 # Phase 7.2C-1 owner-email ledger implementation (TRACE-154) — 2026-11-12
 
 - **Base:** branched from the Codex-cleared plan head `fedaf5f`. #165 merged during implementation (`main` `9b487bf`, docs only), and the branch was rebased onto it. Branch `claude/phase7-2c1-owner-email-ledger`, draft PR against `main`.
