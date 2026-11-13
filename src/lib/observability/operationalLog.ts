@@ -41,6 +41,9 @@ const EVENTS_V2 = [
   "contact_submission.saved",
   "contact_submission.refused",
   "contact_submission.failed",
+  // TRACE-154 (Phase 7.2C-2): provider renewal-document submissions.
+  "renewal_document_submission.saved",
+  "renewal_document_submission.failed",
   "owner_email.claimed",
   "owner_email.not_claimed",
   "owner_email.claim_failed",
@@ -61,6 +64,7 @@ const ROUTES = [
   "vendor_application_submit",
   "application_notification_resend",
   "contact_submit",
+  "renewal_document_submit",
   "owner_email_resend",
   "unattributed",
 ] as const;

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { outcomeState, providerErrorCode } from "@/lib/applicationNotifications";
 import { sendOwnerNotification } from "@/lib/ownerNotifications";
+import { renewalDocumentKindLabel, type RenewalDocumentKind } from "@/lib/renewalDocuments";
 import {
   createCorrelationId,
   elapsedSince,
@@ -11,18 +12,18 @@ import {
   type OperationalRoute,
 } from "@/lib/observability/operationalLog";
 
-// TRACE-154 (Phase 7.2C-1): the owner email for a saved contact submission. The database
-// creates the delivery record with the submission, hands one sender a claim and the saved
-// record, and records the outcome against that claim. The vendor-application helper
-// (TRACE-104) is unchanged; its provider classification is reused as-is.
+// TRACE-154 (Phase 7.2C): the owner email for a saved contact submission (7.2C-1) or a
+// provider's renewal-document submission (7.2C-2). The database creates the delivery record
+// with the business record, hands one sender a claim and the saved record, and records the
+// outcome against that claim. The vendor-application helper (TRACE-104) is unchanged; its
+// provider classification is reused as-is.
 //
 // A claim error is not proof that nothing happened: a timeout or lost connection may follow
 // a committed claim. Without a received claim nothing is sent, and the ledger is never reset
 // from here. A committed claim stays `sending` and reads `unknown` after the claim window,
 // where only an operator's attested resend can permit another attempt.
 
-/** 7.2C-1 delivers contact submissions only; the ledger reserves `renewal_document` for 7.2C-2. */
-export type OwnerEmailKind = "contact_submission";
+export type OwnerEmailKind = "contact_submission" | "renewal_document";
 export type OwnerEmailMode = "initial" | "resend";
 
 export type ClaimedContactSubmission = {
@@ -36,8 +37,17 @@ export type ClaimedContactSubmission = {
   message: string;
 };
 
+/** The saved document and the provider's current business name (null when missing). */
+export type ClaimedRenewalDocument = {
+  id: string;
+  created_at: string;
+  kind: string;
+  business_name: string | null;
+};
+
 type Claim =
-  | { claimed: true; claim_id: string; attempt: number; kind: OwnerEmailKind; source: ClaimedContactSubmission }
+  | { claimed: true; claim_id: string; attempt: number; kind: "contact_submission"; source: ClaimedContactSubmission }
+  | { claimed: true; claim_id: string; attempt: number; kind: "renewal_document"; source: ClaimedRenewalDocument }
   | { claimed: false; state: string };
 
 export type OwnerEmailOutcome =
@@ -74,23 +84,67 @@ export function contactNotificationMessage(submission: ClaimedContactSubmission)
   };
 }
 
-/** Resend replays the first result for a repeated key; each permitted attempt has its own. */
-export function ownerEmailKey(kind: OwnerEmailKind, sourceId: string, attempt: number) {
-  const prefix = { contact_submission: "contact-submission-notification" }[kind];
-  return `${prefix}:${sourceId}:${attempt}`;
+/**
+ * The owner email for a provider's renewal-document submission. Subject, body lines, labels
+ * and the "A provider" / "Compliance" fallbacks match the pre-7.2C-2 route; no reply-to.
+ * "Submitted" is the saved row's time and "Business" the current name at claim time (C-6).
+ */
+export function renewalNotificationMessage(document: ClaimedRenewalDocument) {
+  const business = (document.business_name ?? "A provider").replace(/\s+/g, " ").slice(0, 100);
+  const kind = renewalDocumentKindLabel[document.kind as RenewalDocumentKind] ?? "Compliance";
+  return {
+    subject: `Renewal document submitted — ${business}`,
+    text: [
+      "A provider submitted a renewed compliance document",
+      "",
+      `Submitted: ${new Date(document.created_at).toISOString()}`,
+      `Business: ${business}`,
+      `Item: ${kind}`,
+      "",
+      "Review it from Admin → Compliance Expiry. Nothing changes until an operator accepts or declines it.",
+    ].join("\n"),
+  };
 }
 
-function isClaim(value: unknown): value is Claim {
+const KEY_PREFIX: Record<OwnerEmailKind, string> = {
+  contact_submission: "contact-submission-notification",
+  renewal_document: "renewal-document-notification",
+};
+
+/** Resend replays the first result for a repeated key; each permitted attempt has its own. */
+export function ownerEmailKey(kind: OwnerEmailKind, sourceId: string, attempt: number) {
+  return `${KEY_PREFIX[kind]}:${sourceId}:${attempt}`;
+}
+
+function isClaim(value: unknown, kind: OwnerEmailKind): value is Claim {
   if (typeof value !== "object" || value === null) return false;
   const claim = value as Record<string, unknown>;
   if (claim.claimed === false) return typeof claim.state === "string";
-  return (
-    claim.claimed === true &&
-    typeof claim.claim_id === "string" &&
-    typeof claim.attempt === "number" &&
-    typeof claim.source === "object" &&
-    claim.source !== null
-  );
+  if (
+    claim.claimed !== true ||
+    claim.kind !== kind ||
+    typeof claim.claim_id !== "string" ||
+    typeof claim.attempt !== "number" ||
+    typeof claim.source !== "object" ||
+    claim.source === null
+  ) {
+    return false;
+  }
+  const source = claim.source as Record<string, unknown>;
+  if (kind === "renewal_document") {
+    return (
+      typeof source.created_at === "string" &&
+      typeof source.kind === "string" &&
+      (source.business_name === null || source.business_name === undefined || typeof source.business_name === "string")
+    );
+  }
+  return true;
+}
+
+function ownerEmailMessage(claim: Extract<Claim, { claimed: true }>) {
+  return claim.kind === "renewal_document"
+    ? renewalNotificationMessage({ ...claim.source, business_name: claim.source.business_name ?? null })
+    : contactNotificationMessage(claim.source);
 }
 
 export async function deliverOwnerEmail(
@@ -112,7 +166,7 @@ export async function deliverOwnerEmail(
     logOperationalEvent({ ...context, event: "owner_email.claim_failed", outcome: "failed", error });
     return { state: "claim_failed" };
   }
-  if (!isClaim(data)) {
+  if (!isClaim(data, kind)) {
     logOperationalEvent({ ...context, event: "owner_email.claim_failed", outcome: "failed", errorCode: "unexpected" });
     return { state: "claim_failed" };
   }
@@ -130,7 +184,7 @@ export async function deliverOwnerEmail(
 
   const sendStarted = Date.now();
   const result = await send({
-    ...contactNotificationMessage(data.source),
+    ...ownerEmailMessage(data),
     idempotencyKey: ownerEmailKey(kind, sourceId, attempt),
   });
   const state = outcomeState(result);
