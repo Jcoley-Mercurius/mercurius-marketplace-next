@@ -1,3 +1,23 @@
+# Phase 7.3A plan revision after Codex review #5891386779 (TRACE-155) — 2026-11-13 ET
+
+- **Base:** rebased onto `main` `8a9603b` (#167 merged 12:54 UTC; #167 exact-head CI 43424109360 and main merge CI 43429080720 success). Draft PR #168, documentation only. Earlier `24dd455` baseline kept in plan §1.1.
+- **Evidence kept separate (plan §1.2):**
+  - No GitHub review is recorded on #167.
+  - The hosted push of `20261123001000` is #167's own record, not re-verified.
+  - The GitHub `Production` deployment status `success` is metadata, not a Vercel READY readback.
+  - The post-deploy renewal-window reconciliation is not recorded.
+  - The 7.2C-2 record's status line is stale and was not edited here.
+- **R1–R5 resolved** (plan §18):
+  - R1: bounded byte-stream read with cancellation and bounded headers.
+  - R2: durable cascading FK linkage, finite expiry, logical expiry, purge-on-receipt and operator purge. No arming before EO-2 is decided and enforcement is tested.
+  - R3: fact sets with deterministic rules; complaint and inconclusive bounces never count as "not delivered".
+  - R4: conflicted receipts excluded; durable flag before 2xx.
+  - R5: inspected `svix@2.9.1` source. `verify` returns `undefined` with `jsonParse: false`; authentication failures throw `WebhookVerificationError` → 400; other exceptions → 500; no handwritten fallback.
+- **Codex directions EC-1..EC-10** recorded (§15.2). EO-1..EO-8 remain unapproved proposals.
+- **Conflicts:** handoff and TRACEABILITY both kept (`main`'s 7.2C entries and TRACE-154 row unchanged).
+- **Not done:** no code, dependency, hosted action, registration or email; no tests (documentation only). 7.3B not cleared.
+- **Next:** Codex re-review (open points §15.3); the owner answers EO-2/3/7 when convenient.
+
 # Phase 7.3A email delivery evidence plan (TRACE-155) — 2026-11-13 ET
 
 - **Base:** `main` `24dd455` (#166); main CI 43343682357 success. Branch `claude/phase7-3a-email-evidence-plan` (separate worktree), draft documentation-only PR. Record: [PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md).
