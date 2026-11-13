@@ -14,6 +14,10 @@ import { randomUUID } from "node:crypto";
 // never used for authorization, and never derived from a claim or provider idempotency key.
 
 export const OPERATIONAL_LOG_SCHEMA = "mercurius.oplog.v1";
+// TRACE-154 (Phase 7.2C-1, Codex C-5): owner-email events add `source_kind` and `source_id`.
+// The schema version is fixed per event name below, never chosen by the caller: a v1 event
+// always has exactly the 14 v1 keys, and a v2 event can never be written as v1.
+export const OPERATIONAL_LOG_SCHEMA_V2 = "mercurius.oplog.v2";
 
 const EVENTS = [
   "application_submission.saved",
@@ -32,16 +36,40 @@ const EVENTS = [
   "application_notification_resend.completed",
   "application_notification_resend.failed",
 ] as const;
-export type OperationalEvent = (typeof EVENTS)[number];
+
+const EVENTS_V2 = [
+  "contact_submission.saved",
+  "contact_submission.refused",
+  "contact_submission.failed",
+  "owner_email.claimed",
+  "owner_email.not_claimed",
+  "owner_email.claim_failed",
+  "owner_email.provider_result",
+  "owner_email.recorded",
+  "owner_email.record_failed",
+  "owner_email.background_failed",
+  "owner_email_resend.requested",
+  "owner_email_resend.refused",
+  "owner_email_resend.completed",
+  "owner_email_resend.failed",
+] as const;
+export type OperationalEventV1 = (typeof EVENTS)[number];
+export type OperationalEventV2 = (typeof EVENTS_V2)[number];
+export type OperationalEvent = OperationalEventV1 | OperationalEventV2;
 
 const ROUTES = [
   "vendor_application_submit",
   "application_notification_resend",
+  "contact_submit",
+  "owner_email_resend",
   "unattributed",
 ] as const;
 export type OperationalRoute = (typeof ROUTES)[number];
 
 const MODES = ["initial", "resend"] as const;
+
+const SOURCE_KINDS = ["contact_submission", "renewal_document"] as const;
+export type OperationalSourceKind = (typeof SOURCE_KINDS)[number];
 
 const OUTCOMES = [
   // Submission
@@ -102,6 +130,10 @@ export type OperationalLogInput = {
   route: OperationalRoute;
   correlationId: string;
   applicationId?: string | null;
+  /** v2 events only; ignored for v1 events. */
+  sourceKind?: OperationalSourceKind | null;
+  /** v2 events only; ignored for v1 events. UUID-validated. */
+  sourceId?: string | null;
   attempt?: number | null;
   mode?: (typeof MODES)[number] | null;
   outcome?: OperationalOutcome | null;
@@ -117,7 +149,7 @@ export type OperationalLogRecord = {
   level: "info" | "warn" | "error";
   env: "production" | "preview" | "development" | "test" | "local";
   release: string | null;
-  event: OperationalEvent | "oplog.invalid_event";
+  event: OperationalEventV1 | "oplog.invalid_event";
   route: OperationalRoute | null;
   correlation_id: string | null;
   application_id: string | null;
@@ -126,6 +158,14 @@ export type OperationalLogRecord = {
   outcome: OperationalOutcome | null;
   error_code: OperationalErrorCode | null;
   duration_ms: number | null;
+};
+
+/** The v2 record: the 14 v1 keys plus `source_kind` and `source_id`. */
+export type OperationalLogRecordV2 = Omit<OperationalLogRecord, "schema" | "event"> & {
+  schema: typeof OPERATIONAL_LOG_SCHEMA_V2;
+  event: OperationalEventV2;
+  source_kind: OperationalSourceKind | null;
+  source_id: string | null;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -201,7 +241,7 @@ export function classifyOperationalError(error: unknown): OperationalErrorCode {
   }
 }
 
-function levelFor(event: OperationalLogRecord["event"], outcome: OperationalOutcome | null) {
+function levelFor(event: OperationalLogRecord["event"] | OperationalEventV2, outcome: OperationalOutcome | null) {
   if (event === "oplog.invalid_event") return "error" as const;
   if (/\.(failed|claim_failed|record_failed|background_failed)$/.test(event)) return "error" as const;
   if (event.endsWith(".refused") || event.endsWith(".upload_url_failed") || event.endsWith(".not_claimed")) {
@@ -214,14 +254,16 @@ function levelFor(event: OperationalLogRecord["event"], outcome: OperationalOutc
 }
 
 /** Builds the allowlisted record. Exposed for tests; never throws. */
-export function buildOperationalLogRecord(input: OperationalLogInput): OperationalLogRecord {
-  const event = member(EVENTS, input?.event) ?? "oplog.invalid_event";
+export function buildOperationalLogRecord(input: OperationalLogInput): OperationalLogRecord | OperationalLogRecordV2 {
+  const v2 = member(EVENTS_V2, input?.event);
+  const event = v2 ?? member(EVENTS, input?.event) ?? "oplog.invalid_event";
   const outcome = member(OUTCOMES, input?.outcome);
   const errorCode =
     member(ERROR_CODES, input?.errorCode) ??
     (input && "error" in input && input.error !== undefined ? classifyOperationalError(input.error) : null);
-  return {
-    schema: OPERATIONAL_LOG_SCHEMA,
+  // Field order matches the 7.1 v1 line exactly; v2 appends its two keys.
+  const record = {
+    schema: v2 ? OPERATIONAL_LOG_SCHEMA_V2 : OPERATIONAL_LOG_SCHEMA,
     ts: new Date().toISOString(),
     level: levelFor(event, outcome),
     env: environment(),
@@ -236,6 +278,12 @@ export function buildOperationalLogRecord(input: OperationalLogInput): Operation
     error_code: errorCode,
     duration_ms: boundedInteger(input?.durationMs, MAX_DURATION_MS),
   };
+  if (!v2) return record as OperationalLogRecord;
+  return {
+    ...record,
+    source_kind: member(SOURCE_KINDS, input?.sourceKind),
+    source_id: uuid(input?.sourceId),
+  } as OperationalLogRecordV2;
 }
 
 /**

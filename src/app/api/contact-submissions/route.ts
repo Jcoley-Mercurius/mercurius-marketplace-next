@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { after, NextResponse } from "next/server";
-import { sendOwnerNotification } from "@/lib/ownerNotifications";
+import { deliverOwnerEmail } from "@/lib/ownerEmailNotifications";
+import {
+  createCorrelationId,
+  elapsedSince,
+  logOperationalEvent,
+} from "@/lib/observability/operationalLog";
 import {
   appendRequestContext,
   normalizeRequestId,
@@ -76,14 +81,28 @@ function serviceClient() {
   });
 }
 
+// TRACE-154 (Phase 7.2C-1): the saved submission and its owner-email record commit together
+// (AFTER INSERT trigger). The email is claimed and sent after the response; whatever happens
+// to it, the submission stays saved and its delivery state stays visible in Owner Emails.
+// Each request has its own server correlation ID; a client-supplied one is never read.
+const ROUTE = "contact_submit" as const;
+
 export async function POST(request: Request) {
+  const trace = { route: ROUTE, correlationId: createCorrelationId() } as const;
+  const startedAt = Date.now();
   try {
     const body: unknown = await request.json();
     const refusal = intakeGuardRefusal(
       typeof body === "object" && body !== null ? (body as Record<string, unknown>).intake : null,
     );
     if (refusal) {
-      console.warn("Contact submission refused", { reason: refusal });
+      logOperationalEvent({
+        ...trace,
+        event: "contact_submission.refused",
+        outcome: "refused",
+        errorCode: refusal === "trap" ? "intake_trap" : "intake_too_fast",
+        durationMs: elapsedSince(startedAt),
+      });
       return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
     }
     const submission = parseSubmission(body);
@@ -95,48 +114,68 @@ export async function POST(request: Request) {
       intakeClientIp(request.headers),
     );
     if (limit !== "accepted") {
-      console.warn("Contact submission refused", { reason: limit });
+      logOperationalEvent({
+        ...trace,
+        event: "contact_submission.refused",
+        outcome: "refused",
+        errorCode: limit === "email_limit" ? "intake_email_limit" : "intake_ip_limit",
+        durationMs: elapsedSince(startedAt),
+      });
       return NextResponse.json({ error: INTAKE_REFUSAL_MESSAGE }, { status: 429 });
     }
-    const submittedAt = new Date().toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("contact_submissions")
-      .insert(submission);
+      .insert(submission)
+      .select("id")
+      .single();
     if (error) throw error;
-
-    const fullName = `${submission.first_name} ${submission.last_name}`.trim();
-    const subjectSummary = submission.subject.replace(/\s+/g, " ").slice(0, 100);
+    const submissionId = (data as { id: string }).id;
 
     // Email is deliberately post-response: the stored submission remains the
     // source of truth and an email-provider outage cannot erase user success.
     after(async () => {
-      const result = await sendOwnerNotification({
-        subject: `New contact submission — ${subjectSummary}`,
-        replyTo: submission.email,
-        text: [
-          "New Mercurius contact form submission",
-          "",
-          `Submitted: ${submittedAt}`,
-          `Name: ${fullName}`,
-          `Email: ${submission.email}`,
-          `Phone: ${submission.phone ?? "Not provided"}`,
-          `Subject: ${submission.subject}`,
-          "",
-          "Message:",
-          submission.message,
-        ].join("\n"),
-      });
-      if (!result.ok) {
-        console.error("Contact owner notification failed", { error: result.error });
+      try {
+        await deliverOwnerEmail(supabase, "contact_submission", submissionId, "initial", undefined, trace);
+      } catch (error) {
+        logOperationalEvent({
+          ...trace,
+          sourceKind: "contact_submission",
+          sourceId: submissionId,
+          mode: "initial",
+          event: "owner_email.background_failed",
+          outcome: "failed",
+          error,
+        });
       }
     });
 
+    logOperationalEvent({
+      ...trace,
+      sourceKind: "contact_submission",
+      sourceId: submissionId,
+      event: "contact_submission.saved",
+      outcome: "saved",
+      durationMs: elapsedSince(startedAt),
+    });
     return NextResponse.json({ submitted: true }, { status: 201 });
   } catch (error) {
     if (error instanceof ContactValidationError) {
+      logOperationalEvent({
+        ...trace,
+        event: "contact_submission.refused",
+        outcome: "invalid",
+        errorCode: "validation_failed",
+        durationMs: elapsedSince(startedAt),
+      });
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    console.error("Contact submission failed", error);
+    logOperationalEvent({
+      ...trace,
+      event: "contact_submission.failed",
+      outcome: "failed",
+      error,
+      durationMs: elapsedSince(startedAt),
+    });
     return NextResponse.json(
       { error: "Your message could not be submitted. Please try again." },
       { status: 500 },

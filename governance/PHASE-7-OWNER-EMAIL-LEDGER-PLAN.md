@@ -1,6 +1,7 @@
 # Phase 7.2C — Owner-email ledger plan for contact-form and renewal-document emails (TRACE-154)
 
-**Status:** REVISED PLAN FOR CODEX FINAL REVIEW (2026-11-12). Documentation only. Nothing here is implemented, migrated, pushed, deployed or activated.
+**Status:** CLEARED BY CODEX FOR 7.2C-1 IMPLEMENTATION at `fedaf5f419e49349371e4a183987e05d5036f722` (2026-11-12), with the two binding clarifications in §0.2. This document is still documentation only; the 7.2C-1 implementation and its evidence are in [PHASE-7-OWNER-EMAIL-LEDGER-7-2C-1](PHASE-7-OWNER-EMAIL-LEDGER-7-2C-1.md). Nothing is pushed, deployed or activated.
+**Previous status (kept as history):** REVISED PLAN FOR CODEX FINAL REVIEW (2026-11-12).
 **Original status (kept as history):** PLAN FOR CODEX REVIEW, at head `89edfaefc37e262d3349e82c6ab770ce3e1cc572`.
 **Revision:** §0.1 lists what changed after Codex's plan review: the owner's approval of O-1 ([DEC-2026-066](DECISION-LOG.md)), Codex's settled decisions C-1..C-8, and the four review findings.
 **Checkpoint:** 2026-11-12 (America/New_York), `main` `3eb8ff4521c17bdf009247792f5a93d742c626d8` (#164 merge, 7.2B). Re-verified unchanged at the revision (§1.1).
@@ -57,6 +58,23 @@ This plan proposes. It approves no policy and changes no recipient, subject, con
 | R-2 | Renewal lookup: a missing name and a genuine database/claim failure must be distinguished, and a changed failure path must not be called unchanged | §3.5.1 specifies both cases: what is committed, the claim rollback, whether an email is attempted, and how the obligation stays recoverable. The failure path **is changed** from today and is recorded as such (F-4; tests 3a, 14a) |
 | R-3 | Audit classification: actor/source identifiers and free-form reasons are not anonymous | Classified as restricted administrative data, excluded from operational logs, analytics and URLs; retention follows existing approved rules with no new period or purge job (§3.10). The earlier statement that the events table "holds no personal data" is withdrawn |
 | R-4 | Rollout compatibility: the old application can send without a ledger claim | A new acceptance test runs the old route's behavior against the new schema. Such rows are never claimed automatically (an initial claim refuses a `missed` row), and resend or acknowledgement from `missed`/`unknown` requires an explicit inbox-verification attestation; there is no bulk acknowledgement (§3.4, §4.4; test 26) |
+
+### 0.2 Codex clearance and binding clarifications (2026-11-12)
+
+Codex reviewed this plan at `fedaf5f` and cleared local implementation of **7.2C-1 only**. O-1 and C-1..C-8 stay settled. Two clarifications are binding and supersede any conflicting wording below; where older wording is kept, it is marked as superseded.
+
+**Clarification 1: claim errors are not all confirmed rollbacks.**
+- A confirmed SQL exception raised inside the claim rolls that claim transaction back.
+- A timeout, lost connection or lost RPC response may happen **after** the claim committed.
+- Without a successfully received claim result, the provider is not called.
+- The ledger is never reset, and attempts are never assumed unchanged, because the client received an error. Actual durable state is read where available (the operator page always reloads from the database).
+- A committed claim whose response was lost stays `sending` and later reads `unknown`. It is never claimed again automatically; recovery needs the attested resend.
+- Required test: the database commits the claim but the response is lost; no automatic second claim or send occurs, and uncertain recovery requires confirmation.
+
+**Clarification 2: acknowledgement and resend need different attestations.**
+- **Resend** from `missed`/`unknown`: the operator checked and **found no matching email**.
+- **Acknowledge** from those states: the operator **checked the inbox and provider evidence**, and the reason records what they found and why no further email is needed. Acknowledgement must work when the email **was found**; it never requires a "found no email" statement.
+- Both stay explicit, per row, reasoned where required, and audited. The event table stores which attestation was given (`attestation`: `no_matching_email_found` or `inbox_evidence_reviewed`) in place of the single `inbox_checked` boolean proposed in §3.2.
 
 ---
 
@@ -303,10 +321,10 @@ All are `SECURITY DEFINER`, `set search_path = ''`, with explicit revokes (defau
 | Function | Caller and grant | Behavior |
 |---|---|---|
 | `private.owner_email_log(...)`, `private.owner_email_view(n)` | none (private) | Audit insert; derived state |
-| `public.owner_email_claim(p_kind text, p_source uuid, p_mode text)` | `service_role` only | `FOR UPDATE` on the ledger row found by kind and source. `initial` claims only `pending` **within the claim window**; a `pending` row older than the window (view state `missed`) returns `{claimed:false, state:'missed'}` and is never claimed automatically (R-4). `resend` claims only `resend_requested`. Otherwise `{claimed:false, state:<view>}`. On claim: `sending`, new claim UUID, `attempts + 1`, audit, and returns `{claimed, claim_id, attempt, source:{…}}` built from the **source row** (§3.5). Not found → P0002. Any error inside the function rolls the whole claim back (§3.5.1) |
+| `public.owner_email_claim(p_kind text, p_source uuid, p_mode text)` | `service_role` only | `FOR UPDATE` on the ledger row found by kind and source. `initial` claims only `pending` **within the claim window**; a `pending` row older than the window (view state `missed`) returns `{claimed:false, state:'missed'}` and is never claimed automatically (R-4). `resend` claims only `resend_requested`. Otherwise `{claimed:false, state:<view>}`. On claim: `sending`, new claim UUID, `attempts + 1`, audit, and returns `{claimed, claim_id, attempt, source:{…}}` built from the **source row** (§3.5). Not found → P0002. A confirmed SQL exception inside the function rolls the claim back; a lost response may follow a committed claim (§0.2, clarification 1; §3.5.1). *(Superseded wording: "Any error inside the function rolls the whole claim back.")* |
 | `public.owner_email_record(p_kind, p_source, p_claim uuid, p_outcome text, p_provider_id text, p_error_code text)` | `service_role` only | `FOR UPDATE`; refuses unless `state = 'sending'` and `claim_id = p_claim` (40001). `p_outcome ∈ {sent, failed, unknown}`; `p_error_code` must be in the enumeration, or null for `sent`. Clears `claim_id`; sets `sent_at` and provider ID only for `sent` |
-| `public.owner_email_request_resend(p_kind, p_source, p_confirm_uncertain boolean default false)` | `authenticated`, guarded by `vendor_require_operator()` | `FOR UPDATE` on the ledger row. `resend_requested` → idempotent return. Allowed from `failed`; from `missed` and `unknown` only with `p_confirm_uncertain = true`, the operator's attestation that they checked the owner inbox and Resend log and found no email (C-3); without it → 55000. The attestation is stored on the event (`inbox_checked`). `sending` within the claim window, `sent`, `pending` within the window and `acknowledged` → 55000. **No ledger row (untracked) → 55000 "Not tracked; recovery for records saved before tracking is a separate proposal."** Clears `claim_id`, so a stale worker's later outcome write is refused |
-| `public.owner_email_acknowledge(p_kind, p_source, p_reason text, p_inbox_checked boolean default false)` | `authenticated`, operator guard | Reason required (1–500). Allowed from `failed` and `resend_requested`; from `missed` and `unknown` **only with `p_inbox_checked = true`** (the operator checked the inbox and Resend log), else 55000, so an uncertain row is never acknowledged blind (R-4). Idempotent from `acknowledged`. Untracked → 55000 (no row is created for history). One row per call; **no bulk acknowledgement** |
+| `public.owner_email_request_resend(p_kind, p_source, p_confirm_uncertain boolean default false)` | `authenticated`, guarded by `vendor_require_operator()` | `FOR UPDATE` on the ledger row. `resend_requested` → idempotent return. Allowed from `failed`; from `missed` and `unknown` only with `p_confirm_uncertain = true`, the operator's attestation that they checked the owner inbox and Resend log and found no email (C-3); without it → 55000. The attestation is stored on the event (`attestation = 'no_matching_email_found'`; §0.2, clarification 2). *(Implemented as `p_confirm_no_email`.)* `sending` within the claim window, `sent`, `pending` within the window and `acknowledged` → 55000. **No ledger row (untracked) → 55000 "Not tracked; recovery for records saved before tracking is a separate proposal."** Clears `claim_id`, so a stale worker's later outcome write is refused |
+| `public.owner_email_acknowledge(p_kind, p_source, p_reason text, p_inbox_checked boolean default false)` | `authenticated`, operator guard | Reason required (1–500). Allowed from `failed` and `resend_requested`; from `missed` and `unknown` **only with `p_inbox_checked = true`** (the operator checked the inbox and Resend log; the reason records what they found, including finding the email; §0.2, clarification 2), else 55000, so an uncertain row is never acknowledged blind (R-4). Idempotent from `acknowledged`. Untracked → 55000 (no row is created for history). One row per call; **no bulk acknowledgement** |
 | `public.owner_email_overview(p_kind text default null, p_include_settled boolean default false, p_before_created_at timestamptz default null, p_before_id uuid default null, p_limit integer default 50)` | `authenticated`, operator guard | **Bounded keyset page (C-8).** `p_limit` is clamped to 1–100. Rows are ordered `created_at desc, id desc` and start strictly after the `(p_before_created_at, p_before_id)` cursor. Without `p_include_settled`, the page holds attention rows only. Returns `checked_at`, `stale_after_minutes`, `next_cursor` (null on the last page), **exact `attention_count`** in total and per kind (a `count(*)` over the full set, not the page), and per item: kind, source ID, a **non-sensitive label** (§5.2), submitted at, view state, attempts, `last_error_code`, sent, requested and acknowledged times, acknowledged reason, `needs_attention`. It **never returns a contact submission's name, email, phone, subject or message**, nor any actor ID (R-1, R-3) |
 | `public.owner_email_contact_submission(p_source uuid)` | `authenticated`, operator guard (O-1, **approved**, DEC-2026-066) | The stored contact fields (name, email, phone, subject, message, submitted at) for one submission that has a ledger row, for an operator handling it. Untracked or unknown ID → P0002. Called only on an explicit operator action (§5.3) |
 
@@ -340,13 +358,15 @@ The claim reads `contractors.name` with a left join on `contractor_id`. (`vendor
 
 **On a genuine claim failure, the proposed behavior is:**
 - **What stays committed.** The `vendor_renewal_documents` row and its `pending` ledger row, both committed earlier in the `vendor_submit_renewal_document` transaction. The route has already returned 200 with the same body.
-- **The claim rolls back entirely.** The ledger row stays `pending`, `attempts` is unchanged, there is no claim ID and no claim event. No partial claim is ever visible.
+- **A confirmed exception rolls the claim back.** When the claim function raises, the ledger row stays `pending`, `attempts` is unchanged, there is no claim ID and no claim event. No partial claim is ever visible.
+- **A lost response is not a rollback (§0.2, clarification 1).** A timeout or lost connection can follow a committed claim. The route then has no claim result and sends nothing, but the row may already be `sending` at attempt 1. Nothing resets it; it reads `unknown` after the window and needs the attested resend.
+- *(Superseded wording, kept as history: "The claim rolls back entirely." It applies only to a confirmed exception.)*
 - **No email is attempted.** The sender runs only after a successful claim, so the initial attempt sends nothing. This is the change from today, where a failed read still sent an email with the fallback.
 - **Logged.** `owner_email.claim_failed` (v2) with `source_kind`, `source_id` and the mapped `error_code` (e.g. `db_unavailable`, `db_error`); no name, file name or path. The log is best effort; the ledger is the record.
 - **Recoverable.** After the 10-minute window the row reads `missed` and enters the attention count. It is not claimed again automatically (§3.4). The operator checks the inbox and Resend log (the page cannot tell a failed claim from an old release's send), then resends with the attestation or acknowledges with a reason and the attestation. A successful resend claims attempt 1 with a fresh key.
 - **Why change it.** Sending "A provider" because the database is failing hides the failure and leaves no recovery record. The new path never loses the obligation and never sends without a claim. If Codex prefers today's "send anyway" behavior, the alternative is a claim that tolerates only the name read failing. That needs a sub-transaction and was not chosen.
 
-The **contact** claim has the same failure semantics: a raised claim leaves the submission and its `pending` row committed, sends nothing, and becomes `missed` after the window. Today a contact email does not depend on any read, so this is also a changed failure path for contact. It is reached only when the database fails after the insert has already committed.
+The **contact** claim has the same failure semantics: a raised claim leaves the submission and its `pending` row committed, sends nothing, and becomes `missed` after the window; a lost response after a committed claim leaves it `sending`, then `unknown` (§0.2). Today a contact email does not depend on any read, so this is also a changed failure path for contact. It is reached only when the database fails after the insert has already committed.
 
 ### 3.6 Delivery helper and states
 
@@ -518,8 +538,8 @@ Source IDs and recipients are derived securely:
 | `provider_conflict`, `provider_server_error`, `provider_timeout_or_network` | Result unknown | Check the owner inbox and Resend log before resending |
 
 - **Actions** (only where `needs_attention`):
-  - **Resend email** (ConfirmAction, commitment tone, names the entity). For `unknown`/`missed`, the consequence copy says an earlier email may already have arrived. The dialog requires a checkbox: "I checked the owner inbox and the Resend log and found no email for this." The confirm button stays disabled until it is ticked, and the request sends the flag only then.
-  - **Acknowledge** (reason required). For `unknown`/`missed`, the same inbox-check checkbox is required.
+  - **Resend email** (ConfirmAction, commitment tone, names the entity). For `unknown`/`missed`, the consequence copy says an earlier email may already have arrived. The dialog requires a checkbox: "I checked the owner inbox and the Resend log and found no email for this submission." The confirm button stays disabled until it is ticked, and the request sends the flag only then.
+  - **Acknowledge** (reason required). For `unknown`/`missed`, a **different** checkbox is required: "I checked the owner inbox and the Resend log for this submission." The reason is labelled "What you found and why no further email is needed" and may say the email was found (§0.2, clarification 2).
   - Contact rows also get **View submission** (O-1, approved). Renewal rows get **Open Compliance Expiry**.
 - **States:**
   - loading (`AdminLoading`);
@@ -572,7 +592,7 @@ Source IDs and recipients are derived securely:
    - Allowed only from `failed` (direct), and `missed`/`unknown` with confirmation.
    - Refused from `pending`/`sending` inside the window, `sent` and `acknowledged`, and untracked.
    - Idempotent while requested.
-   - Acknowledge needs a reason, is idempotent, and refuses untracked. From `missed`/`unknown` it refuses without `p_inbox_checked` (55000) and succeeds with it; the event records `inbox_checked = true`.
+   - Acknowledge needs a reason, is idempotent, and refuses untracked. From `missed`/`unknown` it refuses without `p_inbox_checked` (55000) and succeeds with it; the event records `attestation = 'inbox_evidence_reviewed'`.
 5a. **Overview paging and counts (C-8).** With 130 attention rows and 20 settled rows across both kinds:
    - The default page returns 50 attention rows, newest first, with a `next_cursor`.
    - Following the cursor returns the next 50, then 30 with a null cursor. No row is repeated or skipped, including rows with equal `created_at`.
@@ -645,7 +665,7 @@ Source IDs and recipients are derived securely:
      2. The new release's code never claims it: no initial claim names that ID, and an initial claim forced on it after the window returns `claimed:false, state:'missed'`.
      3. Resend and acknowledge each refuse it without the inbox-check attestation.
      4. No function acknowledges more than one row per call.
-     5. With the attestation and a reason, acknowledge records `acknowledged` with `inbox_checked = true`.
+     5. With the attestation and a reason (email found), acknowledge records `acknowledged` with `attestation = 'inbox_evidence_reviewed'`.
 
    Together these prove the row is never resent automatically or acknowledged blind.
 

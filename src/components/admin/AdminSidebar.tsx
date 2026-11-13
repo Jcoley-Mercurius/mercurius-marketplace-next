@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Archive, BadgePercent, BarChart3, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Archive, BadgePercent, BarChart3, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, Mail, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ export const navigationGroups: { label: string; items: NavEntry[] }[] = [
   ] },
   { label: "Trust & Support", items: [
     { label: "Support Tickets", href: "/admin/tickets", icon: Ticket },
+    { label: "Owner Emails", href: "/admin/owner-emails", icon: Mail },
     { label: "Reviews", href: "/admin/reviews", icon: Star },
     { label: "Quality", href: "/admin/quality", icon: Shield },
     { label: "Message Audit", href: "/admin/messages", icon: MessageSquare },
