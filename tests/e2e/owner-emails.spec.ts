@@ -1,4 +1,5 @@
-// TRACE-154 (Phase 7.2C-1): synthetic browser evidence for the Owner Emails page. The overview,
+// TRACE-154 (Phase 7.2C-1 and 7.2C-2): synthetic browser evidence for the Owner Emails page,
+// with contact-submission and provider renewal-document rows. The overview,
 // acknowledgement and contact-detail RPCs and the resend route are served from an in-memory
 // store that applies the page's own keyset cursor, filter and limit, and mirrors the database's
 // attestation and operator rules. The database contract itself is SQL 120.
@@ -13,8 +14,9 @@ const cors = { "access-control-allow-origin": "http://127.0.0.1:3103", "access-c
 // Sentinels: submitted content that must never reach the list.
 const SENTINEL = { subject: "Sentinel subject do not list", message: "Sentinel message do not list", email: "sentinel.sender@example.test", name: "Sentinelfirst" };
 
+type Kind = "contact_submission" | "renewal_document";
 type Row = {
-  id: string; source_id: string; created_at: string; state: string; attempts: number;
+  kind: Kind; id: string; source_id: string; created_at: string; state: string; attempts: number;
   last_error_code: string | null; sent_at: string | null; acknowledged_at: string | null; acknowledged_reason: string | null;
 };
 const ATTENTION = ["failed", "missed", "unknown", "resend_requested"];
@@ -22,11 +24,14 @@ const sourceId = (n: number) => `${n.toString(16).padStart(8, "0")}-0000-4000-80
 // A larger n is older; every fifth pair shares a timestamp so ties cross page boundaries.
 const at = (n: number) => new Date(Date.UTC(2026, 10, 12, 15, 0, 0) - Math.floor(n / 2) * 60_000).toISOString().replace("Z", "+00:00");
 const row = (n: number, state: string, extra: Partial<Row> = {}): Row => ({
-  id: `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}`, source_id: sourceId(n), created_at: at(n), state,
+  kind: "contact_submission", id: `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}`, source_id: sourceId(n), created_at: at(n), state,
   attempts: state === "missed" ? 0 : 1, last_error_code: state === "failed" ? "provider_refused" : state === "unknown" ? "provider_server_error" : null,
   sent_at: state === "sent" ? at(n) : null, acknowledged_at: state === "acknowledged" ? at(n) : null,
   acknowledged_reason: state === "acknowledged" ? "Read it in the admin" : null, ...extra,
 });
+
+const renewalRow = (n: number, state: string, extra: Partial<Row> = {}) => row(n, state, { kind: "renewal_document", ...extra });
+const BUSINESS = "Synthetic Renewal Provider";
 
 class Store {
   rows: Row[];
@@ -36,6 +41,8 @@ class Store {
   resendCalls: Array<Record<string, unknown>> = [];
   failOverview = 0;
   holdOverview: Promise<void> | null = null;
+  /** Holds only the next overview response (for stale-response checks). */
+  holdNext: Promise<void> | null = null;
   detailRefusal: { status: number; code: string } | null = null;
   resendResponse: { status: number; body: Record<string, unknown> } = { status: 200, body: { state: "sent", message: "Resend accepted the email. Confirm it arrived in the owner inbox." } };
   constructor(rows: Row[]) { this.rows = rows; }
@@ -45,16 +52,18 @@ class Store {
     const settled = body.p_include_settled === true;
     const before = body.p_before_created_at as string | null;
     const beforeId = body.p_before_id as string | null;
-    const listed = this.sorted().filter((r) => (settled || ATTENTION.includes(r.state))
+    const kind = (body.p_kind ?? null) as Kind | null;
+    const listed = this.sorted().filter((r) => (settled || ATTENTION.includes(r.state)) && (!kind || r.kind === kind)
       && (!before || r.created_at < before || (r.created_at === before && r.id < beforeId!)));
     const page = listed.slice(0, limit);
-    const attention = this.rows.filter((r) => ATTENTION.includes(r.state)).length;
+    const attention = (k?: Kind) => this.rows.filter((r) => ATTENTION.includes(r.state) && (!k || r.kind === k)).length;
     return {
       checked_at: "2026-11-12T16:00:00+00:00", stale_after_minutes: 10, limit,
-      attention_count: { total: attention, contact_submission: attention, renewal_document: 0 },
+      attention_count: { total: attention(), contact_submission: attention("contact_submission"), renewal_document: attention("renewal_document") },
       next_cursor: listed.length > limit ? { created_at: page.at(-1)!.created_at, id: page.at(-1)!.id } : null,
       items: page.map((r) => ({
-        kind: "contact_submission", source_id: r.source_id, label: "Contact submission", reference: r.source_id.slice(0, 8),
+        kind: r.kind, source_id: r.source_id, label: r.kind === "contact_submission" ? "Contact submission" : `${BUSINESS} — License`,
+        reference: r.source_id.slice(0, 8),
         submitted_at: r.created_at, state: r.state, attempts: r.attempts, last_error_code: r.last_error_code, sent_at: r.sent_at,
         requested_at: null, acknowledged_at: r.acknowledged_at, acknowledged_reason: r.acknowledged_reason,
         needs_attention: ATTENTION.includes(r.state),
@@ -70,6 +79,7 @@ class Store {
     if (name === "owner_email_overview") {
       this.overviewCalls.push(body);
       if (this.holdOverview) await this.holdOverview;
+      if (this.holdNext) { const held = this.holdNext; this.holdNext = null; await held; }
       if (this.failOverview > 0) { this.failOverview -= 1; return json(500, { code: "XX000", message: "Synthetic outage" }); }
       return json(200, this.overview(body));
     }
@@ -134,21 +144,24 @@ async function accessible(page: Page) {
   expect(await page.locator("main").evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 }
 
-const rows = (page: Page) => page.getByRole("list", { name: "Contact form emails" }).getByRole("listitem");
+const rows = (page: Page) => page.getByRole("list", { name: "Owner emails" }).getByRole("listitem");
+const summary = (page: Page, term: string) => page.locator("dl > div").filter({ has: page.locator("dt", { hasText: new RegExp(`^${term}$`) }) }).locator("dd");
 const rowFor = (page: Page, n: number) => rows(page).filter({ hasText: `Ref ${sourceId(n).slice(0, 8)}` });
 
 test("exact count with bounded pages, Load older, and no submitted content in the list", async ({ page }) => {
   const store = new Store(fixture());
   await open(page, store);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Owner emails");
-  await expect(page.getByText("Contact form emails needing attention")).toBeVisible();
-  await expect(page.locator("p.font-heading").first()).toHaveText("130");
+  await expect(page.getByText("Owner emails needing attention")).toBeVisible();
+  await expect(summary(page, "Total")).toHaveText("130");
+  await expect(summary(page, "Contact form")).toHaveText("130");
+  await expect(summary(page, "Renewal documents")).toHaveText("0");
   await expect(page.getByText("Needs attention", { exact: true })).toBeVisible();
   await expect(rows(page)).toHaveCount(50);
   await expect(page.getByText("Showing 50 of 130 needing attention")).toBeVisible();
   await expect(rows(page).first()).toContainText("Contact submission");
   await expect(rows(page).first()).toContainText(`Ref ${sourceId(1).slice(0, 8)}`);
-  await expect(page.getByText("Messages saved before email tracking began are not listed here and cannot be resent.")).toBeVisible();
+  await expect(page.getByText("Messages and documents saved before email tracking began are not listed here and cannot be resent.")).toBeVisible();
 
   await page.getByRole("button", { name: "Load older" }).click();
   await expect(rows(page)).toHaveCount(100);
@@ -177,7 +190,7 @@ test("show all resets to the first page; settled rows have no actions", async ({
   await toggle.click();
   await expect(page.getByRole("button", { name: "Show only emails needing attention" })).toHaveAttribute("aria-pressed", "true");
   await expect(rows(page)).toHaveCount(50);
-  expect(store.overviewCalls.at(-1)).toMatchObject({ p_include_settled: true, p_before_created_at: null, p_kind: "contact_submission" });
+  expect(store.overviewCalls.at(-1)).toMatchObject({ p_include_settled: true, p_before_created_at: null, p_kind: null });
   await page.getByRole("button", { name: "Load older" }).click();
   await expect(rows(page)).toHaveCount(100);
   await page.getByRole("button", { name: "Load older" }).click();
@@ -401,11 +414,185 @@ test("non-admin sessions cannot open Owner Emails", async ({ page }) => {
   expect(store.overviewCalls).toHaveLength(0);
 });
 
+// 7.2C-2 ------------------------------------------------------------------------------------
+function mixedFixture() {
+  // 160 needing attention, alternating kinds so equal timestamps (pairs) cross kinds and page
+  // boundaries: 80 contact and 80 renewal. Then 10 settled of each kind.
+  return [
+    ...Array.from({ length: 160 }, (_, i) => (i % 2 === 0 ? row : renewalRow)(i + 1, ["failed", "missed", "unknown", "resend_requested"][i % 4])),
+    ...Array.from({ length: 10 }, (_, i) => row(i + 161, "sent")),
+    ...Array.from({ length: 10 }, (_, i) => renewalRow(i + 171, "acknowledged")),
+  ];
+}
+
+test("7.2C-2: mixed kinds show exact totals and per-kind counts; filters reset paging", async ({ page }) => {
+  const store = new Store(mixedFixture());
+  await open(page, store);
+  await expect(summary(page, "Total")).toHaveText("160");
+  await expect(summary(page, "Contact form")).toHaveText("80");
+  await expect(summary(page, "Renewal documents")).toHaveText("80");
+  const group = page.getByRole("group", { name: "Filter by email kind" });
+  await expect(group.getByRole("button", { name: "All", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(rows(page)).toHaveCount(50);
+  await expect(page.getByText("Showing 50 of 160 needing attention")).toBeVisible();
+  // Newest first with id tie-breaks: rows 1-49 and 51 (pairs share a timestamp), so 26 contact and 24 renewal.
+  await expect(rows(page).filter({ hasText: "Renewal document" })).toHaveCount(24);
+  await expect(rows(page).filter({ hasText: "Contact submission" })).toHaveCount(26);
+  expect(store.overviewCalls.at(-1)).toMatchObject({ p_kind: null, p_before_created_at: null });
+
+  await page.getByRole("button", { name: "Load older" }).click();
+  await expect(rows(page)).toHaveCount(100);
+  await group.getByRole("button", { name: "Renewal documents" }).click();
+  await expect(group.getByRole("button", { name: "Renewal documents" })).toHaveAttribute("aria-pressed", "true");
+  await expect(rows(page)).toHaveCount(50);
+  expect(store.overviewCalls.at(-1)).toMatchObject({ p_kind: "renewal_document", p_before_created_at: null, p_before_id: null });
+  await expect(page.getByText("Showing 50 of 80 needing attention")).toBeVisible();
+  await expect(rows(page).filter({ hasText: "Contact submission" })).toHaveCount(0);
+  // The summary still reports every kind.
+  await expect(summary(page, "Total")).toHaveText("160");
+
+  await group.getByRole("button", { name: "Contact form" }).click();
+  await expect(rows(page)).toHaveCount(50);
+  expect(store.overviewCalls.at(-1)).toMatchObject({ p_kind: "contact_submission", p_before_created_at: null });
+  await expect(page.getByText("Showing 50 of 80 needing attention")).toBeVisible();
+  await expect(rows(page).filter({ hasText: BUSINESS })).toHaveCount(0);
+
+  // Refresh also starts again from the first page of the current filter.
+  await page.getByRole("button", { name: "Load older" }).click();
+  await expect(rows(page)).toHaveCount(80);
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(rows(page)).toHaveCount(50);
+  expect(store.overviewCalls.at(-1)).toMatchObject({ p_kind: "contact_submission", p_before_created_at: null });
+});
+
+test("7.2C-2: keyset pages across tied timestamps and both kinds skip and repeat nothing", async ({ page }) => {
+  const store = new Store(mixedFixture());
+  await open(page, store);
+  await page.getByRole("button", { name: "Show all tracked emails" }).click();
+  await expect(rows(page)).toHaveCount(50);
+  for (const expected of [100, 150, 180]) {
+    await page.getByRole("button", { name: "Load older" }).click();
+    await expect(rows(page)).toHaveCount(expected);
+  }
+  await expect(page.getByRole("button", { name: "Load older" })).toHaveCount(0);
+  const refs = await rows(page).locator("span.font-mono").allTextContents();
+  expect(new Set(refs).size).toBe(180);
+  // Each request followed the previous page's last row.
+  const pages = store.overviewCalls.slice(-4);
+  expect(pages.map((call) => call.p_before_created_at === null)).toEqual([true, false, false, false]);
+});
+
+test("7.2C-2: a response for an earlier filter is discarded", async ({ page }) => {
+  const store = new Store(mixedFixture());
+  await open(page, store);
+  await expect(rows(page)).toHaveCount(50);
+  let release!: () => void;
+  store.holdNext = new Promise((resolve) => { release = resolve; });
+  const group = page.getByRole("group", { name: "Filter by email kind" });
+  await group.getByRole("button", { name: "Contact form" }).click();
+  await expect.poll(() => store.overviewCalls.at(-1)?.p_kind).toBe("contact_submission");
+  await group.getByRole("button", { name: "Renewal documents" }).click();
+  await expect(page.getByText("Showing 50 of 80 needing attention")).toBeVisible();
+  await expect(rows(page).filter({ hasText: "Contact submission" })).toHaveCount(0);
+  release();
+  // The late contact response arrives and must not replace the renewal list.
+  await expect.poll(() => store.overviewCalls.length).toBeGreaterThanOrEqual(3);
+  await page.waitForTimeout(300);
+  await expect(rows(page).filter({ hasText: "Contact submission" })).toHaveCount(0);
+  await expect(rows(page).filter({ hasText: BUSINESS })).toHaveCount(50);
+});
+
+test("7.2C-2: renewal rows link to Compliance Expiry and never open contact detail", async ({ page }) => {
+  const store = new Store([renewalRow(1, "failed"), row(2, "failed")]);
+  await open(page, store);
+  const renewal = rowFor(page, 1);
+  await expect(renewal).toContainText("Renewal document");
+  await expect(renewal).toContainText(`${BUSINESS} — License`);
+  const link = renewal.getByRole("link", { name: `Open Compliance Expiry to review ${BUSINESS} — License` });
+  await expect(link).toHaveAttribute("href", "/admin/compliance/renewals");
+  await expect(renewal.getByRole("button", { name: "View submission" })).toHaveCount(0);
+  await expect(rowFor(page, 2).getByRole("button", { name: "View submission" })).toBeVisible();
+  await expect(rowFor(page, 2).getByRole("link", { name: /Compliance Expiry/ })).toHaveCount(0);
+  const url = page.url();
+  await link.click();
+  await expect(page).toHaveURL(/\/admin\/compliance\/renewals$/);
+  expect(store.detailCalls).toHaveLength(0);
+  expect(url).not.toContain(sourceId(1));
+});
+
+test("7.2C-2: renewal recovery needs the renewal attestations and sends the renewal kind", async ({ page }) => {
+  const store = new Store([renewalRow(1, "unknown"), renewalRow(2, "missed"), renewalRow(3, "failed")]);
+  await open(page, store);
+  await rowFor(page, 1).getByRole("button", { name: "Resend email" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Resend the owner email?" });
+  await expect(dialog).toContainText("show no email for this renewal document");
+  const confirm = dialog.getByRole("button", { name: "Resend", exact: true });
+  await expect(confirm).toBeDisabled();
+  await dialog.getByRole("checkbox", { name: "I checked the owner inbox and the Resend log and found no email for this renewal document." }).check();
+  await confirm.click();
+  await expect(page.getByText("Resend recorded")).toBeVisible();
+  expect(store.resendCalls).toEqual([{ kind: "renewal_document", sourceId: sourceId(1), confirmNoEmail: true }]);
+  await expect(rowFor(page, 1)).toHaveCount(0);
+
+  await rowFor(page, 2).getByRole("button", { name: "Acknowledge" }).click();
+  const ack = page.getByRole("alertdialog", { name: "Acknowledge without email?" });
+  await ack.getByLabel("What you found and why no further email is needed").fill("Found the renewal email in the owner inbox");
+  await expect(ack.getByRole("button", { name: "Acknowledge", exact: true })).toBeDisabled();
+  await ack.getByRole("checkbox", { name: "I checked the owner inbox and the Resend log for this renewal document." }).check();
+  await ack.getByRole("button", { name: "Acknowledge", exact: true }).click();
+  await expect(page.getByText("No email was sent. The renewal document stays saved.")).toBeVisible();
+  expect(store.ackCalls).toEqual([{ p_kind: "renewal_document", p_source: sourceId(2), p_reason: "Found the renewal email in the owner inbox", p_inbox_checked: true }]);
+
+  await rowFor(page, 3).getByRole("button", { name: "Acknowledge" }).click();
+  const direct = page.getByRole("alertdialog", { name: "Acknowledge without email?" });
+  await expect(direct).toContainText("already being reviewed in Compliance Expiry");
+  await expect(direct.getByRole("checkbox")).toHaveCount(0);
+});
+
+test("7.2C-2: a lost renewal resend response refreshes without retrying or claiming success", async ({ page }) => {
+  const target = renewalRow(1, "failed");
+  const store = new Store([target]);
+  await open(page, store);
+  await expect(rows(page)).toHaveCount(1);
+  await page.route("http://127.0.0.1:3103/api/admin/owner-emails", async (route) => {
+    store.resendCalls.push(route.request().postDataJSON());
+    target.state = "unknown";
+    target.attempts += 1;
+    target.last_error_code = "provider_timeout_or_network";
+    await route.abort("failed");
+  });
+  const before = store.overviewCalls.length;
+  await rowFor(page, 1).getByRole("button", { name: "Resend email" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Resend the owner email?" });
+  await dialog.getByRole("button", { name: "Resend", exact: true }).click();
+  await expect.poll(() => store.overviewCalls.length).toBeGreaterThan(before);
+  await expect(dialog.getByRole("alert")).toContainText("Review the refreshed state");
+  await expect(dialog.getByRole("checkbox", { name: /for this renewal document/ })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Resend", exact: true })).toBeDisabled();
+  await expect(page.getByText("Resend recorded", { exact: true })).toHaveCount(0);
+  expect(store.resendCalls).toEqual([{ kind: "renewal_document", sourceId: sourceId(1), confirmNoEmail: false }]);
+  // Close the alert dialog before locating background rows by role.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(rowFor(page, 1)).toContainText("Result unknown");
+});
+
+test("7.2C-2: filters are keyboard operable", async ({ page }) => {
+  const store = new Store(mixedFixture());
+  await open(page, store);
+  const renewals = page.getByRole("group", { name: "Filter by email kind" }).getByRole("button", { name: "Renewal documents" });
+  await renewals.focus();
+  await expect(renewals).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(renewals).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => store.overviewCalls.at(-1)?.p_kind).toBe("renewal_document");
+});
+
 for (const theme of ["light", "dark"]) {
   for (const width of [320, 1440]) {
     test(`owner emails ${theme} ${width}px: axe and reflow, list and dialogs`, async ({ page }) => {
-      await open(page, new Store([row(1, "unknown"), row(2, "failed"), row(3, "missed"), row(4, "sent")]), { theme, width });
-      await expect(rows(page)).toHaveCount(3);
+      await open(page, new Store([row(1, "unknown"), row(2, "failed"), row(3, "missed"), row(4, "sent"), renewalRow(5, "failed"), renewalRow(6, "unknown")]), { theme, width });
+      await expect(rows(page)).toHaveCount(5);
       await accessible(page);
       await rowFor(page, 1).getByRole("button", { name: "Acknowledge" }).click();
       await expect(page.getByRole("alertdialog")).toBeVisible();

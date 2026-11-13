@@ -1,5 +1,6 @@
-// TRACE-154 (Phase 7.2C-1): concurrent claims, outcome records and operator commands for one
-// contact-submission owner email, against the real database. Each call is its own psql
+// TRACE-154 (Phase 7.2C-1, extended in 7.2C-2): concurrent claims, outcome records and operator
+// commands for contact-submission and provider renewal-document owner emails, against the real
+// database. Each call is its own psql
 // session, so claims race on the ledger row lock. Proves one claim (one send) per permitted
 // attempt, operator resends as distinct attempts, no authority for anonymous or non-operator
 // callers, and that a claim which commits while its client is lost is never re-claimed
@@ -141,4 +142,102 @@ assert.ok(acks.every(result => result.ok));
 assert.equal(await sql(`select count(*) from private.owner_email_notification_events e join private.owner_email_notifications n on n.id=e.notification_id
  where n.contact_submission_id='${lost}' and e.state='acknowledged'`), '1', 'one acknowledgement event');
 
-console.log('Owner email concurrency: PASS (8 initial claims → 1; 4 records → 1; 6 resend requests → 1 attempt; 9 mixed claims → 1; lost committed claim → no automatic claim, attested recovery as attempt 2; 5 acknowledgements → 1; no anon/non-operator authority).');
+// 7.2C-2: provider renewal documents --------------------------------------------------------
+const vendor = '7c500000-0000-4000-8000-000000000003';
+const provider = '7c520000-0000-4000-8000-000000000001';
+const rpath = n => `renewals/${provider}/${n < 10 ? 'license' : 'insurance'}/7c530000-0000-4000-8000-${String(n).padStart(12, '0')}-synthetic.pdf`;
+assert.equal(await sql(`select count(*) from public.contractors where id='${provider}'`), '0',
+  'Reset the isolated database before rerunning renewal owner-email fixtures.');
+await sql(`insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values ('${vendor}','owner-email-renewal-vendor@example.test',now(),'{}');
+insert into public.user_roles(user_id,role) values ('${vendor}','vendor') on conflict do nothing;
+insert into public.contractors(id,name,is_active,marketing_enabled,user_id) values ('${provider}','Synthetic Renewal Racer',true,false,'${vendor}');
+insert into public.vendor_applications(id,business_name,first_name,last_name,email,phone,contractor_id,document_urls)
+ values ('7c540000-0000-4000-8000-000000000001','Synthetic Renewal Racer','Test','Racer','owner-email-renewal-racer@example.test','synthetic','${provider}','{}');
+insert into public.vendor_onboarding(contractor_id,application_version_id,revision,status)
+ values ('${provider}',(select id from public.vendor_application_versions where application_id='7c540000-0000-4000-8000-000000000001'),1,'active');
+insert into storage.objects(bucket_id,name,metadata) select 'vendor-documents',p,'{"size":2048,"mimetype":"application/pdf"}'::jsonb
+ from unnest(array['${rpath(1)}','${rpath(2)}','${rpath(10)}']) p;`);
+const submit = (sub, path, contractor) => settle(sql(as('authenticated', sub,
+  `select public.vendor_submit_renewal_document('${path}'${contractor ? `,'${contractor}'` : ''})`)).then(JSON.parse));
+const rledger = async id => sql(`select coalesce((select state||':'||attempts from private.owner_email_notifications where renewal_document_id='${id}'),'none')`);
+const rcount = async (id, state) => Number(await sql(`select count(*) from private.owner_email_notification_events e
+ join private.owner_email_notifications n on n.id=e.notification_id where n.renewal_document_id='${id}' and e.state='${state}'`));
+const rclaim = (id, mode) => service(`select public.owner_email_claim('renewal_document','${id}','${mode}')`).then(JSON.parse);
+const rrecord = (id, claimId, outcome, code) => service(`select public.owner_email_record('renewal_document','${id}','${claimId}','${outcome}',null,${code ? `'${code}'` : 'null'})`);
+const rresend = (sub, id, confirm) => settle(sql(as('authenticated', sub, `select public.owner_email_request_resend('renewal_document','${id}',${confirm})`)));
+
+// Eight concurrent provider submissions of one upload: one document, one ledger row, one creation event.
+const submissions = await Promise.all(Array.from({ length: 8 }, () => submit(vendor, rpath(1))));
+assert.ok(submissions.every(result => result.ok), 'every racing submission answers (one records, the rest replay)');
+assert.equal(submissions.filter(result => result.value.recorded).length, 1, 'one submission is recorded');
+const doc = submissions[0].value.document_id;
+assert.ok(submissions.every(result => result.value.document_id === doc && result.value.submitted_as === 'provider'));
+assert.equal(await rledger(doc), 'pending:0', 'the provider submission has exactly one pending row');
+assert.equal(await rcount(doc, 'pending'), 1, 'one creation event despite the replays');
+
+// An operator upload on the provider's behalf creates no ledger row.
+const operatorUpload = await submit(operator, rpath(10), provider);
+assert.ok(operatorUpload.ok && operatorUpload.value.recorded && operatorUpload.value.submitted_as === 'operator');
+assert.equal(await rledger(operatorUpload.value.document_id), 'none', 'an operator upload notifies nobody');
+
+// Eight concurrent initial claims: one; four concurrent records: one.
+const rInitial = await Promise.all(Array.from({ length: 8 }, () => rclaim(doc, 'initial')));
+const rWinners = rInitial.filter(result => result.claimed);
+assert.equal(rWinners.length, 1, 'one concurrent renewal claim wins');
+assert.equal(rWinners[0].kind, 'renewal_document');
+assert.equal(rWinners[0].source.business_name, 'Synthetic Renewal Racer');
+assert.deepEqual(Object.keys(rWinners[0].source).sort(), ['business_name', 'created_at', 'id', 'kind'], 'no file name or path in the payload');
+const rRecords = await Promise.all(Array.from({ length: 4 }, () => settle(rrecord(doc, rWinners[0].claim_id, 'unknown', 'provider_server_error'))));
+assert.equal(rRecords.filter(result => result.ok).length, 1, 'one outcome is recorded for the renewal claim');
+assert.equal(await rledger(doc), 'unknown:1');
+
+// Anonymous, the provider itself and non-operators gain no authority over the renewal row.
+const anonRenewal = await settle(sql(as('anon', null, `select public.owner_email_request_resend('renewal_document','${doc}',true)`)));
+assert.ok(!anonRenewal.ok && /permission denied/.test(anonRenewal.error), 'anon cannot request a renewal resend');
+for (const sub of [vendor, member]) {
+  const refused = await rresend(sub, doc, true);
+  assert.ok(!refused.ok && /Onboarding operator required/.test(refused.error), 'the provider or a member cannot request a renewal resend');
+}
+const vendorClaim = await settle(sql(as('authenticated', vendor, `select public.owner_email_claim('renewal_document','${doc}','resend')`)));
+assert.ok(!vendorClaim.ok && /permission denied/.test(vendorClaim.error), 'the provider cannot claim its own renewal email');
+assert.equal(await rledger(doc), 'unknown:1');
+
+// Unknown needs the attestation; six attested requests permit one attempt.
+const rBlind = await rresend(operator, doc, false);
+assert.ok(!rBlind.ok && /confirm no matching email/.test(rBlind.error), 'an unknown renewal email needs the no-email attestation');
+const rRequests = await Promise.all(Array.from({ length: 6 }, () => rresend(operator, doc, true)));
+assert.ok(rRequests.every(result => result.ok && JSON.parse(result.value).state === 'resend_requested'));
+const rMixed = await Promise.all([...Array.from({ length: 6 }, () => rclaim(doc, 'resend')), ...Array.from({ length: 3 }, () => rclaim(doc, 'initial'))]);
+const rResendWinners = rMixed.filter(result => result.claimed);
+assert.equal(rResendWinners.length, 1, 'one renewal resend claim wins');
+assert.equal(rResendWinners[0].attempt, 2);
+const rStale = await settle(rrecord(doc, rWinners[0].claim_id, 'sent'));
+assert.ok(!rStale.ok && /Owner email claim is not current/.test(rStale.error), 'a stale renewal worker cannot overwrite');
+assert.ok((await settle(rrecord(doc, rResendWinners[0].claim_id, 'sent'))).ok);
+assert.equal(await rledger(doc), 'sent:2');
+assert.equal(await rcount(doc, 'sending'), 2, 'two renewal sends in total');
+
+// A renewal claim commits but its client is lost before reading the response.
+const lostSubmission = await submit(vendor, rpath(2));
+const lostDoc = lostSubmission.value.document_id;
+const rDoomed = spawn('docker', psqlArgs, { stdio: ['pipe', 'ignore', 'ignore'] });
+rDoomed.stdin.end(`${as('service_role', null, `select public.owner_email_claim('renewal_document','${lostDoc}','initial')`)}
+select pg_sleep(60);`);
+for (let tries = 0; (await rledger(lostDoc)) !== 'sending:1'; tries++) {
+  assert.ok(tries < 100, 'the renewal claim committed');
+  await sleep(100);
+}
+rDoomed.kill('SIGKILL');
+await sql(`select pg_terminate_backend(pid) from pg_stat_activity where query like '%pg_sleep(60)%' and pid <> pg_backend_pid()`);
+assert.ok((await Promise.all(Array.from({ length: 6 }, () => rclaim(lostDoc, 'initial')))).every(result => !result.claimed && result.state === 'sending'),
+  'no automatic second renewal claim');
+await sql(`update private.owner_email_notifications set claimed_at=now()-interval '11 minutes' where renewal_document_id='${lostDoc}'`);
+assert.ok((await Promise.all(Array.from({ length: 4 }, () => rclaim(lostDoc, 'initial')))).every(result => !result.claimed && result.state === 'unknown'));
+const rAttested = await Promise.all(Array.from({ length: 4 }, () => rresend(operator, lostDoc, true)));
+assert.ok(rAttested.every(result => result.ok));
+const rRecovery = (await Promise.all(Array.from({ length: 5 }, () => rclaim(lostDoc, 'resend')))).filter(result => result.claimed);
+assert.equal(rRecovery.length, 1);
+assert.equal(rRecovery[0].attempt, 2, 'the renewal recovery is attempt 2');
+assert.equal(await rcount(lostDoc, 'sending'), 2);
+
+console.log('Owner email concurrency: PASS (8 initial claims → 1; 4 records → 1; 6 resend requests → 1 attempt; 9 mixed claims → 1; lost committed claim → no automatic claim, attested recovery as attempt 2; 5 acknowledgements → 1; no anon/non-operator authority). Renewal: 8 racing submissions → 1 document/1 row; operator upload → no row; 8 claims → 1; 4 records → 1; 6 attested requests → 1 attempt; stale worker refused; lost committed claim → attested recovery as attempt 2; no anon/vendor/member authority).');

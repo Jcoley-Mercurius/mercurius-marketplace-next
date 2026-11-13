@@ -1,8 +1,10 @@
 # Phase 7.2C-1 — Owner-email ledger, contact-submission delivery and operator recovery (TRACE-154)
 
-**Status:** IMPLEMENTED; **MIGRATION PUSHED TO HOSTED 2026-11-12** on the owner's instruction (§6.1). Draft PR against `main` for Codex review. Not merged, not deployed, not activated.
+**Release update — 2026-11-12 ET:** #166 is merged as `24dd455` and production is READY. Final PR CI passed; the post-deploy ledger/event count is 0/0. Main merge CI was still running. See §6.2 and the [Codex checkpoint](PHASE-7-OWNER-EMAIL-LEDGER-CODEX-REVIEW.md). Real-email acceptance remains separate.
+
+**Original implementation checkpoint (superseded by the release update above):** IMPLEMENTED; **MIGRATION PUSHED TO HOSTED 2026-11-12** on the owner's instruction (§6.1). The PR was draft for Codex review and had not yet merged or deployed at that checkpoint.
 **Branch:** `claude/phase7-2c1-owner-email-ledger`, created from the reviewed plan head `fedaf5f419e49349371e4a183987e05d5036f722`. Plan PR #165 merged during implementation (`9b487bf4…`, documentation only), so the branch was rebased onto that `main`. The PR diff is implementation plus this slice's records.
-**`main` at this checkpoint:** `9b487bf91e1420881b77579f20894edc33dd3494` (#165 merge). Previous application code base: `3eb8ff4` (#164); #165 changed documentation only.
+**`main` at the original implementation checkpoint:** `9b487bf91e1420881b77579f20894edc33dd3494` (#165 merge). Previous application code base: `3eb8ff4` (#164); #165 changed documentation only.
 **Plan:** [PHASE-7-OWNER-EMAIL-LEDGER-PLAN](PHASE-7-OWNER-EMAIL-LEDGER-PLAN.md), with its §0.2 clarifications.
 **Authority:** the owner's 7.2C-1 implementation instruction (2026-11-12); [DEC-2026-066](DECISION-LOG.md) (O-1); Codex decisions C-1..C-8; contract G1-02; MTS §4; MPS §10; MDS ConfirmAction and OperationalQueue; DEC-2026-037 for any later push or release.
 
@@ -72,7 +74,7 @@ These are within the plan's intent but differ in detail from its proposed SQL or
 
 **Local-only notes.** The isolated stack runs from a copy in `.phase5-local`, so `node scripts/prepare-phase5-local.mjs` is needed before a reset picks up new migrations; CI does this. The local `vitest run` also collects an untracked worktree under the ignored `.phase5-local/wt/`, so it is run with `--exclude ".phase5-local/**"`; CI checkouts do not contain it.
 
-## 6. Rollout and rollback (not performed)
+## 6. Rollout and rollback procedure (status in §6.1–6.2)
 
 1. Codex reviews this PR, and exact-head CI passes.
 2. **With the owner's authorization:** `supabase db push --linked --dry-run`, then `supabase db push --linked`.
@@ -94,12 +96,22 @@ The owner instructed the push on 2026-11-12, after exact-head CI passed on `2ddc
 | Unchanged definitions (hosted) | Application ledger `10 \| 5f14532aa26ed5400e73e210379aa4f8`; `vendor_submit_renewal_document` `8c8942365d8f9d34bdcd1d839f86c472`; `contact_submissions` ACL unchanged. All equal to local |
 | Money fingerprint (hosted) | `58 \| af0fae6e0c5b604e9073e10bc060957e` |
 
-No row contents were read; only counts. **Push-to-deploy window now open:** the deployed (old) route keeps emailing without claims. Each contact saved before this PR deploys gets a `pending` row that reads `missed` after 10 minutes and needs per-row attested handling (§6 step 5). Not merged, not deployed.
+At this hosted-push checkpoint, no row contents were read; only counts. The push-to-deploy window was open: the old route kept emailing without claims, and contacts saved then would become `missed` after 10 minutes and need per-row attested handling. Merge/deploy had not yet happened. The subsequent release and zero-row reconciliation are in §6.2.
+
+## 6.2 Reviewed release and reconciliation — 2026-11-12 ET
+
+- **Reviewed/tested head:** `02f17c6d37dad65bccfa94575dd26c67a2f8f16a`; [PR CI 43333421014](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/43333421014) passed backend, lifecycle and application. Application logs confirm **66 unit files / 861 tests and 704 browser tests** passed, including the 17 owner-email browser cases.
+- **Merge:** [#166](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/166), `24dd455acd520a21da14b0305a92383fbedfcccf`. Its Git tree equals the tested head: `7b2b8b916d7bd8e64d96f80a1d4242a2e086f7ad`.
+- **Production:** `dpl_7jx9gTgj2tEz1MkqnhMNLxU6pD81`, READY on that merge at **8:17:38 PM ET**, with the production domains assigned. [Deployment](https://vercel.com/mercurius-projects/mercurius-marketplace-next/7jx9gTgj2tEz1MkqnhMNLxU6pD81).
+- **Main CI:** [43343682357](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/43343682357) was still running at this checkpoint; no post-merge CI result is claimed.
+- **Fresh post-deploy hosted readback:** migration head `20261122001000`; **0 ledger / 0 event rows**; contact trigger enabled; no renewal-email trigger. The rollout window therefore has no record requiring acknowledgement or resend. No record contents, inbox or provider evidence were read; no recovery command or email was sent.
+- **Additional HTTP smoke checks:** not executed. Automatic approval review failed because the account's tool-usage quota was reached; this was not an unsafe-action finding. The command did not run.
+- **Still separate:** real-email/inbox verification, A2, CFG-011 retention, retrospective 7.2B review, and final booking-candidate schema/grants, fingerprint and completion-integrity checks. The older intermittent accessibility failure is not declared repaired. This checkpoint does not accept Phase 7 or activate transactions/automation.
 
 ## 7. Unresolved and carried
 
-- Codex review of this implementation, merge and deploy. (The hosted push and readback are done, §6.1.)
+- Codex review, merge/deploy and zero-row rollout reconciliation are recorded in §6.2. Main merge CI was still running at that checkpoint.
 - Real-email verification with the controlled mailbox (plan §6.4): separate and owner-authorized.
-- 7.2C-2 (renewal trigger and route) is not started.
+- [7.2C-2](PHASE-7-OWNER-EMAIL-LEDGER-7-2C-2.md) has a documentation-only implementation handoff; renewal application/database work has not started.
 - Main CI run 43214230785's intermittent `request.spec.ts:837` accessibility failure is outside this slice. It is not repaired or retried here (plan §1.1).
 - Carried unchanged: CFG-011 log retention (7.6), A2 human verification, final schema/grants, fingerprint and completion-integrity checks on the final candidate, the `offer_terms` and promotions gates off, and booking readiness.
