@@ -2,9 +2,9 @@
 
 **Release update — 2026-11-12 ET:** #166 is merged as `24dd455` and production is READY. Final PR CI passed; the post-deploy ledger/event count is 0/0. Main merge CI was still running. See §6.2 and the [Codex checkpoint](PHASE-7-OWNER-EMAIL-LEDGER-CODEX-REVIEW.md). Real-email acceptance remains separate.
 
-**Status:** IMPLEMENTED; **MIGRATION PUSHED TO HOSTED 2026-11-12** on the owner's instruction (§6.1). Draft PR against `main` for Codex review. Not merged, not deployed, not activated.
+**Original implementation checkpoint (superseded by the release update above):** IMPLEMENTED; **MIGRATION PUSHED TO HOSTED 2026-11-12** on the owner's instruction (§6.1). The PR was draft for Codex review and had not yet merged or deployed at that checkpoint.
 **Branch:** `claude/phase7-2c1-owner-email-ledger`, created from the reviewed plan head `fedaf5f419e49349371e4a183987e05d5036f722`. Plan PR #165 merged during implementation (`9b487bf4…`, documentation only), so the branch was rebased onto that `main`. The PR diff is implementation plus this slice's records.
-**`main` at this checkpoint:** `9b487bf91e1420881b77579f20894edc33dd3494` (#165 merge). Previous application code base: `3eb8ff4` (#164); #165 changed documentation only.
+**`main` at the original implementation checkpoint:** `9b487bf91e1420881b77579f20894edc33dd3494` (#165 merge). Previous application code base: `3eb8ff4` (#164); #165 changed documentation only.
 **Plan:** [PHASE-7-OWNER-EMAIL-LEDGER-PLAN](PHASE-7-OWNER-EMAIL-LEDGER-PLAN.md), with its §0.2 clarifications.
 **Authority:** the owner's 7.2C-1 implementation instruction (2026-11-12); [DEC-2026-066](DECISION-LOG.md) (O-1); Codex decisions C-1..C-8; contract G1-02; MTS §4; MPS §10; MDS ConfirmAction and OperationalQueue; DEC-2026-037 for any later push or release.
 
