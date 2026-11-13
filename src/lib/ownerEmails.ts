@@ -1,4 +1,4 @@
-// TRACE-154 (Phase 7.2C-1): presentation of the owner-email ledger for operators. The
+// TRACE-154 (Phase 7.2C): presentation of the owner-email ledger for operators. The
 // database decides every state and permission; these only label it.
 import { notificationStateLabel, type NotificationState } from "@/lib/recruitingReadiness";
 
@@ -12,9 +12,15 @@ export type OwnerEmailErrorCode =
   | "provider_timeout_or_network"
   | "provider_not_configured";
 
-/** An overview row. It never carries submitted content or an actor ID. */
+export type OwnerEmailKind = "contact_submission" | "renewal_document";
+export type OwnerEmailFilter = "all" | OwnerEmailKind;
+
+/**
+ * An overview row. It never carries submitted contact content or an actor ID. A contact row's
+ * label is the fixed "Contact submission"; a renewal row's is "<business> — <item>".
+ */
 export type OwnerEmailItem = {
-  kind: "contact_submission";
+  kind: OwnerEmailKind;
   source_id: string;
   label: string;
   reference: string;
@@ -82,7 +88,29 @@ export function ownerEmailIsUncertain(state: OwnerEmailState) {
   return state === "missed" || state === "unknown";
 }
 
-export const RESEND_ATTESTATION =
-  "I checked the owner inbox and the Resend log and found no email for this submission.";
-export const ACKNOWLEDGE_ATTESTATION =
-  "I checked the owner inbox and the Resend log for this submission.";
+export const ownerEmailFilters: ReadonlyArray<{ value: OwnerEmailFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "contact_submission", label: "Contact form" },
+  { value: "renewal_document", label: "Renewal documents" },
+];
+
+export const ownerEmailKindLabel: Record<OwnerEmailKind, string> = {
+  contact_submission: "Contact form",
+  renewal_document: "Renewal document",
+};
+
+/** What the email was about, as the confirmation copy names it. */
+export const ownerEmailRecordNoun: Record<OwnerEmailKind, string> = {
+  contact_submission: "submission",
+  renewal_document: "renewal document",
+};
+
+/** Renewal documents are reviewed from Compliance Expiry; the link carries no record ID. */
+export const RENEWAL_REVIEW_PATH = "/admin/compliance/renewals";
+
+export function resendAttestation(kind: OwnerEmailKind) {
+  return `I checked the owner inbox and the Resend log and found no email for this ${ownerEmailRecordNoun[kind]}.`;
+}
+export function acknowledgeAttestation(kind: OwnerEmailKind) {
+  return `I checked the owner inbox and the Resend log for this ${ownerEmailRecordNoun[kind]}.`;
+}

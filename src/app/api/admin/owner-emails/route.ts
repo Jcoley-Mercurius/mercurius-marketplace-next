@@ -12,20 +12,30 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-// TRACE-154 (Phase 7.2C-1): an operator resends the owner email for a saved, tracked contact
-// submission. The operator's session asks the database to allow one more attempt (admin
+// TRACE-154 (Phase 7.2C): an operator resends the owner email for a saved, tracked contact
+// submission (7.2C-1) or provider renewal document (7.2C-2). The operator's session asks the database to allow one more attempt (admin
 // only; a missed or unknown email needs the operator's attestation that they checked the
 // owner inbox and the Resend log and found no matching email). The service client then
-// claims that attempt and sends. Nothing here creates a submission, and nothing is retried.
+// claims that attempt and sends. Nothing here creates a submission or document, and nothing
+// is retried.
 const ROUTE = "owner_email_resend" as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const KINDS = ["contact_submission", "renewal_document"] as const;
+type Kind = (typeof KINDS)[number];
 
-const resultMessage: Record<string, string> = {
-  sent: "Resend accepted the email. Confirm it arrived in the owner inbox.",
-  failed: "Resend refused the email. The submission is still saved.",
-  unknown: "The email result is unknown. Check the owner inbox and the Resend log before trying again.",
-  unrecorded: "The email was attempted but its result was not saved. Check the owner inbox and the Resend log.",
+const savedRecord: Record<Kind, string> = {
+  contact_submission: "The submission is still saved.",
+  renewal_document: "The renewal document is still saved.",
 };
+
+function resultMessage(kind: Kind, state: "sent" | "failed" | "unknown" | "unrecorded") {
+  return {
+    sent: "Resend accepted the email. Confirm it arrived in the owner inbox.",
+    failed: `Resend refused the email. ${savedRecord[kind]}`,
+    unknown: "The email result is unknown. Check the owner inbox and the Resend log before trying again.",
+    unrecorded: "The email was attempted but its result was not saved. Check the owner inbox and the Resend log.",
+  }[state];
+}
 
 const refusedOutcome: Record<number, OperationalOutcome> = {
   401: "unauthenticated",
@@ -40,7 +50,8 @@ export async function POST(request: Request) {
   const trace = { route: ROUTE, correlationId } as const;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const sourceId = typeof body?.sourceId === "string" ? body.sourceId.toLowerCase() : "";
-  if (body?.kind !== "contact_submission" || !UUID.test(sourceId)) {
+  const kind = KINDS.find((value) => value === body?.kind);
+  if (!kind || !UUID.test(sourceId)) {
     // The rejected input is not logged.
     logOperationalEvent({
       ...trace,
@@ -49,9 +60,8 @@ export async function POST(request: Request) {
       errorCode: "validation_failed",
       durationMs: elapsedSince(startedAt),
     });
-    return NextResponse.json({ error: "Choose a contact submission." }, { status: 400 });
+    return NextResponse.json({ error: "Choose a contact submission or renewal document." }, { status: 400 });
   }
-  const kind = "contact_submission" as const;
   const confirmNoEmail = body?.confirmNoEmail === true;
   const context = { ...trace, sourceKind: kind, sourceId, mode: "resend" as const };
 
@@ -135,7 +145,7 @@ export async function POST(request: Request) {
       outcome: outcome.state,
       durationMs: elapsedSince(startedAt),
     });
-    return NextResponse.json({ state: outcome.state, message: resultMessage[outcome.state] });
+    return NextResponse.json({ state: outcome.state, message: resultMessage(kind, outcome.state) });
   } catch (error) {
     logOperationalEvent({
       ...context,

@@ -1,8 +1,13 @@
--- TRACE-154 (Phase 7.2C-1): owner-email ledger for contact submissions.
+-- TRACE-154 (Phase 7.2C-1 and 7.2C-2): owner-email ledger for contact submissions and provider
+-- renewal-document submissions.
 -- Atomic creation and rollback, shape checks, claim rules, a committed claim whose response
 -- is lost, confirmed claim rollback, derived states, resend and acknowledgement attestations,
 -- bounded keyset pages with exact counts, queue privacy, authorization, on-demand detail
 -- (DEC-2026-066), cascade, the old-application compatibility case and unchanged surfaces.
+-- 7.2C-2 (section 9): provider-only atomic creation and rollback through the real
+-- vendor_submit_renewal_document RPC, replay and operator suppression, the renewal claim
+-- payload, missing name versus claim failure, expiry and attested recovery, source privacy,
+-- operator/service-only/cross-account boundaries and the old renewal route on the new schema.
 -- Synthetic identities and content only. Every change rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -87,7 +92,13 @@ select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pr
  'no owner-email command takes a list: one row per call, no bulk acknowledgement');
 select is((select string_agg(tgname,',') from pg_trigger where tgrelid='public.contact_submissions'::regclass and not tgisinternal),
  'owner_email_contact_create','the contact table has exactly the new AFTER INSERT trigger');
-select is((select count(*)::int from pg_trigger where tgname like 'owner\_email\_renewal%'),0,'no renewal trigger exists in 7.2C-1');
+-- 7.2C-2: exactly one renewal trigger, AFTER INSERT, provider submissions only, enabled.
+select is((select string_agg(tgname||':'||tgenabled::text||':'||pg_get_triggerdef(oid), ',' order by tgname) from pg_trigger
+  where tgrelid='public.vendor_renewal_documents'::regclass and not tgisinternal and tgname like 'owner\_email\_%'),
+ 'owner_email_renewal_create:O:CREATE TRIGGER owner_email_renewal_create AFTER INSERT ON public.vendor_renewal_documents FOR EACH ROW WHEN ((new.submitted_as = ''provider''::text)) EXECUTE FUNCTION private.owner_email_renewal_create()',
+ 'the renewal table has exactly the provider-only AFTER INSERT trigger, enabled');
+select is((select string_agg(tgname,',' order by tgname) from pg_trigger where tgrelid='public.vendor_renewal_documents'::regclass and not tgisinternal),
+ 'immutable_evidence,owner_email_renewal_create','the immutability trigger is kept beside it');
 
 -- 1. Atomic creation ------------------------------------------------------------------
 select pg_temp.contact('e1300000-0000-4000-8000-000000000001');
@@ -417,7 +428,8 @@ select ok((select bool_and((i->>'needs_attention')::boolean) from jsonb_array_el
  'every attention-only item needs attention');
 select throws_ok($$select pg_temp.op('select public.owner_email_overview(null,false,now(),null,50)')$$,'22023',null,'a half cursor is refused');
 select throws_ok($$select pg_temp.op('select public.owner_email_overview(''newsletter'')')$$,'22023',null,'an unknown kind filter is refused');
-select is(jsonb_array_length(pg_temp.op($$select public.owner_email_overview('renewal_document',true)$$)->'items'),0,'the reserved renewal filter lists nothing');
+select is(jsonb_array_length(pg_temp.op($$select public.owner_email_overview('renewal_document',true)$$)->'items'),0,
+ 'the renewal filter lists no contact row (no renewal row exists yet)');
 select is(pg_temp.page()->>'stale_after_minutes','10','the overview reports the 10-minute window');
 -- The partial index serves the attention scan.
 select ok(exists (select 1 from pg_indexes where schemaname='private' and indexname='owner_email_notifications_open'),'the open-row index exists');
@@ -443,7 +455,230 @@ select is((select row(e.previous_state,e.attestation,e.reason)::text from privat
 select is((select count(*)::int from private.owner_email_notification_events e join private.owner_email_notifications n on n.id=e.notification_id
   where n.contact_submission_id='e1500000-0000-4000-8000-000000000001' and e.state='sending'),0,'26 the old-release row was never claimed or sent');
 
--- Reserved renewal shape (7.2C-2): the claim payload and label work, though no trigger exists.
+-- 9. Renewal documents (7.2C-2) -------------------------------------------------------------
+-- Provider A (vendor 3) and provider B (vendor 4), both active. Synthetic storage objects carry
+-- metadata only. The file name is a sentinel: it must never reach the ledger, events or overview.
+insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
+ ('e1200000-0000-4000-8000-000000000004','owner-email-vendor-b@example.test',now(),'{}');
+insert into public.user_roles(user_id,role) values ('e1200000-0000-4000-8000-000000000004','vendor') on conflict do nothing;
+insert into public.contractors(id,name,is_active,marketing_enabled,user_id) values
+ ('e1700000-0000-4000-8000-000000000001','Synthetic Renewal Provider A',true,false,'e1200000-0000-4000-8000-000000000003'),
+ ('e1700000-0000-4000-8000-000000000002','Synthetic Renewal Provider B',true,false,'e1200000-0000-4000-8000-000000000004');
+insert into public.vendor_applications(id,business_name,first_name,last_name,email,phone,contractor_id,document_urls)
+ select ('e1710000-0000-4000-8000-00000000000'||n)::uuid,'Synthetic renewal provider '||n,'Test','Renewal',
+   'renewal-provider-'||n||'@example.test','synthetic',('e1700000-0000-4000-8000-00000000000'||n)::uuid,'{}' from generate_series(1,2) n;
+insert into public.vendor_onboarding(contractor_id,application_version_id,revision,status)
+ select ('e1700000-0000-4000-8000-00000000000'||n)::uuid,
+   (select id from public.vendor_application_versions where application_id=('e1710000-0000-4000-8000-00000000000'||n)::uuid),1,'active'
+ from generate_series(1,2) n;
+
+create function pg_temp.rpath(p_c int, p_kind text, p_n int) returns text language sql as $$
+ select 'renewals/e1700000-0000-4000-8000-00000000000'||p_c||'/'||p_kind||'/e1730000-0000-4000-8000-'||lpad(p_n::text,12,'0')||'-SentinelRenewalFile.pdf' $$;
+create function pg_temp.robject(p_path text) returns void language sql as $$
+ insert into storage.objects(bucket_id,name,metadata) values('vendor-documents',p_path,jsonb_build_object('size',2048,'mimetype','application/pdf')) $$;
+create function pg_temp.submit(p_user int, p_path text) returns jsonb language sql as $$
+ select pg_temp.user(p_user, format('select public.vendor_submit_renewal_document(%L)',p_path)) $$;
+create function pg_temp.rledger(p_doc uuid) returns private.owner_email_notifications language sql as $$
+ select * from private.owner_email_notifications where renewal_document_id=p_doc $$;
+create function pg_temp.revents(p_doc uuid) returns text language sql as $$
+ select string_agg(coalesce(e.previous_state,'∅')||'>'||e.state||'@'||e.attempt, ' ' order by e.id) from private.owner_email_notification_events e
+  join private.owner_email_notifications n on n.id=e.notification_id where n.renewal_document_id=p_doc $$;
+create function pg_temp.rclaim(p_doc uuid, p_mode text default 'initial') returns jsonb language sql as $$
+ select pg_temp.svc(format('select public.owner_email_claim(''renewal_document'',%L,%L)',p_doc,p_mode)) $$;
+create function pg_temp.rrecord(p_doc uuid, p_claim text, p_outcome text, p_code text default null) returns jsonb language sql as $$
+ select pg_temp.svc(format('select public.owner_email_record(''renewal_document'',%L,%L,%L,%L,%L)',
+  p_doc,p_claim,p_outcome,case when p_outcome='sent' then 'msg_synthetic' end,p_code)) $$;
+create function pg_temp.rresend(p_doc uuid, p_confirm boolean default false) returns jsonb language sql as $$
+ select pg_temp.op(format('select public.owner_email_request_resend(''renewal_document'',%L,%L)',p_doc,p_confirm)) $$;
+create function pg_temp.rack(p_doc uuid, p_reason text, p_checked boolean default false) returns jsonb language sql as $$
+ select pg_temp.op(format('select public.owner_email_acknowledge(''renewal_document'',%L,%L,%L)',p_doc,p_reason,p_checked)) $$;
+create function pg_temp.rview(p_doc uuid) returns text language sql as $$
+ select n->>'state' from jsonb_array_elements(pg_temp.op($q$select public.owner_email_overview('renewal_document',true,null,null,100)$q$)->'items') n
+  where (n->>'source_id')::uuid=p_doc $$;
+create temp table docs(n int primary key, body jsonb);
+grant all on docs to service_role, authenticated;
+create function pg_temp.doc(p_n int) returns uuid language sql as $$ select (body->>'document_id')::uuid from docs where n=p_n $$;
+
+select pg_temp.robject(pg_temp.rpath(1,'license',n)) from generate_series(1,5) n;
+select pg_temp.robject(pg_temp.rpath(1,'insurance',n)) from generate_series(10,14) n;
+select pg_temp.robject(pg_temp.rpath(2,'license',20));
+
+-- 9.1 Provider submission through the real RPC: one pending row and one event, atomically.
+insert into docs values (1, pg_temp.submit(3, pg_temp.rpath(1,'license',1)));
+select is((select body->>'submitted_as'||':'||(body->>'recorded') from docs where n=1),'provider:true','9.1 the provider submission is recorded');
+select is(row((pg_temp.rledger(pg_temp.doc(1))).state,(pg_temp.rledger(pg_temp.doc(1))).attempts,(pg_temp.rledger(pg_temp.doc(1))).source_kind)::text,
+ '(pending,0,renewal_document)','9.1 a provider renewal submission gets exactly one pending ledger row');
+select is(pg_temp.revents(pg_temp.doc(1)),'∅>pending@0','9.1 and one creation event');
+select is((pg_temp.rledger(pg_temp.doc(1))).created_at,(select created_at from public.vendor_renewal_documents where id=pg_temp.doc(1)),
+ '9.1 the ledger row is created in the submission transaction');
+
+-- 9.2 A replay of the same path inserts nothing, so it creates nothing.
+insert into docs values (2, pg_temp.submit(3, pg_temp.rpath(1,'license',1)));
+select is((select body->>'recorded' from docs where n=2),'false','9.2 the replay is not recorded again');
+select is(pg_temp.doc(2),pg_temp.doc(1),'9.2 and returns the same document');
+select is((select count(*)::int from private.owner_email_notifications where renewal_document_id=pg_temp.doc(1)),1,'9.2 no duplicate ledger row on replay');
+select is(pg_temp.revents(pg_temp.doc(1)),'∅>pending@0','9.2 and no second creation event');
+
+-- 9.3 An operator upload on the provider's behalf notifies nobody (owner decision 2026-09-15).
+insert into docs values (3, pg_temp.op(format('select public.vendor_submit_renewal_document(%L,%L)',pg_temp.rpath(1,'insurance',10),'e1700000-0000-4000-8000-000000000001')));
+select is((select body->>'submitted_as'||':'||(body->>'recorded') from docs where n=3),'operator:true','9.3 the operator upload is recorded');
+select is((select count(*)::int from private.owner_email_notifications where renewal_document_id=pg_temp.doc(3)),0,'9.3 an operator upload creates no ledger row');
+select throws_ok(format($$select pg_temp.rclaim(%L)$$,pg_temp.doc(3)),'P0002',null,'9.3 so it can never be claimed');
+select throws_ok(format($$select pg_temp.rresend(%L,true)$$,pg_temp.doc(3)),'55000',
+ 'Not tracked; recovery for records saved before tracking is a separate proposal.','9.3 nor resent');
+
+-- 9.4 A forced ledger failure fails the whole RPC: the document is rolled back with it.
+alter table private.owner_email_notifications add constraint test_force_failure check (false) not valid;
+select throws_ok(format($$select pg_temp.submit(3,%L)$$,pg_temp.rpath(1,'license',2)),'23514',null,'9.4 a ledger failure fails the submission RPC');
+alter table private.owner_email_notifications drop constraint test_force_failure;
+select is((select count(*)::int from public.vendor_renewal_documents where storage_path=pg_temp.rpath(1,'license',2)),0,
+ '9.4 the document is rolled back with its ledger row');
+
+-- 9.5 The claim returns the saved document and the current business name; nothing else.
+delete from claims; insert into claims values (1, pg_temp.rclaim(pg_temp.doc(1)));
+select is((select body->'source' from claims where n=1),
+ (select jsonb_build_object('id',d.id,'created_at',d.created_at,'kind',d.kind,'business_name','Synthetic Renewal Provider A')
+   from public.vendor_renewal_documents d where d.id=pg_temp.doc(1)),'9.5 the claim returns the saved document and the current business name');
+select is((select array_agg(k order by k) from claims, jsonb_object_keys(body->'source') k where n=1),array['business_name','created_at','id','kind'],
+ '9.5 the payload carries no file name, path, size or submitter');
+select is((select body->>'kind' from claims where n=1),'renewal_document','9.5 the claim names its kind');
+select is((select (body->>'attempt')::int from claims where n=1),1,'9.5 attempt 1');
+select is(pg_temp.rclaim(pg_temp.doc(1)),jsonb_build_object('claimed',false,'state','sending'),'9.5 a second initial claim sends nothing');
+select is(pg_temp.rrecord(pg_temp.doc(1),(select body->>'claim_id' from claims where n=1),'sent')->>'state','sent','9.5 the outcome is recorded');
+-- A rename after the first email shows on a later resend (C-6): the name is read at claim time.
+update public.contractors set name='Synthetic Renewal Provider A Renamed' where id='e1700000-0000-4000-8000-000000000001';
+select is((select i->>'label' from jsonb_array_elements(pg_temp.op($$select public.owner_email_overview('renewal_document',true,null,null,100)$$)->'items') i
+  where (i->>'source_id')::uuid=pg_temp.doc(1)),'Synthetic Renewal Provider A Renamed — License','9.5 the queue label is the current business name and item');
+update public.contractors set name='Synthetic Renewal Provider A' where id='e1700000-0000-4000-8000-000000000001';
+select is(pg_temp.revents(pg_temp.doc(1)),'∅>pending@0 pending>sending@1 sending>sent@1','9.5 every transition is audited once');
+
+-- 9.6 A confirmed claim exception (not a missing name) sends nothing and leaves pending.
+insert into docs values (4, pg_temp.submit(3, pg_temp.rpath(1,'license',3)));
+create trigger test_claim_fault before update on private.owner_email_notifications for each row execute function pg_temp.fault();
+select throws_ok(format($$select pg_temp.rclaim(%L)$$,pg_temp.doc(4)),'55P03',null,'9.6 a fault inside the renewal claim raises');
+drop trigger test_claim_fault on private.owner_email_notifications;
+select is(row((pg_temp.rledger(pg_temp.doc(4))).state,(pg_temp.rledger(pg_temp.doc(4))).attempts,(pg_temp.rledger(pg_temp.doc(4))).claim_id is null)::text,
+ '(pending,0,t)','9.6 the raised claim left no partial claim');
+select is(pg_temp.revents(pg_temp.doc(4)),'∅>pending@0','9.6 and no claim event');
+select is((select count(*)::int from public.vendor_renewal_documents where id=pg_temp.doc(4)),1,'9.6 the document stays saved');
+update private.owner_email_notifications set created_at=now()-interval '11 minutes' where renewal_document_id=pg_temp.doc(4);
+select is(pg_temp.rview(pg_temp.doc(4)),'missed','9.6 after the window it reads missed');
+select is(pg_temp.rclaim(pg_temp.doc(4)),jsonb_build_object('claimed',false,'state','missed'),'9.6 missed is never claimed automatically');
+select throws_ok(format($$select pg_temp.rresend(%L)$$,pg_temp.doc(4)),'55000',null,'9.6 resend from missed needs the no-email attestation');
+select is(pg_temp.rresend(pg_temp.doc(4),true)->>'state','resend_requested','9.6 with it, resend is allowed');
+select is((pg_temp.rclaim(pg_temp.doc(4),'resend')->>'attempt')::int,1,'9.6 the recovered email is attempt 1');
+select is((select attestation from private.owner_email_notification_events e join private.owner_email_notifications n on n.id=e.notification_id
+  where n.renewal_document_id=pg_temp.doc(4) and e.state='resend_requested'),'no_matching_email_found','9.6 the resend records its attestation');
+
+-- 9.7 A committed claim whose response is lost: stays sending, then unknown; attested acknowledgement.
+insert into docs values (5, pg_temp.submit(3, pg_temp.rpath(1,'license',4)));
+select pg_temp.rclaim(pg_temp.doc(5));  -- result discarded: the response was lost
+select is(row((pg_temp.rledger(pg_temp.doc(5))).state,(pg_temp.rledger(pg_temp.doc(5))).attempts)::text,'(sending,1)','9.7 the lost claim stays sending');
+select is(pg_temp.rclaim(pg_temp.doc(5)),jsonb_build_object('claimed',false,'state','sending'),'9.7 no automatic second claim');
+select throws_ok(format($$select pg_temp.rresend(%L,true)$$,pg_temp.doc(5)),'55000','This owner email cannot be resent from sending','9.7 no resend inside the window');
+update private.owner_email_notifications set claimed_at=now()-interval '11 minutes' where renewal_document_id=pg_temp.doc(5);
+select is(pg_temp.rview(pg_temp.doc(5)),'unknown','9.7 past the window it reads unknown');
+select is(pg_temp.rclaim(pg_temp.doc(5)),jsonb_build_object('claimed',false,'state','unknown'),'9.7 unknown is never claimed automatically');
+select throws_ok(format($$select pg_temp.rack(%L,'Checked')$$,pg_temp.doc(5)),'55000',
+ 'Check the owner inbox and the Resend log before acknowledging an uncertain email','9.7 acknowledge from unknown needs the inbox-check attestation');
+select is(pg_temp.rack(pg_temp.doc(5),'Found the renewal email in the owner inbox',true)->>'state','acknowledged','9.7 with it, acknowledged (email found)');
+select is((select row(e.previous_state,e.attestation)::text from private.owner_email_notification_events e join private.owner_email_notifications n on n.id=e.notification_id
+  where n.renewal_document_id=pg_temp.doc(5) and e.state='acknowledged'),'(unknown,inbox_evidence_reviewed)','9.7 the event records the inbox-evidence attestation');
+
+-- 9.8 A stale worker cannot overwrite after an operator request clears its claim.
+insert into docs values (6, pg_temp.submit(3, pg_temp.rpath(1,'insurance',11)));
+delete from claims; insert into claims values (1, pg_temp.rclaim(pg_temp.doc(6)));
+select is(pg_temp.rrecord(pg_temp.doc(6),(select body->>'claim_id' from claims where n=1),'unknown','provider_timeout_or_network')->>'state','unknown',
+ '9.8 a timeout is recorded as unknown');
+select is(pg_temp.rresend(pg_temp.doc(6),true)->>'state','resend_requested','9.8 an attested resend is allowed');
+select throws_ok(format($$select pg_temp.rrecord(%L,%L,'sent')$$,pg_temp.doc(6),(select body->>'claim_id' from claims where n=1)),
+ '40001',null,'9.8 the earlier claim cannot record after the resend request');
+insert into claims values (2, pg_temp.rclaim(pg_temp.doc(6),'resend'));
+select is((select (body->>'attempt')::int from claims where n=2),2,'9.8 the resend is attempt 2 with a new claim');
+select isnt((select body->>'claim_id' from claims where n=2),(select body->>'claim_id' from claims where n=1),'9.8 and a fresh claim UUID');
+select is(pg_temp.rrecord(pg_temp.doc(6),(select body->>'claim_id' from claims where n=2),'failed','provider_refused')->>'state','failed','9.8 its outcome is recorded');
+select is(pg_temp.rack(pg_temp.doc(6),'Reviewed in Compliance Expiry')->>'state','acknowledged','9.8 a failed renewal email is acknowledged with a reason only');
+
+-- 9.9 Old renewal route on the new schema (R-4, test 26 repeated for renewal): the old release
+-- calls the same RPC and emails outside the ledger without claiming.
+insert into docs values (7, pg_temp.submit(3, pg_temp.rpath(1,'insurance',12)));
+select is(row((pg_temp.rledger(pg_temp.doc(7))).state,(pg_temp.rledger(pg_temp.doc(7))).attempts)::text,'(pending,0)','9.9.1 the old route creates one pending row');
+update private.owner_email_notifications set created_at=now()-interval '30 minutes' where renewal_document_id=pg_temp.doc(7);
+select is(pg_temp.rclaim(pg_temp.doc(7)),jsonb_build_object('claimed',false,'state','missed'),'9.9.2 a forced initial claim after the window does not claim it');
+select throws_ok(format($$select pg_temp.rresend(%L)$$,pg_temp.doc(7)),'55000',null,'9.9.3 resend refuses without the attestation');
+select throws_ok(format($$select pg_temp.rack(%L,'Sent by the previous release; found in the inbox')$$,pg_temp.doc(7)),'55000',null,
+ '9.9.3 acknowledge refuses without the attestation');
+select is(pg_temp.rack(pg_temp.doc(7),'Sent by the previous release; found in the inbox',true)->>'state','acknowledged','9.9.5 attested acknowledgement');
+select is(pg_temp.revents(pg_temp.doc(7)),'∅>pending@0 missed>acknowledged@0','9.9 never claimed or sent by the new release');
+
+-- 9.10 Untracked: a provider document saved without the trigger (history) is not sendable.
+alter table public.vendor_renewal_documents disable trigger owner_email_renewal_create;
+insert into docs values (8, pg_temp.submit(3, pg_temp.rpath(1,'insurance',13)));
+alter table public.vendor_renewal_documents enable trigger owner_email_renewal_create;
+select is((select count(*)::int from private.owner_email_notifications where renewal_document_id=pg_temp.doc(8)),0,'9.10 an untracked document has no row');
+select throws_ok(format($$select pg_temp.rresend(%L,true)$$,pg_temp.doc(8)),'55000',
+ 'Not tracked; recovery for records saved before tracking is a separate proposal.','9.10 an untracked document cannot be resent');
+select throws_ok(format($$select pg_temp.rack(%L,'reason',true)$$,pg_temp.doc(8)),'55000',null,'9.10 nor acknowledged');
+select throws_ok(format($$select pg_temp.rclaim(%L)$$,pg_temp.doc(8)),'P0002',null,'9.10 nor claimed');
+select is(pg_temp.rview(pg_temp.doc(8)),null,'9.10 nor listed');
+
+-- 9.11 Cross-account, service-only and operator boundaries.
+select throws_ok(format($$select pg_temp.submit(4,%L)$$,pg_temp.rpath(1,'license',5)),'P0001','Document path does not belong to this provider',
+ '9.11 provider B cannot submit provider A''s path');
+select is((select count(*)::int from public.vendor_renewal_documents where storage_path=pg_temp.rpath(1,'license',5)),0,'9.11 and nothing was saved');
+insert into docs values (9, pg_temp.submit(4, pg_temp.rpath(2,'license',20)));
+select is((pg_temp.rledger(pg_temp.doc(9))).state,'pending','9.11 provider B''s own submission is tracked');
+select throws_ok(format($$select pg_temp.user(%s,%L)$$,u,format(s,pg_temp.doc(1))),'42501','Onboarding operator required',
+  '9.11 vendor '||u||' cannot use operator commands on renewal rows: '||left(s,48))
+ from unnest(array[3,4]) u, unnest(array['select public.owner_email_overview(''renewal_document'')',
+  'select public.owner_email_request_resend(''renewal_document'',%L,true)',
+  'select public.owner_email_acknowledge(''renewal_document'',%L,''x'',true)']) s;
+select throws_ok(format($$select pg_temp.user(%s,%L)$$,u,format(s,pg_temp.doc(9))),'42501',null,
+  '9.11 vendor '||u||' cannot claim or record a renewal row: '||left(s,40))
+ from unnest(array[3,4]) u, unnest(array['select public.owner_email_claim(''renewal_document'',%L,''initial'')',
+  'select public.owner_email_record(''renewal_document'',%L,gen_random_uuid(),''sent'',null,null)']) s;
+select throws_ok(format($$select pg_temp.run(null,'anon',%L)$$,format('select public.owner_email_claim(''renewal_document'',%L,''initial'')',pg_temp.doc(9))),
+ '42501',null,'9.11 anon cannot claim a renewal row');
+select throws_ok(format($$select pg_temp.op(%L)$$,format('select public.owner_email_claim(''renewal_document'',%L,''initial'')',pg_temp.doc(9))),
+ '42501',null,'9.11 an operator session cannot claim directly');
+select is((pg_temp.rledger(pg_temp.doc(9))).state,'pending','9.11 refused callers changed nothing');
+select throws_ok(format($$select pg_temp.op(%L)$$,format('select public.owner_email_contact_submission(%L)',pg_temp.doc(9))),'P0002',null,
+ '9.11 contact detail never opens a renewal record');
+select throws_ok(format($$select pg_temp.svc(%L)$$,format('select public.owner_email_claim(''contact_submission'',%L,''initial'')',pg_temp.doc(9))),'P0002',null,
+ '9.11 a renewal ID is never claimed as a contact submission');
+
+-- 9.12 Source privacy: no file name, path, MIME type or submitter in the ledger, events or overview.
+select ok(not exists (select 1 from private.owner_email_notifications n where n.renewal_document_id is not null and row_to_json(n)::text ~ s)
+      and not exists (select 1 from private.owner_email_notification_events e where e.source_kind='renewal_document' and row_to_json(e)::text ~ s)
+      and pg_temp.op($$select public.owner_email_overview('renewal_document',true,null,null,100)$$)::text !~ s,
+ '9.12 no renewal ledger row, event or overview item holds document detail: '||s)
+ from unnest(array['SentinelRenewalFile','renewals/','application/pdf','e1200000-0000-4000-8000-000000000003']) s;
+select ok(not exists (select 1 from jsonb_array_elements(pg_temp.op($$select public.owner_email_overview('renewal_document',true,null,null,100)$$)->'items') i,
+  jsonb_object_keys(i) k where k in ('actor','requested_by','acknowledged_by','submitted_by','storage_path','file_name','claim_id','provider_message_id')),
+ '9.12 no renewal overview item carries an actor, path, claim or provider ID');
+select is((select count(*)::int from jsonb_array_elements(pg_temp.op($$select public.owner_email_overview('renewal_document',true,null,null,100)$$)->'items') i
+  where i->>'kind'<>'renewal_document'),0,'9.12 the renewal filter lists renewal rows only');
+
+-- 9.13 Exact attention counts per kind include renewal rows.
+-- Provider B's untouched pending row passes the window and needs attention as missed.
+update private.owner_email_notifications set created_at=now()-interval '11 minutes' where renewal_document_id=pg_temp.doc(9);
+select is(pg_temp.rview(pg_temp.doc(9)),'missed','9.13 an unclaimed renewal row reads missed after the window');
+select is(pg_temp.op($$select public.owner_email_overview('renewal_document')$$)->'attention_count'->'renewal_document',
+ to_jsonb((select count(*)::int from private.owner_email_notifications n where n.source_kind='renewal_document'
+   and private.owner_email_state(n.state,n.created_at,n.claimed_at) in ('failed','missed','unknown','resend_requested'))),
+ '9.13 the renewal attention count is exact');
+select ok((pg_temp.op($$select public.owner_email_overview()$$)->'attention_count'->>'renewal_document')::int > 0,'9.13 and non-zero here');
+select is((select (c->>'total')::int - (c->>'contact_submission')::int - (c->>'renewal_document')::int
+  from (select pg_temp.op($$select public.owner_email_overview()$$)->'attention_count' c) x),0,'9.13 the total is the sum of both kinds');
+
+-- 9.14 The renewal ledger row stays with its immutable document.
+select throws_ok(format($$delete from public.vendor_renewal_documents where id=%L$$,pg_temp.doc(1)),null,null,'9.14 a renewal document cannot be deleted');
+select is((select count(*)::int from private.owner_email_notifications where renewal_document_id=pg_temp.doc(1)),1,'9.14 so its ledger row is kept');
+
+-- Missing (blank) business name. contractors.name is NOT NULL, so a "missing" name in the
+-- database is a blank one; the claim returns it as stored and the email builder (unit tests)
+-- and the queue label fall back to "A provider". A null name is covered in the unit tests.
+select ok((select attnotnull from pg_attribute where attrelid='public.contractors'::regclass and attname='name'),'contractors.name is NOT NULL');
 insert into public.contractors(id,name,is_active,marketing_enabled) values
  ('e1600000-0000-4000-8000-000000000001','   ',true,false),('e1600000-0000-4000-8000-000000000002','Synthetic Renewal Co',true,false);
 insert into public.vendor_applications(id,business_name,first_name,last_name,email,phone,contractor_id,document_urls)
@@ -453,23 +688,25 @@ insert into public.vendor_onboarding(contractor_id,application_version_id,revisi
  select ('e1600000-0000-4000-8000-00000000000'||n)::uuid,
    (select id from public.vendor_application_versions where application_id=('e1610000-0000-4000-8000-00000000000'||n)::uuid),1,'active'
  from generate_series(1,2) n;
+-- Direct inserts (no RPC): the trigger is on the table, so a provider row is still tracked and an operator row is not.
 insert into public.vendor_renewal_documents(id,contractor_id,kind,storage_path,file_name,mime_type,size_bytes,submitted_by,submitted_as)
- select ('e1620000-0000-4000-8000-00000000000'||n)::uuid,('e1600000-0000-4000-8000-00000000000'||n)::uuid,'license',
-   'renewals/e1600000-0000-4000-8000-00000000000'||n||'/license/e1630000-0000-4000-8000-00000000000'||n||'-synthetic.pdf',
-   'synthetic.pdf','application/pdf',100,'e1200000-0000-4000-8000-000000000003','provider' from generate_series(1,2) n;
-select is((select count(*)::int from private.owner_email_notifications where renewal_document_id is not null),0,
- 'a renewal submission creates no ledger row in 7.2C-1');
-insert into private.owner_email_notifications(source_kind,renewal_document_id)
- values ('renewal_document','e1620000-0000-4000-8000-000000000001'),('renewal_document','e1620000-0000-4000-8000-000000000002');
--- contractors.name is NOT NULL, so a "missing" name is a blank one; the claim returns it as stored.
+ select ('e1620000-0000-4000-8000-00000000000'||n)::uuid,('e1600000-0000-4000-8000-00000000000'||least(n,2))::uuid,'license',
+   'renewals/e1600000-0000-4000-8000-00000000000'||least(n,2)||'/license/e1630000-0000-4000-8000-00000000000'||n||'-synthetic.pdf',
+   'synthetic.pdf','application/pdf',100,
+   case when n=3 then 'e1200000-0000-4000-8000-000000000001' else 'e1200000-0000-4000-8000-000000000003' end::uuid,
+   case when n=3 then 'operator' else 'provider' end from generate_series(1,3) n;
+select is((select count(*)::int from private.owner_email_notifications where renewal_document_id in
+  ('e1620000-0000-4000-8000-000000000001','e1620000-0000-4000-8000-000000000002') and state='pending' and attempts=0),2,
+ 'the trigger tracks every provider insert, however it is made');
+select is((select count(*)::int from private.owner_email_notifications where renewal_document_id='e1620000-0000-4000-8000-000000000003'),0,
+ 'and no operator insert');
 select is(pg_temp.svc($$select public.owner_email_claim('renewal_document','e1620000-0000-4000-8000-000000000001','initial')$$)->'source'->>'business_name',
- '   ','reserved renewal claim: a blank business name is returned as stored, not a failure');
+ '   ','a blank business name is returned as stored: a missing name, not a failure');
 select is(pg_temp.svc($$select public.owner_email_claim('renewal_document','e1620000-0000-4000-8000-000000000002','initial')$$)->'source'->>'business_name',
- 'Synthetic Renewal Co','reserved renewal claim: the current business name');
-select is((select array_agg(i->>'label' order by i->>'label') from jsonb_array_elements(pg_temp.op($$select public.owner_email_overview('renewal_document',true)$$)->'items') i),
- array['A provider — License','Synthetic Renewal Co — License'],'reserved renewal label: business name and item');
-select throws_ok($$select pg_temp.op('select public.owner_email_contact_submission(''e1620000-0000-4000-8000-000000000001'')')$$,'P0002',null,
- 'contact detail never opens a renewal record');
+ 'Synthetic Renewal Co','the claim reads the current business name');
+select is((select array_agg(i->>'label' order by i->>'label') from jsonb_array_elements(pg_temp.op($$select public.owner_email_overview('renewal_document',true,null,null,100)$$)->'items') i
+  where i->>'source_id' like 'e1620000-%'),
+ array['A provider — License','Synthetic Renewal Co — License'],'renewal label: business name and item, "A provider" for a blank name');
 
 -- 8. Unchanged surfaces -------------------------------------------------------------------
 -- The fingerprint list is maintained in scripts/promotion-money-fingerprint.sql; it is run
@@ -480,6 +717,13 @@ select is((select count(*)::text||'|'||md5(string_agg(pg_get_functiondef(p.oid),
  '10|5f14532aa26ed5400e73e210379aa4f8','the vendor-application ledger functions are byte-identical');
 select is(md5(pg_get_functiondef('public.vendor_submit_renewal_document(text,uuid)'::regprocedure)),'8c8942365d8f9d34bdcd1d839f86c472',
  'vendor_submit_renewal_document is unchanged');
+-- 7.2C-2 adds only its trigger function; the twelve 7.2C-1 ledger functions are not restated.
+select is((select count(*)::text||'|'||md5(string_agg(pg_get_functiondef(p.oid), E'\n' order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)))
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname in ('public','private') and p.proname like 'owner\_email\_%' and p.proname <> 'owner_email_renewal_create'),
+ '12|016c0e683cb19c4c68769d87f5215ff1','the 7.2C-1 owner-email ledger functions are byte-identical');
+select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname in ('public','private') and p.proname like 'owner\_email\_%'),13,'7.2C-2 adds exactly one owner-email function');
 select is((select md5(string_agg(format('%s %s %s', c.relname, a.attname, format_type(a.atttypid,a.atttypmod)), ',' order by c.relname, a.attnum))
   from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='private' and c.relname in ('r0_application_notifications','r0_application_notification_events') and a.attnum>0 and not a.attisdropped),

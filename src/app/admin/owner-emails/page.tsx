@@ -1,36 +1,45 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Eye, EyeOff, History, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AdminError, AdminLoading } from "@/components/admin/AdminPageState";
 import { ContactSubmissionDetail } from "@/components/admin/ContactSubmissionDetail";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { createClient } from "@/lib/supabase/client";
 import {
-  ACKNOWLEDGE_ATTESTATION,
   OWNER_EMAIL_PAGE_SIZE,
-  RESEND_ATTESTATION,
+  RENEWAL_REVIEW_PATH,
+  acknowledgeAttestation,
   ownerEmailErrorLabel,
+  ownerEmailFilters,
   ownerEmailIsUncertain,
+  ownerEmailKindLabel,
+  ownerEmailRecordNoun,
   ownerEmailStateLabel,
+  resendAttestation,
   type OwnerEmailCursor,
+  type OwnerEmailFilter,
   type OwnerEmailItem,
   type OwnerEmailOverview,
 } from "@/lib/ownerEmails";
 import { cn } from "@/lib/utils";
 
-// TRACE-154 (Phase 7.2C-1): owner emails for saved contact submissions. Every read and
-// command is admin-only in the database; this page only presents it. Rows carry a fixed
-// label and a reference, never submitted content (R-1). Pages are bounded; the attention
-// count is exact for the whole ledger (C-8). After any action the list reloads from the
-// database; nothing is optimistic.
+// TRACE-154 (Phase 7.2C): owner emails for saved contact submissions (7.2C-1) and provider
+// renewal-document submissions (7.2C-2). Every read and command is admin-only in the
+// database; this page only presents it. Contact rows carry a fixed label and a reference,
+// never submitted content (R-1); renewal rows carry the business name and item and link to
+// Compliance Expiry. Pages are bounded; the attention counts are exact for the whole ledger,
+// in total and per kind (C-8). A filter change, refresh or completed action reloads from the
+// first page, and a response for an earlier load is discarded. Nothing is optimistic.
+type Counts = OwnerEmailOverview["attention_count"];
 type Data = {
   checkedAt: string;
-  attention: number;
+  counts: Counts;
   items: OwnerEmailItem[];
   cursor: OwnerEmailCursor | null;
 };
@@ -42,9 +51,9 @@ const tone: Record<string, string> = {
   sending: "border-border bg-muted text-muted-foreground",
 };
 
-async function fetchPage(includeSettled: boolean, cursor: OwnerEmailCursor | null) {
+async function fetchPage(filter: OwnerEmailFilter, includeSettled: boolean, cursor: OwnerEmailCursor | null) {
   const { data, error } = await createClient().rpc("owner_email_overview", {
-    p_kind: "contact_submission",
+    p_kind: filter === "all" ? null : filter,
     p_include_settled: includeSettled,
     p_before_created_at: cursor?.created_at ?? null,
     p_before_id: cursor?.id ?? null,
@@ -65,21 +74,22 @@ export default function AdminOwnerEmailsPage() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const [filter, setFilter] = useState<OwnerEmailFilter>("all");
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState("");
   // Responses for an earlier filter or refresh are discarded.
   const generation = useRef(0);
 
-  const load = useCallback(async (includeSettled: boolean) => {
+  const load = useCallback(async (kind: OwnerEmailFilter, includeSettled: boolean) => {
     const ticket = ++generation.current;
     setError("");
     setOlderError("");
     try {
-      const page = await fetchPage(includeSettled, null);
+      const page = await fetchPage(kind, includeSettled, null);
       if (ticket !== generation.current) return;
       setData({
         checkedAt: page.checked_at,
-        attention: page.attention_count.contact_submission,
+        counts: page.attention_count,
         items: page.items,
         cursor: page.next_cursor,
       });
@@ -89,11 +99,11 @@ export default function AdminOwnerEmailsPage() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(showAll), 0);
+    const timer = window.setTimeout(() => void load(filter, showAll), 0);
     return () => window.clearTimeout(timer);
-  }, [load, showAll]);
+  }, [load, filter, showAll]);
 
-  const reload = () => load(showAll);
+  const reload = () => load(filter, showAll);
 
   const loadOlder = async () => {
     if (!data?.cursor || loadingOlder) return;
@@ -101,11 +111,11 @@ export default function AdminOwnerEmailsPage() {
     setLoadingOlder(true);
     setOlderError("");
     try {
-      const page = await fetchPage(showAll, data.cursor);
+      const page = await fetchPage(filter, showAll, data.cursor);
       if (ticket !== generation.current) return;
       setData((current) => current && {
         checkedAt: page.checked_at,
-        attention: page.attention_count.contact_submission,
+        counts: page.attention_count,
         items: [...current.items, ...page.items],
         cursor: page.next_cursor,
       });
@@ -168,10 +178,13 @@ export default function AdminOwnerEmailsPage() {
       toast.error("Acknowledgement not confirmed", { description: ackError.message });
       throw new Error(ackError.message);
     }
-    toast.success("Acknowledged", { description: "No email was sent. The submission stays saved." });
+    toast.success("Acknowledged", {
+      description: `No email was sent. The ${ownerEmailRecordNoun[item.kind]} stays saved.`,
+    });
   };
 
   const loadedAttention = data.items.filter((item) => item.needs_attention).length;
+  const attention = filter === "all" ? data.counts.total : data.counts[filter];
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 md:p-8">
@@ -187,40 +200,67 @@ export default function AdminOwnerEmailsPage() {
         <Button variant="outline" className="min-h-11" onClick={() => void reload()}><RefreshCw />Refresh</Button>
       </header>
 
-      <Card className={cn(data.attention > 0 && "border-status-warning")}>
-        <CardContent className="flex items-center justify-between gap-3 py-4">
+      <Card className={cn(data.counts.total > 0 && "border-status-warning")}>
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium">Contact form emails needing attention</p>
-            {data.attention > 0 && (
+            <p className="text-sm font-medium">Owner emails needing attention</p>
+            {data.counts.total > 0 && (
               <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-status-warning">
                 <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />Needs attention
               </p>
             )}
           </div>
-          <p className="font-heading text-2xl font-semibold tabular-nums">{data.attention}</p>
+          <dl className="flex flex-wrap items-end gap-x-6 gap-y-2">
+            <div>
+              <dt className="text-xs text-muted-foreground">Contact form</dt>
+              <dd className="font-heading text-lg font-semibold tabular-nums">{data.counts.contact_submission}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Renewal documents</dt>
+              <dd className="font-heading text-lg font-semibold tabular-nums">{data.counts.renewal_document}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Total</dt>
+              <dd className="font-heading text-2xl font-semibold tabular-nums">{data.counts.total}</dd>
+            </div>
+          </dl>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg"><Mail className="h-5 w-5 text-accent" />Contact form emails</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-lg"><Mail className="h-5 w-5 text-accent" />Tracked owner emails</CardTitle>
           <CardDescription>
-            Each row is a saved contact submission. Open a submission to read it; the list never shows its content.
+            Each row is a saved contact submission or provider renewal document. Open a contact submission to read it; the list never shows its content. Review renewal documents in Compliance Expiry.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div role="group" aria-label="Filter by email kind" className="flex flex-wrap gap-2">
+            {ownerEmailFilters.map(({ value, label }) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={filter === value ? "default" : "outline"}
+                aria-pressed={filter === value}
+                className="min-h-10"
+                onClick={() => setFilter(value)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button variant="ghost" size="sm" className="min-h-11 self-start" aria-pressed={showAll} onClick={() => setShowAll((value) => !value)}>
               {showAll ? <EyeOff /> : <Eye />}
               {showAll ? "Show only emails needing attention" : "Show all tracked emails"}
             </Button>
-            {!showAll && loadedAttention < data.attention && (
-              <p role="status" className="text-sm text-muted-foreground">Showing {loadedAttention} of {data.attention} needing attention</p>
+            {!showAll && loadedAttention < attention && (
+              <p role="status" className="text-sm text-muted-foreground">Showing {loadedAttention} of {attention} needing attention</p>
             )}
           </div>
           <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
             <History className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Messages saved before email tracking began are not listed here and cannot be resent.
+            Messages and documents saved before email tracking began are not listed here and cannot be resent.
           </p>
 
           {data.items.length === 0 ? (
@@ -228,7 +268,7 @@ export default function AdminOwnerEmailsPage() {
               {showAll ? "No tracked owner emails yet." : "No owner emails need attention."}
             </p>
           ) : (
-            <ul className="divide-y divide-border rounded-xl border border-border" aria-label="Contact form emails">
+            <ul className="divide-y divide-border rounded-xl border border-border" aria-label="Owner emails">
               {data.items.map((item) => <Row key={item.source_id} item={item} onResend={resend} onAcknowledge={acknowledge} />)}
             </ul>
           )}
@@ -253,11 +293,13 @@ function Row({ item, onResend, onAcknowledge }: {
   const uncertain = ownerEmailIsUncertain(item.state);
   const error = item.last_error_code ? ownerEmailErrorLabel[item.last_error_code] : null;
   const entity = `${item.label} · Ref ${item.reference}`;
+  const noun = ownerEmailRecordNoun[item.kind];
   return (
     <li className="flex flex-col gap-3 p-4 lg:flex-row lg:items-start">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium">{item.label}</p>
+          <span className="text-xs font-medium text-muted-foreground">{ownerEmailKindLabel[item.kind]}</span>
+          <p className="break-words font-medium">{item.label}</p>
           <span className="font-mono text-xs text-muted-foreground">Ref {item.reference}</span>
           <Badge className={cn("border", tone[item.state] ?? "border-status-warning bg-status-warning-bg text-status-warning")}>
             {ownerEmailStateLabel(item.state)}
@@ -281,7 +323,17 @@ function Row({ item, onResend, onAcknowledge }: {
         {item.acknowledged_reason && <p className="mt-1 break-words text-xs text-muted-foreground">Reason: {item.acknowledged_reason}</p>}
       </div>
       <div className="flex flex-wrap gap-2">
-        <ContactSubmissionDetail sourceId={item.source_id} reference={item.reference} />
+        {item.kind === "contact_submission" ? (
+          <ContactSubmissionDetail sourceId={item.source_id} reference={item.reference} />
+        ) : (
+          <Link
+            href={RENEWAL_REVIEW_PATH}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "min-h-11")}
+            aria-label={`Open Compliance Expiry to review ${item.label}`}
+          >
+            Open Compliance Expiry
+          </Link>
+        )}
         {item.needs_attention && (
           <>
             <ConfirmAction
@@ -289,11 +341,11 @@ function Row({ item, onResend, onAcknowledge }: {
               title="Resend the owner email?"
               entity={entity}
               consequence={uncertain
-                ? "An earlier email may already have arrived. Resend only if the owner inbox and the Resend log show no email for this submission. This sends one owner email; it creates no submission."
-                : "Sends one owner email for this saved submission. It creates no submission."}
+                ? `An earlier email may already have arrived. Resend only if the owner inbox and the Resend log show no email for this ${noun}. This sends one owner email; it creates no ${noun}.`
+                : `Sends one owner email for this saved ${noun}. It creates no ${noun}.`}
               confirmLabel="Resend"
               confirmationTone="commitment"
-              attestation={uncertain ? RESEND_ATTESTATION : undefined}
+              attestation={uncertain ? resendAttestation(item.kind) : undefined}
               describeError={(caught) => (caught instanceof Error ? caught.message : undefined)}
               onConfirm={(_reason, _choice, attested) => onResend(item, attested)}
             />
@@ -303,13 +355,15 @@ function Row({ item, onResend, onAcknowledge }: {
               entity={entity}
               consequence={uncertain
                 ? "Records that no further email is needed. Check the owner inbox and the Resend log first, then say what you found, including if the email did arrive. Nothing is sent."
-                : "Records that no further email is needed, for example because you read the submission here. Nothing is sent."}
+                : item.kind === "contact_submission"
+                  ? "Records that no further email is needed, for example because you read the submission here. Nothing is sent."
+                  : "Records that no further email is needed, for example because the document is already being reviewed in Compliance Expiry. Nothing is sent."}
               confirmLabel="Acknowledge"
               confirmationTone="commitment"
               requireReason
               reasonLabel={uncertain ? "What you found and why no further email is needed" : "Reason"}
               reasonHelp="Describe what you checked. Don't include the submitter's personal details."
-              attestation={uncertain ? ACKNOWLEDGE_ATTESTATION : undefined}
+              attestation={uncertain ? acknowledgeAttestation(item.kind) : undefined}
               describeError={(caught) => (caught instanceof Error ? caught.message : undefined)}
               onConfirm={(text, _choice, attested) => onAcknowledge(item, text, attested)}
             />
