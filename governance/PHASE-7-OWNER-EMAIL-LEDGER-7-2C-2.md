@@ -1,6 +1,6 @@
 # Phase 7.2C-2 — renewal owner-email ledger implementation (TRACE-154)
 
-**Status: IMPLEMENTED LOCALLY on draft PR #167 for Codex review (2026-11-12 ET).** Not pushed to hosted, not merged, not deployed; no email sent. The handoff as Codex issued it is kept unchanged in the appendix.
+**Status: IMPLEMENTED on draft PR #167; MIGRATION PUSHED TO HOSTED 2026-11-13 on the owner's instruction (§6.1).** Exact-head CI 43419555745 passed on `f5305c2`. Not merged or deployed; Codex review pending; no email sent. The handoff as Codex issued it is kept unchanged in the appendix.
 **Base:** `main` `24dd455acd520a21da14b0305a92383fbedfcccf`, the #166 merge. 7.2C-1's reviewed head passed all PR CI jobs; production is READY and the fresh rollout count is zero. Main merge CI 43343682357 was still running when this handoff was prepared. Read the [release checkpoint](PHASE-7-OWNER-EMAIL-LEDGER-CODEX-REVIEW.md) before proceeding.
 
 The owner authorized review, fixes, release, rollout reconciliation and starting this renewal slice. O-1 (DEC-2026-066) and Codex C-1..C-8 remain settled. No new owner decision is required for the scope below. This does not authorize a renewal hosted push or release.
@@ -59,7 +59,7 @@ The owner authorized review, fixes, release, rollout reconciliation and starting
 | Unit mutations (6) | Each caught: operator uploads notify, renewal key prefix, builder trims the name, raw route error logged, no claim-kind check (after strengthening the wrong-kind test so it uses a renewal-shaped payload), `after()` delivery not guarded |
 | Browser `owner-emails.spec.ts` | **24/24** (7.2C-1: 17), one worker, 6.2 min. See §5.1 |
 | Full unit, SQL, lint, typecheck, secret scan, build | See §5.1 |
-| Exact-head CI | Recorded on the PR when it completes |
+| Exact-head CI | [43419555745](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/43419555745) on `f5305c2`: backend, lifecycle and application PASS. SQL 111 files / 7,613; owner-email concurrency with its renewal section; unit 66 / 890; browser 711 passed |
 
 ### 5.1 Full-suite results
 
@@ -84,9 +84,24 @@ The owner authorized review, fixes, release, rollout reconciliation and starting
 
 **Rollback.** App-only: `vercel promote` the previous deployment. Old code keeps emailing, and new provider renewals become `missed` noise. If that lasts more than briefly, a forward migration drops the renewal trigger. Ledger rows are kept as evidence. Schema defects are fixed forward.
 
+## 6.1 Hosted migration (performed 2026-11-13, owner-authorized)
+
+The owner instructed the push ("Please run the migration") after exact-head CI passed on `f5305c2`. Steps 2 and 3 of §6 were performed; nothing else was. Codex review had not yet happened.
+
+| Step | Result |
+|---|---|
+| `supabase db push --linked --dry-run` | Exactly one pending migration: `20261123001000_phase7_owner_email_renewal_trigger.sql` |
+| `supabase db push --linked` | Applied `20261123001000` |
+| Read-only readback | Migration head `20261123001000`. `owner_email_renewal_create` is enabled (`O`) with `AFTER INSERT … FOR EACH ROW WHEN ((new.submitted_as = 'provider'::text))`. `owner_email_contact_create` is still enabled. The trigger function is security definer with `search_path=""`, is not executable by anon, authenticated or service_role, and its definition hash `b1607618f1af59ca19d9c6e5d0d410f5` equals local |
+| Unchanged definitions (hosted) | `vendor_submit_renewal_document` `8c8942365d8f9d34bdcd1d839f86c472`; 7.2C-1 ledger functions `12 \| 016c0e683cb19c4c68769d87f5215ff1`. All equal to local |
+| Money fingerprint (hosted) | `58 \| af0fae6e0c5b604e9073e10bc060957e` |
+| Ledger rows at readback | 0 in total (no contact or renewal rows); 0 events. Counts only; no row contents were read |
+
+**The push-to-deploy window is open.** Until this PR merges and deploys, the old renewal route keeps emailing without claiming. Each provider renewal saved in the window gets a `pending` row that becomes `missed` after 10 minutes and needs per-row attested handling (§6 step 5). Merge and deploy have not happened.
+
 ## 7. Unresolved and carried
 
-- Codex review; exact-head CI; owner authorization for the hosted push; merge/deploy; post-deploy window reconciliation. None performed.
+- Codex review; merge/deploy; post-deploy window reconciliation. Not performed. The hosted push is done (§6.1).
 - Finding §3.2 (queue label "License" vs. email "License or business tax receipt") needs a Codex decision.
 - Real-email verification with the controlled mailbox (plan §6.4): separate and owner-authorized.
 - Carried unchanged: CFG-011 log retention (7.6), A2 human verification, retrospective 7.2B review, final booking-candidate schema/grants, fingerprint and completion-integrity checks, the older intermittent accessibility failure (`request.spec.ts:837`), and the `offer_terms`/promotions gates. No payments, booking, Cron, retries or automation activated. Proposed channel/reminder/retention decisions remain proposals.

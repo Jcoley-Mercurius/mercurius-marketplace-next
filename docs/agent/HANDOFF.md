@@ -4,7 +4,9 @@
 - **Built:** migration `20261123001000` (one provider-only `AFTER INSERT` trigger on `vendor_renewal_documents`; the CLI stamp `20261113014623` sorted before the hosted head and was renamed); renewal route delivers through the ledger in guarded `after()`; resend route takes the two kinds; `/admin/owner-emails` gains All / Contact form / Renewal documents filters, per-kind counts and Compliance Expiry links; v2 logger names. Record: [7.2C-2](../../governance/PHASE-7-OWNER-EMAIL-LEDGER-7-2C-2.md).
 - **Evidence:** SQL 120 302/302 (4 mutations); full SQL 111/7,613; unit 66/890 (6 mutations); owner-emails browser 24/24; renewal/ledger concurrency PASS; fingerprint `58 | af0fae6e…`, renewal submit `8c894236…`, 7.2C-1 functions `12 | 016c0e68…` unchanged; lint, types, secrets, build (`MERCURIUS_BUILD_WORKERS=2` on this host).
 - **For Codex:** queue label "License" vs email "License or business tax receipt" (record §3.2) and the other decisions in §3.
-- **Not done:** Codex review, exact-head CI, hosted push (needs owner authorization), merge/deploy, post-deploy window count, real email.
+- **CI:** exact-head 43419555745 PASS on `f5305c2` (unit 890, browser 711).
+- **Hosted (2026-11-13, owner-instructed):** dry run showed only `20261123001000`, then pushed. The readback matches local (trigger `O`, provider-only; function ACL owner-only; renewal-submit and 7.2C-1 hashes unchanged); fingerprint `58 | af0fae6e…`; ledger 0 rows / 0 events. **The push-to-deploy window is open:** provider renewals saved before the deploy become `missed` rows that need attested per-row handling.
+- **Not done:** Codex review, merge/deploy, post-deploy window count, real email.
 - **Local gotcha:** rerun `node scripts/prepare-phase5-local.mjs` after editing SQL tests too, not only migrations; the isolated stack tests its own copy.
 
 # Phase 7.2C-1 release / 7.2C-2 handoff (TRACE-154) — 2026-11-12 ET
