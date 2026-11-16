@@ -117,6 +117,7 @@ Production schema, data, billing, domains, secrets, and webhooks must not be cha
 | `OWNER_NOTIFICATION_EMAIL` | Next.js server configuration | Local `.env.local` / Vercel preview | Vercel production |
 | `RESEND_API_KEY` | Next.js server secret | Local secret store / Vercel preview | Vercel production |
 | `RESEND_FROM_EMAIL` | Next.js server configuration | Local `.env.local` / Vercel preview | Vercel production |
+| `RESEND_WEBHOOK_SECRET`, `RESEND_WEBHOOK_SECRET_PREVIOUS` | Next.js server secrets (TRACE-155); unset keeps `/api/webhooks/resend` dormant (503) | Unset; tests generate synthetic secrets | Vercel production only, never preview; set only at owner-authorized arming (7.3D) |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Supabase Edge Function | Supabase local/preview | Supabase production |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Supabase Edge Function secrets | Stripe test + Supabase preview | Stripe live + Supabase production |
 | `SITE_URL`, `VERCEL_URL` | Supabase Edge Function configuration | Local/preview platform | Production platform |
