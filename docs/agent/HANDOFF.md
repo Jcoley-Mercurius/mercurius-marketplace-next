@@ -1,3 +1,12 @@
+# Phase 7.3B dormant Resend receipt implementation (TRACE-155) — 2026-11-16 ET
+
+- **Base:** `main` `bc51c3d` (#168 merged 14:14 UTC; tree identical to the cleared plan head `5e8b813`, whose CI 43872763779/43872434089 passed). Main merge CI 43883598183 was running at branch time. Branch `claude/phase7-3b-dormant-email-receiver`, draft PR. Record: [7.3B](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3B.md).
+- **Built (dormant):** migration `20261124001000` adds receipts with coherence checks and an immutability guard, receive (service role) and operator purge functions, an empty arming record, and ledger `provider_message_id` indexes last. It runs under a 2 s lock timeout and a 5 s index statement timeout. `POST /api/webhooks/resend` answers 503 without `RESEND_WEBHOOK_SECRET`. `svix@2.9.1` is pinned exact. Logger additions are v2 only.
+- **Evidence:** SQL 121 196/196 (11 mutations); full SQL 112/7,809; unit 973 (83 new, 8 mutations). Concurrency S-21/S-22/S-58/S-61 PASS. Under ledger contention the migration aborts cleanly with 55P03 after about 2.2 s; uncontended it takes 224 ms. Fingerprint `58 | af0fae6e…` and ledger/7.2C/renewal hashes unchanged. Lint, types, secrets, audit and build pass.
+- **For Codex:** decisions D-1–D-15, and the §4 clarification: stored conflicts are permanent through the guard trigger, but a derived read-time `id_conflict` is not durable, so 7.3C must choose quarantine or accurately worded current-snapshot exclusion. Deviations from S-2/S-2a wording: D-9 and D-10.
+- **Not done:** hosted push (preflight script ready, not run), merge/deploy, secrets, registration, email, suppression, retries, Cron, booking or payments. EO-1..EO-8 and every carried item remain open.
+- **Next:** Codex implementation review at the exact head. Then, with separate owner authorization, the preflight, dry run and push before merge (record §7).
+
 # Phase 7.3A plan second revision after Codex re-review #5891897514 (TRACE-155) — 2026-11-16 ET
 
 - **Base:** PR #168 head `5d577f0` (the reviewed commit); `origin/main` still `8a9603b`, so no rebase. Documentation only.

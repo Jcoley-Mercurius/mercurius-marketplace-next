@@ -94,6 +94,10 @@ jobs:
         run: node scripts/application-notification-concurrency.mjs
       - name: Concurrent owner-email claims, lost claim responses and attested operator recovery (TRACE-154)
         run: node scripts/owner-email-concurrency.mjs
+      - name: Provider-event migration under ledger lock contention, aborting on its 2 s lock timeout (TRACE-155)
+        run: node scripts/email-provider-events-migration-lock.mjs
+      - name: Concurrent provider-event receipts, conflicts, source deletion and purges (TRACE-155)
+        run: node scripts/email-provider-events-concurrency.mjs
       - name: Concurrent promotion redemptions, price approvals and publication
         run: node scripts/pricing-concurrency.mjs
       - name: Concurrent finance operator commands

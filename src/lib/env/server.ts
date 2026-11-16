@@ -15,6 +15,8 @@ function serverSource(): EnvironmentSource {
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     VENDOR_UPLOAD_HMAC_SECRET: process.env.VENDOR_UPLOAD_HMAC_SECRET,
     VENDOR_UPLOAD_HMAC_VERSION: process.env.VENDOR_UPLOAD_HMAC_VERSION,
+    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    RESEND_WEBHOOK_SECRET_PREVIOUS: process.env.RESEND_WEBHOOK_SECRET_PREVIOUS,
   };
 }
 
@@ -60,5 +62,18 @@ export function getVendorUploadSigningEnvironment() {
       minLength: 32,
     }),
     version,
+  } as const;
+}
+
+/**
+ * TRACE-155 (Phase 7.3B): the Resend webhook signing secrets. Both are optional and never
+ * throw here: an unset current secret keeps the receiver dormant (503), and a malformed
+ * value is refused by the receiver's own configuration check.
+ */
+export function getResendWebhookEnvironment() {
+  const source = serverSource();
+  return {
+    current: optionalString(source, "RESEND_WEBHOOK_SECRET"),
+    previous: optionalString(source, "RESEND_WEBHOOK_SECRET_PREVIOUS"),
   } as const;
 }

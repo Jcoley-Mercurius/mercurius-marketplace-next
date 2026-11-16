@@ -55,6 +55,15 @@ const EVENTS_V2 = [
   "owner_email_resend.refused",
   "owner_email_resend.completed",
   "owner_email_resend.failed",
+  // TRACE-155 (Phase 7.3B): the dormant Resend webhook receiver. Never logs the secret,
+  // signature, secret slot, svix-id, provider email ID, tags, recipient, subject, body,
+  // bounce text or event type; source_kind and source_id stay null.
+  "email_webhook.refused",
+  "email_webhook.rejected",
+  "email_webhook.recorded",
+  "email_webhook.duplicate",
+  "email_webhook.conflict",
+  "email_webhook.failed",
 ] as const;
 export type OperationalEventV1 = (typeof EVENTS)[number];
 export type OperationalEventV2 = (typeof EVENTS_V2)[number];
@@ -66,6 +75,7 @@ const ROUTES = [
   "contact_submit",
   "renewal_document_submit",
   "owner_email_resend",
+  "resend_webhook",
   "unattributed",
 ] as const;
 export type OperationalRoute = (typeof ROUTES)[number];
@@ -99,6 +109,8 @@ const OUTCOMES = [
   "forbidden",
   "not_found",
   "conflict",
+  // Provider webhook receipt
+  "duplicate",
 ] as const;
 export type OperationalOutcome = (typeof OUTCOMES)[number];
 
@@ -125,6 +137,11 @@ const ERROR_CODES = [
   "provider_server_error",
   "provider_timeout_or_network",
   "provider_not_configured",
+  "webhook_headers_invalid",
+  "webhook_payload_too_large",
+  "webhook_payload_invalid_encoding",
+  "webhook_signature_invalid",
+  "webhook_payload_invalid",
   "unexpected",
 ] as const;
 export type OperationalErrorCode = (typeof ERROR_CODES)[number];
@@ -248,7 +265,13 @@ export function classifyOperationalError(error: unknown): OperationalErrorCode {
 function levelFor(event: OperationalLogRecord["event"] | OperationalEventV2, outcome: OperationalOutcome | null) {
   if (event === "oplog.invalid_event") return "error" as const;
   if (/\.(failed|claim_failed|record_failed|background_failed)$/.test(event)) return "error" as const;
-  if (event.endsWith(".refused") || event.endsWith(".upload_url_failed") || event.endsWith(".not_claimed")) {
+  if (
+    event.endsWith(".refused") ||
+    event.endsWith(".upload_url_failed") ||
+    event.endsWith(".not_claimed") ||
+    event.endsWith(".rejected") ||
+    event.endsWith(".conflict")
+  ) {
     return "warn" as const;
   }
   if (event.endsWith(".provider_result") || event.endsWith(".completed")) {
