@@ -1,3 +1,17 @@
+# Phase 7.3C-1 Owner Emails evidence handoff (TRACE-155) — 2026-11-16 ET
+
+- **Base:** `main` `e25e7f8` (#169 merged 16:38 UTC). Branch `claude/phase7-3c1-evidence-readback-handoff`, draft PR. Documentation only. Record: [7.3C-1 handoff](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1-HANDOFF.md).
+- **Verified:** exact-head CI 43888756983 and main CI 43909709363 succeeded; Production deployment for `e25e7f8` is Ready (`dpl_AiiAmRxc…`); hosted migration head `20261124001000` matches local.
+- **Open on 7.3B:** no Codex implementation review is recorded (a dependency before 7.3C-1 code); push provenance and timing and the preflight record are missing; the 503 probe was not run. A dated status was added to the 7.3B record.
+- **Proposed slice:**
+  - opt-in tags on owner-email sends, with the ref from a new read-only lookup and an untagged fallback;
+  - stable, read-only SQL summary, count and history functions;
+  - an Owner Emails readback.
+  Conflicts: stored ones are permanent; a derived `id_conflict` uses current-snapshot exclusion and can count again after the conflicting row is deleted (S-57 amended for Codex). Application and price-draft tags follow in 7.3C-2; arming comes after both.
+- **For Codex:** C3C-1..C3C-6.
+- **Not done:** no code, migration, hosted action, secret, registration or email. EO-1..EO-8 and every carried item remain open.
+- **Next:** Codex reviews #169 and this handoff; then Claude implements 7.3C-1 from the then-current `main`.
+
 # Phase 7.3B dormant Resend receipt implementation (TRACE-155) — 2026-11-16 ET
 
 - **Base:** `main` `bc51c3d` (#168 merged 14:14 UTC; tree identical to the cleared plan head `5e8b813`, whose CI 43872763779/43872434089 passed). Main merge CI 43883598183 was running at branch time. Branch `claude/phase7-3b-dormant-email-receiver`, draft PR. Record: [7.3B](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3B.md).

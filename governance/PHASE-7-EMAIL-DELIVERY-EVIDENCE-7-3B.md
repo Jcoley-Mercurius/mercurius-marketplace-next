@@ -1,5 +1,7 @@
 # Phase 7.3B — dormant authenticated receipt of Resend provider events: implementation (TRACE-155)
 
+> **Dated status (2026-11-16, read-only verification; the original status below is kept as written):** merged as #169, `main` `e25e7f8`. Exact-head CI 43888756983 and main merge CI 43909709363 succeeded. GitHub Production deployment 7830152319 succeeded, and Vercel `dpl_AiiAmRxcd3oXKgne2QbRzUHvBK9V` reads Ready. Hosted migration head `20261124001000` matches local. **Still open:** the Codex implementation review (none recorded; the merge is not review acceptance); the push provenance and timing, and a §7 preflight record; the post-deploy 503 probe; the §8 items. The receiver remains dormant. See [7.3C-1 handoff](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1-HANDOFF.md) §1.
+
 **Status: IMPLEMENTED LOCALLY on a draft PR; DORMANT.** Codex implementation review pending. Not pushed to hosted, merged or deployed. No secret configured, no webhook registered, no email sent. Suppression, retries, Cron, booking and payments are untouched.
 **Authority:** Codex plan clearance [#5920917095](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5920917095) at plan head `5e8b8139789aadd8d76179a1b04a4b556af6b1d8`, under [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §13.2. Clearance covers this LOCAL, DORMANT slice only. It is not implementation acceptance, merge or deployment approval, hosted push, receiver arming, or owner-policy approval.
 **Branch:** `claude/phase7-3b-dormant-email-receiver`, based on `main` `bc51c3d` (§1).
