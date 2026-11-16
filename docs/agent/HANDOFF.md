@@ -1,3 +1,13 @@
+# Phase 7.3A plan second revision after Codex re-review #5891897514 (TRACE-155) — 2026-11-16 ET
+
+- **Base:** PR #168 head `5d577f0` (the reviewed commit); `origin/main` still `8a9603b`, so no rebase. Documentation only.
+- **C1:** decoding is `fatal: true, ignoreBOM: true`, with a re-encode check that the string equals the received bytes; no BOM, whitespace or newline normalization. Parse only after authentication; a BOM-prefixed authenticated body takes the verified-malformed path (plan §6.2; S-8a–S-8f).
+- **C2:** the tag candidate and the provider-ID candidate across all three ledgers are resolved independently. Disagreement, ambiguity or any present invalid tag is a conflict: never linked, never trusted, no ID fallback. A read-time recheck can only remove trust. `identity_class`, coherence checks and ledger ID indexes are in §8.1 (§7; S-52–S-58, S-62).
+- **C3:** batch 100 bounds each call, not each row; with no traffic and no purge there is no physical bound. Expiry is immutable and logical exclusion immediate. **EO-2 must choose P-1 (unbounded lag) or P-2 (deadline D) and an accountable purge mechanism** before arming; no automation is authorized (§11.4; S-59–S-61).
+- **§15.3:** Codex's answers are recorded with their conditions applied (opaque `svix-id`, header boundary fixtures, "also reported" wording, rotation-branch restriction). Resolution table in §18.2.
+- **Not done:** no code, hosted change, email, webhook or automation. The #167 retrospective review and hosted/deployment/rollout evidence remain open. EO-1..EO-8 unapproved.
+- **Next:** final Codex plan clearance at the new head; then the owner answers EO-2/3/7.
+
 # Phase 7.3A plan revision after Codex review #5891386779 (TRACE-155) — 2026-11-13 ET
 
 - **Base:** rebased onto `main` `8a9603b` (#167 merged 12:54 UTC; #167 exact-head CI 43424109360 and main merge CI 43429080720 success). Draft PR #168, documentation only. Earlier `24dd455` baseline kept in plan §1.1.

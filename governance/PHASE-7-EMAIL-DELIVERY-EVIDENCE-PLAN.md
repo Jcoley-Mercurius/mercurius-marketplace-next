@@ -1,6 +1,6 @@
 # Phase 7.3A — Email delivery evidence and safe recovery: characterization and plan (TRACE-155)
 
-**Status:** PLAN, REVISED AFTER CODEX REVIEW [#5891386779](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891386779) (at `7c2d0e5`), for Codex re-review. Documentation only. Approves nothing, activates nothing. **No 7.3B implementation clearance has been given.**
+**Status:** PLAN, REVISED AFTER CODEX REVIEW [#5891386779](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891386779) (at `7c2d0e5`) AND RE-REVIEW [#5891897514](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891897514) (at `5d577f0`; corrections C1–C3, §18.2), for final Codex plan clearance. Documentation only. Approves nothing, activates nothing. **No 7.3B implementation clearance has been given.**
 **Branch:** `claude/phase7-3a-email-evidence-plan`. First written on `main` `24dd455` (§1.1). Rebased onto `main` **`8a9603b94ea908e83742cbc2548d40f63ba4263b`** for this revision (§1.2).
 **Authority:**
 - The owner's Phase 7.3A instruction and revision instruction (2026-11-13), under the Phase 7 authorization ([PHASE-6-ACCEPTANCE](PHASE-6-ACCEPTANCE.md)).
@@ -22,15 +22,15 @@
    - Auth SMTP mail has no local record.
    - **Recipient email is never a matching key** (§7).
 4. **Model, revised.** Provider evidence is kept apart from the send-attempt ledgers:
-   - **minimal receipts**, linked **durably at receipt time** to exactly one ledger row by tag or ID, with an access-controlled FK that cascades with the source;
-   - **finite expiry** for every receipt, enforced in the database (R2);
-   - **conflicted receipts excluded** from evidence (R4);
+   - **minimal receipts**, linked **durably at receipt time** to at most one ledger row, with an access-controlled FK that cascades with the source. The tag candidate and the provider-ID candidate (searched across **all three** ledgers) are resolved **independently**; a receipt is linked only when they agree or exactly one is present, and the check is repeated at read time (C2);
+   - **finite expiry** for every receipt, fixed at receipt time and excluded from every database read once passed (R2). Physical deletion is bounded per call, not per row: **the physical lag and the accountable purge mechanism are owner decision EO-2**, required before arming (C3);
+   - **conflicted receipts excluded** from evidence: content conflicts (R4), and identity conflicts such as an invalid tag, an ambiguous ID, or a tag and an ID that disagree (C2);
    - **all facts preserved**, with a deterministic summary that separates *proven non-delivery* from *needs review* (R3).
 
    Claims, attempt history, stale-worker refusal, attestations and the meaning of `sent` are unchanged (§8).
-5. **Ingestion, revised.** The raw body is read as a **bounded byte stream** (64 KiB ceiling, cancelled at overflow) with bounded headers. It is verified by the **exact-pinned official `svix` verifier**, whose `verify` authenticates without parsing (inspected source, §4.3). JSON parsing is a separate later step. Only a verified, parse-failed body becomes an `invalid_payload` receipt. **No verification exception is ever turned into a 2xx** (R1, R5).
+5. **Ingestion, revised.** The raw body is read as a **bounded byte stream** (64 KiB ceiling, cancelled at overflow) with bounded headers. It is decoded **without dropping a leading BOM** and checked to re-encode to the exact received bytes (C1). It is then verified by the **exact-pinned official `svix` verifier**, whose `verify` authenticates without parsing (inspected source, §4.3). JSON parsing is a separate later step. Only a verified, parse-failed body becomes an `invalid_payload` receipt. **No verification exception is ever turned into a 2xx** (R1, R5).
 6. **First slice: 7.3B, a dormant authenticated receipt.** Not cleared. Its scope now includes the linkage, expiry and conflict mechanisms, so collection never precedes enforceable deletion (§13.2).
-7. **Owner decisions** EO-1..EO-8 stay open (§15.1). EO-2 now asks for a concrete retention value and enforcement mechanism (§11.4). **Codex directions** EC-1..EC-10 are recorded (§15.2). Findings R1–R5 and how each is resolved are in §18.
+7. **Owner decisions** EO-1..EO-8 stay open (§15.1). EO-2 now asks for concrete retention intervals, the accepted physical-deletion lag and an accountable purge mechanism (§11.4). **Codex directions** EC-1..EC-10 are recorded (§15.2), with Codex's answers to the re-review questions (§15.3). Findings R1–R5 are resolved in §18.1, and corrections C1–C3 in §18.2.
 
 ---
 
@@ -64,6 +64,15 @@ Each kind of evidence is listed separately. **Merge is not hosted acceptance.**
 | Conflicts | `docs/agent/HANDOFF.md` and `governance/TRACEABILITY.md` conflicted on rebase. **Both sides kept**: `main`'s two 7.2C entries and its updated TRACE-154 row are unchanged; the 7.3A entries and TRACE-155 sit above or after them | This branch |
 
 **Source inventory now (for EO-8).** At `8a9603b`, the renewal-document owner email is **ledgered in source on `main`** (kind `renewal_document`). The 7.2C-2 code is deployed according to GitHub's deployment record only (above). Every other row in §3.1 is unchanged from the first draft.
+
+### 1.3 Second revision (2026-11-16), after re-review #5891897514
+
+| Check | Result |
+|---|---|
+| PR #168 head reviewed | `5d577f01aa378320eac0bd782e26a303ab7bd297`; review #5891897514 was made at that commit, so C1–C3 were all outstanding |
+| `origin/main` | Still `8a9603b94ea908e83742cbc2548d40f63ba4263b`. No rebase or merge was needed |
+| Scope of this revision | C1 (§6.2, §4.3), C2 (§7, §8.1, §8.3), C3 (§11.4, §15.1 EO-2), plus the conditions Codex attached to its §15.3 answers. Documentation only |
+| §1.2 evidence | Not re-queried. The #167 retrospective review and the hosted, deployment and rollout evidence remain separate open work (§16) |
 
 ---
 
@@ -197,7 +206,7 @@ Packages were inspected from npm tarballs in a scratch directory, not installed,
 | Tolerance is a **fixed constant**, `WEBHOOK_TOLERANCE_IN_SECONDS = 5 * 60`, checked in both directions; it is not configurable | `index.js` | EC-3's ±5 minutes is the verifier's supported check. The route does **not** add its own range check |
 | The timestamp is read with `parseInt(…, 10)` (lenient: `"123abc"` → 123) | `verifyTimestamp` | The route bounds the header format **before** calling `verify` (`^[0-9]{1,12}$`, §6.2) |
 | Every space-separated entry is checked; non-`v1` entries are skipped; comparison is a constant-time byte comparison after a length check | `verify`; `timing_safe_equal.js` | The route bounds the signature header length and entry count before `verify` |
-| A payload must be a `string` or `Buffer`; anything else throws a **plain `Error`** (not `WebhookVerificationError`). A `Buffer` is turned into a string by UTF-8 decoding | `sign` | The route passes the **string it decoded itself with fatal UTF-8 decoding** (§6.2), so the verified string is exactly the retained, parsed text. Any non-`WebhookVerificationError` exception → **500**, no receipt |
+| A payload must be a `string` or `Buffer`; anything else throws a **plain `Error`** (not `WebhookVerificationError`). A `Buffer` is turned into a string by UTF-8 decoding, and the signed content is UTF-8 encoded for the HMAC | `sign` | The route passes the **string it decoded itself** with fatal, BOM-preserving UTF-8 decoding, after proving that the string re-encodes to the exact received bytes (§6.2 step 6, C1). So the verified string is exactly the retained, parsed text. This reading of the tarball is not certification: 7.3B proves the exact-byte property with executable fixtures against the resolved package (S-8a to S-8e). Any non-`WebhookVerificationError` exception → **500**, no receipt |
 | The constructor strips `whsec_` and base64-decodes. An empty or invalid secret throws a plain `Error` | `constructor` | Verifier instances are built during configuration validation. Failure → **503** (unarmed), separate from request authentication |
 | An empty payload with a matching signature returns `undefined` | `verify` | An empty signed body reaches the parse step → `invalid_payload` (§6.2 step 9) |
 | `svix` is the full API client (`dist/index.mjs` ≈ 250 KB); its transitive dependencies are `standardwebhooks`, `@stablelib/base64` and `fast-sha256` | `package.json` files | **Dependency review (EC-2) must cover all four**, with the lockfile pinning each exact version. If the review rejects `svix`, 7.3B stops and returns to Codex. **There is no automatic fallback to handwritten cryptography** |
@@ -233,7 +242,7 @@ A Next Route Handler, `src/app/api/webhooks/resend/route.ts`, with `runtime = "n
 1. **Method.** Anything other than `POST` → 405.
 2. **Configuration gate.** Build the verifier instances from `RESEND_WEBHOOK_SECRET` and optional `RESEND_WEBHOOK_SECRET_PREVIOUS`. If the current secret is missing, or either constructor throws → **503**, fixed body. No body is read and nothing is stored.
 3. **Header bounds** (before any body read):
-   - `svix-id` matches `^msg_[A-Za-z0-9]{1,64}$`; the exact form is to be confirmed by a synthetic sample (§4.2).
+   - `svix-id` is an **opaque bounded identifier**: 1–128 bytes of visible ASCII (`^[!-~]{1,128}$`). No prefix or alphabet is assumed, because no provider contract guarantees one, and a synthetic sample cannot prove the whole allowed format (Codex answer 4, §15.3). It is compared and stored only as an exact string.
    - `svix-timestamp` matches `^[0-9]{1,12}$`.
    - `svix-signature` is at most **1,024 bytes**, has at most **8** space-separated entries, and each entry is at most 128 bytes.
    - Missing, oversized or malformed → **400**. Nothing is read, verified or stored.
@@ -243,16 +252,22 @@ A Next Route Handler, `src/app/api/webhooks/resend/route.ts`, with `runtime = "n
    - A missing body (`null`) is treated as zero bytes.
    - The retained bytes are exactly the chunks read, concatenated once.
    - `request.text()`, `request.json()` and `arrayBuffer()` are **not** used.
-6. **Decode.** `new TextDecoder("utf-8", { fatal: true }).decode(bytes)` on the **whole** buffer, never per chunk, so a multibyte character split across chunks decodes correctly. Invalid UTF-8 → **400**: an unauthenticated body is never decoded leniently. Resend signs UTF-8 JSON text, so for valid UTF-8 the decoded string is byte-equivalent to what was signed.
-7. **Verify** that exact string with the current verifier, then the previous one if the first threw `WebhookVerificationError` with "No matching signature found".
+6. **Decode, preserving every byte (C1).**
+   - `new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)` on the **whole** buffer, never per chunk, so a multibyte character split across chunks decodes correctly.
+   - **`ignoreBOM: true` is required.** By default the Web `TextDecoder` *consumes* a leading UTF-8 BOM (`EF BB BF`), so `fatal: true` alone would hand the verifier a string one character shorter than the signed bytes. With `ignoreBOM: true`, a leading BOM stays in the string as U+FEFF.
+   - **Exact-byte proof.** Before verifying, the route checks that `new TextEncoder().encode(decoded)` equals the retained bytes, byte for byte and in length. For well-formed UTF-8 this always holds; the check exists so that a decoder or runtime change cannot silently alter the verified input. A mismatch → **500**, no verify, no receipt.
+   - **Nothing is normalized:** no BOM stripping, no trimming, no newline or whitespace change, no Unicode normalization, before or after verification.
+   - Invalid UTF-8 → **400**: an unauthenticated body is never decoded leniently (Codex answer 5).
+7. **Verify** that exact string with the current verifier. Only if the current verifier threw `WebhookVerificationError` on its documented **signature-mismatch** path ("No matching signature found") is the previous verifier tried. A missing-header or timestamp error from the current verifier is final, so the previous secret never widens the fixed freshness check. Each branch is tested (S-15, S-15a).
    - A normal return (`undefined`) = authenticated; record the slot (`current` / `previous`).
    - `WebhookVerificationError` from every configured verifier → **400**.
    - **Any other exception → 500** (no receipt, no 2xx).
    - **A verification exception is never converted into a receipt or a 2xx.**
 8. **Stop on rejection.** After any rejection in steps 1–7, no parse, normalization or RPC happens.
-9. **Parse** the same string with `JSON.parse` in its own `try`. A parse error, a non-object, or a missing or invalid `type` → a **verified-malformed** receipt (`processing = 'invalid_payload'`, no data fields) and 200. This path is reached **only** after step 7 returned normally (EC-7, conditioned on R5).
+9. **Parse** the same string with `JSON.parse` in its own `try`, **only after** step 7 returned normally. A parse error, a non-object, or a missing or invalid `type` → a **verified-malformed** receipt (`processing = 'invalid_payload'`, no data fields) and 200 (EC-7, conditioned on R5).
+   - An authenticated body with a leading BOM is parsed as received. `JSON.parse` does not accept U+FEFF as whitespace, so it fails and the receipt follows this verified-malformed path. The BOM is **not** stripped to make it parse (C1).
 10. **Normalize** the allowlisted fields (§11.1). Invalid values become `null` or `other`.
-11. **Receive.** One service-role RPC, `email_receive_provider_event(...)`, in one transaction: insert-or-detect, receipt-time linkage (§7.2), the conflict flag (§7.4) and bounded expiry purge (§11.4). It returns `recorded | duplicate | conflict`.
+11. **Receive.** One service-role RPC, `email_receive_provider_event(...)`, in one transaction: insert-or-detect, independent identity resolution and linkage (§7.2), the content-conflict flag (§7.4) and the bounded expiry purge (§11.4). It returns `recorded | duplicate | conflict`.
 12. **RPC error or database unavailable** → **500 / 503**, so Resend retries. **No 2xx before the receipt, or the conflict flag, has committed.**
 13. **Response.** `200 {"received":true}` for `recorded`, `duplicate` and `conflict` (the conflict flag has durably committed).
 
@@ -284,6 +299,7 @@ There is no `after()` work: everything that matters commits inside the request.
 | Header missing, oversized or malformed | 400 | Nothing | `refused` / `webhook_headers_invalid` |
 | `Content-Length` over the limit, or streamed bytes over the limit | 413 (stream cancelled) | Nothing | `refused` / `webhook_payload_too_large` |
 | Invalid UTF-8 | 400 | Nothing | `refused` / `webhook_payload_invalid_encoding` |
+| Decoded string does not re-encode to the received bytes (invariant breach) | 500 | Nothing | `failed` / `unexpected` |
 | `WebhookVerificationError` (any reason) | 400 | Nothing | `refused` / `webhook_signature_invalid` |
 | Other verifier exception | 500 | Nothing | `failed` / `unexpected` |
 | Verified, unparseable or untyped | 200 | `invalid_payload` receipt | `rejected` / `webhook_payload_invalid` |
@@ -297,62 +313,101 @@ The timestamp reason is not split out of `webhook_signature_invalid` in logs. Th
 
 ---
 
-## 7. Mapping events to attempts (item 3; revised for R2 and R4)
+## 7. Mapping events to attempts (item 3; revised for R2, R4 and C2)
 
 ### 7.1 Identifiers
 
 | Identifier | Use |
 |---|---|
 | `svix-id` | Receipt identity and dedupe only |
-| `data.email_id` | Agreement check and fallback match against the ledger's `provider_message_id` |
-| **Correlation tags** (7.3C, opt-in, EC-5) | `mm_ledger` ∈ `application\|owner_email\|package_draft`, `mm_ref` (ledger row key, UUID), `mm_attempt` (1–10,000). Values are validated opaque IDs only |
+| `data.email_id` | The **provider-ID candidate**: looked up against `provider_message_id` in **all three** ledgers (§7.2) |
+| **Correlation tags** (7.3C, opt-in, EC-5) | `mm_ledger` ∈ `application\|owner_email\|package_draft`, `mm_ref` (ledger row key, UUID), `mm_attempt` (1–10,000). Values are validated opaque IDs only. They give the **tag candidate** (§7.2) |
 | `data.to`, `from`, `subject`, `message_id` | **Never matched, never stored** |
 
-### 7.2 Receipt-time durable linkage
+### 7.2 Independent identity resolution and receipt-time linkage (C2)
 
-Inside `email_receive_provider_event`, each new receipt is linked to **at most one** ledger row and attempt, through **one of three nullable FKs**:
+Inside `email_receive_provider_event`, two candidates are computed **independently**, for every new receipt with `processing = 'recorded'` and an `email.*` type. Neither is computed from the other, and the tag is not "tried first".
+
+**Provider-ID candidate (I).** The set of ledger rows, across `r0_application_notifications`, `owner_email_notifications` and `package_draft_email_notices`, whose `provider_message_id` equals `email_id`.
+- `I = none`: no row has it.
+- `I = (ledger, row, attempt)`: exactly one row has it. Its attempt is the row's **sent attempt** (IDs are stored only on `sent`, which is terminal, so this is the row's final attempt).
+- `I = ambiguous`: two or more rows have it, in different ledgers or the same ledger.
+- `email_id` absent or invalid → `I = missing`.
+
+**Tag candidate (T).**
+- `T = absent`: no `mm_*` tag is present.
+- `T = (ledger, row, attempt)`: all three tags are present and well formed, the named row exists in the named ledger, and `mm_attempt ≤` that row's `attempts`.
+- `T = invalid`: any `mm_*` tag is present, but the set is partial or malformed, the row does not exist, or the attempt is in the future. **A present invalid tag is never ignored, and never falls back to an ID match.**
+
+**Resolution at receipt time:**
+
+| T | I | `identity_class` | FK link | Trusted? |
+|---|---|---|---|---|
+| absent | none | `unmatched` | None | No claim (unmatched mail) |
+| absent | one row | `id_only` | I's row, I's attempt | Yes, subject to §7.3 |
+| valid | none | `tag_only` | T's row, T's attempt | Yes, subject to §7.3 |
+| valid | one row, **same** ledger, row **and** attempt as T | `tag_and_id` | T's row and attempt | Yes, subject to §7.3 |
+| valid | one row that differs from T in ledger, row **or** attempt | `conflict_disagree` | **None** | **No**; conflict counted |
+| any | ambiguous | `conflict_id_ambiguous` | **None** | **No**; conflict counted |
+| invalid | any | `conflict_tag_invalid` | **None** | **No**; conflict counted |
+| valid or absent | missing | `id_missing` | None | No |
+
+`other` and `invalid_payload` receipts are `unmatched` and never linked.
+
+**Why conflicts are not linked.** A conflicted receipt has no single trustworthy owner, so durable linkage must not turn it into a match (C2). It gets no FK, the short unlinked expiry (§11.4), and is excluded from every summary and claim. Its opaque `tag_ref` and `provider_email_id` are kept only so the readback can show a "Conflicting provider reports" signal on any row they name (display only, §7.4).
+
+**Never** link by recipient, subject, time or `from`.
+
+**The FKs.** At most one of three nullable FKs is set:
 - `application_notification` → `private.r0_application_notifications(application_id)`;
 - `owner_email_notification` → `private.owner_email_notifications(id)`;
 - `package_draft_notice` → `private.package_draft_email_notices(id)`.
 
-Each FK is `ON DELETE CASCADE`, with a check that at most one is set, plus `linked_attempt`.
+Each is `ON DELETE CASCADE` and indexed. Table checks enforce coherence: exactly one FK plus `linked_attempt` is set **if and only if** `identity_class` is `id_only`, `tag_only` or `tag_and_id`; the set FK matches `tag_ledger` when the class involves a tag; and `tag_ref` equals the FK value for `tag_only` and `tag_and_id` (§8.1).
 
-1. **Tag first.** If all three tags are valid and the referenced row exists with `tag_attempt ≤ attempts`, link it (`link_basis = 'tag'`). Tags are authored by us inside a signed payload, but they are only accepted with the existence and attempt checks.
-2. **Else by ID.** If exactly one ledger row across the three has `provider_message_id = email_id`, link it to that row's final attempt (`link_basis = 'provider_id'`).
-3. **Else unlinked.**
-4. **Never** by recipient, subject, time or `from`.
+The links live in `private`, have no client grants, and are read only through the operator-guarded readback. A **linked** receipt is deleted with its source. An identity-conflicted or unmatched receipt was never linked and so never trusted; it does not cascade, and it lasts until its own short expiry (§11.4) even if the row its opaque `tag_ref` names is deleted. It holds no address or content.
 
-The links live in `private`, have no client grants, and are read only through the operator-guarded readback. Because each link is an FK that cascades, **a receipt for a deleted source is deleted with it**. A previously matched receipt therefore cannot survive as an "unmatched" one (R2).
+**Concurrency with recording and deletion.**
+- A `*_record` that writes a provider ID can commit after the receipt's lookup. Receipt-time resolution is therefore **not final**: §7.3 recomputes it at every read.
+- If a source is deleted while a receipt is linking to it, the FK insert either waits on the row lock and then fails with `23503`, or sees the row already gone. A `23503` aborts the receive transaction and returns **5xx**, so Resend retries. On the retry the tag resolves to `invalid`, giving `conflict_tag_invalid`. No 2xx is sent before a consistent commit (S-58).
 
-### 7.3 Read-time agreement check
+### 7.3 Read-time recheck (C2)
 
-A tag-linked receipt is re-checked each time it is read, because the ledger's ID may be recorded after the receipt arrives (an early callback).
-- If the linked attempt is the ledger's `sent` attempt, `provider_message_id` is set, and it differs from the receipt's `email_id` → **`id_conflict`**.
-- If the receipt's `email_id` equals `provider_message_id` but the tag names an earlier attempt → **`id_conflict`**.
-- Agreement and "not yet known" are both acceptable.
+Every read recomputes the provider-ID candidate `I'` for each linked receipt, using the ledgers' current `provider_message_id` values, and checks the linked row's current state. A linked receipt is **trusted** only if all of the following hold:
+1. `I'` is `none`, or exactly the linked ledger, row and attempt. A different row, a different attempt, or an ambiguous `I'` → **`id_conflict`**.
+2. For `tag_only` and `tag_and_id`: if the linked row now has a `provider_message_id`, it equals the receipt's `email_id`. Otherwise → **`id_conflict`**.
+3. For `id_only`: `I'` is still exactly the linked row. If another row has since recorded the same ID (now ambiguous) → **`id_conflict`**.
 
-### 7.4 Conflicts (R4)
+An `id_conflict` is derived, not stored. It excludes the receipt exactly as a stored conflict does. **No read-time check can upgrade a receipt-time conflict to trusted.**
+
+Example (Codex's case): a receipt tagged for attempt A of row X (A is `unknown`, so X never records an ID) carries an `email_id` that row Y already recorded, in the same ledger or another. At receipt this is `conflict_disagree`. If Y records that ID only **after** the receipt, the receipt is linked `tag_only` at first, and then becomes `id_conflict` at the first read after Y's record.
+
+### 7.4 Conflicts (R4, C2)
 
 | Conflict | Recorded how | Effect |
 |---|---|---|
-| **Content conflict**: same `svix-id`, different normalized fields | Inside the receive transaction: `insert … on conflict (svix_id) do nothing`; then `select … for update` on the existing row and compare normalized fields. If they differ, set `content_conflict = true` and `conflict_seen_at`, and keep the **first** normalized receipt unchanged. The differing content is **not stored**. The 2xx is sent only after this commits | **Excluded** from evidence facts, summaries and every non-delivery claim. Counted in the attempt's "Conflicting provider reports" signal, or in a global count if unlinked |
-| **ID conflict** (§7.3) | Derived at read time | Same exclusion and signal |
-| **Tag invalid** (missing row, future attempt, malformed) | Not linked | Unlinked receipt; no claim |
+| **Content conflict**: same `svix-id`, different normalized fields | Inside the receive transaction: `insert … on conflict (svix_id) do nothing`; then `select … for update` on the existing row and compare normalized fields. If they differ, set `content_conflict = true` and `conflict_seen_at`, and keep the **first** normalized receipt unchanged (including its `expires_at`, §11.4). The differing content is **not stored**. The 2xx is sent only after this commits | **Excluded** from evidence facts, summaries and every non-delivery claim. Counted in "Conflicting provider reports" |
+| **Identity conflict at receipt** (`conflict_disagree`, `conflict_id_ambiguous`, `conflict_tag_invalid`) | `identity_class`, set in the receive transaction; no FK | Excluded. Counted globally, and shown as a signal on any ledger row named by its `tag_ref` or `provider_email_id` |
+| **Identity conflict at read** (`id_conflict`, §7.3) | Derived at every read | Excluded. Signal on the linked row |
+| `id_missing` | `identity_class` | Excluded; counted with unmatched receipts |
 
 ### 7.5 Cases
 
 | Case | Behavior |
 |---|---|
-| Early callback (receipt before `*_record`) | Tag-linked at receipt; the agreement check applies once the ID is recorded. Untagged: unlinked (only possible before 7.3C ships; the receiver is unarmed until then, §13.3) |
-| Lost API response (`unknown`) | Tag-linked; evidence shown; the row stays `unknown` and its attested recovery is unchanged |
+| Early callback (receipt before `*_record`) | `tag_only` at receipt. Trusted while the ID is unknown or agrees; `id_conflict` if any row later records a different identity (§7.3). Untagged: `unmatched` (only possible before 7.3C ships; the receiver is unarmed until then, §13.3) |
+| Lost API response (`unknown`) | `tag_only`; evidence shown while the recheck passes. The row stays `unknown` and its attested recovery is unchanged |
+| Tag names unknown attempt A; ID already belongs to B (same or other ledger) | `conflict_disagree`; unlinked; excluded |
+| Same ID recorded in two ledgers (impossible by construction; forced in tests) | `conflict_id_ambiguous`, or `id_conflict` if it becomes ambiguous after linking |
+| Invalid, partial, future-attempt or missing-row tag with an ID that matches one row | `conflict_tag_invalid`; **no fallback** to the ID |
 | Unknown type | Stored as `other`; never a fact |
-| Unmatched (Auth SMTP, legacy, other senders) | Unlinked, address-free, short expiry (EO-7, §11.4) |
-| Duplicate | No-op 2xx |
+| Unmatched (Auth SMTP, legacy, other senders) | `unmatched`, address-free, short expiry (EO-7, §11.4) |
+| Duplicate | No-op 2xx; `expires_at` unchanged |
 | Concurrent differing payloads, same `svix-id` | One row (the first to commit); the flag set by the loser; both requests answered 2xx only after commit |
 | Several events per email | Kept as history |
 | Out of order | The summary uses the fixed rules in §8.3, never arrival order |
 | Resend after an earlier attempt | Each receipt stays on its own attempt |
-| Source deleted | Linked receipts cascade away |
+| Source deleted | Linked receipts cascade away; conflicted and unmatched receipts last until their own expiry |
 
 ---
 
@@ -362,9 +417,9 @@ A tag-linked receipt is re-checked each time it is read, because the ledger's ID
 
 ```sql
 create table private.email_provider_events (
-  svix_id text primary key check (svix_id ~ '^msg_[A-Za-z0-9]{1,64}$'),
+  svix_id text primary key check (svix_id ~ '^[!-~]{1,128}$'),   -- opaque, bounded (§6.2 step 3)
   received_at timestamptz not null default now(),
-  expires_at timestamptz not null,                 -- set by the receive function (§11.4)
+  expires_at timestamptz not null,                 -- set once by the receive function; never updated (§11.4)
   secret_slot text not null check (secret_slot in ('current','previous')),
   processing text not null check (processing in ('recorded','invalid_payload')),
   event_type text not null check (event_type in (
@@ -383,22 +438,41 @@ create table private.email_provider_events (
   owner_email_notification uuid references private.owner_email_notifications(id) on delete cascade,
   package_draft_notice uuid references private.package_draft_email_notices(id) on delete cascade,
   linked_attempt integer check (linked_attempt between 1 and 10000),
-  link_basis text check (link_basis in ('tag','provider_id')),
+  identity_class text not null check (identity_class in (
+    'unmatched','id_only','tag_only','tag_and_id',
+    'conflict_disagree','conflict_id_ambiguous','conflict_tag_invalid','id_missing')),   -- §7.2
   content_conflict boolean not null default false,
   conflict_seen_at timestamptz,
   check (num_nonnulls(application_notification, owner_email_notification, package_draft_notice) <= 1),
+  -- linked if and only if the class is a non-conflict match
   check ((num_nonnulls(application_notification, owner_email_notification, package_draft_notice) = 1)
-         = (linked_attempt is not null and link_basis is not null)),
+         = (identity_class in ('id_only','tag_only','tag_and_id'))),
+  check ((linked_attempt is not null) = (identity_class in ('id_only','tag_only','tag_and_id'))),
+  -- tag-based links point at the tagged row and attempt in the tagged ledger
+  check (identity_class not in ('tag_only','tag_and_id') or (tag_attempt = linked_attempt and (
+         (tag_ledger = 'application'   and application_notification = tag_ref) or
+         (tag_ledger = 'owner_email'   and owner_email_notification = tag_ref) or
+         (tag_ledger = 'package_draft' and package_draft_notice     = tag_ref)))),
+  check (identity_class not in ('id_only','unmatched') or tag_ledger is null),
+  -- tags are stored only as a complete, well-formed set; anything else is stored as null and classed conflict_tag_invalid
+  check (num_nonnulls(tag_ledger, tag_ref, tag_attempt) in (0, 3)),
+  check (identity_class <> 'id_missing' or provider_email_id is null),
   check (content_conflict = (conflict_seen_at is not null)),
   check ((processing = 'invalid_payload') = (event_type = 'other' and provider_email_id is null and provider_type is null)),
   check (expires_at > received_at)
 );
--- indexes: (provider_email_id); (tag_ledger, tag_ref, tag_attempt); each FK column; (expires_at)
+-- indexes: (provider_email_id); (tag_ledger, tag_ref, tag_attempt); each FK column; (expires_at, svix_id)
+-- on the existing ledgers, additive only: an index on provider_message_id in each of the three, for §7.2/§7.3 lookups
 alter table private.email_provider_events enable row level security;
 revoke all on private.email_provider_events from public, anon, authenticated, service_role;
 ```
 
-- **Adding FKs to existing ledgers alters none of their definitions.** A cascade adds work only to deletions of their rows. SQL tests cover those cascades, and the 7.2C functions, the application ledger functions and the money fingerprint stay byte-identical.
+- **Referential and deletion behavior, stated accurately.** The three ledger tables' definitions, and the 7.2C, application-ledger and money-fingerprinted function definitions and hashes, stay byte-identical. The FKs live on the receipt table, but they do change behavior on the existing tables:
+  - deleting a ledger row (directly, or by cascade from its source) now also deletes every **linked** receipt for it, in the same statement;
+  - such a delete takes row locks on those receipts, and a concurrent receipt insert that references the row waits for it, then commits or fails with `23503` (§7.2);
+  - cascade work is an indexed lookup on the FK column.
+
+  Conflicted and unmatched receipts are not referenced, so they do not cascade (§7.2). No SQL path that deletes these sources exists today (§3.1); SQL tests delete them directly and test concurrent receive and delete (S-33, S-58). The added ledger indexes are built on existing tables, so 7.3B records the hosted row counts before the push and confirms that a plain `create index` is acceptable at that size (or uses `concurrently` if Codex requires it).
 - No address, subject, Message-ID, bounce text, header, link, IP, user agent or raw payload is stored.
 
 ### 8.2 Ordering for display
@@ -407,12 +481,12 @@ Receipts sort by `(provider_created_at nulls last, received_at, svix_id)`. This 
 
 ### 8.3 Summary and flags (revised for R3)
 
-Only **trusted** receipts are used: linked, `processing = 'recorded'`, not `content_conflict`, no `id_conflict`, not expired. From them, the derivation computes the fact set **F** (types present) and evaluates the rules **top-down**; the **first** matching rule gives the summary. Ties are therefore deterministic.
+Only **trusted** receipts are used: `identity_class` ∈ {`id_only`, `tag_only`, `tag_and_id`} (so linked), `processing = 'recorded'`, not `content_conflict`, passing the §7.3 read-time recheck (no `id_conflict`), and not expired. From them, the derivation computes the fact set **F** (types present) and evaluates the rules **top-down**; the **first** matching rule gives the summary. Ties are therefore deterministic.
 
 | # | Rule over F | Summary label (proposal) | `delivered_fact` | `non_delivery_proven` | `needs_review` |
 |---|---|---|---|---|---|
 | 1 | `complained` ∈ F | "Handed to the mail server; the recipient marked it as spam" | yes | **no** | yes |
-| 2 | `delivered` ∈ F and any of `bounced_permanent`, `provider_failed` or `provider_suppressed` ∈ F | "Provider reports disagree: handed to the mail server, and later reported <bounced permanently / failed / suppressed>" | yes (reported) | **no** | yes |
+| 2 | `delivered` ∈ F and any of `bounced_permanent`, `provider_failed` or `provider_suppressed` ∈ F | "Provider reports disagree: handed to the mail server, and also reported <bounced permanently / failed / suppressed>" | yes (reported) | **no** | yes |
 | 3 | `delivered` ∈ F and (`bounced_transient` or `bounced_undetermined`) ∈ F | "Handed to the mail server; a temporary or undetermined bounce was also reported" | yes | no | yes |
 | 4 | `delivered` ∈ F | "Handed to the recipient's mail server. Not proof it reached the inbox or was read" | yes | no | no |
 | 5 | Any of `bounced_permanent`, `provider_failed` or `provider_suppressed` ∈ F (no `delivered`, no `complained`) | "Not delivered: Resend reported <a permanent bounce / a failure / suppression>" | no | **yes** | yes |
@@ -425,6 +499,7 @@ Only **trusted** receipts are used: linked, `processing = 'recorded'`, not `cont
 - **Full history is always shown** under the summary: type, provider time and bounce category, including excluded receipts, which are marked "Excluded: conflicting report".
 - A conflict signal (§7.4) is a **separate** flag, `has_conflict`, shown as "Conflicting provider reports: excluded from this summary". It is independent of the rules.
 - **A complaint never counts as non-delivery. A transient or undetermined bounce never counts as non-delivery.** "Delivered" plus a permanent bounce is shown as a disagreement, not resolved by precedence.
+- **No chronology is implied.** Labels say "also reported", never "later", because provider timestamps may be missing, equal or out of order. The history shows each receipt's `provider_created_at` exactly as received (Codex answer 3).
 
 ### 8.4 Arming record
 
@@ -448,8 +523,9 @@ Owner Emails comes first (EC-9), then Recruiting, then the price-draft panel. Th
 - **Additive counts.** The existing exact attention counts are unchanged.
   - **"Not delivered (Resend reported)"**: `sent` rows with `non_delivery_proven` on their sent attempt.
   - **"Provider reports to review"**: rows with `needs_review` and not `non_delivery_proven` (complaints, inconclusive bounces, disagreements).
-  - **"Conflicting provider reports"**: rows with `has_conflict`.
-  - **"Unmatched provider reports"**: a global count of unlinked receipts by type, with no recipient or content.
+  - **"Conflicting provider reports"**: rows with `has_conflict` (content conflicts, read-time `id_conflict`, or a receipt-time identity conflict naming the row), plus a global count of identity-conflicted receipts by `identity_class`.
+  - **"Unmatched provider reports"**: a global count of `unmatched` and `id_missing` receipts by type, with no recipient or content.
+  - **Retention backlog** (§11.4): the count of expired rows awaiting physical deletion and the oldest expiry. No row content.
 
 ### 9.2 What an operator may conclude and do (existing functions only)
 
@@ -511,26 +587,35 @@ Exactly the §8.1 columns.
 - **New error codes:** `webhook_headers_invalid`, `webhook_payload_too_large`, `webhook_payload_invalid_encoding`, `webhook_signature_invalid`, `webhook_payload_invalid`.
 - **Never logged:** the secret, signature, secret slot, `svix-id`, email ID, tags, recipient, subject, body, bounce text or event type.
 
-### 11.4 Retention and deletion (R2): proposed design for EO-2
+### 11.4 Retention and deletion (R2, C3): proposed design for EO-2
 
 **Mechanism, built in 7.3B, before any collection:**
-1. **Source-lifetime bound (durable):** linked receipts cascade with their ledger row, which cascades with its source (§7.2). SQL tests delete a contact submission, a vendor application and a price draft, and prove their receipts are gone.
-2. **Finite clock (all receipts):** the receive function sets `expires_at = received_at + interval`. The intervals are **owner-chosen (EO-2)**. **Proposal:**
+1. **Source-lifetime bound (durable), for linked receipts only:** linked receipts cascade with their ledger row, which cascades with its source (§7.2). SQL tests delete a contact submission, a vendor application and a price draft, and prove their linked receipts are gone. Conflicted and unmatched receipts are never linked and are bounded by the clock below.
+2. **Finite clock (all receipts), immutable:** the receive function sets `expires_at = received_at + interval` **once**, when the row is inserted. No path updates it: a duplicate is a no-op, the content-conflict update writes only `content_conflict` and `conflict_seen_at`, and a `BEFORE UPDATE` trigger rejects any change to `expires_at` (tested). So **duplicates and retries never extend retention** (S-59). A dashboard replay that arrives after the row has been physically deleted is a new receipt with its own clock. The intervals are **owner-chosen (EO-2)**. **Proposal:**
    - **linked receipts: 90 days;**
    - **unlinked, `other` and `invalid_payload` receipts: 30 days.** That is longer than the ≈32 h retry horizon (for dedupe), and short because the receipts are not ours to explain.
 
    Both are below CFG-011's 90-day operational-log class. Matched evidence older than 90 days has little recovery value: the ledger keeps the settled outcome.
-3. **Logical expiry (immediate, enforced in the database):** every readback, summary and count excludes rows with `expires_at <= now()`. Once expired, a receipt is never shown, counted or used, even before physical deletion.
-4. **Physical deletion, without new automation:**
-   - **(a) Purge on receipt:** each receive call deletes up to 100 expired rows, in the same transaction, oldest first.
-   - **(b) Operator purge command:** `email_provider_events_purge(p_limit)`, operator-guarded and bounded. It returns the number deleted and the oldest remaining `expires_at`, and is audited by count only. This follows the Phase 5 retention precedent.
-   - **Physical upper bound:** an expired row is gone at the next receipt or the next operator purge, whichever comes first. With no traffic and no operator purge, a row can outlive `expires_at`, though it stays logically expired.
-5. **Optional (c), a scheduled purge:** an owner-approved `pg_cron` job calling the same function. Not proposed for activation without EO-2's choice. It would be a new scheduler activation.
+3. **Logical expiry (immediate, enforced in the database):** the table has no client grants, so the guarded database functions are the only read path. Every readback, summary and count in them excludes rows with `expires_at <= now()`. Once expired, a receipt is never shown, counted or used, even before physical deletion.
+4. **Physical deletion: bounded per call, not per row.**
+   - **(a) Purge on receipt.** Each receive call deletes **at most 100** expired rows in the same transaction, chosen in deterministic oldest-first order `(expires_at, svix_id)` through the `(expires_at, svix_id)` index, with `for update skip locked` so concurrent ingesters do not block one another (Codex answer 2).
+   - **(b) Operator purge command.** `email_provider_events_purge(p_limit)`, operator-guarded, with `p_limit` clamped to **1–1,000** and the same order and locking. It returns the number deleted, the number of expired rows remaining (counted up to a cap, for example "over 10,000"), and the oldest remaining `expires_at`. It is audited by count only. This follows the Phase 5 retention precedent.
+   - **What this does and does not guarantee (C3).** A receipt removes *up to* 100 expired rows. That does **not** mean a given expired row is gone at the next receipt or the next operator purge: if the backlog is larger than the batch, older rows go first and the rest wait. **With no traffic and no operator purge, the mechanism gives no finite physical upper bound.** An expired row then stays in storage indefinitely, though it is logically excluded (item 3). An operator command that exists is not evidence that anyone runs it.
+5. **Optional (c), a scheduled purge:** a `pg_cron` job calling the same function. This would be a **new scheduler activation**, and needs its own owner approval and Codex review. Nothing in this plan authorizes or activates it.
+
+**EO-2 must explicitly choose the physical lag and an accountable purge mechanism, before arming.** Codex does not set this policy. The options are:
+
+| Option | What the owner accepts | What must exist before arming |
+|---|---|---|
+| **P-1: no hard deletion deadline** | Expired receipts are excluded immediately, but may stay in storage for an **unbounded** time (a + b only) | A named accountable person and cadence for running (b); the backlog readback (expired count and oldest expiry) as part of that routine; dated purge records as evidence that it runs |
+| **P-2: hard deletion deadline D** (for example, every expired row deleted within 7 days of `expires_at`) | Physical presence is bounded by `expires_at` + D | **Either** (c), separately authorized, **or** an evidenced operator procedure that runs (b) at least every D/2, with dated records; **and** backlog monitoring that flags `oldest expired expires_at < now() − D` (operator readback now; alerting in 7.6); **and** a capacity check that purge throughput (batch size × runs per period, plus receipt-time purges) exceeds the expected expiry inflow, with the margin recorded |
+
+The plan's recommendation is **P-2 with an evidenced weekly operator purge** (D = 14 days), because it bounds storage without new automation. It stays a **proposal** until EO-2 is decided.
 
 **Activation gate.** The receiver is not armed (7.3D) until:
-- EO-2 names the intervals and the mechanism (a+b, or a+b+c);
-- SQL tests prove cascade, logical expiry, purge-on-receipt, operator purge and boundary times;
-- the hosted readback after arming shows `0` rows past `expires_at` + the agreed lag.
+- EO-2 names the intervals, the option (P-1 or P-2, with D) and the accountable purge mechanism;
+- SQL tests prove cascade, immutable expiry, logical expiry, bounded and ordered purge-on-receipt, the clamped operator purge and its return values, non-blocking concurrent purges, and boundary times (S-33 to S-36, S-59 to S-61);
+- under P-2, the hosted readback after arming shows no row whose `expires_at` is more than D in the past, and the first dated purge record exists. Under P-1, the readback records the backlog count and oldest expiry, with no deletion claim.
 
 **Deferring enforcement to 7.6 is withdrawn.** 7.6 keeps CFG-011 for log lines only.
 
@@ -573,7 +658,7 @@ Exactly the §8.1 columns.
 ### 13.2 First slice: 7.3B, dormant authenticated receipt (not yet cleared)
 
 **Scope:**
-- one additive migration: the §8.1 table and `email_evidence_config` (empty); `email_receive_provider_event` (service role only, with linkage, conflict and purge-on-receipt); `email_provider_events_purge` (operator-guarded); explicit revokes;
+- one additive migration: the §8.1 table, its coherence checks and its `expires_at` immutability trigger; `email_evidence_config` (empty); the `provider_message_id` indexes on the three ledgers; `email_receive_provider_event` (service role only, with independent identity resolution across all three ledgers, linkage, the content-conflict flag and purge-on-receipt); `email_provider_events_purge` (operator-guarded, clamped); explicit revokes;
 - the route (§6) and a server-only verifier wrapper around `svix@2.9.1`, exact-pinned;
 - env names; v2 logger allowlist additions;
 - SQL, unit and concurrency tests, and their CI step;
@@ -586,7 +671,9 @@ Exactly the §8.1 columns.
 2. Every §14 case for 7.3B passes, with locally generated secrets and synthetic signed payloads.
 3. Exactly one receipt per `svix-id` under concurrency, including differing payloads.
 4. No 2xx before commit.
-5. Expiry, cascade and purge are enforced and tested.
+5. Expiry, cascade and purge are enforced and tested, with the guarantees stated in §11.4 and no stronger ones (no per-row physical deadline is claimed without EO-2).
+5a. The exact received bytes, including a leading BOM, are what is verified (S-8a to S-8e).
+5b. Identity is resolved independently across all three ledgers. Disagreeing, ambiguous and invalid-tag receipts are never linked or trusted (S-31, S-32, S-52 to S-58).
 6. No PII is retained or logged.
 7. v1 unchanged; v2 exact-key test extended, still 16 keys.
 8. Existing function definitions unchanged: application ledger `10 | 5f14532a…`; 7.2C-1 `12 | 016c0e68…`; renewal submit `8c894236…`; renewal trigger function `b1607618…`; fingerprint `58 | af0fae6e…`.
@@ -620,13 +707,20 @@ All cases use locally generated secrets and synthetic payloads. "Rejected" means
 | # | Case | Expected |
 |---|---|---|
 | S-1 | No secret; malformed secret (constructor throws) | 503; body not read |
-| S-2 | Each `svix-*` header missing; `svix-id` malformed; timestamp `"123abc"` or 13 digits; signature header over 1,024 bytes, 9 entries, or an entry over 128 bytes | 400; body not read; `verify` not called |
+| S-2 | Each `svix-*` header missing; `svix-id` empty, 129 bytes, or containing a space or non-ASCII byte; timestamp `"123abc"`, `" 123"` or 13 digits; signature header over 1,024 bytes, 9 entries, or an entry over 128 bytes | 400; body not read; `verify` not called |
+| S-2a | **Boundaries accepted:** `svix-id` of exactly 128 bytes and one without any `msg_` prefix; a 12-digit timestamp; a signature header of exactly 1,024 bytes; a header with exactly 8 entries, one of them exactly 128 bytes, and the matching `v1` entry last | Proceeds to verification (and verifies when signed). Compatibility with the real provider is still proven in 7.3D before activation |
 | S-3 | `Content-Length` 70,000 with a small body | 413 before reading |
 | S-4 | **No `Content-Length`**, chunked body of 65,537 bytes | 413; `reader.cancel()` observed; no decode, `verify` or RPC |
 | S-5 | **False `Content-Length`** (declares 100, streams 80,000) | 413 at the byte ceiling; stream cancelled |
 | S-6 | `Content-Length` invalid (`abc`, negative) | Ignored; the byte ceiling still applies |
 | S-7 | Body of exactly 65,536 bytes containing multibyte characters (byte count ≠ character count) | Accepted when signed; 65,537 bytes → 413 |
 | S-8 | A multibyte character split across two chunks | Decodes correctly; verifies |
+| S-8a | **Signed body with a leading UTF-8 BOM** (`EF BB BF` + JSON), signature computed over all bytes including the BOM | Verifies (the string passed to `verify` starts with U+FEFF, spy); `JSON.parse` fails → 200 `invalid_payload` receipt; BOM not stripped |
+| S-8b | **BOM sent, signature computed over the body without the BOM**; and the reverse (signed with the BOM, sent without it) | 400 both ways (proves no stripping or insertion) |
+| S-8c | Mutation: decoder built without `ignoreBOM: true` (default BOM handling) | S-8a fails (test detects the dropped byte) |
+| S-8d | **Multibyte and split-chunk fixtures:** a 4-byte character split across three chunks; the body delivered in 1-byte chunks; 2-, 3- and 4-byte characters at the 65,536-byte boundary | Each verifies, and the re-encoded string equals the retained bytes exactly |
+| S-8e | **Whitespace and newlines preserved:** signed bodies with a trailing `\n`, a trailing `\r\n`, leading spaces, and internal tabs; each also sent with the whitespace altered | Exact bodies verify; every altered variant → 400. No trimming or newline normalization (spy on the verified string) |
+| S-8f | Re-encoding check forced to mismatch (injected decoder) | 500; `verify` not called; no receipt |
 | S-9 | Invalid UTF-8 bytes | 400; `verify` not called |
 | S-10 | Body re-read with `request.text()` or parsed before verify (mutation) | Tests fail |
 | S-11 | Wrong signature; a different secret; truncated; only non-`v1` entries | 400 (`WebhookVerificationError`) |
@@ -634,6 +728,7 @@ All cases use locally generated secrets and synthetic payloads. "Rejected" means
 | S-13 | Timestamp 301 s old or 301 s ahead (fake clock) | 400 (`WebhookVerificationError` from the verifier); no own range check (spy) |
 | S-14 | Several `v1` entries, only the second matching | Accepted |
 | S-15 | Rotation: signed with previous only, previous configured; previous unset | Accepted, slot `previous`; then 400 |
+| S-15a | Rotation branches: the current verifier fails with a missing-header or timestamp error while a valid previous-secret signature is present | 400; the previous verifier is **not** called (spy). Only the signature-mismatch path tries it |
 | S-16 | **Verifier throws a non-`WebhookVerificationError`** (injected) | 500; no receipt; never 2xx |
 | S-17 | **Verified non-JSON; verified JSON without `type`; verified empty body** | 200; `invalid_payload` receipt with no data |
 | S-18 | **Same non-JSON body with an invalid signature** | 400; no receipt (proves authentication runs before the malformed path) |
@@ -649,19 +744,30 @@ All cases use locally generated secrets and synthetic payloads. "Rejected" means
 | S-28 | Sentinel PII in every non-retained field, and in extra tags | Absent from the row, logs and responses |
 | S-29 | Secret, signature, slot, `svix-id` and email ID in logs | Absent |
 | S-30 | Non-POST | 405 |
-| S-31 | Tag link to an existing row and attempt; to a missing row; to attempt > attempts | Linked; unlinked; unlinked |
-| S-32 | ID fallback link; two ledgers sharing an ID (impossible by construction; forced) | Linked to one; ambiguous → unlinked |
-| S-33 | **Delete a contact submission, a vendor application, or a price draft** | Their linked receipts are cascade-deleted; no unlinked survivor |
+| S-31 | Valid tag to an existing row and attempt, no ID anywhere; tag to a missing row; tag to attempt > attempts; a partial tag set; a malformed `mm_ref` | `tag_only`, linked; then `conflict_tag_invalid`, unlinked, for the other four |
+| S-32 | Untagged with an ID held by exactly one row; untagged with no match | `id_only`, linked to that row's sent attempt; `unmatched` |
+| S-33 | **Delete a contact submission, a vendor application, or a price draft** | Their **linked** receipts are cascade-deleted. A conflicted receipt whose `tag_ref` named the row remains, unlinked, until its own expiry (documented behavior, §7.2) |
 | S-34 | Expiry: a row at `expires_at - 1 s` and at `expires_at` | Visible, then excluded from every readback |
-| S-35 | Purge on receipt: 150 expired rows, then one receive | 100 deleted, oldest first, in the same transaction |
-| S-36 | Operator purge | Bounded deletion; returns count and oldest remaining; non-operator refused |
+| S-35 | Purge on receipt: 150 expired rows, then one receive | Exactly 100 deleted, the oldest by `(expires_at, svix_id)`, in the same transaction; 50 remain and stay logically excluded |
+| S-36 | Operator purge | `p_limit` 0, 1,001 and negative clamped to 1–1,000; deterministic order; returns the deleted count, the remaining expired count (capped) and the oldest remaining expiry; non-operator refused |
+| S-52 | **Tag names unknown attempt A of row X; the ID already belongs to row Y in the same ledger** | `conflict_disagree`; no FK; excluded; counted |
+| S-53 | **The same as S-52, with Y in a different ledger** | `conflict_disagree`; no FK; excluded |
+| S-54 | Valid tag for row X attempt 1; the ID belongs to row X's sent attempt 2 | `conflict_disagree` (attempt differs) |
+| S-55 | **ID collision across ledgers** (forced): two rows in different ledgers, and two rows in one ledger, hold the same ID; tagged and untagged variants | `conflict_id_ambiguous`; no FK; excluded; never linked to either |
+| S-56 | **Invalid tag (missing row, future attempt, partial or malformed) with an ID that matches one row uniquely** | `conflict_tag_invalid`; **no fallback** to the ID; excluded |
+| S-57 | Valid tag, no ID at receipt; S-52's Y then records the receipt's ID; and, separately, an `id_only` receipt whose ID another ledger then records | Both trusted before; `id_conflict` at the next read and excluded after; never restored to trusted |
+| S-58 | **Concurrent receive and source deletion** (real database, repeated): a receipt linking to row X while X's source is deleted | Either the receipt commits linked and is then cascade-deleted, or the receive gets `23503` → 5xx (no 2xx) and the retry is classed `conflict_tag_invalid`. Never a linked receipt to a missing row, never a 2xx before commit |
+| S-59 | **Immutable expiry:** a duplicate delivery 10 days after the first; a content-conflict update; a direct `update … set expires_at` as the table owner | `expires_at` unchanged; the direct update is rejected by the trigger |
+| S-60 | **Backlog larger than the batch:** 1,000 expired rows, then 3 receives with no operator purge | 300 deleted, oldest first; the remaining 700 are still stored and logically excluded. Proves that no per-row deadline follows from receipts alone |
+| S-61 | Concurrent purges: two receives and an operator purge over the same expired rows | No deadlock or wait (`skip locked`); each row deleted once; counts add up |
+| S-62 | Coherence checks: inserts violating each §8.1 linkage check (FK without class, tag link pointing at another row, partial tags, `id_only` with tags) | Rejected by the table |
 | *7.3C* | | |
-| S-37 | Early callback: tag-linked receipt before `*_record`; the record then commits a matching or a different ID | Agreement → trusted; different → `id_conflict`, excluded |
+| S-37 | Early callback: tag-linked receipt before `*_record`; the record then commits a matching or a different ID | Agreement → trusted; different → `id_conflict`, excluded (the readback side of S-57) |
 | S-38 | `unknown` row with a tagged delivered receipt | Rule 4 shown; row stays `unknown`; resend still needs attestation |
 | S-39 | **Delivered + complaint** (either arrival order) | Rule 1; `delivered_fact` yes; **not** in "Not delivered"; in "to review" |
 | S-40 | **Delivered + transient bounce**; delivered + undetermined bounce | Rule 3; not in "Not delivered" |
 | S-41 | **Permanent bounce only** | Rule 5; in "Not delivered" |
-| S-42 | **Delivered + permanent bounce** (either order) | Rule 2 (disagreement); **not** in "Not delivered"; in "to review" |
+| S-42 | **Delivered + permanent bounce** (either order, and with equal or missing provider timestamps) | Rule 2 (disagreement, "also reported", never "later"); **not** in "Not delivered"; in "to review"; history shows the provider timestamps as received |
 | S-43 | Transient bounce only | Rule 6; never "not delivered" |
 | S-44 | Same facts in every arrival permutation (property test) | Identical summary and flags |
 | S-45 | **A content-conflicted receipt that would change the summary** (for example a permanent bounce) | Excluded; summary from the others; `has_conflict` shown; not in "Not delivered" |
@@ -683,7 +789,7 @@ Codex's review recommendations are noted beside each. They are not approvals.
 | ID | Question | Recommendation (proposal) |
 |---|---|---|
 | **EO-1** | Authorize 7.3D hosted activation (push, secrets, registration)? | Later, per action |
-| **EO-2** | Receipt retention: intervals and enforcement mechanism (§11.4) | Linked 90 days, unlinked 30 days; purge on receipt plus an operator purge, with logical expiry immediate; optional `pg_cron` purge as a separate approval. *Codex recommends minimal finite retention with enforceable deletion.* No arming before this is decided and tested |
+| **EO-2** | Receipt retention: intervals, **the accepted physical-deletion lag (P-1 unbounded, or P-2 with deadline D)** and **the accountable purge mechanism** (§11.4) | Linked 90 days, unlinked 30 days; immutable receipt-time expiry; immediate logical exclusion; purge on receipt plus the operator purge; **P-2 with D = 14 days through an evidenced weekly operator purge** with backlog monitoring and a capacity check. A `pg_cron` purge would need its own approval and is not proposed here. *Codex recommends minimal finite retention with enforceable deletion, and leaves the physical lag to the owner.* No arming before this is decided and tested. Codex's acceptance of batch 100 is a technical bound, not approval of any lag |
 | **EO-3** | Subscribed events | The seven operational types: `email.sent`, `delivered`, `delivery_delayed`, `bounced`, `complained`, `failed`, `suppressed`. Not opens or clicks. *Codex concurs as a recommendation* |
 | **EO-4** | Should a bounce or complaint on transactional mail change later sends? | No automatic action; operator review only. *Unapproved* |
 | **EO-5** | Who removes addresses from Resend's suppression list, and how is it recorded? | Owner only, per address, with a reason. *Unapproved* |
@@ -706,19 +812,24 @@ Codex's review recommendations are noted beside each. They are not approvals.
 | EC-9 | Owner-email readback first | §9.1 |
 | EC-10 | Defer new resend transitions | §9.3 |
 
-### 15.3 Open for Codex re-review
+### 15.3 Questions put to Codex, and its answers (review #5891897514)
 
-1. Is receipt-time linkage through three nullable cascading FKs on the receipt table acceptable, given it adds cascade work to deletions of existing ledger rows? (No SQL path that deletes those rows or their sources was found: §3.1. S-33 therefore deletes sources directly in tests.)
-2. Purge-on-receipt batch size (100), and whether physical deletion lag without traffic is acceptable when logical expiry is immediate.
-3. Rule 2 (delivered plus permanent bounce as "disagreement", not non-delivery): confirm the wording and that it should stay out of the "Not delivered" count.
-4. Header bounds (1,024 bytes; 8 entries; 128 bytes per entry; `svix-id` pattern), pending a synthetic Resend sample.
-5. Invalid UTF-8 → 400 (unauthenticated) versus verifying first and then recording `invalid_payload`. The plan chooses 400, because lenient decoding before authentication would verify bytes other than those retained.
+| # | Question (previous revision) | Codex answer | Applied |
+|---|---|---|---|
+| 1 | Receipt-time linkage through three nullable cascading FKs | Acceptable, **conditional on C2**, with indexed FK columns, enforced coherent linkage fields, SQL cascade and role tests, concurrent receipt and source-deletion tests, and an accurate statement of the new referential and deletion behavior | §7.2, §8.1 (checks, indexes, behavior note); S-33, S-58, S-62, S-27 |
+| 2 | Purge batch size 100; physical lag without traffic | 100 is an acceptable initial **technical** bound. Clamp operator limits to 1–1,000; deterministic oldest-first order; index `expires_at`; avoid blocking concurrent ingesters; return the deleted count plus the remaining expired count and oldest expiry. **Physical lag is EO-2, not Codex policy approval** | §11.4 items 4(a)/(b), P-1/P-2; §15.1 EO-2; S-35, S-36, S-60, S-61 |
+| 3 | Rule 2 wording and exclusion from "Not delivered" | Accepted. Preserve provider timestamps; avoid "later" unless chronology establishes it | §8.3 rule 2 ("also reported") and the chronology note; S-42 |
+| 4 | Header ceilings | Accept 1,024 bytes / 8 entries / 128 bytes per entry and a strict numeric timestamp, with boundary fixtures and controlled-provider compatibility before activation. Treat `svix-id` as **opaque and bounded** unless the provider guarantees a format | §6.2 step 3, §8.1 `svix_id` check; S-2, S-2a; §12 |
+| 5 | Invalid UTF-8 → 400 | Accepted, with C1's exact-byte handling for valid UTF-8 | §6.2 step 6; S-9, S-8a to S-8f |
+| — | Verifier | The exact-pinned `svix`/`standardwebhooks` approach is accepted, **subject to** the dependency review and executable tests of the resolved exports, error class and return value. The review does not certify the tarball contents. No handwritten fallback. Try the previous secret only on the documented signature-mismatch path, keeping the fixed freshness check; test every branch | §4.3, §6.2 step 7, §13.1; S-11 to S-16, S-15a |
+
+No question is open for Codex in this revision beyond final plan clearance.
 
 ---
 
 ## 16. Carried register (unchanged by this plan)
 
-- **CFG-011:** 90-day log retention not met (7.6). Receipt retention is now designed for EO-2 (§11.4) and is **not** deferred to 7.6.
+- **CFG-011:** 90-day log retention not met (7.6). Receipt retention is now designed for EO-2 (§11.4) and is **not** deferred to 7.6. Backlog alerting for the receipt purge, if P-2 is chosen, belongs to 7.6.
 - **A2 human verification:** NOT PERFORMED; booking-readiness register.
 - **Retrospective Codex review of 7.2B:** open.
 - **7.2C-2 (#167):** merged. Its Codex review record, a deployment READY readback, the post-deploy renewal-window reconciliation and the stale status line in its record are open (§1.2). This plan does not perform or claim them.
@@ -734,8 +845,11 @@ Codex's review recommendations are noted beside each. They are not approvals.
 - Baseline facts: `git fetch`; `gh pr view 167`; `gh run list`; `gh api` (reviews, deployments) on 2026-11-13. No hosted Supabase or Vercel query.
 - Provider facts: fetched official pages (Sources). Library facts: the published `svix@2.9.1` and `standardwebhooks@1.1.1` tarballs, read in a scratch directory outside the repository and not executed.
 - No tests were run: no code changed. `git diff --check`, the secret scan and a relative-link check were run on the documentation diff (§19).
+- Second revision (2026-11-16): no new provider or tarball fetch. The `TextDecoder` BOM behavior (C1) is the Web Encoding standard's default as stated by Codex. 7.3B proves it executably with S-8a to S-8c, not by citation.
 
-## 18. Codex review #5891386779: finding-to-resolution table
+## 18. Finding-to-resolution tables
+
+### 18.1 Codex review #5891386779
 
 | Finding | Summary | Resolution in this revision | Tests |
 |---|---|---|---|
@@ -747,6 +861,17 @@ Codex's review recommendations are noted beside each. They are not approvals.
 | Baseline | Reconcile #167's merge; separate kinds of evidence | §1.1 history kept; §1.2 separates source and CI, review, hosted migration, deployment metadata and rollout reconciliation | — |
 | Conflicts | Handoff and TRACEABILITY | Both sides kept (§1.2) | — |
 | EC directions | Record them | §15.2 | — |
+
+R2's physical-retention statement and R2/R4's linkage were corrected again by C2 and C3 (§18.2).
+
+### 18.2 Codex re-review #5891897514 (at `5d577f0`)
+
+| Correction | Summary | Resolution in this revision | Tests |
+|---|---|---|---|
+| **C1** | `TextDecoder` consumes a leading BOM by default, so `fatal: true` alone does not preserve the signed bytes | §6.2 step 6: `fatal: true, ignoreBOM: true`; a re-encode equality check against the retained bytes before `verify` (mismatch → 500); no BOM, whitespace, newline or Unicode normalization. Step 9: parse only after authentication; a BOM-prefixed authenticated body that `JSON.parse` rejects follows the verified-malformed path. §4.3 notes that 7.3B tests the exact-byte property against the resolved package | S-8a to S-8f (BOM signed and sent; BOM mismatch both ways; default-decoder mutation; 4-byte split across chunks, 1-byte chunks, multibyte at the ceiling; whitespace and newline variants; injected mismatch) |
+| **C2** | Tag-first linkage with only a linked-row ID check can trust a receipt whose ID identifies a different ledger or attempt | §7.2: the tag candidate and the provider-ID candidate (across **all three** ledgers) are resolved **independently**. Linked only when they agree or exactly one is present; disagreement, ID ambiguity and any present invalid tag are conflicts, **never linked**, never trusted, and there is no fallback from an invalid tag to the ID. §7.3: a read-time recheck of every linked receipt catches IDs recorded later and can only remove trust, never restore it. §8.1: `identity_class` with linkage-coherence checks and ledger ID indexes; §7.4/§9.1 conflict counting. Retention consequence stated: conflicted receipts do not cascade and are bounded by their short expiry | S-31, S-32, S-52 to S-58 (Codex's same-ledger and cross-ledger A/B cases, ID collision, invalid tag with matching ID, later-recorded IDs, concurrent receive and deletion), S-62 |
+| **C3** | "Gone at the next receipt or purge" was wrong; there is no finite physical bound without traffic or a purge | §11.4 item 4 now says what the batch does and does not guarantee, including the unbounded case. Expiry is immutable at receipt time (a trigger rejects changes; duplicates never extend it). Logical exclusion is in the only (database) read path. Purge is deterministic, oldest first, `skip locked`, with a clamped operator limit and backlog return values. **EO-2 must choose P-1 (unbounded lag accepted) or P-2 (deadline D)** and an accountable purge mechanism; under P-2 a separately authorized schedule or an evidenced operator procedure, plus backlog monitoring and capacity. Nothing authorizes automation | S-34 to S-36, S-59 to S-61 |
+| §15.3 answers | Conditions on FKs, batch, wording, headers, UTF-8, verifier | Applied as listed in §15.3 (opaque `svix-id`, header boundary fixtures, "also reported", rotation-branch restriction) | S-2, S-2a, S-15a, S-42 |
 
 ## 19. Revision validation
 
