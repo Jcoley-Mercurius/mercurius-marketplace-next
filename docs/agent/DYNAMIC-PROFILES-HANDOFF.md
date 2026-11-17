@@ -3,6 +3,14 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
+## Current status — 2026-11-17
+
+PR #171 is merged as `a44a062`. Codex's retrospective review of final head `b4eb800` is recorded as [review #5941302731](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/171#pullrequestreview-5941302731): both earlier P2 findings resolved; no new blocking code findings in that scope. Exact-head CI 44007255413 passed backend/lifecycle/application (1,021 unit, 793 non-visual browser tests); independent focused model checks passed 78 assertions.
+
+**Subsequent owner approval:** Josh approved the initial gallery layout/design and requested implementation with reasonable refinement alongside Phase 7. The approval is transcribed in `governance/OWNER-APPROVALS.md` on documentation PR #173, with proposed TRACE-156. It is not a claim that unperformed manual/reference/screen-reader/real-phone checks passed or that a live-route candidate has been accepted.
+
+**Next executable slice:** P2A real directory cards, then P2B dynamic profile interior. Read [the integration handoff](../../governance/DYNAMIC-PROFILES-INTEGRATION.md). Work in a separate worktree/branch from current main (inspected `3327c83`, including the security patch), preserve Phase 7 files/processes, and return a draft implementation PR for review. Do not merge/deploy or add a database/media schema. The prior live-route/design approval holds below are historical; initial-layout approval is now recorded. PR #173 remains a documentation proposal until merged.
+
 ## Slice
 
 - **Name:** Dynamic profiles — local review gallery.
@@ -189,7 +197,7 @@ Still open:
   predate the new `/mds` link and were not regenerated.
 - **Next.js advisory.** See the build note under Results.
 
-## Not done
+## Historical implementation checkpoint — before the #171 merge
 
 No merge, deploy, migration, hosted query or production change. No Phase 7 file, the
 shared `HANDOFF.md`, `TRACEABILITY.md`, `OWNER-APPROVALS.md` or any gate was edited. No live
@@ -203,9 +211,9 @@ was performed. PR #171 stays a draft.
 
 ## Next
 
-Codex re-review of the revision on PR #171. Then the owner reviews the gallery at desktop and
-phone widths and answers the decisions above. The integration slice (P2 in the plan) starts
-only after both.
+The retrospective code re-review and initial-layout/design approval are recorded. Begin the bounded P2A real-directory-card implementation using the integration handoff as read-only authority input from PR #173 if needed. Keep reset-on-service-change, deterministic contextual card lead, sentence case and removal of invalid below-minimum extras. Reconcile the documentation proposal before an implementation release; it need not block isolated P2A development. P2B follows P2A review.
+
+The detailed build directions and open-item statements below are the historical implementation record; the dated current-status note and review above describe subsequent actions.
 
 ## Revision of 2026-11-16 (Codex review of `4622a80`)
 
