@@ -136,6 +136,7 @@ synthetic test value; the gallery makes no backend request.
 - **Visual baselines.** No golden screenshots were added; the baseline environment and the
   owner's review of first images come first (plan P0/H). The existing win32 catalog baselines
   predate the new `/mds` link and were not regenerated.
+- **Next.js advisory.** See the build note under Results.
 
 ## Not done
 
@@ -150,11 +151,44 @@ answers the decisions above. The integration slice (P2 in the plan) starts only 
 
 ## Results
 
-Verification is still in progress at this checkpoint. Completed so far on 2026-11-16:
+Run on 2026-11-16 in this worktree, Node 24.17.0, npm 11.13.0, WSL2. Final state of the branch.
 
-- `npx tsc --noEmit` — no errors.
-- `npx eslint` on the new and changed files — no findings.
-- `npx vitest run tests/unit/provider-profile-model.test.ts` — 32 of 32 passed.
+| Check | Command | Result |
+|---|---|---|
+| Secret scan | `npm run scan:secrets` | Passed |
+| Lint | `npm run lint` | No findings |
+| Types | `npm run typecheck` | No errors |
+| Unit | `npm run test:unit` | 68 files, 1005 of 1005 passed (32 new in `provider-profile-model.test.ts`) |
+| Build | `npm run build` with the synthetic values above | Exit 0 at the final state (see note) |
+| Gallery browser spec, isolated lane | `npx playwright test --config playwright.profile-gallery.config.ts` (port 3123) | 69 of 69 passed |
+| Standard lane | `npx playwright test mds.spec.ts profile-gallery.spec.ts --grep-invert @visual` (3103 / 55831, both free at the time) | 88 of 88 passed: the existing catalog spec's 19 and the gallery's 69 |
 
-Not yet run at this checkpoint: production build, the gallery browser spec, the full unit
-suite and the full lint.
+The gallery spec covers axe (WCAG 2.0/2.1/2.2 A and AA) and reflow for the index and nine
+profile views at 320, 390, 768, 1024 and 1440 px; 200% zoom; service switching by keyboard;
+stale-selection clearing; explicit, withdrawn, unoffered and unknown service links; Back and
+Forward; focus return; ZIP results; sparse and failed-read states; the next step by access
+state; and the directory cards.
+
+**Found and fixed during verification:** muted text on tinted surfaces measured 4.34–4.44:1
+(now the `slate` token); a long extras label overflowed at 320 px (now wraps); the existing map
+rendered oversized in a wide column (now width-limited; the component itself is unchanged).
+
+**Build note.** Of four builds, two stopped with exit 1 after compiling, on a notice from the
+Next.js CLI that 16.4.3 "is affected by a known security vulnerability" and recommending an
+upgrade; the other two, including the last, exited 0 on the same code. Nothing was upgraded:
+a dependency change is outside this slice and affects every branch. It needs an owner and
+Codex decision, and CI may hit the same stop.
+
+**Not run:** the full browser suite (`npm run test:a11y`), `npm run test:visual`, database
+tests (no schema or data contract changed), and CI. The gate that returns 404 without
+`MDS_CATALOG_ENABLED=1` was not exercised in a browser; it is the same check `/mds` uses.
+
+**Manual checks not performed:** real phone, screen reader, a text-size setting other than
+page zoom, forced colors, and a side-by-side comparison with the reference PDFs.
+
+**Review images.** The spec writes them to `test-results/profile-gallery/` on every run (47
+images: 320, 390 and 1440 px, full page, plus phone viewport shots). They are not committed:
+15 curated images came to 4.5 MB against a 10.6 MB repository. A copy of the last run is in
+`../mercurius-dynamic-profiles-review/`, outside git. In full-page phone images the fixed
+action bar is laid out at the end of the page for the capture only; the `-viewport` images
+show it pinned.

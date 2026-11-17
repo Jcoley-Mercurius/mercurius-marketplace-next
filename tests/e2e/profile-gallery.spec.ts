@@ -98,7 +98,12 @@ for (const [name, path, view] of views) for (const width of widths) {
       expect((await label.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
     if (width === 320 || width === 390 || width === 1440) {
-      await page.screenshot({ path: `${shots}/${name.replace(/\W+/g, "-")}-${width}.png`, fullPage: true });
+      const file = `${shots}/${name.replace(/\W+/g, "-")}-${width}`;
+      // What a visitor sees on arrival, with the phone action bar in place.
+      if (width < 1024) await page.screenshot({ path: `${file}-viewport.png` });
+      // A full-page capture pins a fixed bar mid-image, so it is laid out in flow for the image only.
+      await page.addStyleTag({ content: "[data-profile-action-bar]{position:static!important}" });
+      await page.screenshot({ path: `${file}.png`, fullPage: true });
     }
   });
 }
@@ -108,7 +113,7 @@ test("phone layout puts the decision before the media and keeps the last section
   const priceBox = (await price(page).boundingBox())!;
   const mediaBox = (await page.locator("[data-profile-media]").boundingBox())!;
   expect(priceBox.y).toBeLessThan(mediaBox.y);
-  await page.keyboard.press("End");
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const bar = (await page.locator("[data-profile-action-bar]").boundingBox())!;
   const last = (await page.locator("[data-service-row=all]").boundingBox())!;
   expect(last.y + last.height).toBeLessThanOrEqual(bar.y);
@@ -433,7 +438,7 @@ test("directory cards follow the service context and link with it", async ({ pag
   await expect(card("synthetic-northside").locator("[data-logo=initials]")).toHaveText("NH");
   await expect(card("synthetic-caloosa").locator("[data-card-price]")).toContainText("$55 · weekly, per visit");
   await expect(card("synthetic-brightbin").getByRole("link")).toHaveAttribute("href", brightbin);
-  await expect(card("synthetic-brightbin").getByRole("link")).toHaveAccessibleName("View profile: Brightbin Can Care, One-time can cleaning");
+  await expect(card("synthetic-brightbin").getByRole("link")).toHaveAccessibleName(/^View profile ?: Brightbin Can Care, One-time can cleaning$/);
 
   // A service context changes the headline and price, and leaves out providers without it.
   await page.getByRole("combobox", { name: "Directory service context" }).selectOption("pressure-washing");

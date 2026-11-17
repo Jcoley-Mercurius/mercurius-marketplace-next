@@ -169,7 +169,7 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
       </p>
     </div>}
 
-    <nav aria-label="Profile sections" className="mt-4 flex flex-wrap gap-x-5 border-b border-border">
+    <nav aria-label="Profile sections" className="mt-4 flex flex-wrap gap-x-4 border-b border-border">
       <a href="#profile-services" className={sectionLink}>Work &amp; services</a>
       <a href="#profile-about" className={sectionLink}>About</a>
       <a href="#profile-reviews" className={sectionLink}>Reviews</a>
@@ -224,7 +224,7 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
         <h2 id={`${id}-reviews`} className="text-2xl font-semibold text-foreground">Customer reviews</h2>
         {!data.reviews && <div data-reviews="unavailable" className="mt-3 rounded-xl bg-secondary p-4">
           <p className="text-base font-semibold text-foreground">Reviews could not be loaded</p>
-          <p className="mt-1 text-sm text-muted-foreground">No rating or review count is shown until they can be read.</p>
+          <p className="mt-1 text-sm text-slate">No rating or review count is shown until they can be read.</p>
           {onRetryReviews && <Button type="button" variant="outline" className="mt-3" onClick={onRetryReviews}><RefreshCw aria-hidden="true" />Try again</Button>}
         </div>}
         {data.reviews && <>

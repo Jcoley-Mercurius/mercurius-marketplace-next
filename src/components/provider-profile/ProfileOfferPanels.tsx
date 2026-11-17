@@ -59,7 +59,7 @@ export function OfferSummary({ service, selection, headingId }: {
       </div>}
 
       {preview && extrasChosen && <div data-price-preview className="mt-4 rounded-xl bg-secondary p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Price preview</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate">Price preview</p>
         <div className="mt-2 flex items-baseline justify-between gap-3">
           <p className="text-base font-semibold text-foreground">Service subtotal</p>
           <p data-price-total className="text-xl font-semibold tabular-nums text-foreground">{preview.totalLabel}</p>
@@ -67,7 +67,7 @@ export function OfferSummary({ service, selection, headingId }: {
         <ul className="mt-2 space-y-1">{preview.lines.map((line) => <li key={line.id} className="flex items-baseline justify-between gap-3 text-sm text-foreground">
           <span className={cn("min-w-0", anywhere)}>{line.label}</span><span className="shrink-0 tabular-nums">{line.amount}</span>
         </li>)}</ul>
-        <p className="mt-3 text-xs leading-5 text-muted-foreground">Calculated from the published offer. Applicable taxes or other approved charges are disclosed in the request step, which confirms the final amount.</p>
+        <p className="mt-3 text-xs leading-5 text-slate">Calculated from the published offer. Applicable taxes or other approved charges are disclosed in the request step, which confirms the final amount.</p>
       </div>}
     </> : <>
       <p data-offer-price className="mt-1 text-3xl font-semibold leading-tight tracking-tight text-foreground">{quoteHeadline()}</p>
@@ -202,7 +202,7 @@ export function PackageSelector({ service, selection, onChange, idPrefix }: {
               <Button type="button" variant="outline" size="icon" aria-label={`Remove one ${addon.name}`} disabled={quantity === 0} focusableWhenDisabled onClick={() => setAddon(addon, quantity - 1)}><Minus aria-hidden="true" /></Button>
               <span data-addon-quantity={addon.id} className="min-w-8 text-center text-base font-semibold tabular-nums text-foreground">{quantity}</span>
               <Button type="button" variant="outline" size="icon" aria-label={`Add one ${addon.name}`} disabled={quantity >= max} focusableWhenDisabled onClick={() => setAddon(addon, quantity + 1)}><Plus aria-hidden="true" /></Button>
-            </div> : <Checkbox label={`Add ${addon.name}`} checked={quantity > 0} onChange={(event) => setAddon(addon, event.target.checked ? 1 : 0)} className="shrink-0" />}
+            </div> : <Checkbox label={`Add ${addon.name}`} checked={quantity > 0} onChange={(event) => setAddon(addon, event.target.checked ? 1 : 0)} className="max-w-full min-w-0 [overflow-wrap:anywhere]" />}
           </li>;
         })}
       </ul>
@@ -214,7 +214,7 @@ function OfferText({ offer }: { offer: ProfileOffer }) {
   return <span className="min-w-0">
     <span className={cn("block text-base font-semibold text-foreground", anywhere)}>{offer.name}</span>
     {offer.scope.length > 0 && <span className={cn("block text-sm text-foreground", anywhere)}>{offer.scope.join(" · ")}</span>}
-    {offer.description && <span className={cn("block text-sm text-muted-foreground", anywhere)}>{offer.description}</span>}
+    {offer.description && <span className={cn("block text-sm text-slate", anywhere)}>{offer.description}</span>}
   </span>;
 }
 
@@ -223,8 +223,8 @@ function OfferPrice({ offer, className }: { offer: ProfileOffer; className?: str
   const cadences = offer.cadences.length;
   return <span className={cn("min-w-0", className)}>
     <span className="block text-base font-semibold tabular-nums text-foreground">{line.amount}</span>
-    {offer.kind === "quote" && line.detail && <span className="block text-sm text-muted-foreground">{line.detail}</span>}
-    {offer.kind === "fixed" && <span className="block text-sm text-muted-foreground">
+    {offer.kind === "quote" && line.detail && <span className="block text-sm text-slate">{line.detail}</span>}
+    {offer.kind === "fixed" && <span className="block text-sm text-slate">
       {offer.cadences[0].frequency === "one-time" ? "One-time" : `${cadenceLabel(offer.cadences[0].frequency)}, per visit`}{cadences > 1 ? ` · ${cadences} cadences` : ""}
     </span>}
   </span>;

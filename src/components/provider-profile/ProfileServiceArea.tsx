@@ -79,7 +79,8 @@ export function ProfileServiceArea({ providerName, serviceName, serviceArea, mar
             : "This provider has not listed its service ZIP codes."}
         />}
         {serviceArea && areas.length > 0 && <div className="space-y-3">
-          <ServiceAreaMap areas={areas} />
+          {/* The existing map, kept near the width its labels were drawn for. */}
+          <div className="max-w-sm"><ServiceAreaMap areas={areas} /></div>
           <p className="text-sm text-foreground">{count} listed ZIP code{count === 1 ? "" : "s"} in Lee County, FL</p>
           <ul className="space-y-2">
             {areas.map((area) => <li key={area.city} className="flex gap-2">
@@ -136,9 +137,9 @@ function ZipResult({ result, serviceName, directoryHref, onRetry }: {
 
 function AreaMessage({ title, copy, onRetry }: { title: string; copy: string; onRetry?: () => void }) {
   return <div className="rounded-xl bg-secondary p-5">
-    <MapPin aria-hidden="true" className="size-6 text-muted-foreground" />
+    <MapPin aria-hidden="true" className="size-6 text-slate" />
     <p className="mt-2 text-base font-semibold text-foreground">{title}</p>
-    <p className="mt-1 text-sm text-muted-foreground">{copy}</p>
+    <p className="mt-1 text-sm text-slate">{copy}</p>
     {onRetry && <Button type="button" variant="outline" className="mt-3" onClick={onRetry}><RefreshCw aria-hidden="true" />Try again</Button>}
   </div>;
 }

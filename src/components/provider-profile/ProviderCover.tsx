@@ -69,7 +69,7 @@ export function ProviderCover({ name, logoUrl, photo, ratio = "card", className 
     data-cover={usablePhoto ? "photo" : "logo"}
     className={cn(
       "relative flex w-full items-center justify-center overflow-hidden bg-card",
-      ratio === "card" ? "aspect-[2/1]" : "aspect-[16/9]",
+      ratio === "card" ? "aspect-[2/1]" : "aspect-[2/1] sm:aspect-[3/1]",
       className,
     )}
   >
