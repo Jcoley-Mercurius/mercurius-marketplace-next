@@ -52,3 +52,13 @@ These are existing owner decisions, transcribed from the approval pages of the t
 The owner separately assigned the bounded local review gallery on 2026-11-16. PR #171's final revision was merged as `a44a062` on 2026-11-17 and retrospectively code-reviewed by Codex at `b4eb800`. Merge and engineering review do not establish owner visual acceptance. See [the review record](DYNAMIC-PROFILES-REVIEW.md), [the task checkpoint](../docs/agent/DYNAMIC-PROFILES-HANDOFF.md) and TRACE-156.
 
 The dropdown/chips breakpoint, history replacement, retained ZIP and business-wide review sentence are implemented prototype directions, still requiring Josh's desktop/phone review before becoming production interaction authority. Sentence case already follows MDS §9. The proposed first integration retains reset-on-service-change and the first eligible published offer as its temporary no-context card lead; those recommendations are not new owner approvals.
+
+## Initial profile gallery layout and design — 2026-11-17
+
+Josh approved the initial layout/design shown at the local profile gallery and requested implementation of the design cards and profiles with reasonable refinements:
+
+> I approve the initial layout and design ( We want implementation to make our design cards etc). So Please review and make any updates you see fit. Also can we go ahead and make the profile changes before finishing phase 7 or do them along side each other?
+
+This establishes the initial gallery composition as the implementation baseline and authorizes profile presentation work alongside Phase 7 in separate worktrees/PRs. It is a bounded sequencing direction, not Phase 7 acceptance. Codex has scoped P2A (real directory cards) first and P2B (dynamic profile route) next in [the integration handoff](DYNAMIC-PROFILES-INTEGRATION.md).
+
+Keep the directed prototype defaults and the bounded implementation choices described in that handoff. This record does not assert unperformed manual, screen-reader, real-phone or exact-build visual checks, expand pricing/access policy, or authorize a merge/deployment or hosted change. The owner's local serving commit was not independently verified. Acceptance of the integrated candidate still requires real-data-contract and rendering evidence.
