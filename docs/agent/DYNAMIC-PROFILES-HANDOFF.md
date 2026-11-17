@@ -586,3 +586,39 @@ tests (no data contract changed). CI on the PR is the full run.
   the narrowest and widest widths, the contrast is still *measured* in every state at all five
   widths, and one of the three identical failed-read pages carries the scan. The isolated lane
   went from 1 m 06 s to 53 s for the same 21 tests. No workflow file or timeout was changed.
+
+## Candidate `535d722` — Codex re-review and exact-head CI (2026-11-17)
+
+Codex re-reviewed `535d722` and closed both P2 findings (the response ceiling and the
+directory's contrast). Nothing was reimplemented after that review. This section adds only
+evidence, and it is a documentation-only commit on top of the candidate.
+
+**Exact-head CI: run 44168091887, `pull_request` on `535d722`, all required jobs passed.**
+
+| Job | Result | Duration |
+|---|---|---|
+| `backend` | Passed | 9 m 33 s |
+| `lifecycle` | Passed | 3 m 31 s |
+| `application` | Passed | 16 m 20 s (cap 20 m) |
+| Supabase Preview | Skipped (no migration) | — |
+
+Inside `application`, lint, the secret scan, types, the production audit and the build all
+passed. Unit tests ran 69 files and passed 1037 of 1037. The browser step (`npm run test:a11y`)
+passed 814 tests in 14.0 m, with no flaky, retried or skipped tests, and all 21 tests in
+`provider-directory-cards.spec.ts` ran. The run that `313f667` cancelled at the cap now fits,
+with about 3 m 40 s of headroom. No workflow file or timeout was changed.
+
+**Closeout gates still open:**
+
+- CI on the documentation-only head that carries this section. The code is unchanged from
+  `535d722`, but the run should still be green before merge.
+- Codex's approval of the PR, and its review of the PR's move out of draft.
+- Codex or the owner enters the TRACE-156 row in `TRACEABILITY.md`.
+- The integration scope document (PR #173) is not on `main` yet. Whether it merges before,
+  with, or after this PR is Codex's or the owner's call.
+- No manual, real-phone, screen-reader, forced-colors or text-size check has been performed, and
+  none is claimed. The owner decides whether any of them is required before release.
+- The owner merges the PR, which is the release approval (DEC-2026-037). There is no migration,
+  so nothing is pushed to the hosted database first.
+
+P2B (the dynamic profile interior) has not started. No Phase 7 file was touched.
