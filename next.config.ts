@@ -8,8 +8,12 @@ if (buildWorkers && !/^(?:[1-9]|1[0-6])$/.test(buildWorkers)) {
   throw new Error("MERCURIUS_BUILD_WORKERS must be an integer from 1 to 16.");
 }
 
-const nextConfig: NextConfig = buildWorkers
-  ? { experimental: { cpus: Number(buildWorkers) } }
-  : {};
+const nextConfig: NextConfig = {
+  experimental: {
+    // Keep upgrade reminders limited to published security advisories.
+    agentUpgrade: "security",
+    ...(buildWorkers ? { cpus: Number(buildWorkers) } : {}),
+  },
+};
 
 export default nextConfig;
