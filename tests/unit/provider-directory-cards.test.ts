@@ -8,6 +8,7 @@ import {
   profileServices,
   publishedOffers,
   type CardContext,
+  type ProfilePackage,
 } from "@/lib/providerProfile/model";
 import {
   fetchPublicProviderOffers,
@@ -63,34 +64,70 @@ const addonRow = (row: Partial<AddonRow> & Pick<AddonRow, "id" | "package_id" | 
   ...row,
 });
 
-/** A client that answers each table once, in the shape PostgREST returns. */
-function client(answers: Record<string, { data?: unknown; error?: { message: string } | null }>) {
-  const tables: string[] = [];
+type Answer = {
+  rows?: unknown[];
+  /** Fail this table's read with this zero-based index among its requests. */
+  failAt?: number;
+  /** Stop returning rows after this many, while the exact count still reports the whole set. */
+  truncateAfter?: number;
+};
+
+type Request = { table: string; from: number; to: number; ids: string[] | null; count: boolean };
+
+/**
+ * A PostgREST-shaped client: `in` filters, `range` windows, an exact count only when it was
+ * asked for, and — the point of these tests — a server ceiling on how many rows one successful
+ * response may carry. A capped response is a success, not an error.
+ */
+function client(answers: Record<string, Answer>, { cap = 1000 } = {}) {
+  const requests: Request[] = [];
   const from = (table: string) => {
-    tables.push(table);
-    const answer = answers[table] ?? { data: [], error: null };
+    const answer = answers[table] ?? { rows: [] };
+    const state: Request = { table, from: 0, to: Number.MAX_SAFE_INTEGER, ids: null, count: false };
+    let column: string | null = null;
     const chain: Record<string, unknown> = {};
-    for (const step of ["select", "in", "eq", "is", "order", "limit"]) chain[step] = () => chain;
-    chain.then = (resolve: (value: unknown) => unknown) => Promise.resolve(resolve({ data: answer.data ?? null, error: answer.error ?? null }));
+    chain.select = (_columns: string, options?: { count?: string }) => {
+      state.count = options?.count === "exact";
+      return chain;
+    };
+    chain.in = (name: string, values: string[]) => { column = name; state.ids = values; return chain; };
+    for (const step of ["eq", "is", "order", "limit"]) chain[step] = () => chain;
+    chain.range = (start: number, end: number) => { state.from = start; state.to = end; return chain; };
+    chain.then = (resolve: (value: unknown) => unknown) => {
+      const index = requests.filter((request) => request.table === table).length;
+      requests.push({ ...state });
+      if (answer.failAt === index) {
+        return Promise.resolve(resolve({ data: null, error: { message: "Synthetic failure" }, count: null }));
+      }
+      const all = (answer.rows ?? []).filter((row) =>
+        !state.ids || !column || state.ids.includes((row as Record<string, string>)[column]));
+      const available = answer.truncateAfter === undefined ? all : all.slice(0, answer.truncateAfter);
+      const window = available.slice(state.from, Math.min(state.to + 1, state.from + cap));
+      return Promise.resolve(resolve({ data: window, error: null, count: state.count ? all.length : null }));
+    };
     return chain;
   };
-  return { supabase: { from } as unknown as ReturnType<typeof createClient>, tables };
+  return { supabase: { from } as unknown as ReturnType<typeof createClient>, requests };
 }
+
+const tablesRead = (requests: Request[]) => [...new Set(requests.map((request) => request.table))];
 
 describe("the directory reads published offers in batches", () => {
   it("reads packages, then levels and extras, and groups them by provider", async () => {
-    const { supabase, tables } = client({
-      vendor_packages: { data: [
+    const { supabase, requests } = client({
+      vendor_packages: { rows: [
         packageRow({ id: "p1", contractor_id: "c1", service_id: "lawn-mowing", included_scope: ["Up to 1/4 acre"] }),
         packageRow({ id: "p2", contractor_id: "c2", service_id: "kitchen-remodel", pricing_mode: "custom_quote" }),
       ] },
-      package_tiers: { data: [tierRow({ id: "t1", package_id: "p1", price: "60" })] },
-      package_addons: { data: [addonRow({ id: "a1", package_id: "p1", price: "15", is_required: true })] },
+      package_tiers: { rows: [tierRow({ id: "t1", package_id: "p1", price: "60" })] },
+      package_addons: { rows: [addonRow({ id: "a1", package_id: "p1", price: "15", is_required: true })] },
     });
 
     const result = await fetchPublicProviderOffers(["c1", "c2", "c1"], supabase);
 
-    expect(tables).toEqual(["vendor_packages", "package_tiers", "package_addons"]);
+    expect(tablesRead(requests)).toEqual(["vendor_packages", "package_tiers", "package_addons"]);
+    // The first window of each read asks for the exact count; the rest do not.
+    expect(requests.filter((request) => request.count)).toHaveLength(3);
     if (result.status !== "ready") throw new Error("expected a readable result");
     expect([...result.packages.keys()]).toEqual(["c1", "c2"]);
     const lawn = profileServices({ packages: result.packages.get("c1")!, serviceNames });
@@ -100,35 +137,122 @@ describe("the directory reads published offers in batches", () => {
   });
 
   it("asks for nothing when no provider is listed", async () => {
-    const { supabase, tables } = client({});
+    const { supabase, requests } = client({});
     expect(await fetchPublicProviderOffers([], supabase)).toEqual({ status: "ready", packages: new Map() });
-    expect(tables).toEqual([]);
+    expect(requests).toEqual([]);
   });
 
   it("does not read levels or extras when no provider publishes a package", async () => {
-    const { supabase, tables } = client({ vendor_packages: { data: [] } });
+    const { supabase, requests } = client({ vendor_packages: { rows: [] } });
     const result = await fetchPublicProviderOffers(["c1"], supabase);
     expect(result).toEqual({ status: "ready", packages: new Map() });
-    expect(tables).toEqual(["vendor_packages"]);
+    expect(tablesRead(requests)).toEqual(["vendor_packages"]);
   });
 
   it("reports a failed package read as unreadable, never as nothing published", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { supabase } = client({ vendor_packages: { error: { message: "Synthetic failure" } } });
+    const { supabase } = client({ vendor_packages: { failAt: 0 } });
     expect(await fetchPublicProviderOffers(["c1"], supabase)).toEqual({ status: "unavailable" });
   });
 
   it("refuses to price an offer when a level or extra read fails", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    const packages = { data: [packageRow({ id: "p1", contractor_id: "c1", service_id: "lawn-mowing" })] };
-    const tiers = { data: [tierRow({ id: "t1", package_id: "p1", price: 60 })] };
-    const failure = { error: { message: "Synthetic failure" } };
+    const packages = { rows: [packageRow({ id: "p1", contractor_id: "c1", service_id: "lawn-mowing" })] };
+    const tiers = { rows: [tierRow({ id: "t1", package_id: "p1", price: 60 })] };
 
     // A missing extra would advertise $60 instead of $75, so the read is reported unreadable.
-    expect(await fetchPublicProviderOffers(["c1"], client({ vendor_packages: packages, package_tiers: tiers, package_addons: failure }).supabase))
+    expect(await fetchPublicProviderOffers(["c1"], client({ vendor_packages: packages, package_tiers: tiers, package_addons: { failAt: 0 } }).supabase))
       .toEqual({ status: "unavailable" });
-    expect(await fetchPublicProviderOffers(["c1"], client({ vendor_packages: packages, package_tiers: failure }).supabase))
+    expect(await fetchPublicProviderOffers(["c1"], client({ vendor_packages: packages, package_tiers: { failAt: 0 } }).supabase))
       .toEqual({ status: "unavailable" });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Response ceilings (Codex P2A review, finding 1)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The reviewer's reproduction: one hundred providers, each with a $100 level and eleven required
+ * $1 extras, so 1,100 add-on rows meet a 1,000-row response ceiling. Taking one successful
+ * response as the whole set drops the extras that did not arrive and advertises $100 where the
+ * provider published $111.
+ */
+function crowdedDirectory(providerCount = 100, extrasPerPackage = 11) {
+  const providerIds = Array.from({ length: providerCount }, (_, index) => `c${String(index).padStart(3, "0")}`);
+  const packages = providerIds.map((contractor) => packageRow({
+    id: `p-${contractor}`, contractor_id: contractor, service_id: "lawn-mowing",
+  }));
+  const tiers = providerIds.map((contractor) => tierRow({ id: `t-${contractor}`, package_id: `p-${contractor}`, price: 100 }));
+  const addons = providerIds.flatMap((contractor) => Array.from({ length: extrasPerPackage }, (_, index) => addonRow({
+    id: `a-${contractor}-${String(index).padStart(2, "0")}`, package_id: `p-${contractor}`, price: 1,
+    is_required: true, min_quantity: 1, max_quantity: 1, sort_order: index,
+  })));
+  return {
+    providerIds, packages, tiers, addons,
+    answers: { vendor_packages: { rows: packages }, package_tiers: { rows: tiers }, package_addons: { rows: addons } },
+  };
+}
+
+const priceOf = (offers: Map<string, ProfilePackage[]>, provider: string) =>
+  offerPriceLine(profileServices({ packages: offers.get(provider)!, serviceNames })[0].offers[0]).amount;
+
+describe("a capped response is never taken as the whole set", () => {
+  it("pages past the ceiling and prices the last provider's complete offer", async () => {
+    const { providerIds, packages, tiers, addons, answers } = crowdedDirectory();
+    const { supabase, requests } = client(answers, { cap: 1000 });
+
+    // What one capped response alone would have published: the defect this repairs.
+    expect(priceOf(groupPublicPackages(packages, tiers, addons.slice(0, 1000)), "c099")).toBe("$100");
+
+    const result = await fetchPublicProviderOffers(providerIds, supabase);
+
+    if (result.status !== "ready") throw new Error("expected a readable result");
+    // $100 plus eleven required $1 extras. One response would have said $100.
+    expect(priceOf(result.packages, "c099")).toBe("$111");
+    expect(priceOf(result.packages, "c000")).toBe("$111");
+
+    const addonRequests = requests.filter((request) => request.table === "package_addons");
+    expect(addonRequests.length).toBeGreaterThan(2);
+    // Every window starts where the previous one ended, so no row is skipped or read twice.
+    expect(addonRequests.map((request) => request.from)).toEqual([0, 500, 1000, 1100]);
+    // The ceiling cuts through a package's required extras, not between packages.
+    expect(1000 % 11).not.toBe(0);
+  });
+
+  it("reports unreadable when the rows that arrive fall short of the reported count", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { providerIds, answers } = crowdedDirectory();
+    // The server reports 1,100 add-ons and then stops at 1,000: completeness cannot be shown.
+    const { supabase } = client({ ...answers, package_addons: { ...answers.package_addons, truncateAfter: 1000 } });
+
+    expect(await fetchPublicProviderOffers(providerIds, supabase)).toEqual({ status: "unavailable" });
+  });
+
+  it("reports unreadable when a later page fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { providerIds, answers } = crowdedDirectory();
+    // The first window succeeds; the second does not. The partial rows are not used.
+    const { supabase } = client({ ...answers, package_addons: { ...answers.package_addons, failAt: 1 } });
+
+    expect(await fetchPublicProviderOffers(providerIds, supabase)).toEqual({ status: "unavailable" });
+  });
+
+  it("pages within every identifier batch, not only the first", async () => {
+    // 150 providers: two identifier batches for packages, and two more for their package ids.
+    const { providerIds, answers } = crowdedDirectory(150, 11);
+    const { supabase, requests } = client(answers, { cap: 1000 });
+
+    const result = await fetchPublicProviderOffers(providerIds, supabase);
+
+    if (result.status !== "ready") throw new Error("expected a readable result");
+    expect(priceOf(result.packages, "c149")).toBe("$111");
+    expect(result.packages.size).toBe(150);
+    const batches = requests.filter((request) => request.table === "package_addons")
+      .map((request) => request.ids?.length ?? 0);
+    // Two batches of package identifiers, each paged to its own end.
+    expect(new Set(batches)).toEqual(new Set([100, 50]));
+    expect(batches.filter((size) => size === 50).length).toBeGreaterThan(1);
   });
 });
 

@@ -392,12 +392,16 @@ The worktree has no `.env.local`, and none was copied; no production credential 
 
 ## Gaps and findings for Codex
 
-1. **Category membership still comes from the provider's declared services, not from its
-   published offers.** That is the existing grouping rule and it was deliberately left alone, so
-   a provider that publishes an offer in a category it has not declared is still not discovered
-   there, and a provider that declares a category it does not publish in gets an unpriced card
-   in it. Changing it would change group membership and the per-category counts; it needs a
-   decision, not a quiet edit.
+1. **Category membership comes from the public listing's own services array** — corrected after
+   Codex's review, which found the earlier wording wrong. That array is *not* the provider's
+   declared services: `r0_public_providers`
+   (`supabase/migrations/20261105001000_phase6_vendor_listing.sql`, the 2026-11-05 redefinition)
+   derives it from active catalog services that have a live, review-cleared, unarchived eligible
+   offering — a fixed price with valid exact levels, a Custom Quote, or a quote with a deposit.
+   SQL 105 asserts that a declared service without such an offering is left out. A provider whose
+   declared services have no live offering is still listable (`r0_provider_listable` only needs
+   content and an active declared service) and simply comes back with an empty array. Grouping is
+   unchanged, and no membership or count policy is proposed.
 2. **The provider's description no longer appears on a directory card.** The approved
    composition answers offer, business, location and price; `bio` was on the former card. It is
    still on the profile. Flagged as a content change the approval implies but does not state.
@@ -445,14 +449,11 @@ cannot cross into another category; category counts, the chip rail, `#cat-` anch
 `#provider-` targeting; provider, city and catalog-service search, `?q=`, Back from a profile,
 and clearing; and each card link's accessible name, focus and 44 px target.
 
-**Pre-existing contrast, found and not changed.** With providers rendered, axe reports two
-colour-contrast failures on `/providers` that predate this slice and are untouched by it: the
-category chip's provider count (`text-xs opacity-60`, 4.06:1) and the closing invitation
-paragraph, both the muted-foreground token on a tinted background. They are excluded by name in
-the spec and the cards themselves are asserted clean with nothing excused, so the exclusion
-cannot hide a new failure. Fixing them is a design-token question for the MDS, not a page-local
-edit; it is left for Codex and the owner, in line with the earlier `/vendors` eyebrow-pill
-finding.
+**Pre-existing contrast, found.** With providers rendered, axe reported two colour-contrast
+failures on `/providers`: the category chip's provider count (`text-xs opacity-60`, 4.06:1) and
+the closing invitation paragraph. This candidate excluded them by name and reported them instead
+of repairing them. **Superseded by the revision below**, which repairs both and removes the
+exclusions; pre-existing status is not an approved accessibility exception.
 
 **Not run:** the full browser suite (`npm run test:a11y`), `npm run test:visual`, and database
 tests (no data contract changed). CI on the PR is the full run; its result for this candidate is
@@ -466,3 +467,111 @@ logger's reported environment (`local` instead of `test`). Both are environmenta
 **Review images.** The spec writes them to `test-results/provider-directory-cards/` on every
 run: the directory at 320, 390 and 1440 px full page, and the failed-offer-read state at
 1440 px. They are not committed.
+
+## Revision of 2026-11-17 (Codex P2A review of `e7cf134`)
+
+Codex requested changes on PR #174 (review `5943079065`). Both P2 findings are repaired here and
+the six dispositions are applied. The slice, base, authority and boundaries above are unchanged.
+
+### 1. A capped response is no longer taken as the whole set
+
+Codex reproduced the defect independently: batching 100 identifiers bounds the query string, not
+the returned rows. PostgREST caps a response (1,000 rows by default) and that cap is a
+*successful* response, so one short answer was accepted as complete. With 100 providers, each
+priced $100 with eleven required $1 extras, the 1,100 add-on rows met the ceiling and the last
+provider's card read $100 where the provider published $111.
+
+`fetchPublicProviderOffers` now reads every table through one paging helper:
+
+- each request takes an explicit window (`range`) over a stable server-side order — `sort_order`,
+  then `id`, so windows neither overlap nor skip;
+- the window advances by the rows that actually arrived, whatever the server's own ceiling;
+- the set ends only when the server reports nothing past it;
+- the total is checked against the exact count the server reported for the first window
+  (`count: "exact"`, requested once per read);
+- a failed later page, a missing count, a count that disagrees with the rows received, or a read
+  that will not finish within a bounded number of requests all return `unavailable`. The partial
+  rows are never used, and no hosted row limit is raised.
+
+Regression coverage in `tests/unit/provider-directory-cards.test.ts` reproduces the reviewer's
+scenario against the real reader and model: it first asserts that one capped response alone
+yields `$100`, then that the reader yields `$111`; that the add-on windows advance `0, 500,
+1000, 1100`; that the ceiling cuts through a package's required extras rather than between
+packages; that 150 providers page inside *both* identifier batches, not only the first; that a
+failed later page is `unavailable`; and that rows falling short of the reported count are
+`unavailable` rather than priced.
+
+### 2. The directory's contrast is repaired and nothing is excused
+
+Both failures are fixed with existing approved semantics, not a global palette change:
+
+- the category chip's count drops `opacity-60` and takes `text-slate` — it is essential
+  information, not a dimmed copy of the label;
+- the closing invitation paragraph takes `text-slate` on the tinted band, where the muted
+  foreground is specified against the plain background.
+
+`PRE_EXISTING` and the selector-based filtering are gone. The spec now asserts the whole rendered
+page clean at 320, 390, 768, 1024 and 1440 px, asserts the cards clean separately, and measures
+the repaired text's actual painted contrast — compositing every translucent band it sits on — at
+rest, on hover and on focus, requiring 4.5:1 at every width. The hovered and focused states are
+also re-run through axe while the state is held. Measured ratios are printed by the run and are
+recorded below.
+
+### 3. Dispositions applied
+
+1. **Category source corrected.** Grouping still uses the public RPC's services array, and the
+   description of that array is fixed throughout (Gaps item 1, the comment in
+   `src/app/providers/page.tsx` and the spec's header): it is derived from active catalog
+   services with a live, review-cleared, unarchived eligible offering, not from declared
+   services. The normal browser fixtures now match that contract — every listed service has an
+   eligible offering, and the provider that publishes nothing comes back with an empty array and
+   lands in the catch-all group, which is also where its under-review and withdrawn packages are
+   proved unable to price a card. Responses that disagree with the contract are kept, relabelled
+   as explicitly defensive scenarios.
+2. **Card description:** accepted as written; the bio stays on the profile.
+3. **Contrast:** repaired locally as above; no global token approval sought or needed.
+4. **Return restoration:** the spec no longer implies a full round trip. It states that the
+   directory-side state returns from the address and that profile-side return control and
+   list-position restoration are P2B.
+5. **Card links:** unchanged at `/providers/<id>`.
+6. **NODE_ENV:** every install and check in this revision ran with `NODE_ENV` unset. The logger
+   and its assertions are untouched.
+
+### Revision results
+
+Run on 2026-11-17 in this worktree, Node 24.17.0, npm 11.13.0, WSL2. Every install and check in
+this revision ran with **`NODE_ENV` unset** (`env -u NODE_ENV …`); the earlier candidate's two
+environmental unit failures do not recur, and no logger or assertion was changed.
+
+| Check | Command | Result |
+|---|---|---|
+| Secret scan | `npm run scan:secrets` | Passed |
+| Lint | `npm run lint` | No findings |
+| Types | `npm run typecheck` | No errors |
+| Unit | `npx vitest run` | 69 files, 1037 of 1037 passed (19 in `provider-directory-cards.test.ts`, 4 of them the response-ceiling regressions) |
+| Build | `npm run build` with the synthetic public values | Exit 0 |
+| Directory browser lane, isolated | `npx playwright test --config playwright.provider-directory.config.ts` (port 3133) | 21 of 21 passed |
+| Default lane, directory-adjacent specs | `npx playwright test provider-directory-cards.spec.ts vendor-listing.spec.ts provider-badges.spec.ts provider-service-area.spec.ts --grep-invert @visual` (3103 / 55831) | 39 of 39 passed |
+
+**Measured contrast (the evidence for finding 2).** The spec paints each element's real
+composited colours on a canvas, so the oklab tints are measured as rendered, and prints every
+ratio. At all five widths: chip label 14.28 at rest and 5.84 hovered and focused; chip count
+6.88 at rest and 6.15 hovered and focused; invitation paragraph 6.53 in every state. All exceed
+the 4.5:1 requirement, and the whole page — not an allowlisted subset — is asserted clean by axe
+at rest and while each state is held.
+
+**Two test-harness defects were found and fixed while verifying this** (both in the new spec,
+not in the application): the stub answered `range()` from a `Range` header, but PostgREST sends
+`offset`/`limit` query parameters, so windows never advanced; and the first contrast helper
+parsed colour strings itself, which produced nonsense for the `oklab()` values Tailwind emits
+for tinted backgrounds. While the first defect was present the reader behaved exactly as
+designed — it refused to price anything it could not prove complete.
+
+**Not run:** the full browser suite (`npm run test:a11y`), `npm run test:visual`, and database
+tests (no data contract changed). CI on the PR is the full run.
+
+**Default-lane note.** A first default-lane run of this revision timed out in six tests while
+the machine was loaded — including the untouched `provider-service-area` spec, which is why the
+cause is read as load against that lane's 30 s per-test budget rather than the change. The new
+spec was then split per width and its duplicate card-only axe scan removed, so each test fits
+well inside that budget; the rerun above passes 39 of 39, that spec included.

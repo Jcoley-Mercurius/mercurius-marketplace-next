@@ -2,12 +2,14 @@
 //
 // Columns, filters and ordering follow the public provider storefront
 // (src/app/providers/[id]/page.tsx) so the directory and the profile publish the same offers.
-// Reads are batched by the listed providers: one packages read, then one tiers read and one
-// add-ons read for the packages that came back. No card reads on its own.
+// Reads are batched by the listed providers: the packages read, then the levels and extras read
+// for the packages that came back. No card reads on its own.
 //
-// A failed supporting read never becomes a cheaper price or a claim that a provider publishes
-// nothing: the result says the published offers could not be read, and the caller shows its
-// unpriced card instead.
+// A failed or incomplete supporting read never becomes a cheaper price or a claim that a
+// provider publishes nothing: the result says the published offers could not be read, and the
+// caller shows its unpriced card instead. Completeness is established, not assumed — a capped
+// PostgREST response is a successful one, and the rows it leaves out would quietly remove a
+// required extra from a published starting price.
 
 import { createClient } from "@/lib/supabase/client";
 import type { ProfileAddon, ProfilePackage, ProfileTier } from "@/lib/providerProfile/model";
@@ -22,6 +24,16 @@ const ADDON_COLUMNS =
 
 /** PostgREST takes the identifiers in the query string, so a long directory reads in batches. */
 const BATCH = 100;
+
+/**
+ * Rows asked for per request. The server may return fewer — PostgREST caps a response (1,000
+ * rows by default) and that cap is a *successful* response, not an error — so the window always
+ * advances by the rows that actually arrived.
+ */
+const PAGE = 500;
+
+/** A read that still has not ended after this many requests is reported unreadable, not short. */
+const MAX_REQUESTS = 60;
 
 export type PackageRow = {
   id: string;
@@ -165,6 +177,51 @@ export function groupPublicPackages(
   return grouped;
 }
 
+type RowPage = { data: unknown; error: unknown; count?: number | null };
+
+/**
+ * Every row of one read, or null when its completeness cannot be established.
+ *
+ * A capped PostgREST response succeeds, so taking one response as the whole set would silently
+ * drop rows — and a dropped required extra lowers a published starting price. Each request
+ * therefore takes an explicit window ordered the same way every time (sort order, then id, so
+ * windows neither overlap nor skip); the window advances by the rows that actually arrived,
+ * whatever the server's own cap; the set ends only when the server reports nothing past it; and
+ * the total is checked against the exact count the server reported for the first window. A
+ * mismatch, a missing count, a failed later page or a read that will not end is null — never
+ * the rows that did arrive.
+ */
+async function readAllRows<TRow>(
+  label: string,
+  request: (from: number, to: number, withCount: boolean) => PromiseLike<RowPage>,
+): Promise<TRow[] | null> {
+  const rows: TRow[] = [];
+  let reported: number | null = null;
+  let ended = false;
+
+  for (let index = 0; index < MAX_REQUESTS && !ended; index += 1) {
+    const page = await request(rows.length, rows.length + PAGE - 1, index === 0);
+    if (page.error) {
+      console.warn(`${label} could not be read`, page.error);
+      return null;
+    }
+    if (index === 0) reported = typeof page.count === "number" ? page.count : null;
+    const batch = (page.data ?? []) as TRow[];
+    rows.push(...batch);
+    ended = batch.length === 0;
+  }
+
+  if (!ended) {
+    console.warn(`${label} did not finish within ${MAX_REQUESTS} requests`);
+    return null;
+  }
+  if (reported === null || reported !== rows.length) {
+    console.warn(`${label} is incomplete`, { reported, received: rows.length });
+    return null;
+  }
+  return rows;
+}
+
 /**
  * The published offers for the providers the public listing returned. The listing stays the
  * authority on who appears: a package read for an id that is not listed is never requested.
@@ -177,20 +234,21 @@ export async function fetchPublicProviderOffers(
   if (!ids.length) return { status: "ready", packages: new Map() };
 
   const supabase = client ?? createClient();
+  const count = { count: "exact" } as const;
+
   const packageRows: PackageRow[] = [];
   for (const batch of chunk(ids)) {
-    const result = await supabase
+    const page = await readAllRows<PackageRow>("Public provider offers", (from, to, withCount) => supabase
       .from("vendor_packages")
-      .select(PACKAGE_COLUMNS)
+      .select(PACKAGE_COLUMNS, withCount ? count : undefined)
       .in("contractor_id", batch)
       .eq("is_active", true)
       .eq("needs_review", false)
-      .order("sort_order");
-    if (result.error) {
-      console.warn("Public provider offers are unavailable", result.error);
-      return { status: "unavailable" };
-    }
-    packageRows.push(...((result.data ?? []) as unknown as PackageRow[]));
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to));
+    if (!page) return { status: "unavailable" };
+    packageRows.push(...page);
   }
   if (!packageRows.length) return { status: "ready", packages: new Map() };
 
@@ -199,24 +257,29 @@ export async function fetchPublicProviderOffers(
   const addonRows: AddonRow[] = [];
   for (const batch of chunk(packageIds)) {
     const [tiers, addons] = await Promise.all([
-      supabase.from("package_tiers").select(TIER_COLUMNS).in("package_id", batch).order("sort_order"),
-      supabase
+      readAllRows<TierRow>("Public offer levels", (from, to, withCount) => supabase
+        .from("package_tiers")
+        .select(TIER_COLUMNS, withCount ? count : undefined)
+        .in("package_id", batch)
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)),
+      readAllRows<AddonRow>("Public offer extras", (from, to, withCount) => supabase
         .from("package_addons")
-        .select(ADDON_COLUMNS)
+        .select(ADDON_COLUMNS, withCount ? count : undefined)
         .in("package_id", batch)
         // The storefront's rule: only the provider's own, offered extras are public.
         .is("template_addon_id", null)
         .eq("is_offered", true)
-        .order("sort_order"),
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)),
     ]);
     // A level or extra that cannot be read would lower a published starting price, so the whole
     // result is reported unreadable rather than priced from what did arrive.
-    if (tiers.error || addons.error) {
-      console.warn("Public provider offer details are unavailable", tiers.error ?? addons.error);
-      return { status: "unavailable" };
-    }
-    tierRows.push(...((tiers.data ?? []) as unknown as TierRow[]));
-    addonRows.push(...((addons.data ?? []) as unknown as AddonRow[]));
+    if (!tiers || !addons) return { status: "unavailable" };
+    tierRows.push(...tiers);
+    addonRows.push(...addons);
   }
 
   return { status: "ready", packages: groupPublicPackages(packageRows, tierRows, addonRows) };

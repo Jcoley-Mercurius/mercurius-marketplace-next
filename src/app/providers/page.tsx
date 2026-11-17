@@ -201,6 +201,10 @@ export default function ProvidersPage() {
   const grouped = useMemo<ProviderGroup[]>(() => {
     if (!data) return [];
 
+    // The listing's own services array decides the groups, unchanged. It is not the provider's
+    // declared services: r0_public_providers returns the active catalog services that have a
+    // live, review-cleared, unarchived eligible offering, so a provider with none comes back
+    // with an empty array and falls to the catch-all group.
     const serviceToCategory = new Map(data.services.map((service) => [service.id, service.category_id]));
     const groups = data.categories
       .map((category) => ({
@@ -294,7 +298,9 @@ export default function ProvidersPage() {
                   >
                     <Icon className="h-4 w-4" />
                     {category.name}
-                    <span className="text-xs opacity-60">({vendors.length})</span>
+                    {/* The count is essential information, so it carries the secondary text
+                        semantic at full strength rather than a dimmed copy of the label. */}
+                    <span className="text-xs text-slate">({vendors.length})</span>
                   </a>
                 );
               })}
@@ -378,7 +384,9 @@ export default function ProvidersPage() {
         <section className="bg-primary/5 py-16">
           <div className="container-wide mx-auto max-w-2xl text-center">
             <h2 className="mb-4 text-2xl font-bold text-foreground md:text-3xl">Booking Is Opening by Invitation</h2>
-            <p className="mb-6 text-muted-foreground">
+            {/* On the tinted band the secondary text semantic carries this copy; the muted
+                foreground is specified against the plain background, not this one. */}
+            <p className="mb-6 text-slate">
               Join early access and we&apos;ll invite Lee County homeowners in stages as approved providers and services are ready in their area.
             </p>
             <Link
