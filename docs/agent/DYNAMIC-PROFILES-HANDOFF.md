@@ -316,12 +316,16 @@ written; nothing in them was re-tested here.
 - **Authority:** the owner's approval of the initial gallery layout/design, recorded once in
   [OWNER-APPROVALS](../../governance/OWNER-APPROVALS.md#initial-profile-gallery-layout-and-design--2026-11-17),
   and Codex's scope in [DYNAMIC-PROFILES-INTEGRATION](../../governance/DYNAMIC-PROFILES-INTEGRATION.md)
-  (read from PR #173's branch; it is not on `main` yet, and it was not merged or cherry-picked).
+  (*corrected 2026-11-17:* PR #173 was already merged to `main` as `d0c767d` at 17:42Z. This
+  branch's base `3327c83` predates that merge and was not rebased, but CI's `pull_request`
+  merge ref includes #173, and the PR merges cleanly).
   The approval authorizes the presentation work and reasonable refinement. It is not Phase 7
   acceptance, a release, or a claim that any manual, screen-reader, real-phone or production
   check has passed.
 - **Traceability:** TRACE-156 is used as the slice name Codex assigned in the handoff.
-  `TRACEABILITY.md` was not edited; Codex or the owner enters the row at review.
+  *Corrected 2026-11-17:* the TRACE-156 row already exists on `main` (added by #173). It records
+  P2A as authorized but "live integration not yet implemented or accepted". This branch does not
+  edit `TRACEABILITY.md`; Codex or the owner updates that row's evidence and status at acceptance.
 
 ## What it does
 
@@ -608,17 +612,65 @@ passed 814 tests in 14.0 m, with no flaky, retried or skipped tests, and all 21 
 `provider-directory-cards.spec.ts` ran. The run that `313f667` cancelled at the cap now fits,
 with about 3 m 40 s of headroom. No workflow file or timeout was changed.
 
+The closeout gates first listed here are superseded by the section below. That list wrongly said
+#173 was not on `main` and that the TRACE-156 row still had to be entered.
+
+## Documentation head `11e8d54` failed CI: an order-dependent unit-test mock (2026-11-17)
+
+CI run 44173445715 on `11e8d54` (a documentation-only commit on top of `535d722`) failed in job
+134366945834, in `application` → Unit tests. One test failed, 1036 passed:
+`tests/unit/application-notification-tracing.test.ts:621`, "logs an intake guard refusal with
+its enumerated reason", which expected 429 and received 201. `backend` and `lifecycle` passed. P2A
+does not touch that file or the route, so the same file on `main` carries the same defect.
+
+**Cause: a race between two module mocks, found in the test file and in vitest 4.1.11.** The
+journey `beforeEach` calls `vi.resetModules()` and queues
+`vi.doMock("@/lib/intakeProtection", … intakeGuardRefusal: () => null)`. The failing test then
+queued a second `doMock` of the same id with `() => "trap"` before its first import. Vitest
+resolves queued mocks only at the next import, and `resolveMocks()` resolves each run of
+consecutive "mock" entries **concurrently** (`Promise.all`). Each entry registers once its own
+async `resolveId` returns, and the last registration replaces the earlier one. When the
+`beforeEach` factory registers last, the guard passes, the route saves the application and
+answers 201. The route itself behaves correctly in both orders; only the test's set-up was
+order-dependent.
+
+**Reproduced locally on the unchanged file:** 2 of 15 full-file runs failed with the identical
+`expected 201 to be 429`. The filtered runs (0 of 25) never failed.
+
+**Repair (test only, assertion unchanged):** the `beforeEach` intake mock now returns a per-test
+`intakeRefusal` value (default `null`), and this test sets it to `"trap"` instead of registering a
+competing mock. This is the same pattern the file already uses for `storageError` and
+`insertError`. The test still asserts 429, no insert, exactly one `application_submission.refused`
+line with `intake_trap`, and no sensitive data. No production code changed. After the repair, 0 of
+40 full-file runs failed. The other unit files that use `vi.doMock` (`invitation-open-link`,
+`vendor-readiness`, `owner-email-ledger`) were checked: each flushes its queued mock with an
+import before the same module is mocked again, so none carries this race.
+
+**Phase 7 coordination.** The file belongs to TRACE-151 (Phase 7.1, merged on `main` in
+`438714c`). No Phase 7 branch, worktree or open PR modifies it, so the change does not overlap
+Phase 7 work. It is kept to one test-set-up hunk so that Codex can carry it independently of P2A
+if preferred.
+
+**Checks after the repair** (Node 24.17.0, `NODE_ENV` unset): secret scan passed; lint, no
+findings; types, no errors; unit, 69 files, 1037 of 1037. The application, browser specs and build
+are unchanged from `535d722`, so the browser lane was not rerun locally. CI on the new head is the
+full run.
+
+**`main` state confirmed:** `origin/main` is `d0c767d` (the #173 merge). #173 carries the owner
+approval record, `DYNAMIC-PROFILES-INTEGRATION.md`, `DYNAMIC-PROFILES-REVIEW.md` and the
+TRACE-156 row.
+
 **Closeout gates still open:**
 
-- CI on the documentation-only head that carries this section. The code is unchanged from
-  `535d722`, but the run should still be green before merge.
-- Codex's approval of the PR, and its review of the PR's move out of draft.
-- Codex or the owner enters the TRACE-156 row in `TRACEABILITY.md`.
-- The integration scope document (PR #173) is not on `main` yet. Whether it merges before,
-  with, or after this PR is Codex's or the owner's call.
+- Green exact-head CI on the head that carries this repair.
+- Codex's review of the test repair (a TRACE-151 test file), the PR's approval, and its move out
+  of draft.
+- Codex or the owner updates the existing TRACE-156 row with P2A's evidence and status at
+  acceptance.
 - No manual, real-phone, screen-reader, forced-colors or text-size check has been performed, and
   none is claimed. The owner decides whether any of them is required before release.
 - The owner merges the PR, which is the release approval (DEC-2026-037). There is no migration,
   so nothing is pushed to the hosted database first.
 
-P2B (the dynamic profile interior) has not started. No Phase 7 file was touched.
+P2B (the dynamic profile interior) has not started. No Phase 7 product code or Phase 7 branch was
+touched. The only Phase 7 file changed is the test set-up described above.
