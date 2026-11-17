@@ -251,8 +251,18 @@ export function publishedOffers(packages: readonly ProfilePackage[]): ProfileOff
   });
 }
 
+/**
+ * A services_catalog name, read as data. Only an own, non-empty string entry counts, so an id
+ * taken from a link (such as "__proto__", "constructor" or "toString") never resolves to a
+ * member the object inherits.
+ */
+export function catalogServiceName(names: Record<string, string>, id: string): string | null {
+  const name: unknown = Object.prototype.hasOwnProperty.call(names, id) ? names[id] : null;
+  return typeof name === "string" && name.trim() ? name : null;
+}
+
 export function serviceDisplayName(id: string, names: Record<string, string>) {
-  return names[id] ?? id.replace(/-/g, " ").replace(/^\w/, (letter) => letter.toUpperCase());
+  return catalogServiceName(names, id) ?? id.replace(/-/g, " ").replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
 /** The provider's published services, each with its offers, in first-offer order. */
@@ -287,6 +297,26 @@ export function resolveServiceSelection(requested: string | null | undefined, se
   return service ? { kind: "service", service } : { kind: "unavailable", requestedId: id };
 }
 
+/**
+ * The current address with only the service choice changed: every other query parameter (in
+ * its original spelling and order) and the hash are kept. Returns the path, query and hash, or
+ * null when the address already says this.
+ */
+export function serviceSelectionUrl(href: string, serviceId: string | null, param = "service"): string | null {
+  const url = new URL(href);
+  const next = serviceId?.trim() || null;
+  const names = (pair: string) => {
+    try { return decodeURIComponent(pair.split("=", 1)[0].replace(/\+/g, " ")) === param; } catch { return false; }
+  };
+  const pairs = url.search.slice(1).split("&").filter(Boolean);
+  const first = pairs.findIndex(names);
+  const kept = pairs.filter((pair) => !names(pair));
+  // The choice keeps its place in the query; a new one goes last.
+  if (next) kept.splice(first < 0 ? kept.length : first, 0, `${encodeURIComponent(param)}=${encodeURIComponent(next)}`);
+  const target = `${url.pathname}${kept.length ? `?${kept.join("&")}` : ""}${url.hash}`;
+  return target === `${url.pathname}${url.search}${url.hash}` ? null : target;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Offer selection within one service
 // ---------------------------------------------------------------------------------------------
@@ -309,13 +339,51 @@ export function defaultOfferSelection(service: ProfileService): OfferSelection {
   };
 }
 
-export function addonMaxQuantity(addon: ProfileAddon) {
-  return Math.max(1, addon.max_quantity ?? 1);
+const wholeNumber = (value: unknown, fallback: number) => {
+  const whole = Math.floor(Number(value ?? fallback));
+  return Number.isFinite(whole) ? whole : fallback;
+};
+
+/**
+ * The published limits for choosing an optional extra. Its quantity is zero (not chosen) or
+ * from the minimum to the maximum, the rule the request step's server calculation applies
+ * (`addon_quantity`). An extra published with no minimum starts at one.
+ */
+export function addonQuantityBounds(addon: ProfileAddon): { min: number; max: number } {
+  return { min: Math.max(1, wholeNumber(addon.min_quantity, 0)), max: Math.max(1, wholeNumber(addon.max_quantity, 1)) };
+}
+
+/**
+ * A quantity the published limits allow. Anything below the minimum, or not a number, is zero;
+ * anything above the maximum is the maximum. A preview therefore never prices more of an extra
+ * than was chosen.
+ */
+export function normalizeAddonQuantity(addon: ProfileAddon, value: unknown): number {
+  const { min, max } = addonQuantityBounds(addon);
+  const quantity = typeof value === "number" || typeof value === "string" ? Math.floor(Number(value)) : Number.NaN;
+  if (!Number.isFinite(quantity) || quantity < min || min > max) return 0;
+  return Math.min(quantity, max);
+}
+
+/** One step up or down: the first step up lands on the minimum, a step below it removes the extra. */
+export function stepAddonQuantity(addon: ProfileAddon, current: unknown, direction: 1 | -1): number {
+  const { min, max } = addonQuantityBounds(addon);
+  const quantity = normalizeAddonQuantity(addon, current);
+  if (direction > 0) return quantity === 0 ? normalizeAddonQuantity(addon, min) : Math.min(quantity + 1, max);
+  return quantity <= min ? 0 : quantity - 1;
+}
+
+/** The limits in words when an extra has a minimum above one, so the first step is explained. */
+export function addonQuantityNote(addon: ProfileAddon): string | null {
+  const { min, max } = addonQuantityBounds(addon);
+  if (min > max || min <= 1) return null;
+  return min === max ? `Quantity ${min}` : `Minimum ${min}, up to ${max}`;
 }
 
 /**
  * Keeps only what is valid for this service: a selection made for another service, a withdrawn
- * offer, a cadence the offer does not publish, or an extra that does not apply is discarded.
+ * offer, a cadence the offer does not publish, or an extra that does not apply is discarded,
+ * and each remaining quantity is brought within the extra's published limits.
  */
 export function reconcileOfferSelection(service: ProfileService, selection: OfferSelection | null | undefined): OfferSelection {
   const fallback = defaultOfferSelection(service);
@@ -326,8 +394,8 @@ export function reconcileOfferSelection(service: ProfileService, selection: Offe
   const cadence = offer.cadences.find((candidate) => candidate.frequency === selection.frequency) ?? offer.cadences[0];
   const addons: Record<string, number> = {};
   for (const addon of cadence.optionalAddons) {
-    const quantity = Math.floor(Number(selection.addons[addon.id]));
-    if (Number.isFinite(quantity) && quantity > 0) addons[addon.id] = Math.min(quantity, addonMaxQuantity(addon));
+    const quantity = normalizeAddonQuantity(addon, selection.addons[addon.id]);
+    if (quantity > 0) addons[addon.id] = quantity;
   }
   return { serviceId: service.id, offerId: offer.id, frequency: cadence.frequency, addons };
 }
@@ -410,7 +478,7 @@ export function pricePreview(offer: ProfileOffer, cadence: OfferCadence, addons:
   let total = cadence.baseCents;
   let exact = cadence.qualifier === "exact";
   for (const addon of cadence.optionalAddons) {
-    const quantity = Math.min(addons[addon.id] ?? 0, addonMaxQuantity(addon));
+    const quantity = normalizeAddonQuantity(addon, addons[addon.id]);
     if (quantity <= 0) continue;
     const unit = toCents(addon.price) ?? 0;
     const range = addon.price_kind === "range" && addon.price_max != null;

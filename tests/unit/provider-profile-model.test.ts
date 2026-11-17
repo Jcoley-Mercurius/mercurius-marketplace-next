@@ -4,13 +4,17 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PROFILE_SCENARIOS, SYNTHETIC_COVERAGE_AREAS, profileScenario } from "@/components/mds/profiles/profileFixtures";
 import {
+  addonQuantityBounds,
+  addonQuantityNote,
   billingBasisLabel,
   cardOffer,
+  catalogServiceName,
   checkZip,
   defaultOfferSelection,
   logoShape,
   mediaForService,
   nextStepCopy,
+  normalizeAddonQuantity,
   offerPriceLine,
   pricePreview,
   profileServices,
@@ -21,6 +25,10 @@ import {
   resolveServiceSelection,
   selectedOffer,
   selectionAnnouncement,
+  serviceDisplayName,
+  serviceSelectionUrl,
+  stepAddonQuantity,
+  type ProfileAddon,
   type ProfileService,
 } from "@/lib/providerProfile/model";
 
@@ -110,6 +118,136 @@ describe("price preview", () => {
     const preview = pricePreview(windows, windows.cadences[0], { "pe-interior": 1 });
     expect(preview.totalCents).toBeNull();
     expect(preview.totalLabel).toBe("From $220");
+  });
+});
+
+describe("optional-extra quantities are zero or within the published minimum and maximum", () => {
+  const gutters = service("palmetto-exterior-care", "gutter-cleaning");
+  const [cleanOut] = gutters.offers;
+  const [oneTime] = cleanOut.cadences;
+  // Published with a minimum of two and a maximum of six.
+  const flush = oneTime.optionalAddons.find((addon) => addon.id === "pe-downspouts")!;
+  const rinse = oneTime.optionalAddons.find((addon) => addon.id === "pe-guards")!;
+  const extra = (limits: Partial<ProfileAddon>): ProfileAddon => ({ id: "x", name: "Extra", price: 5, sort_order: 0, ...limits });
+
+  it("reads the published limits, starting at one when no minimum is published", () => {
+    expect(addonQuantityBounds(flush)).toEqual({ min: 2, max: 6 });
+    expect(addonQuantityBounds(rinse)).toEqual({ min: 1, max: 1 });
+    expect(addonQuantityBounds(extra({ min_quantity: 0, max_quantity: 4 }))).toEqual({ min: 1, max: 4 });
+    expect(addonQuantityBounds(extra({ min_quantity: null, max_quantity: null }))).toEqual({ min: 1, max: 1 });
+    expect(addonQuantityNote(flush)).toBe("Minimum 2, up to 6");
+    expect(addonQuantityNote(extra({ min_quantity: 3, max_quantity: 3 }))).toBe("Quantity 3");
+    expect(addonQuantityNote(rinse)).toBeNull();
+  });
+
+  it("makes the first selection the minimum, not one", () => {
+    expect(stepAddonQuantity(flush, 0, 1)).toBe(2);
+    expect(stepAddonQuantity(flush, undefined, 1)).toBe(2);
+    expect(stepAddonQuantity(flush, 2, 1)).toBe(3);
+  });
+
+  it("removes the extra when stepping below the minimum", () => {
+    expect(stepAddonQuantity(flush, 3, -1)).toBe(2);
+    expect(stepAddonQuantity(flush, 2, -1)).toBe(0);
+    expect(stepAddonQuantity(flush, 0, -1)).toBe(0);
+  });
+
+  it("stops at the maximum", () => {
+    expect(stepAddonQuantity(flush, 5, 1)).toBe(6);
+    expect(stepAddonQuantity(flush, 6, 1)).toBe(6);
+    expect(stepAddonQuantity(rinse, 1, 1)).toBe(1);
+  });
+
+  it("brings a stale value to zero or inside the limits", () => {
+    const cases: Array<[unknown, number]> = [
+      [0, 0], [1, 0], [2, 2], [2.9, 2], [6, 6], [7, 6], [40, 6], [-3, 0],
+      [Number.NaN, 0], [Number.POSITIVE_INFINITY, 0], ["3", 3], ["", 0], [null, 0], [undefined, 0], [{}, 0], [[4], 0], [true, 0],
+    ];
+    for (const [value, expected] of cases) expect([value, normalizeAddonQuantity(flush, value)]).toEqual([value, expected]);
+    // Limits that allow nothing select nothing.
+    expect(normalizeAddonQuantity(extra({ min_quantity: 5, max_quantity: 2 }), 5)).toBe(0);
+    expect(stepAddonQuantity(extra({ min_quantity: 5, max_quantity: 2 }), 0, 1)).toBe(0);
+  });
+
+  it("reconciles a stored selection to the same rule", () => {
+    const stored = (addons: Record<string, number>) =>
+      reconcileOfferSelection(gutters, { serviceId: "gutter-cleaning", offerId: "pe-gutters", frequency: "one-time", addons }).addons;
+    expect(stored({ "pe-downspouts": 1 })).toEqual({});
+    expect(stored({ "pe-downspouts": 2, "pe-guards": 3 })).toEqual({ "pe-downspouts": 2, "pe-guards": 1 });
+    expect(stored({ "pe-downspouts": 9 })).toEqual({ "pe-downspouts": 6 });
+    expect(stored({ "pe-downspouts": Number.NaN, "pe-guards": 0 })).toEqual({});
+  });
+
+  it("prices only an allowed quantity in the preview", () => {
+    const preview = (addons: Record<string, number>) => pricePreview(cleanOut, oneTime, addons);
+    // Below the minimum: not priced, and no line for it.
+    expect(preview({ "pe-downspouts": 1 })).toEqual({ totalCents: 16000, totalLabel: "$160", lines: [{ id: "base", label: "Gutter clean-out", amount: "$160" }] });
+    expect(preview({ "pe-downspouts": 2 })).toMatchObject({ totalCents: 16000 + 2 * 1500, totalLabel: "$190" });
+    expect(preview({ "pe-downspouts": 2 }).lines.map((line) => [line.label, line.amount])).toEqual([
+      ["Gutter clean-out", "$160"], ["Extra downspout flush × 2", "$30"],
+    ]);
+    // Above the maximum: priced at the maximum.
+    expect(preview({ "pe-downspouts": 9, "pe-guards": 1 })).toMatchObject({ totalCents: 16000 + 3500 + 6 * 1500, totalLabel: "$285" });
+    // The quarterly cadence prices the same extra from its own base.
+    expect(pricePreview(cleanOut, cleanOut.cadences[1], { "pe-downspouts": 6 }).totalLabel).toBe("$220");
+  });
+});
+
+describe("a service name is only ever read from the catalog's own entries", () => {
+  const names = data("brightbin-can-care").serviceNames;
+
+  it("returns a published name", () => {
+    expect(catalogServiceName(names, "pressure-washing")).toBe("Pressure washing");
+  });
+
+  it("does not resolve an id to something the object inherits", () => {
+    for (const id of ["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf", "retired-service", ""]) {
+      expect([id, catalogServiceName(names, id)]).toEqual([id, null]);
+    }
+  });
+
+  it("ignores an entry that is not a non-empty string", () => {
+    const odd = { blank: "  ", count: 3, nested: {} } as unknown as Record<string, string>;
+    for (const id of ["blank", "count", "nested"]) expect(catalogServiceName(odd, id)).toBeNull();
+  });
+
+  it("falls back to a readable id for a published service with no catalog name", () => {
+    expect(serviceDisplayName("constructor", names)).toBe("Constructor");
+    expect(serviceDisplayName("pool-care", names)).toBe("Pool care");
+    expect(resolveServiceSelection("__proto__", services("brightbin-can-care"))).toEqual({ kind: "unavailable", requestedId: "__proto__" });
+  });
+});
+
+describe("a service change rewrites only the service in the address", () => {
+  const at = (path: string) => `https://example.test${path}`;
+
+  it("adds, changes and removes the service", () => {
+    expect(serviceSelectionUrl(at("/providers/p1"), "window-cleaning")).toBe("/providers/p1?service=window-cleaning");
+    expect(serviceSelectionUrl(at("/providers/p1?service=window-cleaning"), "gutter-cleaning")).toBe("/providers/p1?service=gutter-cleaning");
+    expect(serviceSelectionUrl(at("/providers/p1?service=window-cleaning"), null)).toBe("/providers/p1");
+  });
+
+  it("returns nothing to do when the address already says it", () => {
+    expect(serviceSelectionUrl(at("/providers/p1?service=window-cleaning#profile-area"), "window-cleaning")).toBeNull();
+    expect(serviceSelectionUrl(at("/providers/p1?zip=33904"), null)).toBeNull();
+    expect(serviceSelectionUrl(at("/providers/p1"), "  ")).toBeNull();
+  });
+
+  it("keeps unrelated parameters as written, in order, and the hash", () => {
+    expect(serviceSelectionUrl(at("/providers/p1?utm_source=a%20b&service=window-cleaning&ref=x+y&empty=#profile-reviews"), "gutter-cleaning"))
+      .toBe("/providers/p1?utm_source=a%20b&service=gutter-cleaning&ref=x+y&empty=#profile-reviews");
+    expect(serviceSelectionUrl(at("/providers/p1?utm_source=a%20b&service=window-cleaning&ref=x+y#profile-reviews"), null))
+      .toBe("/providers/p1?utm_source=a%20b&ref=x+y#profile-reviews");
+    expect(serviceSelectionUrl(at("/providers/p1?ref=x#profile-area"), "window-cleaning")).toBe("/providers/p1?ref=x&service=window-cleaning#profile-area");
+  });
+
+  it("collapses a repeated service parameter and leaves look-alikes alone", () => {
+    expect(serviceSelectionUrl(at("/p?service=a&services=keep&service=b&my-service=keep"), "c")).toBe("/p?service=c&services=keep&my-service=keep");
+    expect(serviceSelectionUrl(at("/p?service=a&service=a"), "a")).toBe("/p?service=a");
+  });
+
+  it("encodes the service id and tolerates a malformed parameter", () => {
+    expect(serviceSelectionUrl(at("/p?bad=%E0%A4%A&%zz=1"), "a b&c")).toBe("/p?bad=%E0%A4%A&%zz=1&service=a%20b%26c");
   });
 });
 

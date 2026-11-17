@@ -9,9 +9,11 @@ import { ProfileServiceArea } from "@/components/provider-profile/ProfileService
 import { ProviderLogo } from "@/components/provider-profile/ProviderCover";
 import { PublicReviewAuthor } from "@/components/reviews/PublicReviewAuthor";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { displayedProviderBadges } from "@/lib/providerBadges";
 import {
   cadenceLabel,
+  catalogServiceName,
   mediaForService,
   nextStepCopy,
   pricePreview,
@@ -39,9 +41,11 @@ const anywhere = "[overflow-wrap:anywhere]";
 const sectionLink = "inline-flex min-h-11 items-center border-b-2 border-transparent px-1 text-sm font-medium text-foreground hover:border-border-strong";
 
 /**
- * Shared provider profile composition (interior visual direction approved 2026-11-05; the
- * service-focused behavior is an exploration for owner review). It renders only what it is
- * given: eligibility, prices, reviews and coverage are decided before the data arrives here.
+ * Shared provider profile composition. It follows the profile interior reference (visual
+ * direction approved by the owner, 2026-11-05) and explores the optional service focus
+ * (approved for further exploration the same day). The built page itself has not been accepted
+ * by the owner. It renders only what it is given: eligibility, prices, reviews and coverage are
+ * decided before the data arrives here.
  */
 export function ProviderProfileView({ data, requestedServiceId, onServiceChange, viewer, directoryHref, onNextStep, onRetryReviews, onRetryCoverage }: {
   data: ProfileData;
@@ -74,13 +78,17 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
   const offerSelection = service ? reconcileOfferSelection(service, stored) : null;
   const chosen = service && offerSelection ? selectedOffer(service, offerSelection) : null;
 
-  // Selecting from a list that then leaves the page returns focus to the service chooser.
-  const chooser = useRef<HTMLFieldSetElement>(null);
+  // One service choice, two controls: a dropdown on phones and tablets, chips on desktop. Both
+  // read and write the same value, so the choice is the same whichever is on screen.
+  // Selecting from a list that then leaves the page returns focus to whichever is displayed.
+  const dropdown = useRef<HTMLSelectElement>(null);
+  const chips = useRef<HTMLFieldSetElement>(null);
   const focusChooser = useRef(false);
   useEffect(() => {
     if (!focusChooser.current) return;
     focusChooser.current = false;
-    chooser.current?.querySelector<HTMLInputElement>("input:checked")?.focus();
+    if (dropdown.current && dropdown.current.getClientRects().length > 0) dropdown.current.focus();
+    else chips.current?.querySelector<HTMLInputElement>("input:checked")?.focus();
   }, [viewKey]);
   const selectFromList = (serviceId: string | null) => {
     focusChooser.current = true;
@@ -107,7 +115,8 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
     frequency: chosen?.cadence?.frequency ?? null,
     addons: offerSelection?.addons ?? {},
   });
-  const unavailableName = selection.kind === "unavailable" ? data.serviceNames[selection.requestedId] ?? null : null;
+  // The requested id comes from the link: it is only ever looked up as an own catalog name.
+  const unavailableName = selection.kind === "unavailable" ? catalogServiceName(data.serviceNames, selection.requestedId) : null;
   const summary = (headingId: string) => service && offerSelection
     ? <OfferSummary service={service} selection={offerSelection} headingId={headingId} />
     : <BusinessSummary providerName={provider.name} services={services} headingId={headingId} />;
@@ -129,32 +138,50 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
       </div>
     </header>
 
-    {services.length > 0 && <fieldset ref={chooser} className="mt-6">
-      <legend className="text-base font-semibold text-foreground">What can we help with?</legend>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {[{ id: null as string | null, name: "All services" }, ...services].map((option) => {
-          const checked = (service?.id ?? null) === option.id;
-          return <label
-            key={option.id ?? "all"}
-            className={cn(
-              "relative inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border border-border-strong bg-card px-4 py-2 text-sm font-medium text-foreground has-checked:border-commitment has-checked:bg-accent-soft has-checked:font-semibold has-focus-visible:ring-3 has-focus-visible:ring-ring",
-              anywhere,
-            )}
-          >
-            <input
-              type="radio"
-              name={`${id}-service`}
-              value={option.id ?? ""}
-              checked={checked}
-              onChange={() => onServiceChange(option.id)}
-              className="sr-only"
-            />
-            {checked && <Check aria-hidden="true" className="size-4 shrink-0 text-sage-dark" />}
-            <span>{option.name}</span>
-          </label>;
-        })}
+    {services.length > 0 && <div data-service-chooser className="mt-6">
+      {/* Phones and tablets: the dropdown of the approved mobile composition. */}
+      <div className="lg:hidden">
+        <label htmlFor={`${id}-service-select`} className="block text-base font-semibold text-foreground">What can we help with?</label>
+        <Select
+          ref={dropdown}
+          id={`${id}-service-select`}
+          value={service?.id ?? ""}
+          onChange={(event) => onServiceChange(event.target.value || null)}
+          className="mt-2 sm:max-w-md"
+        >
+          <option value="">All services</option>
+          {services.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+        </Select>
       </div>
-    </fieldset>}
+
+      {/* Desktop: every choice visible. */}
+      <fieldset ref={chips} className="hidden lg:block">
+        <legend className="text-base font-semibold text-foreground">What can we help with?</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {[{ id: null as string | null, name: "All services" }, ...services].map((option) => {
+            const checked = (service?.id ?? null) === option.id;
+            return <label
+              key={option.id ?? "all"}
+              className={cn(
+                "relative inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border border-border-strong bg-card px-4 py-2 text-sm font-medium text-foreground has-checked:border-commitment has-checked:bg-accent-soft has-checked:font-semibold has-focus-visible:ring-3 has-focus-visible:ring-ring",
+                anywhere,
+              )}
+            >
+              <input
+                type="radio"
+                name={`${id}-service`}
+                value={option.id ?? ""}
+                checked={checked}
+                onChange={() => onServiceChange(option.id)}
+                className="sr-only"
+              />
+              {checked && <Check aria-hidden="true" className="size-4 shrink-0 text-sage-dark" />}
+              <span>{option.name}</span>
+            </label>;
+          })}
+        </div>
+      </fieldset>
+    </div>}
 
     <p role="status" aria-live="polite" data-profile-announcement className="sr-only">{announcement}</p>
 
@@ -228,9 +255,9 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
           {onRetryReviews && <Button type="button" variant="outline" className="mt-3" onClick={onRetryReviews}><RefreshCw aria-hidden="true" />Try again</Button>}
         </div>}
         {data.reviews && <>
-          <p className="mt-1 text-base text-muted-foreground">
-            {summaryLine(data.reviews.summary)}{data.reviews.summary.count > 0 && services.length > 1 ? " · Reviews cover the whole business, not one service." : ""}
-          </p>
+          <p className="mt-1 text-base text-muted-foreground">{summaryLine(data.reviews.summary)}</p>
+          {/* Public reviews carry no service label, so the same list appears in every service view. */}
+          {data.reviews.summary.count > 0 && services.length > 1 && <p data-reviews-scope className="mt-1 text-sm text-muted-foreground">Reviews shown are for the business overall.</p>}
           {data.reviews.reviews.length === 0
             ? <p data-reviews="empty" className="mt-3 text-sm text-muted-foreground">Published feedback appears here as reviews become available.</p>
             : <ul data-reviews="list" className="mt-4 divide-y divide-border">
@@ -263,8 +290,8 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
         </div>
       </section>}
 
+      {/* Not keyed by view: the ZIP a visitor entered stays through service changes. */}
       <ProfileServiceArea
-        key={viewKey}
         providerName={provider.name}
         serviceName={service?.name ?? null}
         serviceArea={data.serviceArea}

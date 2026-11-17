@@ -257,7 +257,11 @@ const palmetto: ProfileScenario = {
         description: "Debris removed by hand and downspouts flushed.",
         included_scope: ["Single-story home, up to 150 linear feet"],
         tiers: [tier("pe-gutters-once", "One-time", 160), tier("pe-gutters-qtr", "Quarterly", 130, { frequency: "quarterly" })],
-        addons: [addon("pe-guards", "Gutter guard rinse", 35)],
+        addons: [
+          addon("pe-guards", "Gutter guard rinse", 35),
+          // A published minimum above one: the quantity is none, or two to six.
+          addon("pe-downspouts", "Extra downspout flush", 15, { unit_label: "downspout", min_quantity: 2, max_quantity: 6 }),
+        ],
       }),
       pkg("pe-pressure", "pressure-washing", "Driveway and walkway washing", {
         pricing_mode: "custom_quote", description: "Concrete and paver surfaces, quoted after seeing the area.",
@@ -289,7 +293,7 @@ const palmetto: ProfileScenario = {
   links: [
     { label: "All services", query: "", note: "Three services; the withdrawn roof offer is absent." },
     { label: "Window cleaning", query: "?service=window-cleaning", note: "Starting price, required extra and a range-priced extra." },
-    { label: "Gutter cleaning", query: "?service=gutter-cleaning", note: "One-time and quarterly cadences with separate billing labels." },
+    { label: "Gutter cleaning", query: "?service=gutter-cleaning", note: "One-time and quarterly cadences with separate billing labels. One extra has a minimum quantity of two." },
     { label: "Pressure washing", query: "?service=pressure-washing", note: "Quoted, with a qualified estimate." },
     { label: "Roof cleaning (withdrawn)", query: "?service=roof-cleaning", note: "A link to an offer the provider has withdrawn." },
   ],

@@ -5,16 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCents } from "@/lib/pricingContent";
 import {
-  addonMaxQuantity,
+  addonQuantityBounds,
+  addonQuantityNote,
   addonUnitLabel,
   billingBasisLabel,
   cadenceLabel,
   cadencePriceLabel,
   cadenceQualifierNote,
+  normalizeAddonQuantity,
   offerPriceLine,
   pricePreview,
   quoteHeadline,
   selectedOffer,
+  stepAddonQuantity,
   type OfferSelection,
   type ProfileAddon,
   type ProfileOffer,
@@ -134,9 +137,11 @@ export function PackageSelector({ service, selection, onChange, idPrefix }: {
     serviceId: service.id, offerId: next.id, frequency: next.cadences[0]?.frequency ?? next.defaultFrequency, addons: {},
   });
   const chooseFrequency = (frequency: PricingFrequency) => onChange({ ...selection, frequency, addons: {} });
+  // A quantity is zero (the extra is removed) or within its published minimum and maximum.
   const setAddon = (addon: ProfileAddon, quantity: number) => {
     const addons = { ...selection.addons };
-    if (quantity > 0) addons[addon.id] = Math.min(quantity, addonMaxQuantity(addon)); else delete addons[addon.id];
+    const allowed = normalizeAddonQuantity(addon, quantity);
+    if (allowed > 0) addons[addon.id] = allowed; else delete addons[addon.id];
     onChange({ ...selection, addons });
   };
 
@@ -191,18 +196,26 @@ export function PackageSelector({ service, selection, onChange, idPrefix }: {
       <h3 className="text-base font-semibold text-foreground">Optional extras</h3>
       <ul className="mt-2 divide-y divide-border rounded-xl border border-border bg-card">
         {cadence.optionalAddons.map((addon) => {
-          const quantity = selection.addons[addon.id] ?? 0;
-          const max = addonMaxQuantity(addon);
-          return <li key={addon.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 p-4">
+          const quantity = normalizeAddonQuantity(addon, selection.addons[addon.id]);
+          const { min, max } = addonQuantityBounds(addon);
+          const fewer = stepAddonQuantity(addon, quantity, -1);
+          const more = stepAddonQuantity(addon, quantity, 1);
+          const note = addonQuantityNote(addon);
+          // With a minimum above one a step is not always one unit, so the controls say what they change.
+          const labels = min > 1
+            ? { fewer: `Decrease ${addon.name} quantity`, more: `Increase ${addon.name} quantity` }
+            : { fewer: `Remove one ${addon.name}`, more: `Add one ${addon.name}` };
+          return <li key={addon.id} data-addon={addon.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 p-4">
             <div className="min-w-0 flex-1 basis-40">
               <p className={cn("text-base font-medium text-foreground", anywhere)}>{addon.name} <span className="font-normal text-muted-foreground">{addonUnitLabel(addon)}</span></p>
               {addon.description && <p className={cn("text-sm text-muted-foreground", anywhere)}>{addon.description}</p>}
+              {note && <p data-addon-limits className="text-sm text-muted-foreground">{note}</p>}
             </div>
-            {max > 1 ? <div role="group" aria-label={`${addon.name} quantity`} className="flex shrink-0 items-center gap-2">
-              <Button type="button" variant="outline" size="icon" aria-label={`Remove one ${addon.name}`} disabled={quantity === 0} focusableWhenDisabled onClick={() => setAddon(addon, quantity - 1)}><Minus aria-hidden="true" /></Button>
+            {max > min ? <div role="group" aria-label={`${addon.name} quantity${note ? `. ${note}` : ""}`} className="flex shrink-0 items-center gap-2">
+              <Button type="button" variant="outline" size="icon" aria-label={labels.fewer} disabled={fewer === quantity} focusableWhenDisabled onClick={() => setAddon(addon, fewer)}><Minus aria-hidden="true" /></Button>
               <span data-addon-quantity={addon.id} className="min-w-8 text-center text-base font-semibold tabular-nums text-foreground">{quantity}</span>
-              <Button type="button" variant="outline" size="icon" aria-label={`Add one ${addon.name}`} disabled={quantity >= max} focusableWhenDisabled onClick={() => setAddon(addon, quantity + 1)}><Plus aria-hidden="true" /></Button>
-            </div> : <Checkbox label={`Add ${addon.name}`} checked={quantity > 0} onChange={(event) => setAddon(addon, event.target.checked ? 1 : 0)} className="max-w-full min-w-0 [overflow-wrap:anywhere]" />}
+              <Button type="button" variant="outline" size="icon" aria-label={labels.more} disabled={more === quantity} focusableWhenDisabled onClick={() => setAddon(addon, more)}><Plus aria-hidden="true" /></Button>
+            </div> : <Checkbox label={`Add ${addon.name}`} checked={quantity > 0} disabled={min > max} onChange={(event) => setAddon(addon, event.target.checked ? min : 0)} className="max-w-full min-w-0 [overflow-wrap:anywhere]" />}
           </li>;
         })}
       </ul>

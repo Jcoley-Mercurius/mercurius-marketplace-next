@@ -28,7 +28,7 @@ export function ProfileGallery() {
       <PageHeader
         eyebrow="Mercurius Design System · Review gallery"
         title="Provider cards and dynamic profiles"
-        description="Fictional providers rendered through the shared card and profile components. Card and interior visual direction are approved; the service-focused profile is an exploration for owner review. Nothing here reads or changes Marketplace data."
+        description="Fictional providers rendered through the shared card and profile components. The card and profile interior follow the visual directions the owner approved on November 5, 2026; the service focus is approved for exploration only. This built gallery is for review and has not been accepted. Nothing here reads or changes Marketplace data."
       />
       <Link href="/mds" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">Back to component foundation</Link>
 

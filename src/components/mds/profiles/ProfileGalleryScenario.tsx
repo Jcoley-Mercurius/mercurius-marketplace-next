@@ -29,7 +29,7 @@ export function ProfileGalleryScenario({ slug }: { slug: string }) {
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-8 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">MDS review gallery · {scenario.title}</p>
-            <p className="hidden text-sm text-slate sm:block">Synthetic provider and offers. Dynamic service focus is an exploration for owner review.</p>
+            <p className="hidden text-sm text-slate sm:block">Synthetic provider and offers. The service focus is an exploration for owner review, not an accepted design.</p>
             <Link href="/mds/profiles" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">Back to the profile gallery</Link>
           </div>
           <label className="flex min-w-0 flex-col gap-1 text-sm font-medium text-foreground md:w-64">

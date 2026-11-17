@@ -23,14 +23,17 @@ export function ProfileServiceArea({ providerName, serviceName, serviceArea, mar
   directoryHref: string;
   onRetry?: () => void;
 }) {
+  // The ZIP a visitor typed, and the one they last checked, belong to the visit rather than to
+  // one service view: both survive a change of service. The result is worked out from the
+  // checked ZIP on every render, so it always describes the service and coverage now shown.
   const [zip, setZip] = useState("");
-  const [result, setResult] = useState<ZipCheck | null>(null);
+  const [checked, setChecked] = useState<string | null>(null);
+  const result: ZipCheck | null = checked === null ? null : checkZip(checked, serviceArea, marketplaceZips);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const next = checkZip(zip, serviceArea, marketplaceZips);
-    setResult(next);
-    if (next.status === "invalid") event.currentTarget.querySelector<HTMLInputElement>("input")?.focus();
+    setChecked(zip);
+    if (checkZip(zip, serviceArea, marketplaceZips).status === "invalid") event.currentTarget.querySelector<HTMLInputElement>("input")?.focus();
   }
 
   const areas = serviceArea?.areas ?? [];

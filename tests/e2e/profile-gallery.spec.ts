@@ -3,7 +3,9 @@
 // providers through the shared card and profile components. No Marketplace read or write.
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync } from "node:fs";
+import { createServer } from "node:net";
 
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
 const widths = [320, 390, 768, 1024, 1440];
@@ -30,8 +32,13 @@ async function open(page: Page, path: string, width = 1440) {
   await page.evaluate(() => document.fonts.ready);
 }
 
+// The service choice has two controls over one value: chips from 1024px, a dropdown below it.
+const desktop = 1024;
 const chooser = (page: Page, name: string) => page.getByRole("radio", { name, exact: true });
 const choose = (page: Page, name: string) => page.locator("fieldset label").filter({ hasText: new RegExp(`^${name}$`) }).click();
+const dropdown = (page: Page) => page.getByRole("combobox", { name: "What can we help with?" });
+const dropdownChoice = (page: Page) => dropdown(page).evaluate((el: HTMLSelectElement) => el.selectedOptions[0].text);
+const history = (page: Page) => page.evaluate(() => ({ length: window.history.length, router: window.history.state?.__NA === true }));
 const summary = (page: Page) => page.locator("[data-offer-summary]").filter({ visible: true });
 const price = (page: Page) => summary(page).locator("[data-offer-price]");
 const service = (page: Page) => new URL(page.url()).searchParams.get("service");
@@ -97,6 +104,15 @@ for (const [name, path, view] of views) for (const width of widths) {
     for (const label of await page.locator("fieldset label").filter({ visible: true }).all()) {
       expect((await label.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
+    // One service selector is on screen: chips on desktop, the dropdown on phones and tablets.
+    if (width >= desktop) {
+      await expect(dropdown(page)).toHaveCount(0);
+      await expect(page.getByRole("radio", { name: "All services", exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByRole("radio", { name: "All services", exact: true })).toHaveCount(0);
+      await expect(dropdown(page)).toHaveValue(view === "all" ? "" : view);
+      expect((await dropdown(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
     if (width === 320 || width === 390 || width === 1440) {
       const file = `${shots}/${name.replace(/\W+/g, "-")}-${width}`;
       // What a visitor sees on arrival, with the phone action bar in place.
@@ -157,12 +173,14 @@ test("choosing a service updates offer, scope, price, media and questions; ident
   await expect(page.locator("[data-profile-media]")).toHaveAttribute("data-profile-media", "logo");
   await expect(page.getByRole("heading", { name: /^Questions about/ })).toHaveCount(0);
 
+  const entries = (await history(page)).length;
   await chooser(page, "All services").focus();
   await page.keyboard.press("ArrowRight");
   await expect(chooser(page, "Trash can cleaning")).toBeChecked();
-  // Keyboard focus stays on the selector, and the URL carries the choice.
+  // Keyboard focus stays on the selector, and the URL carries the choice without a new history entry.
   await expect(chooser(page, "Trash can cleaning")).toBeFocused();
   expect(service(page)).toBe("trash-can-cleaning");
+  expect((await history(page)).length).toBe(entries);
   await expect(page.locator("[data-profile-announcement]")).toHaveText("Showing Trash can cleaning: One-time can cleaning, $45.");
 
   await expect(summary(page).getByRole("heading", { level: 2 })).toHaveText("One-time can cleaning");
@@ -248,6 +266,70 @@ test("extras update a qualified price preview and stay within published limits",
   await expect(page.locator("[data-optional-extras]")).toHaveCount(0);
 });
 
+test("an extra with a minimum of two is none or two to six, and the preview follows", async ({ page }) => {
+  await open(page, `${palmetto}?service=gutter-cleaning`);
+  const row = page.locator("[data-addon=pe-downspouts]");
+  const quantity = page.locator("[data-addon-quantity=pe-downspouts]");
+  const more = page.getByRole("button", { name: "Increase Extra downspout flush quantity" });
+  const fewer = page.getByRole("button", { name: "Decrease Extra downspout flush quantity" });
+  const total = summary(page).locator("[data-price-total]");
+  const lines = summary(page).locator("[data-price-preview] li");
+
+  await expect(row.locator("[data-addon-limits]")).toHaveText("Minimum 2, up to 6");
+  await expect(page.getByRole("group", { name: "Extra downspout flush quantity. Minimum 2, up to 6" })).toBeVisible();
+  await expect(quantity).toHaveText("0");
+  await expect(fewer).toBeDisabled();
+  await expect(summary(page).locator("[data-price-preview]")).toHaveCount(0);
+
+  // The first selection is the minimum: one is never offered.
+  await more.focus();
+  await page.keyboard.press("Enter");
+  await expect(quantity).toHaveText("2");
+  await expect(total).toHaveText("$190");
+  await expect(lines).toHaveText(["Gutter clean-out$160", "Extra downspout flush × 2$30"]);
+  await expect(page.locator("[data-profile-announcement]")).toHaveText("Gutter clean-out, one-time: $190 service subtotal.");
+
+  // Up to the published maximum, where the control stops but keeps keyboard focus.
+  for (let index = 0; index < 6; index += 1) await page.keyboard.press("Enter");
+  await expect(quantity).toHaveText("6");
+  await expect(more).toBeDisabled();
+  await expect(more).toBeFocused();
+  await expect(total).toHaveText("$250");
+  await expect(lines).toHaveText(["Gutter clean-out$160", "Extra downspout flush × 6$90"]);
+
+  // Down to the minimum, then one more step removes the extra rather than leaving one.
+  await fewer.focus();
+  for (let index = 0; index < 4; index += 1) await page.keyboard.press("Enter");
+  await expect(quantity).toHaveText("2");
+  await expect(total).toHaveText("$190");
+  await page.keyboard.press("Enter");
+  await expect(quantity).toHaveText("0");
+  await expect(summary(page).locator("[data-price-preview]")).toHaveCount(0);
+  await expect(fewer).toBeDisabled();
+  await expect(fewer).toBeFocused();
+  await expect(price(page)).toHaveText("$160");
+
+  // With another extra, on the other cadence: both are priced from that cadence's base.
+  await more.click();
+  await page.getByRole("checkbox", { name: "Add Gutter guard rinse" }).check();
+  await expect(total).toHaveText("$225");
+  await page.locator("label").filter({ hasText: /^Quarterly · \$130 per visit$/ }).click();
+  await expect(quantity).toHaveText("0");
+  await expect(summary(page).locator("[data-price-preview]")).toHaveCount(0);
+  await more.click();
+  await expect(quantity).toHaveText("2");
+  await expect(total).toHaveText("$160");
+  await expect(lines).toHaveText(["Gutter clean-out$130", "Extra downspout flush × 2$30"]);
+
+  // An extra with no published minimum still steps by one.
+  await open(page, `${brightbin}?service=trash-can-cleaning`);
+  await page.getByRole("button", { name: "Add one Extra can" }).click();
+  await expect(page.locator("[data-addon-quantity=bb-extra-can]")).toHaveText("1");
+  await expect(page.locator("[data-addon=bb-extra-can] [data-addon-limits]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Remove one Extra can" }).click();
+  await expect(page.locator("[data-addon-quantity=bb-extra-can]")).toHaveText("0");
+});
+
 test("an explicit service link opens that service", async ({ page }) => {
   await open(page, `${palmetto}?service=pressure-washing`);
   await expect(chooser(page, "Pressure washing")).toBeChecked();
@@ -277,34 +359,150 @@ for (const [name, path, message] of [
   });
 }
 
-test("Back and Forward restore the service choice", async ({ page }) => {
-  await open(page, palmetto);
+for (const id of ["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"]) {
+  test(`a link naming "${id}" as the service shows the normal fallback without a browser error`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(`pageerror: ${error.message}`));
+    page.on("console", message => { if (message.type() === "error") errors.push(`console: ${message.text()}`); });
+    // The Vercel Web Analytics script exists only on Vercel. Locally it is a 404 on every page,
+    // so it is answered here and any other console error still fails the test.
+    await page.route("**/_vercel/insights/**", route => route.fulfill({ status: 200, contentType: "application/javascript", body: "" }));
+    for (const width of [1440, 390]) {
+      await open(page, `${brightbin}?service=${id}`, width);
+      const notice = page.locator("[data-unavailable-service]");
+      await expect(notice.locator("p").first()).toHaveText("The linked service is not currently offered by Brightbin Can Care.");
+      await expect(notice).toContainText("All services are shown instead; choose one above to see its current offer.");
+      await expect(page.locator("[data-profile]")).toHaveAttribute("data-profile-view", "all");
+      if (width >= desktop) await expect(chooser(page, "All services")).toBeChecked();
+      else expect(await dropdownChoice(page)).toBe("All services");
+      await expect(summary(page)).toContainText("1 published service");
+      await expect(page.locator("[data-profile-announcement]")).toHaveText("");
+      await expect(page.getByRole("heading", { name: "Explore services" })).toBeVisible();
+      // The page still works: a published service can be chosen and the notice goes.
+      await page.locator("[data-service-row=trash-can-cleaning]").click();
+      await expect(price(page)).toHaveText("$45");
+      await expect(notice).toHaveCount(0);
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
+test("a service change replaces the history entry: Back leaves the profile, Forward returns to the last choice", async ({ page }) => {
+  await open(page, "/mds/profiles");
+  await page.locator("[data-provider-card=synthetic-palmetto]").getByRole("link").click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Palmetto Exterior Care");
+  const arrival = await history(page);
+
   await choose(page, "Window cleaning");
   await expect(price(page)).toHaveText("From $160");
   await choose(page, "Pressure washing");
   await expect(price(page)).toHaveText("Quote after walkthrough");
-  expect(service(page)).toBe("pressure-washing");
-
-  await page.goBack();
-  await expect(chooser(page, "Window cleaning")).toBeChecked();
-  await expect(price(page)).toHaveText("From $160");
-  expect(service(page)).toBe("window-cleaning");
-
-  await page.goBack();
-  await expect(chooser(page, "All services")).toBeChecked();
+  await choose(page, "All services");
   await expect(summary(page)).toContainText("3 published services");
   expect(service(page)).toBeNull();
-
-  await page.goForward();
-  await expect(chooser(page, "Window cleaning")).toBeChecked();
-  await page.goForward();
-  await expect(chooser(page, "Pressure washing")).toBeChecked();
-  await expect(page.locator("[data-profile-announcement]")).toHaveText("Showing Pressure washing: Driveway and walkway washing, Quote after walkthrough.");
-
-  // Choosing the service already shown adds no history entry.
   await choose(page, "Pressure washing");
+  expect(service(page)).toBe("pressure-washing");
+  // Four changes of service, no new history entry, and the framework's entry state is intact.
+  expect(await history(page)).toEqual(arrival);
+  expect(arrival.router).toBe(true);
+
+  // Back leaves the profile in one step, as a client-side navigation.
   await page.goBack();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Provider cards and dynamic profiles");
+  expect(new URL(page.url()).pathname).toBe("/mds/profiles");
+
+  // Forward returns to the profile with the last service chosen.
+  await page.goForward();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Palmetto Exterior Care");
+  await expect(chooser(page, "Pressure washing")).toBeChecked();
+  await expect(price(page)).toHaveText("Quote after walkthrough");
+  expect(service(page)).toBe("pressure-washing");
+
+  // A reload opens the same view from the address alone.
+  await page.reload();
+  await expect(chooser(page, "Pressure washing")).toBeChecked();
+});
+
+test("a service change keeps unrelated query parameters, the hash and the scroll position", async ({ page }) => {
+  await open(page, `${palmetto}?utm_source=mailer%20a&service=window-cleaning&ref=card+2#profile-reviews`);
   await expect(chooser(page, "Window cleaning")).toBeChecked();
+  const arrival = await history(page);
+  const address = () => page.evaluate(() => `${window.location.pathname}${window.location.search}${window.location.hash}`);
+
+  // The service keeps its place; the other parameters keep their spelling.
+  await choose(page, "Gutter cleaning");
+  await expect(price(page)).toHaveText("$160");
+  expect(await address()).toBe(`${palmetto}?utm_source=mailer%20a&service=gutter-cleaning&ref=card+2#profile-reviews`);
+
+  // Changing service does not jump to the hash target again.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await choose(page, "All services");
+  await expect(summary(page)).toContainText("3 published services");
+  expect(await address()).toBe(`${palmetto}?utm_source=mailer%20a&ref=card+2#profile-reviews`);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  await choose(page, "Pressure washing");
+  expect(await address()).toBe(`${palmetto}?utm_source=mailer%20a&ref=card+2&service=pressure-washing#profile-reviews`);
+  expect(await history(page)).toEqual(arrival);
+
+  // The address still opens the same view, and section links still work after the changes.
+  await page.reload();
+  await expect(chooser(page, "Pressure washing")).toBeChecked();
+  await page.getByRole("navigation", { name: "Profile sections" }).getByRole("link", { name: "Service area" }).click();
+  expect(await address()).toBe(`${palmetto}?utm_source=mailer%20a&ref=card+2&service=pressure-washing#profile-area`);
+  await expect(chooser(page, "Pressure washing")).toBeChecked();
+});
+
+test("phones and tablets choose the service from a dropdown that keeps focus", async ({ page }) => {
+  await open(page, palmetto, 390);
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await expect(dropdown(page).getByRole("option")).toHaveText(["All services", "Window cleaning", "Gutter cleaning", "Pressure washing"]);
+  expect(await dropdownChoice(page)).toBe("All services");
+  const entries = (await history(page)).length;
+
+  await dropdown(page).focus();
+  await dropdown(page).selectOption({ label: "Gutter cleaning" });
+  await expect(page.locator("[data-profile]")).toHaveAttribute("data-profile-view", "gutter-cleaning");
+  await expect(dropdown(page)).toBeFocused();
+  await expect(price(page)).toHaveText("$160");
+  expect(service(page)).toBe("gutter-cleaning");
+  await expect(page.locator("[data-profile-announcement]")).toHaveText("Showing Gutter cleaning: Gutter clean-out, $160.");
+
+  await dropdown(page).selectOption({ label: "All services" });
+  await expect(summary(page)).toContainText("3 published services");
+  expect(service(page)).toBeNull();
+  expect((await history(page)).length).toBe(entries);
+
+  // Choosing from a service list returns focus to the dropdown, which shows the choice.
+  await page.locator("[data-service-row=pressure-washing]").click();
+  await expect(dropdown(page)).toBeFocused();
+  expect(await dropdownChoice(page)).toBe("Pressure washing");
+
+  // A link to a service this provider does not publish leaves the dropdown on All services.
+  await open(page, `${palmetto}?service=roof-cleaning`, 768);
+  await expect(page.locator("[data-unavailable-service]")).toContainText("Roof cleaning is not currently offered by Palmetto Exterior Care.");
+  expect(await dropdownChoice(page)).toBe("All services");
+});
+
+test("the dropdown and the chips are one selection", async ({ page }) => {
+  await open(page, palmetto, 390);
+  await dropdown(page).selectOption({ label: "Gutter cleaning" });
+  await page.getByRole("checkbox", { name: "Add Gutter guard rinse" }).check();
+  await expect(summary(page).locator("[data-price-total]")).toHaveText("$195");
+
+  // Widening the window swaps the control, not the choice or what was chosen within it.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(dropdown(page)).toHaveCount(0);
+  await expect(chooser(page, "Gutter cleaning")).toBeChecked();
+  await expect(page.getByRole("radio", { checked: true }).and(page.locator("[name$=-service]"))).toHaveCount(1);
+  await expect(summary(page).locator("[data-price-total]")).toHaveText("$195");
+
+  await choose(page, "Window cleaning");
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect(page.getByRole("radio", { name: "Window cleaning", exact: true })).toHaveCount(0);
+  expect(await dropdownChoice(page)).toBe("Window cleaning");
+  await expect(dropdown(page)).toHaveValue("window-cleaning");
+  expect(service(page)).toBe("window-cleaning");
 });
 
 test("choosing from a service list returns keyboard focus to the selector", async ({ page }) => {
@@ -359,6 +557,72 @@ test("ZIP results separate listed, outside the list, outside the Marketplace are
   await expect(page.getByText("· 33904, 33914, 33915, 33990")).toBeVisible();
 });
 
+test("the ZIP stays through service changes and its result follows the service shown", async ({ page }) => {
+  await open(page, `${palmetto}?service=window-cleaning`);
+  const zip = page.getByRole("textbox", { name: "ZIP code" });
+  const result = page.locator("[data-zip-result]");
+  await zip.fill("33901");
+  await page.keyboard.press("Enter");
+  await expect(result).toHaveAttribute("data-zip-result", "listed");
+  await expect(result).toContainText("Eligibility for window cleaning at your address is confirmed in the request step.");
+
+  // Another service: the same ZIP, checked for that service.
+  await choose(page, "Pressure washing");
+  await expect(zip).toHaveValue("33901");
+  await expect(result).toHaveAttribute("data-zip-result", "listed");
+  await expect(result).toContainText("33901 is in the listed area");
+  await expect(result).toContainText("Eligibility for pressure washing at your address is confirmed in the request step.");
+  await expect(result).not.toContainText("window cleaning");
+  await expect(page.getByText("Check the listed area for pressure washing.")).toBeVisible();
+
+  // All services: still there, no longer naming a service.
+  await choose(page, "All services");
+  await expect(zip).toHaveValue("33901");
+  await expect(result).toContainText("Eligibility for a service at your address is confirmed in the request step.");
+
+  // A ZIP typed but not yet checked is kept too, and the last checked result stays until it is.
+  await zip.fill("33904");
+  await choose(page, "Gutter cleaning");
+  await expect(zip).toHaveValue("33904");
+  await expect(result).toContainText("33901 is in the listed area");
+  await expect(result).toContainText("Eligibility for gutter cleaning");
+  await page.getByRole("button", { name: "Check ZIP" }).click();
+  await expect(result).toHaveAttribute("data-zip-result", "outside_provider");
+  await choose(page, "Window cleaning");
+  await expect(zip).toHaveValue("33904");
+  await expect(result).toHaveAttribute("data-zip-result", "outside_provider");
+
+  // The same holds on a phone, through the dropdown.
+  await open(page, `${brightbin}?service=trash-can-cleaning`, 390);
+  await page.getByRole("textbox", { name: "ZIP code" }).fill("33904");
+  await page.getByRole("button", { name: "Check ZIP" }).click();
+  await expect(result).toContainText("Eligibility for trash can cleaning");
+  await dropdown(page).selectOption({ label: "All services" });
+  await expect(page.getByRole("textbox", { name: "ZIP code" })).toHaveValue("33904");
+  await expect(result).toContainText("Eligibility for a service at your address");
+});
+
+test("reviews are described as the business's in every view of a multi-service profile", async ({ page }) => {
+  const sentence = page.getByText("Reviews shown are for the business overall.", { exact: true });
+  await open(page, palmetto);
+  await expect(sentence).toBeVisible();
+  await expect(page.getByText(/Reviews cover the whole business/)).toHaveCount(0);
+  const list = await page.locator("[data-reviews=list]").innerText();
+  for (const name of ["Window cleaning", "Pressure washing"]) {
+    await choose(page, name);
+    await expect(sentence).toBeVisible();
+    expect(await page.locator("[data-reviews=list]").innerText()).toBe(list);
+    await expect(page.locator("[data-review-summary]")).toHaveText("4.5 (2 public reviews)");
+  }
+  // One service, or no reviews yet: there is nothing to tell apart, so nothing is said.
+  await open(page, `${brightbin}?service=trash-can-cleaning`);
+  await expect(page.locator("[data-reviews=list] li")).toHaveCount(3);
+  await expect(sentence).toHaveCount(0);
+  await open(page, harborline);
+  await expect(page.locator("[data-reviews=empty]")).toBeVisible();
+  await expect(sentence).toHaveCount(0);
+});
+
 test("sparse profile stays compact and truthful", async ({ page }) => {
   await open(page, northside, 390);
   await expect(page.locator("[data-logo=initials]").first()).toHaveText("NH");
@@ -374,7 +638,7 @@ test("sparse profile stays compact and truthful", async ({ page }) => {
   await expect(result).toHaveAttribute("data-zip-result", "unknown");
   await expect(result).toContainText("We can't tell whether 33904 is covered");
 
-  await choose(page, "Handyman");
+  await dropdown(page).selectOption({ label: "Handyman" });
   await expect(price(page)).toHaveText("Quote after walkthrough");
   await expect(page.locator("[data-profile-media]")).toHaveAttribute("data-profile-media", "logo");
   await expect(page.getByRole("heading", { name: /^Questions about/ })).toHaveCount(0);
@@ -462,4 +726,69 @@ test("the catalog links to the gallery and an unknown scenario is not found", as
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Provider cards and dynamic profiles");
   const missing = await page.goto("/mds/profiles/not-a-scenario");
   expect(missing?.status()).toBe(404);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Catalog gate
+// ---------------------------------------------------------------------------------------------
+
+test.describe("with the catalog disabled", () => {
+  // A second server from the same build, started without MDS_CATALOG_ENABLED, as production is.
+  let server: ChildProcess | undefined;
+  let origin = "";
+  const output: string[] = [];
+
+  test.beforeAll(async () => {
+    const port = await new Promise<number>((resolve, reject) => {
+      const probe = createServer();
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", () => {
+        const { port: free } = probe.address() as { port: number };
+        probe.close(() => resolve(free));
+      });
+    });
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:55831",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "mds-synthetic-anon-key",
+    };
+    delete env.MDS_CATALOG_ENABLED;
+    server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", String(port)], { env, stdio: ["ignore", "pipe", "pipe"] });
+    server.stdout?.on("data", chunk => output.push(String(chunk)));
+    server.stderr?.on("data", chunk => output.push(String(chunk)));
+    origin = `http://127.0.0.1:${port}`;
+    await expect.poll(() => fetch(`${origin}/mds`).then(response => response.status, () => 0), { timeout: 25_000 }).not.toBe(0);
+  });
+
+  test.afterAll(() => { server?.kill(); });
+
+  test("both gallery routes, and the catalog itself, return 404 and none of the gallery", async ({ request, baseURL }) => {
+    const routes = ["/mds/profiles", `${brightbin}?service=trash-can-cleaning`, palmetto, "/mds"];
+    for (const route of routes) {
+      const response = await request.get(`${origin}${route}`);
+      expect([route, response.status()]).toEqual([route, 404]);
+      const body = await response.text();
+      for (const text of ["Provider cards and dynamic profiles", "Brightbin", "Palmetto Exterior Care", "MDS review gallery", "What can we help with?"]) {
+        expect([route, text, body.includes(text)]).toEqual([route, text, false]);
+      }
+    }
+    // The same build with the gate on serves those routes: the 404 comes from the gate alone.
+    for (const route of routes) {
+      expect([route, (await request.get(`${baseURL}${route}`)).status()]).toEqual([route, 200]);
+    }
+    // The live provider directory is not behind the gate.
+    expect((await request.get(`${origin}/providers`)).status()).toBe(200);
+  });
+
+  test("a browser on the disabled catalog sees the not-found page for both gallery routes", async ({ page }) => {
+    // This test alone reaches the second server; everything else stays blocked.
+    await page.unrouteAll();
+    await page.route("**/*", route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    for (const route of ["/mds/profiles", brightbin]) {
+      const response = await page.goto(`${origin}${route}`);
+      expect([route, response?.status()]).toEqual([route, 404]);
+      await expect(page.locator("[data-provider-card], [data-profile], [data-gallery-controls]")).toHaveCount(0);
+      await expect(page.getByText("Provider cards and dynamic profiles")).toHaveCount(0);
+    }
+  });
 });
