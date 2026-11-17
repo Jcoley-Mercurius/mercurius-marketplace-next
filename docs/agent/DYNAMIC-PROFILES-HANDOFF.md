@@ -674,3 +674,67 @@ TRACE-156 row.
 
 P2B (the dynamic profile interior) has not started. No Phase 7 product code or Phase 7 branch was
 touched. The only Phase 7 file changed is the test set-up described above.
+
+## CI on `2bb0ca8`: a timeout across the whole suite, then a gallery-spec race (2026-11-17)
+
+The closeout gates in the section above are superseded by the list at the end of this one.
+
+**Attempt 1 of run 44186485645 hit the job's time limit.** `backend` and `lifecycle` passed. In
+`application`, the unit tests passed 69 of 69 files, including the repaired TRACE-151 test. The
+job was then cancelled at its 20-minute `timeout-minutes` during the browser step, after 792 of
+814 tests had passed and none had failed or retried. Every spec ran about 25–30% slower than on
+`535d722`. For example, `request.spec` took 174 s against 144 s, and the directory spec 27.5 s
+against 20.8 s. That pattern points to a slower runner, not to a test.
+
+**The time limit was already a problem on `main`.** The `application` job on `main`'s last
+three pushes was also cancelled at 20 minutes, during the single-worker browser step:
+
+| Run | Commit | Browser tests passed |
+|---|---|---|
+| 44139983494 | `d0c767d` (#173) | 793 of 793, still cancelled |
+| 44117454907 | `3327c83` (#172) | 734 of 793 |
+| 44095862042 | `a44a062` (#171) | 750 of 793 |
+
+P2A adds about 21–28 s. **Decision for Codex or the owner, shared with Phase 7:** raise the
+`application` timeout, or shard the browser step or give it more workers. No workflow file was
+changed here.
+
+**Attempt 2 (a re-run for exact-head evidence) finished within the limit and found one failure.**
+The browser step passed 813 of 814 tests in 13.2 m, and the unit tests passed 1037 of 1037. The
+failure was `profile-gallery.spec.ts:91`, "profile mixed quoted service 1024px", with
+`locator('[data-profile]')` resolving to two elements, a strict-mode violation. That spec is the
+P1 gallery from #171, and P2A does not touch its route or its spec.
+
+**Cause, read from the CI trace (`accessibility-evidence` artifact).** The final DOM snapshot
+holds the live `main#main-content > div[data-profile]`, and also a second copy inside
+`body > div#S:0[hidden] > main#main-content`. That second copy is React's streamed Suspense
+segment, which had not yet been revealed and removed. The hidden copy is outside the
+accessibility tree and nobody can see it, but a bare CSS locator counts it. Playwright reports a
+strict-mode violation immediately instead of retrying, so the assertion failed on that moment.
+This was not reproduced locally; the evidence is the CI trace.
+
+**Repair (test only, in the spec's `open()` helper):** after the heading is visible, `open()`
+now asserts that no `div[hidden][id^="S:"]` segment remains before anything else is checked.
+This is stricter than before: a segment that never resolved would now fail the test instead of
+being masked. No assertion was loosened, and no application code changed.
+
+**Checks after the repair** (Node 24.17.0, `NODE_ENV` unset; build with the synthetic public
+values, exit 0):
+
+- Lint: no findings. Types: no errors.
+- Isolated gallery lane (`playwright.profile-gallery.config.ts`, port 3143): 82 of 82 passed.
+- The 45 profile-view tests repeated 4 times (`--repeat-each=4`): 180 of 180 passed, none flaky.
+
+**Closeout gates still open:**
+
+- Green exact-head CI on the head that carries both test repairs. Because of the time-limit
+  problem above, a run can still be cancelled through runner speed alone.
+- A decision on the `application` job's CI budget.
+- Codex's review of the two test-only repairs (`application-notification-tracing.test.ts` from
+  TRACE-151 and `profile-gallery.spec.ts` from #171), the PR's approval, and its move out of
+  draft.
+- Codex or the owner updates the existing TRACE-156 row with P2A's evidence and status at
+  acceptance.
+- No manual, real-phone, screen-reader, forced-colors or text-size check has been performed, and
+  none is claimed. The owner decides whether any of them is required.
+- The owner's merge, which is the release (DEC-2026-037). There is no migration to push first.
