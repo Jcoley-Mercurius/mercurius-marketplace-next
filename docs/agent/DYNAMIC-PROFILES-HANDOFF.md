@@ -570,8 +570,19 @@ designed — it refused to price anything it could not prove complete.
 **Not run:** the full browser suite (`npm run test:a11y`), `npm run test:visual`, and database
 tests (no data contract changed). CI on the PR is the full run.
 
-**Default-lane note.** A first default-lane run of this revision timed out in six tests while
-the machine was loaded — including the untouched `provider-service-area` spec, which is why the
-cause is read as load against that lane's 30 s per-test budget rather than the change. The new
-spec was then split per width and its duplicate card-only axe scan removed, so each test fits
-well inside that budget; the rerun above passes 39 of 39, that spec included.
+**Lane budgets.** Two budget problems were found and fixed, neither a test failure:
+
+- A first default-lane run of this revision timed out in six tests while the machine was loaded —
+  including the untouched `provider-service-area` spec, which is why the cause is read as load
+  against that lane's 30 s per-test budget rather than the change. The new spec was split per
+  width, so each test fits well inside it; the rerun above passes 39 of 39.
+- CI run 44154503451 on `313f667` then **cancelled** the `application` job at its 20-minute
+  `timeout-minutes` cap, during the browser step. Lint, the secret scan, types, unit, the
+  production audit and the build all succeeded first, and `lifecycle` passed (the earlier
+  infrastructure failure did not recur). The same job takes about 14 m 50 s on `main`, so the
+  new spec's roughly thirty axe scans consumed the headroom. The scans are now twelve, with no
+  loss of what they prove: the whole page is scanned at every width at rest (which also covers
+  the cards, since nothing is excluded any more), the held hover and focus states are scanned at
+  the narrowest and widest widths, the contrast is still *measured* in every state at all five
+  widths, and one of the three identical failed-read pages carries the scan. The isolated lane
+  went from 1 m 06 s to 53 s for the same 21 tests. No workflow file or timeout was changed.

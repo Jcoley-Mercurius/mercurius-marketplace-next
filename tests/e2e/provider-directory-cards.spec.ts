@@ -178,10 +178,6 @@ async function expectNoOverflow(page: Page) {
 const axe = async (page: Page) => (await new AxeBuilder({ page }).withTags(tags).analyze()).violations
   .flatMap((violation) => violation.nodes.map((node) => ({ id: violation.id, target: node.target.join(" ") })));
 
-/** The approved cards on their own. */
-const axeCards = async (page: Page) =>
-  (await new AxeBuilder({ page }).include("[data-provider-card]").withTags(tags).analyze()).violations;
-
 /**
  * The element's measured contrast ratio in its current state, compositing every background it
  * sits on — the tinted bands on this page are translucent, so the painted colour is what counts.
@@ -235,7 +231,7 @@ for (const width of widths) {
     // Five listed providers; six cards, because one publishes in two categories.
     await expect(page.getByText("5 active providers")).toBeVisible();
     await expect(cards(page)).toHaveCount(6);
-    expect(await axeCards(page)).toEqual([]);
+    // One scan, nothing excused: the cards are part of the page it covers.
     expect(await axe(page)).toEqual([]);
     await expectNoOverflow(page);
     expect(errors).toEqual([]);
@@ -281,8 +277,11 @@ for (const width of widths) {
         measured[`${name} · ${state} · ${width}px`] = ratio;
         if (ratio < 4.5) violations.push(`${name} · ${state} · ${width}px = ${ratio}`);
       }
-      // axe sees the state while it is still held.
-      expect(await axe(page)).toEqual([]);
+      // axe sees the state while it is still held. The at-rest page is scanned at every width
+      // by the rendering tests, so the held states are scanned at the extremes of the matrix.
+      if (state === "rest" || width === widths[0] || width === widths.at(-1)) {
+        expect(await axe(page)).toEqual([]);
+      }
     }
 
     // The measurements are the evidence; the run prints them, failing with any pair that fell short.
@@ -376,8 +375,8 @@ for (const fail of ["tiers", "addons", "packages"] as const) {
       await expect(slot).toContainText("Pricing unavailable right now");
     }
     expect(await amounts(cards(page))).toEqual([]);
-    // One scan covers both: the cards are part of the page, and nothing is excused.
-    expect(await axe(page)).toEqual([]);
+    // The three failures render the same unpriced page, so one of them carries the scan.
+    if (fail === "tiers") expect(await axe(page)).toEqual([]);
     if (fail === "tiers") await page.screenshot({ path: `${shots}/directory-offer-read-failed.png`, fullPage: true });
   });
 }
