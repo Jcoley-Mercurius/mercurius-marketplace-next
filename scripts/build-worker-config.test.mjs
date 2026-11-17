@@ -6,7 +6,9 @@ describe("opt-in build worker limit", () => {
 
   it("preserves the default configuration when unset", async () => {
     vi.stubEnv("MERCURIUS_BUILD_WORKERS", "");
-    expect((await import("../next.config.ts")).default).toEqual({});
+    expect((await import("../next.config.ts")).default).toEqual({
+      experimental: { agentUpgrade: "security" },
+    });
   });
 
   it.each(["1", "16"])("accepts %s workers", async (workers) => {
