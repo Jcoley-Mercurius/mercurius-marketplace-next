@@ -5,9 +5,11 @@ not change any authority, roadmap phase or release gate.
 
 ## Current status — 2026-11-17
 
-PR #171 is merged as `a44a062`. Codex retrospectively reviewed its final head `b4eb800` and recorded [review #5941302731](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/171#pullrequestreview-5941302731): both earlier P2 findings are resolved, with no new blocking code finding in the revision. Exact-head CI 44007255413 passed backend/lifecycle/application (1,021 unit and 793 non-visual browser tests); independent focused model checks passed 78 assertions. Manual visual/reference/real-phone/screen-reader acceptance was not performed by this review.
+PR #171 is merged as `a44a062`. Codex's retrospective review of final head `b4eb800` is recorded as [review #5941302731](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/171#pullrequestreview-5941302731): both earlier P2 findings resolved; no new blocking code findings in that scope. Exact-head CI 44007255413 passed backend/lifecycle/application (1,021 unit, 793 non-visual browser tests); independent focused model checks passed 78 assertions.
 
-This documentation follow-up proposes TRACE-156 and transcribes the existing November 5 approval records in `governance/OWNER-APPROVALS.md`. See [the review and remaining gates](../../governance/DYNAMIC-PROFILES-REVIEW.md). Those documentation edits remain subject to this follow-up PR's merge; they do not retroactively accept the built gallery or authorize integration. Phase 7 state is unchanged.
+**Subsequent owner approval:** Josh approved the initial gallery layout/design and requested implementation with reasonable refinement alongside Phase 7. The approval is transcribed in `governance/OWNER-APPROVALS.md` on documentation PR #173, with proposed TRACE-156. It is not a claim that unperformed manual/reference/screen-reader/real-phone checks passed or that a live-route candidate has been accepted.
+
+**Next executable slice:** P2A real directory cards, then P2B dynamic profile interior. Read [the integration handoff](../../governance/DYNAMIC-PROFILES-INTEGRATION.md). Work in a separate worktree/branch from current main (inspected `3327c83`, including the security patch), preserve Phase 7 files/processes, and return a draft implementation PR for review. Do not merge/deploy or add a database/media schema. The prior live-route/design approval holds below are historical; initial-layout approval is now recorded. PR #173 remains a documentation proposal until merged.
 
 ## Slice
 
@@ -209,7 +211,7 @@ was performed. PR #171 stays a draft.
 
 ## Next
 
-The retrospective code re-review is recorded. Josh's desktop/phone gallery acceptance remains next. For the first integration, Codex recommends keeping reset-on-service-change and the first eligible published offer as the temporary card lead; sentence case is already governed by MDS, and below-minimum restored extras stay removed rather than increased. See the review's disposition table. Reconcile this documentation follow-up before starting the separately bounded live-route integration slice.
+The retrospective code re-review and initial-layout/design approval are recorded. Begin the bounded P2A real-directory-card implementation using the integration handoff as read-only authority input from PR #173 if needed. Keep reset-on-service-change, deterministic contextual card lead, sentence case and removal of invalid below-minimum extras. Reconcile the documentation proposal before an implementation release; it need not block isolated P2A development. P2B follows P2A review.
 
 The detailed build directions and open-item statements below are the historical implementation record; the dated current-status note and review above describe subsequent actions.
 
