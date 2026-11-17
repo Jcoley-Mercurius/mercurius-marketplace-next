@@ -38,3 +38,17 @@ The owner accepted Phase 3 as closed and authorized Phase 4 implementation and
 a draft PR (DEC-2026-005). This accepts the implementation checkpoint; human
 screen-reader/zoom, brand review and cross-platform visual follow-ups remain
 separate. No unperformed manual checks are claimed to have passed.
+
+## Provider profile reference approvals — 2026-11-05 (recorded 2026-11-17)
+
+These are existing owner decisions, transcribed from the approval pages of the three design references on 2026-11-17. They do not constitute acceptance of the rendered gallery or a new production-interaction approval.
+
+| Reference and source page | Owner instruction | Approved scope |
+|---|---|---|
+| `Mercurius-Provider-Card-Redesign.pdf`, page 6 of 6 | “I want to lock that in on the design.” | Consumer card visual direction: identity-led cover, consistent service/business/location/offer/profile-link composition, typography and spacing. Public imagery, prices, coverage and claims must remain supported. |
+| `Mercurius-Profile-Interior-Redesign.pdf`, page 7 of 7 | “I love it. That's approved as well.” | Interior visual direction: identity, gallery, service/package selection, coordinated price summary, hierarchy and the referenced mobile composition. Remaining sections and dynamic behavior were sent to a separate exploration. |
+| `Mercurius-Complete-Profile-and-Dynamic-Concept.pdf`, page 7 of 7 | “Let's lock that in to explore the concept of dynamic profile.” | Further exploration of optional service focus over published work, offers and prices, with All services available. Specific interaction/content decisions and production integration are not approved by this record. |
+
+The owner separately assigned the bounded local review gallery on 2026-11-16. PR #171's final revision was merged as `a44a062` on 2026-11-17 and retrospectively code-reviewed by Codex at `b4eb800`. Merge and engineering review do not establish owner visual acceptance. See [the review record](DYNAMIC-PROFILES-REVIEW.md), [the task checkpoint](../docs/agent/DYNAMIC-PROFILES-HANDOFF.md) and TRACE-156.
+
+The dropdown/chips breakpoint, history replacement, retained ZIP and business-wide review sentence are implemented prototype directions, still requiring Josh's desktop/phone review before becoming production interaction authority. Sentence case already follows MDS §9. The proposed first integration retains reset-on-service-change and the first eligible published offer as its temporary no-context card lead; those recommendations are not new owner approvals.
