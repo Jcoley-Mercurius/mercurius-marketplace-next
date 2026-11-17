@@ -402,6 +402,9 @@ describe("journey: save → post-response attempt → operator recovery", { time
   let operator: { user: { id: string } | null; requestError: { code: string; message: string } | null };
   let storageError: unknown;
   let insertError: unknown;
+  // Set per test instead of re-mocking: a second vi.doMock of the same module queued before the
+  // next import is resolved concurrently with this one, and either may register last.
+  let intakeRefusal: string | null;
 
   beforeEach(() => {
     inserted.length = 0;
@@ -410,6 +413,7 @@ describe("journey: save → post-response attempt → operator recovery", { time
     operator = { user: { id: "0be7a700-0000-4000-8000-000000000001" }, requestError: null };
     storageError = null;
     insertError = null;
+    intakeRefusal = null;
     vi.resetModules();
     vi.doMock("@/lib/env/server", () => ({
       getServiceSupabaseEnvironment: () => ({ supabaseUrl: "http://127.0.0.1:1", serviceRoleKey: SENTINEL.serviceKey }),
@@ -418,7 +422,7 @@ describe("journey: save → post-response attempt → operator recovery", { time
     }));
     vi.doMock("@/lib/intakeProtection", async (importOriginal) => ({
       ...(await importOriginal<typeof import("../../src/lib/intakeProtection")>()),
-      intakeGuardRefusal: () => null,
+      intakeGuardRefusal: () => intakeRefusal,
       recordIntakeSubmission: async () => "accepted",
     }));
     vi.doMock("@supabase/supabase-js", () => ({
@@ -611,11 +615,7 @@ describe("journey: save → post-response attempt → operator recovery", { time
   });
 
   it("logs an intake guard refusal with its enumerated reason", async () => {
-    vi.doMock("@/lib/intakeProtection", async (importOriginal) => ({
-      ...(await importOriginal<typeof import("../../src/lib/intakeProtection")>()),
-      intakeGuardRefusal: () => "trap",
-      recordIntakeSubmission: async () => "accepted",
-    }));
+    intakeRefusal = "trap";
     const logs = captureLogs();
     const { POST } = await import("../../src/app/api/vendor-applications/route");
     expect((await POST(submission())).status).toBe(429);
