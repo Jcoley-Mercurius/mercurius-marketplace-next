@@ -140,13 +140,18 @@ synthetic test value; the gallery makes no backend request.
 
 ## Not done
 
-No push, merge, deploy, migration, hosted query or production change. No Phase 7 file, the
-shared `HANDOFF.md`, `TRACEABILITY.md` or any gate was edited. No homeowner validation, real
+No merge, deploy, migration, hosted query or production change. No Phase 7 file, the
+shared `HANDOFF.md`, `TRACEABILITY.md` or any gate was edited.
+
+On the owner's instruction (2026-11-16) the branch was pushed and draft PR #171 opened against
+`main` for Codex review. `main` had moved to `44751a9` (#170, documentation only): no file
+overlap, clean merge, branch not rebased so the pushed commits are the ones tested. CI on the
+PR is the first full run and its result is not recorded here. No homeowner validation, real
 phone, or screen-reader pass was performed.
 
 ## Next
 
-Codex review of this slice. Then the owner reviews the gallery at desktop and phone widths and
+Codex review of this slice on PR #171. Then the owner reviews the gallery at desktop and phone widths and
 answers the decisions above. The integration slice (P2 in the plan) starts only after both.
 
 ## Results
