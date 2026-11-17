@@ -3,6 +3,10 @@
 Date: 2026-11-17 ET. Traceability: TRACE-156.
 Scope: the local review gallery introduced by PR #171; no live-route integration.
 
+## Owner update — initial design approved 2026-11-17
+
+After the retrospective review below, Josh approved the initial gallery layout/design and authorized reasonable refinement and profile implementation alongside Phase 7. See the [canonical approval record](OWNER-APPROVALS.md#initial-profile-gallery-layout-and-design--2026-11-17). This resolves the initial-layout approval hold; it does not claim manual QA or acceptance of a live-route candidate. Keep the directed prototype defaults and implementation choices under that delegation. [P2A is now scoped for implementation](DYNAMIC-PROFILES-INTEGRATION.md), with P2B next. The review below records the earlier engineering checkpoint; read its open-owner statements in light of this subsequent approval.
+
 ## Reviewed revision and result
 
 - Initial reviewed head: `4622a8068f519ccf6a7f2bc4ec236cc8c65fdf0c`.
@@ -46,8 +50,8 @@ The presentation-model boundary is acceptable for this exploration, subject to t
 
 ## Before live integration
 
-1. Josh reviews desktop and phone rendering and records acceptance or required changes, including the four implemented prototype directions.
-2. Resolve first-integration recommendations above; do not make Josh reapprove sentence case already set by MDS.
+1. Initial gallery layout/design acceptance was received from Josh on 2026-11-17. Capture and review the integrated candidate's desktop/mobile rendering; manual screen-reader and real-phone evidence are still not claimed.
+2. Follow the bounded defaults in the integration handoff under Josh's delegated refinement instruction. Do not make Josh reapprove the initial layout or sentence case already set by MDS.
 3. Reconcile traceability/approval documentation through its documentation-only PR. These records preserve historic approval scope; they do not grant visual acceptance.
 4. Define and review the bounded integration slice: current public readers, true access states and next actions, authoritative server price preview or no calculated subtotal, content/media/FAQ fallbacks, directory search/filter/list-position return, representative eligible-provider audit, and release/rollback evidence.
 5. Missing service-media and FAQ sources may be handled with explicitly approved general-media/omitted-section fallbacks; do not invent a database association or publish fixture content. The actual editing/publication path is required before adding service-linked content.
