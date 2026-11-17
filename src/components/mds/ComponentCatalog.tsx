@@ -27,7 +27,10 @@ export function ComponentCatalog() {
     <Header />
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-6xl space-y-10 px-4 py-8 sm:px-8">
       <PageHeader eyebrow="Mercurius Design System · Beta" title="Component foundation" description="Shared controls, feedback, and navigation. All examples use synthetic data and perform no marketplace operations." actions={<ThemeToggle showLabel />} />
-      <Link href="/mds/brand" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">Review brand asset variants</Link>
+      <div className="flex flex-wrap gap-x-6">
+        <Link href="/mds/brand" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">Review brand asset variants</Link>
+        <Link href="/mds/profiles" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">Review provider cards and profiles</Link>
+      </div>
       <section aria-labelledby="actions-heading" className="space-y-4">
         <h2 id="actions-heading" className="text-xl font-semibold">Actions and density</h2>
         <div className="flex flex-wrap gap-3">
