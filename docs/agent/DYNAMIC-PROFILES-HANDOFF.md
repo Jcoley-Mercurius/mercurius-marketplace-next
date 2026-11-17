@@ -3,6 +3,12 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
+## Current status — 2026-11-17
+
+PR #171 is merged as `a44a062`. Codex retrospectively reviewed its final head `b4eb800` and recorded [review #5941302731](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/171#pullrequestreview-5941302731): both earlier P2 findings are resolved, with no new blocking code finding in the revision. Exact-head CI 44007255413 passed backend/lifecycle/application (1,021 unit and 793 non-visual browser tests); independent focused model checks passed 78 assertions. Manual visual/reference/real-phone/screen-reader acceptance was not performed by this review.
+
+This documentation follow-up proposes TRACE-156 and transcribes the existing November 5 approval records in `governance/OWNER-APPROVALS.md`. See [the review and remaining gates](../../governance/DYNAMIC-PROFILES-REVIEW.md). Those documentation edits remain subject to this follow-up PR's merge; they do not retroactively accept the built gallery or authorize integration. Phase 7 state is unchanged.
+
 ## Slice
 
 - **Name:** Dynamic profiles — local review gallery.
@@ -189,7 +195,7 @@ Still open:
   predate the new `/mds` link and were not regenerated.
 - **Next.js advisory.** See the build note under Results.
 
-## Not done
+## Historical implementation checkpoint — before the #171 merge
 
 No merge, deploy, migration, hosted query or production change. No Phase 7 file, the
 shared `HANDOFF.md`, `TRACEABILITY.md`, `OWNER-APPROVALS.md` or any gate was edited. No live
@@ -203,9 +209,9 @@ was performed. PR #171 stays a draft.
 
 ## Next
 
-Codex re-review of the revision on PR #171. Then the owner reviews the gallery at desktop and
-phone widths and answers the decisions above. The integration slice (P2 in the plan) starts
-only after both.
+The retrospective code re-review is recorded. Josh's desktop/phone gallery acceptance remains next. For the first integration, Codex recommends keeping reset-on-service-change and the first eligible published offer as the temporary card lead; sentence case is already governed by MDS, and below-minimum restored extras stay removed rather than increased. See the review's disposition table. Reconcile this documentation follow-up before starting the separately bounded live-route integration slice.
+
+The detailed build directions and open-item statements below are the historical implementation record; the dated current-status note and review above describe subsequent actions.
 
 ## Revision of 2026-11-16 (Codex review of `4622a80`)
 
