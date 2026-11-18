@@ -3,7 +3,11 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
-## Current status — P2B awaiting CI, review and owner visual acceptance (2026-11-18 ET)
+## Current status — P2C imagery in draft, depending on unmerged P2B (2026-11-18 ET)
+
+P2C is on `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`, based on P2B head `9c4bd96`. It depends on PR #175, which is not merged. No photo is owner-approved, and nothing is accepted, merged or released. See [P2C](#p2c--illustrative-service-imagery-trace-156-2026-11-18-et) at the end of this file. The status notes below are the earlier record and are kept as written.
+
+## Earlier status — P2B awaiting CI, review and owner visual acceptance (2026-11-18 ET)
 
 P2B remains a draft on PR #175. It is not accepted, merged or released. The CI diagnosis and the two commits it produced are in [P2B CI closeout](#p2b-ci-closeout-2026-11-18-et) at the end of this file. The result of CI on the final head is reported on the PR, because recording it here would change that head. The owner's visual acceptance and the manual checks listed there are still open. The status note below is the earlier record and is kept as written.
 
@@ -959,3 +963,70 @@ owner's review of the comparison images; and the manual checks that have not bee
 phones, a screen reader, forced colours, 200% browser zoom beyond the 320 px reflow check, and a
 side-by-side comparison with the reference PDFs. The comparison images are review material, not
 baselines, and no visual baseline was changed.
+
+# P2C — illustrative service imagery (TRACE-156), 2026-11-18 ET
+
+## Slice
+
+- **Branch / worktree:** `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`.
+- **Base and dependency:** P2B head `9c4bd96` (PR #175, draft and unmerged). The P2C PR targets the
+  P2B branch so its diff shows only this slice. P2B must merge first.
+- **Authority:** the owner's media direction of 2026-11-18, MDS §3.2 and Codex review 5950264094.
+- **Not in scope:** service-tagged vendor uploads, schema changes, stock video, autoplay, directory
+  cards, production writes, deployment, booking or payment activation, and Phase 7.
+
+## What it does
+
+- A selected service with an explicit photo mapping shows one panel below the provider's own media,
+  labelled "Illustrative service photo". It says the photo doesn't show the provider's team, work
+  or results.
+- `contractor_gallery` stays general business media with its existing label. Nothing is inferred
+  from captions. If a service-linked provider photo ever exists, it replaces the illustrative photo.
+- All services, unmapped services and directory cards show no illustrative photo.
+- The stock photo never becomes the cover, including on sparse profiles and failed provider photos.
+- If the photo fails to load, the whole panel is removed. Provider video is unchanged.
+
+## Assets and provenance
+
+`docs/imagery/service-imagery-manifest.json` records each photo's source page, creator, licence,
+verification date, source hash, placement, alt text, review notes and approval status. All 11 are
+CC0 from StockSnap or the WordPress Photo Directory, and all are `pending_owner_review`.
+
+`public/images/services/` holds 66 WebP crops, 2.0 MB in total: 16:9 for phones and 4:3 from 640 px.
+`scripts/build-service-imagery.mjs` regenerates them from reviewed sources and refuses a source whose
+hash differs from the manifest.
+
+**Source change.** Unsplash was evaluated first, but its site challenges automated clients, so it was
+not used and no asset comes from it. Openverse's public API supplied the candidates, and each source
+page was then checked directly.
+
+**Gaps.** No suitable CC0 photo was found for pressure washing, window cleaning or tree trimming, so
+those services show none. Four sources are only 960 px wide, which is enough for the panel's size.
+
+## Decisions for the owner
+
+1. Approve or reject each photo.
+2. Interior Painting shows a worker from behind, the only person in the set. Keep it or remove it.
+3. Keep the three unmapped services without a photo, or source more.
+
+## Results
+
+Run in this worktree on 2026-11-18, Node 24.17.0, WSL2, `NODE_ENV` unset.
+
+| Check | Result |
+|---|---|
+| Secret scan, lint, types | Passed, no findings |
+| Unit (`npx vitest run`) | 71 files, 1058 of 1058 passed |
+| Build | Exit 0 |
+| Isolated profile lane (`playwright.provider-profile.config.ts`, port 3163) | 45 of 45 passed |
+
+**Found and fixed during verification.** The panel and the media gallery shared one React key, so
+switching services left the previous photo on screen. The switching test caught it.
+
+**Inconclusive.** A local default-lane run of the affected specs passed 57 tests, failed 3 and did
+not reach 137. A rerun of `pricing-approval.spec.ts` alone failed different tests, each waiting for an
+admin page heading, while the machine's load average reached 23 with about 5 GB of memory. P2C does
+not touch those pages. This run is not offered as evidence, and CI is the full browser run.
+
+**Not performed:** real phones, screen readers, forced colours, 200% browser zoom and the owner's
+visual review. No visual baseline was added or changed.
