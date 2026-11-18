@@ -3,7 +3,14 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
-## Current status — P2B merged; P2C imagery in draft (2026-11-18 ET)
+## Current status — P2C merged; media cleanup prepared (2026-11-18 ET)
+
+PR #176 is merged as `f449b3f`. Josh subsequently requested duplicate-gallery and image-fit
+cleanup, plus service-matched provider photos. The rendering patch, verification limits and
+remaining service-association dependency are recorded in [PROFILE-MEDIA-CLEANUP](PROFILE-MEDIA-CLEANUP.md).
+It is not merged or deployed. Preserve the distinction between provider work and stock examples.
+
+## Earlier status — P2B merged; P2C imagery in draft (2026-11-18 ET)
 
 The owner merged P2B (PR #175) as `55e9667` at 18:35:51 UTC, and Vercel reported the production deployment complete at 18:36:42 UTC. The owner then accepted P2B visually and approved all 11 P2C photos, as recorded in [OWNER-APPROVALS](../../governance/OWNER-APPROVALS.md#dynamic-profile-p2b-visual-acceptance-and-p2c-photos--2026-11-18). No manual check is recorded for P2B. P2C is draft PR #176 on `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`, built on P2B head `9c4bd96` and targeting `main`. P2C is not merged or released. See [P2C](#p2c--illustrative-service-imagery-trace-156-2026-11-18-et) at the end of this file. The status notes below are the earlier record and are kept as written.
 

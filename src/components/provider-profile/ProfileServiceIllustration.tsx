@@ -19,7 +19,7 @@ export function ProfileServiceIllustration({ image, providerName }: {
     data-service-illustration={image.serviceId}
     className="overflow-hidden rounded-xl border border-dashed border-border-strong bg-card sm:flex sm:items-stretch"
   >
-    <picture className="block shrink-0 bg-secondary sm:w-56 lg:w-64">
+    <picture className="relative block aspect-[16/9] w-full shrink-0 overflow-hidden bg-secondary sm:aspect-[4/3] sm:w-56 sm:self-start lg:w-64">
       <source media="(min-width: 640px)" type="image/webp" srcSet={image.compact.srcSet} sizes="(min-width: 1024px) 16rem, 14rem" width={image.compact.width} height={image.compact.height} />
       <img
         src={image.wide.src}
@@ -33,7 +33,7 @@ export function ProfileServiceIllustration({ image, providerName }: {
         // An image that settled before hydration never fires onError.
         ref={(element) => { if (element?.complete && element.naturalWidth === 0 && element.currentSrc) setFailed(true); }}
         onError={() => setFailed(true)}
-        className="aspect-[16/9] h-auto w-full object-cover sm:aspect-[4/3] sm:h-full"
+        className="absolute inset-0 h-full w-full object-contain"
       />
     </picture>
     <figcaption className="min-w-0 px-4 py-3 sm:self-center">

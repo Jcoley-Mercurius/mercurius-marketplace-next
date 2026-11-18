@@ -622,15 +622,29 @@ export function cardUnpricedLine(reason: CardUnpricedReason): CardUnpricedLine {
 
 export type ServiceMedia = { items: ProfileMedia[]; general: boolean };
 
+/** Keep one slide per row and exact asset URL, without conflating different image variants. */
+function uniqueMedia(media: readonly ProfileMedia[]): ProfileMedia[] {
+  const ids = new Set<string>();
+  const urls = new Set<string>();
+  return media.filter((item) => {
+    const url = item.image_url.trim();
+    if (!url || ids.has(item.id) || urls.has(url)) return false;
+    ids.add(item.id);
+    urls.add(url);
+    return true;
+  });
+}
+
 /**
  * Media for a service: items linked to it first; otherwise the provider's unlinked media,
  * flagged general so the profile can label it. Media linked to another service is never used.
  */
 export function mediaForService(media: readonly ProfileMedia[], serviceId: string | null): ServiceMedia {
   const sorted = [...media].sort(bySortOrder);
-  const general = sorted.filter((item) => !item.service_id);
+  const general = uniqueMedia(sorted.filter((item) => !item.service_id));
   if (!serviceId) return { items: general, general: true };
-  const linked = sorted.filter((item) => item.service_id === serviceId);
+  // Filter before deduplicating: a general copy must not hide an explicitly service-linked one.
+  const linked = uniqueMedia(sorted.filter((item) => item.service_id === serviceId));
   return linked.length ? { items: linked, general: false } : { items: general, general: true };
 }
 
