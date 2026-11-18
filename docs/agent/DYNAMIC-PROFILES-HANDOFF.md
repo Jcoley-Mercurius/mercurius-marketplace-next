@@ -5,7 +5,7 @@ not change any authority, roadmap phase or release gate.
 
 ## Current status — P2B merged; P2C imagery in draft (2026-11-18 ET)
 
-The owner merged P2B (PR #175) as `55e9667` at 18:35:51 UTC, and Vercel reported the production deployment complete at 18:36:42 UTC. No owner visual acceptance or manual check is recorded for it. P2C is draft PR #176 on `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`, built on P2B head `9c4bd96` and targeting `main`. No photo is owner-approved, and P2C is not accepted, merged or released. See [P2C](#p2c--illustrative-service-imagery-trace-156-2026-11-18-et) at the end of this file. The status notes below are the earlier record and are kept as written.
+The owner merged P2B (PR #175) as `55e9667` at 18:35:51 UTC, and Vercel reported the production deployment complete at 18:36:42 UTC. The owner then accepted P2B visually and approved all 11 P2C photos, as recorded in [OWNER-APPROVALS](../../governance/OWNER-APPROVALS.md#dynamic-profile-p2b-visual-acceptance-and-p2c-photos--2026-11-18). No manual check is recorded for P2B. P2C is draft PR #176 on `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`, built on P2B head `9c4bd96` and targeting `main`. P2C is not merged or released. See [P2C](#p2c--illustrative-service-imagery-trace-156-2026-11-18-et) at the end of this file. The status notes below are the earlier record and are kept as written.
 
 ## Earlier status — P2B awaiting CI, review and owner visual acceptance (2026-11-18 ET)
 
@@ -990,7 +990,7 @@ baselines, and no visual baseline was changed.
 
 `docs/imagery/service-imagery-manifest.json` records each photo's source page, creator, licence,
 verification date, source hash, placement, alt text, review notes and approval status. All 11 are
-CC0 from StockSnap or the WordPress Photo Directory, and all are `pending_owner_review`.
+CC0 from StockSnap or the WordPress Photo Directory, and all are `approved_by_owner` as of 2026-11-18.
 
 `public/images/services/` holds 66 WebP crops, 2.0 MB in total: 16:9 for phones and 4:3 from 640 px.
 `scripts/build-service-imagery.mjs` regenerates them from reviewed sources and refuses a source whose
@@ -1003,11 +1003,11 @@ page was then checked directly.
 **Gaps.** No suitable CC0 photo was found for pressure washing, window cleaning or tree trimming, so
 those services show none. Four sources are only 960 px wide, which is enough for the panel's size.
 
-## Decisions for the owner
+## Owner decisions
 
-1. Approve or reject each photo.
-2. Interior Painting shows a worker from behind, the only person in the set. Keep it or remove it.
-3. Keep the three unmapped services without a photo, or source more.
+1. **Photos:** all 11 approved on 2026-11-18.
+2. **Interior Painting:** the photo of a worker seen from behind is kept.
+3. **Still open:** whether pressure washing, window cleaning and tree trimming should get photos. They show none until the owner decides.
 
 ## Results
 
@@ -1028,5 +1028,5 @@ not reach 137. A rerun of `pricing-approval.spec.ts` alone failed different test
 admin page heading, while the machine's load average reached 23 with about 5 GB of memory. P2C does
 not touch those pages. This run is not offered as evidence, and CI is the full browser run.
 
-**Not performed:** real phones, screen readers, forced colours, 200% browser zoom and the owner's
-visual review. No visual baseline was added or changed.
+**Not performed:** real phones, screen readers, forced colours and 200% browser zoom. No visual
+baseline was added or changed.

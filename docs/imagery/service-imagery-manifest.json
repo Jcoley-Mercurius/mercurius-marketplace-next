@@ -37,8 +37,10 @@
         "y": 0.55
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "A rooftop unit, not the ground-level condenser common at Lee County homes."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "A rooftop unit, not the ground-level condenser common at Lee County homes.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "deep-cleaning",
@@ -58,8 +60,10 @@
         "y": 0.6
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "Source file is 960 px wide."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "Source file is 960 px wide.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "gutter-cleaning",
@@ -79,8 +83,10 @@
         "y": 0.56
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "A bird is in frame. The gutter is clean, so this is not a before-or-after claim."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "A bird is in frame. The gutter is clean, so this is not a before-or-after claim.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "handyman",
@@ -100,8 +106,10 @@
         "y": 0.5
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "Source file is 960 px wide."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "Source file is 960 px wide.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "house-cleaning",
@@ -121,8 +129,10 @@
         "y": 0.55
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "Source file is 960 px wide."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "Source file is 960 px wide.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "lawn-mowing",
@@ -142,8 +152,10 @@
         "y": 0.68
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "Shows a kept lawn, not mowing in progress."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "Shows a kept lawn, not mowing in progress.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "painting-interior",
@@ -163,8 +175,10 @@
         "y": 0.36
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "The only image with a person. The face is not visible. Owner to decide whether a worker should appear at all. Source file is 960 px wide."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "The only image with a person. The face is not visible. Owner to decide whether a worker should appear at all. Source file is 960 px wide.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "plumbing-repair",
@@ -184,8 +198,10 @@
         "y": 0.5
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "Muted colour compared with the rest of the set."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "Muted colour compared with the rest of the set.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "pool-service",
@@ -205,8 +221,10 @@
         "y": 0.62
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "A shared courtyard pool at a multi-unit property, not a single-family backyard."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "A shared courtyard pool at a multi-unit property, not a single-family backyard.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "shrub-hedge-trimming",
@@ -226,8 +244,10 @@
         "y": 0.62
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "Buildings and parked vehicles are distant background."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "Buildings and parked vehicles are distant background.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     },
     {
       "serviceId": "trash-can-cleaning",
@@ -247,8 +267,10 @@
         "y": 0.78
       },
       "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
-      "approvalStatus": "pending_owner_review",
-      "reviewNotes": "Larger bins than typical household curbside cans."
+      "approvalStatus": "approved_by_owner",
+      "reviewNotes": "Larger bins than typical household curbside cans.",
+      "approvedBy": "Josh Coley",
+      "approvedOn": "2026-11-18"
     }
   ]
 }
