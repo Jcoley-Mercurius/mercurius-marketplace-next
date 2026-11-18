@@ -55,6 +55,8 @@ test("public mobile menu has one trigger, a name, scroll access, trap and restor
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Main menu" });
   await expect(dialog).toBeVisible();
+  // The sheet fades in over 200 ms, so contrast is measured once finite transitions end. The catalog's spinners loop.
+  await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running" || animation.effect?.getTiming().iterations === Infinity));
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const close = dialog.getByRole("button", { name: "Close", exact: true });
   await close.focus();
