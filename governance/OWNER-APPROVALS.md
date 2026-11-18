@@ -62,3 +62,14 @@ Josh approved the initial layout/design shown at the local profile gallery and r
 This establishes the initial gallery composition as the implementation baseline and authorizes profile presentation work alongside Phase 7 in separate worktrees/PRs. It is a bounded sequencing direction, not Phase 7 acceptance. Codex has scoped P2A (real directory cards) first and P2B (dynamic profile route) next in [the integration handoff](DYNAMIC-PROFILES-INTEGRATION.md).
 
 Keep the directed prototype defaults and the bounded implementation choices described in that handoff. This record does not assert unperformed manual, screen-reader, real-phone or exact-build visual checks, expand pricing/access policy, or authorize a merge/deployment or hosted change. The owner's local serving commit was not independently verified. Acceptance of the integrated candidate still requires real-data-contract and rendering evidence.
+
+## Dynamic profile P2B visual acceptance and P2C photos — 2026-11-18
+
+Josh replied "approved" to the P2B comparison images and the P2C contact sheet, then confirmed the scope as "P2B and all P2C photos".
+
+| Item | Approved scope | Not covered |
+|---|---|---|
+| P2B provider profile (PR #175, merged as `55e9667`) | Visual acceptance of the live-route composition shown in the desktop and phone comparison images, which use synthetic providers | Real phones, screen readers, forced colours, 200% browser zoom and inspection of the production site |
+| P2C illustrative service photos (PR #176) | All 11 photos in [the manifest](../docs/imagery/service-imagery-manifest.json), for the labelled panel below a provider's own media, including the Interior Painting photo showing a worker from behind | Merge or release of PR #176, Codex review, any other placement, and any photo for pressure washing, window cleaning or tree trimming |
+
+The photos remain illustrative. This approval does not allow them to be presented as a provider's team, completed work, customer results or before-and-after evidence.

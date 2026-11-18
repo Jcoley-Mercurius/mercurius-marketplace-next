@@ -6,6 +6,8 @@ Status: owner-approved initial layout/design; P2A implementation authorized; sou
 
 **Status update — 2026-11-17 ET (recorded on the P2B branch).** P2A merged to `main` as `ba7db9c` (PR #174, final head `f67bb3f`). Codex's retrospective closeout review ([5948874109](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/174#pullrequestreview-5948874109)) found no new blocker and confirmed P2B as the next bounded slice. P2B is in implementation on `claude/trace156-p2b-profile-route` as a draft PR; it is not accepted, merged or released. The original status line above and the P2A section below are kept as the historical record of what was authorized.
 
+**Status update — 2026-11-18 ET (recorded on the P2C branch).** P2B (PR #175) is merged as `55e9667` and visually accepted by the owner. P2C, labelled illustrative service imagery, is draft PR #176 on `claude/trace156-p2c-profile-imagery`, and its 11 photos are owner-approved. See [the approval record](OWNER-APPROVALS.md#dynamic-profile-p2b-visual-acceptance-and-p2c-photos--2026-11-18). See the [task checkpoint](../docs/agent/DYNAMIC-PROFILES-HANDOFF.md#p2c--illustrative-service-imagery-trace-156-2026-11-18-et).
+
 ## Owner direction and approval scope
 
 Josh identified the local gallery at `http://127.0.0.1:3123/mds/profiles` and stated:
