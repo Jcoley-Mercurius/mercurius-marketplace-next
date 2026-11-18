@@ -7,6 +7,7 @@ import { ProfileBusinessFacts } from "@/components/provider-profile/ProfileBusin
 import { ProfileMediaGallery } from "@/components/provider-profile/ProfileMediaGallery";
 import { BusinessSummary, OfferSummary, PackageSelector, ServiceList } from "@/components/provider-profile/ProfileOfferPanels";
 import { ProfileServiceArea } from "@/components/provider-profile/ProfileServiceArea";
+import { ProfileServiceIllustration } from "@/components/provider-profile/ProfileServiceIllustration";
 import { ProviderLogo } from "@/components/provider-profile/ProviderCover";
 import { PublicReviewAuthor } from "@/components/reviews/PublicReviewAuthor";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   type ProfileData,
   type ProfileViewer,
 } from "@/lib/providerProfile/model";
+import { serviceIllustration } from "@/lib/providerProfile/serviceImagery";
 import { summaryLine } from "@/lib/reviews/serviceReview";
 import { cn } from "@/lib/utils";
 
@@ -131,6 +133,7 @@ export function ProviderProfileView({
   };
 
   const media = mediaForService(data.media, service?.id ?? null);
+  const illustration = serviceIllustration(service?.id ?? null, media.general);
   const questions = service ? questionsForService(data.questions, service.id) : [];
   const badges = displayedProviderBadges(provider.badges);
   const step = nextStepCopy(viewer, chosen ? chosen.offer.kind : "all", { hasServices: services.length > 0 });
@@ -294,6 +297,13 @@ export function ProviderProfileView({
           serviceName={service?.name ?? null}
           unavailable={data.mediaStatus === "unavailable"}
         />
+
+        {/* The provider's own media always comes first. This photo is labelled and kept apart from it. */}
+        {illustration && <ProfileServiceIllustration
+          key={`illustration:${illustration.serviceId}`}
+          image={illustration}
+          providerName={provider.name}
+        />}
 
         {service && offerSelection
           ? <PackageSelector key={service.id} service={service} selection={offerSelection} onChange={changeOffer} idPrefix={`${id}-${service.id}`} interactiveExtras={interactiveExtras} />

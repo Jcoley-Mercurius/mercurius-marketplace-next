@@ -675,6 +675,169 @@ test("unknown admission offers nothing bookable; a failed read can be retried", 
 });
 
 // ---------------------------------------------------------------------------------------------
+// Illustrative service photos (TRACE-156 P2C)
+// ---------------------------------------------------------------------------------------------
+
+const illustration = (page: Page) => page.locator("[data-service-illustration]");
+const imageryShots = "test-results/provider-profile-imagery";
+const imageLoaded = (page: Page) => expect.poll(() => illustration(page).locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0));
+async function showIllustration(page: Page) {
+  await illustration(page).scrollIntoViewIfNeeded();
+  await imageLoaded(page);
+}
+
+test("a mapped service shows a labelled photo apart from the provider's own media", async ({ page }) => {
+  const outside: string[] = [];
+  page.on("request", (request) => { if (/unsplash|pexels|stocksnap|wordpress\.org|openverse/.test(request.url())) outside.push(request.url()); });
+  await serve(page, [palmettoLive()]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  await showIllustration(page);
+  await expect(illustration(page)).toContainText("Illustrative service photo");
+  await expect(illustration(page)).toContainText("It doesn't show Palmetto Exterior Care's team, work or results.");
+  const image = illustration(page).locator("img");
+  await expect(image).toHaveAttribute("alt", /^Illustrative photo of /);
+  await expect(image).toHaveAttribute("loading", "lazy");
+  await expect(image).toHaveAttribute("width", "960");
+  await expect(image).toHaveAttribute("height", "540");
+  expect(await image.evaluate((element: HTMLImageElement) => new URL(element.currentSrc).pathname)).toMatch(/^\/images\/services\/gutter-cleaning-(wide|compact)-\d+\.webp$/);
+  // The provider's own media leads, keeps its own label and contains no stock photo.
+  const portfolio = page.locator('[data-profile-media="photo"]');
+  await expect(portfolio.locator("[data-media-general]")).toHaveText("General business photo · not specific to gutter cleaning");
+  await expect(portfolio.locator('img[src*="/images/services/"]')).toHaveCount(0);
+  await expect(portfolio.locator("[data-service-illustration]")).toHaveCount(0);
+  expect(await portfolio.evaluate((element) => Boolean(element.compareDocumentPosition(document.querySelector("[data-service-illustration]")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  expect(outside).toEqual([]);
+});
+
+test("All services and a service with no mapped photo show no illustrative photo", async ({ page }) => {
+  await serve(page, [palmettoLive()]);
+  await open(page, `/providers/${PALMETTO}`);
+  await expect(page.locator('[data-profile-media="photo"]')).toBeVisible();
+  await expect(illustration(page)).toHaveCount(0);
+  await open(page, `/providers/${PALMETTO}?service=window-cleaning`);
+  await expect(page.locator("[data-media-general]")).toBeVisible();
+  await expect(illustration(page)).toHaveCount(0);
+  await expect(page.getByText("Illustrative service photo")).toHaveCount(0);
+});
+
+test("switching services changes the photo and leaves price and history behaviour intact", async ({ page }) => {
+  await serve(page, [palmettoLive()]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  await showIllustration(page);
+  await expect(price(page)).toHaveText("$160");
+  const entries = await page.evaluate(() => history.length);
+  await pick(page, "Window cleaning");
+  await expect(illustration(page)).toHaveCount(0);
+  expect(serviceParam(page)).toBe("window-cleaning");
+  await pick(page, "Gutter cleaning");
+  await showIllustration(page);
+  await expect(illustration(page)).toHaveAttribute("data-service-illustration", "gutter-cleaning");
+  await expect(price(page)).toHaveText("$160");
+  expect(await page.evaluate(() => history.length)).toBe(entries);
+  await pick(page, "All services");
+  await expect(illustration(page)).toHaveCount(0);
+});
+
+test("a sparse profile keeps its business identity first and labels the photo", async ({ page }) => {
+  await serve(page, [provider("northside-handyman")]);
+  await open(page, `/providers/${NORTHSIDE}?service=handyman`, 390);
+  const cover = page.locator('[data-profile-media="logo"]');
+  await expect(cover).toBeVisible();
+  await expect(cover.locator('img[src*="/images/services/"]')).toHaveCount(0);
+  await showIllustration(page);
+  await expect(illustration(page)).toContainText("It doesn't show Northside Handyman's team, work or results.");
+  expect(await cover.evaluate((element) => Boolean(element.compareDocumentPosition(document.querySelector("[data-service-illustration]")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+});
+
+test("a photo that fails to load removes the whole panel and nothing else", async ({ page }) => {
+  await page.route("**/images/services/**", (route) => route.abort());
+  await serve(page, [palmettoLive()]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, 390);
+  // The photo loads lazily, so bring it into view for the failure to happen.
+  await page.evaluate(() => document.querySelector("[data-service-illustration]")?.scrollIntoView());
+  await expect(illustration(page)).toHaveCount(0);
+  await expect(page.getByText("Illustrative service photo")).toHaveCount(0);
+  await expect(page.locator('[data-profile-media="photo"]')).toBeVisible();
+  await expect(price(page)).toHaveText("$160");
+  await expect(action(page)).toBeEnabled();
+});
+
+test("failed provider photos stay reported and are never replaced by the stock photo", async ({ page }) => {
+  const world = await serve(page, [palmettoLive()]);
+  world.fail.add("contractor_gallery");
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  const cover = page.locator('[data-profile-media="logo"]');
+  await expect(cover.locator("[data-media-unavailable]")).toHaveText("Photos for this provider could not be loaded.");
+  await expect(cover.locator('img[src*="/images/services/"]')).toHaveCount(0);
+  await showIllustration(page);
+  await expect(illustration(page)).toContainText("Illustrative service photo");
+});
+
+test("provider video is kept, does not autoplay and no stock video is added", async ({ page }) => {
+  await serve(page, [palmettoLive({ business: { years_experience: 9, our_promise: null, verified_specialty: null, video_url: "https://cdn.example.invalid/synthetic-provider-video.mp4" } })]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  await showIllustration(page);
+  const video = page.locator("video");
+  await expect(video).toHaveCount(1);
+  await expect(video).toHaveAttribute("src", "https://cdn.example.invalid/synthetic-provider-video.mp4");
+  await expect(video).toHaveAttribute("controls", "");
+  expect(await video.evaluate((element: HTMLVideoElement) => element.autoplay)).toBe(false);
+  await expect(illustration(page).locator("video, iframe")).toHaveCount(0);
+});
+
+test("the request handoff is unchanged by the photo", async ({ page }) => {
+  await serve(page, [palmettoLive()], { trial: "invited" });
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  await showIllustration(page);
+  await expect(action(page)).toHaveText("Continue to request");
+  await action(page).click();
+  await expect(page).toHaveURL(/\/request\?/);
+  const params = new URL(page.url()).searchParams;
+  expect(params.get("provider")).toBe(PALMETTO);
+  expect(params.get("service")).toBe("gutter-cleaning");
+});
+
+for (const width of [320, 768, 1440]) {
+  test(`illustrative photo at ${width}px: axe, reflow and reserved space`, async ({ page }) => {
+    await serve(page, [palmettoLive()]);
+    await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, width);
+    await showIllustration(page);
+    expect(await axe(page)).toEqual([]);
+    await expectNoOverflow(page);
+    const box = await illustration(page).locator("img").boundingBox();
+    const ratio = box!.width / box!.height;
+    expect(Math.abs(ratio - (width < 640 ? 16 / 9 : 4 / 3))).toBeLessThan(0.05);
+  });
+}
+
+// Review images for the owner's look at each photo state. They are not visual baselines.
+const imageryStates: Array<[string, string, string]> = [
+  ["real-media-and-photo", "palmetto-exterior-care", "?service=gutter-cleaning"],
+  ["no-mapped-photo", "palmetto-exterior-care", "?service=window-cleaning"],
+  ["sparse-portfolio", "northside-handyman", "?service=handyman"],
+  ["single-service", "brightbin-can-care", "?service=trash-can-cleaning"],
+];
+
+for (const width of [390, 1440]) {
+  test(`review images of the illustrative photo states at ${width}px`, async ({ page }) => {
+    mkdirSync(imageryShots, { recursive: true });
+    await serve(page, [palmettoLive(), provider("northside-handyman"), provider("brightbin-can-care")]);
+    for (const [state, slug, query] of imageryStates) {
+      await open(page, `/providers/${IDS[slug]}${query}`, width);
+      if (await illustration(page).count()) await showIllustration(page);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: `${imageryShots}/${state}-${width}.png`, fullPage: true });
+    }
+    await page.route("**/images/services/**", (route) => route.abort());
+    await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, width);
+    await page.evaluate(() => document.querySelector("[data-service-illustration]")?.scrollIntoView());
+    await expect(illustration(page)).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `${imageryShots}/failed-photo-${width}.png`, fullPage: true });
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
 // Comparison with the approved gallery (review images; not visual baselines)
 // ---------------------------------------------------------------------------------------------
 

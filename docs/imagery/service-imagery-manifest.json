@@ -1,0 +1,254 @@
+{
+  "purpose": "Provenance and review record for the illustrative service photos on provider profiles (TRACE-156 P2C).",
+  "displayRules": {
+    "label": "Illustrative service photo",
+    "aspectRatios": {
+      "phone": "16:9",
+      "tabletAndDesktop": "4:3"
+    },
+    "crop": "Fixed crop around each asset's focal point, generated ahead of time as WebP",
+    "loading": "Lazy, with intrinsic dimensions reserved",
+    "fallback": "If the image fails, the whole panel is removed. The provider's own media and the offer are unaffected.",
+    "altText": "Describes the photo and begins with 'Illustrative photo of'",
+    "restrictions": "Never presented as the provider's team, completed work, customer results or before-and-after evidence."
+  },
+  "approvalStatuses": [
+    "pending_owner_review",
+    "approved_by_owner",
+    "rejected_by_owner"
+  ],
+  "unmappedServices": "A catalog service with no entry here shows no illustrative photo. Suitable CC0 photos were not found for pressure-washing, window-cleaning or tree-trimming on 2026-11-18.",
+  "assets": [
+    {
+      "serviceId": "ac-maintenance",
+      "altText": "Illustrative photo of an outdoor air conditioning unit mounted on a metal roof.",
+      "sourcePage": "https://wordpress.org/photos/photo/27469e3ea0/",
+      "sourceLibrary": "WordPress.org Photo Directory",
+      "sourceTitle": "A large air conditioning unit is situated on a sloped metal roof, with a clear blue sky in the background. The unit has a white exterior with a grid pattern on the front, and pipes connected to it.",
+      "creator": "Dylan Espinoza Pereira",
+      "creatorUrl": "https://wordpress.org/photos/author/despinozap20/",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://pd.w.org/2026/04/27469e3ea0aedd520.88005265-2048x1536.jpg",
+      "sourceSha256": "656ba23b25cf3d294ee2f4a29c35ec84a32884205dd15cba006a5b9a557ae320",
+      "focalPoint": {
+        "x": 0.62,
+        "y": 0.55
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "A rooftop unit, not the ground-level condenser common at Lee County homes."
+    },
+    {
+      "serviceId": "deep-cleaning",
+      "altText": "Illustrative photo of a bright, tidy bedroom with white bedding and sheer curtains.",
+      "sourcePage": "https://stocksnap.io/photo/bedroom-clean-OE0F9BHXJQ",
+      "sourceLibrary": "StockSnap.io",
+      "sourceTitle": "Bedroom Clean",
+      "creator": "Burst",
+      "creatorUrl": "https://burst.shopify.com",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://cdn.stocksnap.io/img-thumbs/960w/OE0F9BHXJQ.jpg",
+      "sourceSha256": "77ae4db8841a639e9fac75cf98d750c9dfd6e17600774cc087dad83343371da4",
+      "focalPoint": {
+        "x": 0.68,
+        "y": 0.6
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "Source file is 960 px wide."
+    },
+    {
+      "serviceId": "gutter-cleaning",
+      "altText": "Illustrative photo of a metal rain gutter along a tiled roof edge, with a small bird perched on it.",
+      "sourcePage": "https://wordpress.org/photos/photo/334662f95f/",
+      "sourceLibrary": "WordPress.org Photo Directory",
+      "sourceTitle": "A sparrow perched on a rain gutter of a roof with moss-covered tiles, with soft focus greenery in the background.",
+      "creator": "Rámon van Raaij",
+      "creatorUrl": "https://ramon.vanraaij.eu",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://pd.w.org/2024/04/334662f95fd9fbfe3.02679275-2048x1365.jpeg",
+      "sourceSha256": "e0eba99156f6684351bb749db870880f33e2e62d421433b20bae41cf8b3f20ea",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.56
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "A bird is in frame. The gutter is clean, so this is not a before-or-after claim."
+    },
+    {
+      "serviceId": "handyman",
+      "altText": "Illustrative photo of a drill, tape measure, level, screws and wall anchors on printed floor plans.",
+      "sourcePage": "https://stocksnap.io/photo/floorplan-workshop-N3BPNPN0FY",
+      "sourceLibrary": "StockSnap.io",
+      "sourceTitle": "Floorplan Workshop",
+      "creator": "JESHOOTS.com",
+      "creatorUrl": "https://jeshoots.com",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://cdn.stocksnap.io/img-thumbs/960w/N3BPNPN0FY.jpg",
+      "sourceSha256": "bb79e556a6481ce985fd7b75a85e7b1186ca157c31508bdeab011ddaa0b9a0fe",
+      "focalPoint": {
+        "x": 0.6,
+        "y": 0.5
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "Source file is 960 px wide."
+    },
+    {
+      "serviceId": "house-cleaning",
+      "altText": "Illustrative photo of a tidy white kitchen with a farmhouse sink below a bay window.",
+      "sourcePage": "https://stocksnap.io/photo/farmhouse-kitchen-QSX4WH8BDB",
+      "sourceLibrary": "StockSnap.io",
+      "sourceTitle": "Farmhouse Kitchen",
+      "creator": "Matt Bango",
+      "creatorUrl": "https://mattbango.photo",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://cdn.stocksnap.io/img-thumbs/960w/QSX4WH8BDB.jpg",
+      "sourceSha256": "c783bc7c2201a8686f6d9ff961807247a1aef714460060583f6321255d768ce1",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "Source file is 960 px wide."
+    },
+    {
+      "serviceId": "lawn-mowing",
+      "altText": "Illustrative photo of a wide, well-kept green lawn in front of a white house.",
+      "sourcePage": "https://wordpress.org/photos/photo/808688f83e/",
+      "sourceLibrary": "WordPress.org Photo Directory",
+      "sourceTitle": "A picture of a house painted full white withgreen trees on its surrounding and grassy field at its front.",
+      "creator": "Md Limon Miah",
+      "creatorUrl": "https://wordpress.org/photos/author/limonmiah/",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://pd.w.org/2025/08/808688f83e5702616.35304053-2048x1152.jpg",
+      "sourceSha256": "fefea1101b7a9447b534ea6d1cb9cb647c93b37955a8c4f693f01ba3d4616241",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.68
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "Shows a kept lawn, not mowing in progress."
+    },
+    {
+      "serviceId": "painting-interior",
+      "altText": "Illustrative photo of a painter, seen from behind, holding a roller in front of a yellow and white striped wall.",
+      "sourcePage": "https://stocksnap.io/photo/guy-man-Q67DPDQSC1",
+      "sourceLibrary": "StockSnap.io",
+      "sourceTitle": "Guy Man",
+      "creator": "Michal Jarmoluk",
+      "creatorUrl": "https://stocksnap.io/author/34629",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://cdn.stocksnap.io/img-thumbs/960w/Q67DPDQSC1.jpg",
+      "sourceSha256": "5ca2510f2426bc6785a001754026e91f54fdf7748fb9ec5e63851e5165fa06a4",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.36
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "The only image with a person. The face is not visible. Owner to decide whether a worker should appear at all. Source file is 960 px wide."
+    },
+    {
+      "serviceId": "plumbing-repair",
+      "altText": "Illustrative photo of a close-up metal faucet on a sink.",
+      "sourcePage": "https://wordpress.org/photos/photo/501622a378/",
+      "sourceLibrary": "WordPress.org Photo Directory",
+      "sourceTitle": "Bathroom sink tap (with bokeh background)",
+      "creator": "Michael Burridge",
+      "creatorUrl": "https://wordpress.org/photos/author/mburridge/",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://pd.w.org/2022/03/501622a378a187099.75265389-2048x1365.jpg",
+      "sourceSha256": "26ce3b3a04fcd1651db448bf882226867966f1d5f774130cf88428e53ddb8880",
+      "focalPoint": {
+        "x": 0.38,
+        "y": 0.5
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "Muted colour compared with the rest of the set."
+    },
+    {
+      "serviceId": "pool-service",
+      "altText": "Illustrative photo of a clear blue swimming pool in a paved courtyard with palm trees.",
+      "sourcePage": "https://wordpress.org/photos/photo/466686176e/",
+      "sourceLibrary": "WordPress.org Photo Directory",
+      "sourceTitle": "A clear turquoise pool sits in a peaceful courtyard, surrounded by tall white residential buildings with balconies. Palm trees and lush greenery add tropical charm. Lounge chairs line the deck, and a lifebuoy hangs nearby. A small white gazebo and blue accents complete the serene setting.",
+      "creator": "Sagar Pansuriya",
+      "creatorUrl": "https://sagarpansuriya.in/",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://pd.w.org/2025/06/466686176efea2246.87449447-2048x1536.jpg",
+      "sourceSha256": "453c495da5c5445cd871e2a3cbd91590e823495c9b4e5e9593fc2518e1b184b6",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.62
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "A shared courtyard pool at a multi-unit property, not a single-family backyard."
+    },
+    {
+      "serviceId": "shrub-hedge-trimming",
+      "altText": "Illustrative photo of a neatly trimmed hedge along a paved drive lined with palm trees.",
+      "sourcePage": "https://wordpress.org/photos/photo/56569b5862/",
+      "sourceLibrary": "WordPress.org Photo Directory",
+      "sourceTitle": "A landscaped pathway bordered by neatly trimmed hedges leads through vibrant green lawns and small decorative plants toward two large buildings with orange roofs one with windows and a visible entrance, the other featuring balconies—while palm trees provide shade, parked cars sit nearby,",
+      "creator": "laban256",
+      "creatorUrl": "https://wordpress.org/photos/author/laban256/",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://pd.w.org/2026/03/56569b5862d727f86.24904248-2048x1152.jpg",
+      "sourceSha256": "2acf0f76964fa3ecb5028d0cd44c84f4dd2d6b13c4df1d3158858ffc246cc9d1",
+      "focalPoint": {
+        "x": 0.42,
+        "y": 0.62
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "Buildings and parked vehicles are distant background."
+    },
+    {
+      "serviceId": "trash-can-cleaning",
+      "altText": "Illustrative photo of four wheeled waste bins lined up in front of green trees.",
+      "sourcePage": "https://wordpress.org/photos/photo/620645e251/",
+      "sourceLibrary": "WordPress.org Photo Directory",
+      "sourceTitle": "Four waste garbage cans standing in a row against a background of greenery and trees. Eco-friendly trash bins.",
+      "creator": "Marcin Andrzejewski",
+      "creatorUrl": "http://relacje.video",
+      "license": "CC0 1.0 Universal",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseVerifiedOn": "2026-11-18",
+      "sourceImageUrl": "https://pd.w.org/2023/05/620645e251e444ca1.76217960-2048x1152.jpeg",
+      "sourceSha256": "b0125891cd2b0a3e5a112448b92e50e6d9a9e0941a29471fa71d69a845f516b5",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.78
+      },
+      "placement": "Provider profile, selected-service view: labelled panel below the provider's own media",
+      "approvalStatus": "pending_owner_review",
+      "reviewNotes": "Larger bins than typical household curbside cans."
+    }
+  ]
+}
