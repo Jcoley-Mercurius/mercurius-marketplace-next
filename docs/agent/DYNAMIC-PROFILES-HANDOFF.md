@@ -3,9 +3,9 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
-## Current status — P2C imagery in draft, depending on unmerged P2B (2026-11-18 ET)
+## Current status — P2B merged; P2C imagery in draft (2026-11-18 ET)
 
-P2C is on `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`, based on P2B head `9c4bd96`. It depends on PR #175, which is not merged. No photo is owner-approved, and nothing is accepted, merged or released. See [P2C](#p2c--illustrative-service-imagery-trace-156-2026-11-18-et) at the end of this file. The status notes below are the earlier record and are kept as written.
+The owner merged P2B (PR #175) as `55e9667` at 18:35:51 UTC, and Vercel reported the production deployment complete at 18:36:42 UTC. No owner visual acceptance or manual check is recorded for it. P2C is draft PR #176 on `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`, built on P2B head `9c4bd96` and targeting `main`. No photo is owner-approved, and P2C is not accepted, merged or released. See [P2C](#p2c--illustrative-service-imagery-trace-156-2026-11-18-et) at the end of this file. The status notes below are the earlier record and are kept as written.
 
 ## Earlier status — P2B awaiting CI, review and owner visual acceptance (2026-11-18 ET)
 
@@ -969,8 +969,8 @@ baselines, and no visual baseline was changed.
 ## Slice
 
 - **Branch / worktree:** `claude/trace156-p2c-profile-imagery` in `../mercurius-profile-p2c`.
-- **Base and dependency:** P2B head `9c4bd96` (PR #175, draft and unmerged). The P2C PR targets the
-  P2B branch so its diff shows only this slice. P2B must merge first.
+- **Base:** P2B head `9c4bd96`, which is on `main` through merge commit `55e9667`. The P2C PR first
+  targeted the P2B branch and was retargeted to `main` after the owner merged P2B.
 - **Authority:** the owner's media direction of 2026-11-18, MDS §3.2 and Codex review 5950264094.
 - **Not in scope:** service-tagged vendor uploads, schema changes, stock video, autoplay, directory
   cards, production writes, deployment, booking or payment activation, and Phase 7.
