@@ -3,7 +3,11 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
-## Current status — P2B in implementation (2026-11-17 ET)
+## Current status — P2B awaiting CI, review and owner visual acceptance (2026-11-18 ET)
+
+P2B remains a draft on PR #175. It is not accepted, merged or released. The CI diagnosis and the two commits it produced are in [P2B CI closeout](#p2b-ci-closeout-2026-11-18-et) at the end of this file. The result of CI on the final head is reported on the PR, because recording it here would change that head. The owner's visual acceptance and the manual checks listed there are still open. The status note below is the earlier record and is kept as written.
+
+## Earlier status — P2B in implementation (2026-11-17 ET)
 
 P2A is merged to `main` as `ba7db9c` (PR #174, final head `f67bb3f`); Codex's retrospective closeout review [5948874109](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/174#pullrequestreview-5948874109) found no new blocker. P2B — the real `/providers/[id]` route on the approved interior — is on `claude/trace156-p2b-profile-route` in `../mercurius-profile-p2b`, as a draft PR for Codex review. See [the P2B section](#p2b--the-real-provider-profile-uses-the-approved-interior-trace-156-2026-11-17-et) at the end. Not accepted, merged or released. The status notes below are the earlier record and are kept as written.
 
@@ -908,3 +912,50 @@ profile heading at level 1.
 tests (no data contract changed), real phones, screen readers, forced colours, 200 % browser zoom
 beyond the 320 px reflow, and owner visual acceptance. The comparison images are review material,
 not baselines. No merge, deploy, migration, hosted query, gate change or Phase 7 edit.
+
+## P2B CI closeout (2026-11-18 ET)
+
+This section supersedes finding 6 above ("Shared CI budget … Not changed here") and adds to the
+"Not run / not claimed" list. The earlier text stays as the record of 2026-11-17.
+
+**What the runs showed.** PR run 44215697628 passed on `b33a63b`. Push run 44215656433 on the same
+commit never passed in eight attempts, for three separate reasons:
+
+| Attempt | `application` result | Browser tests | Cause |
+|---|---|---|---|
+| 1 | Cancelled at start | None | The PR run on the same branch replaced it (shared concurrency group) |
+| 2 | Cancelled at 20 m | Not reached | Job time limit |
+| 3, 6, 7 | Cancelled at 20 m | 735, 817 and 762 of 846, none failed | Job time limit on a slower runner |
+| 4 | Failed | 845 of 846 | `mds.spec.ts:50`: axe scanned the mobile menu during its fade |
+| 5 | Cancelled at 20 m | 758 of 846, 2 failed | Job time limit, plus the two failures below |
+| 8 | Failed | 845 of 846 | `invitation-operations.spec.ts:185`: "Response has been disposed" |
+
+**Repairs, each its own commit. No test, assertion, worker setting or security check was removed.**
+
+1. `11f459f` raises only the `application` job's `timeout-minutes` from 20 to 30, as Codex directed.
+2. `3be88cc` removes two test races. No application code changes.
+   - `mds.spec.ts`: the scan now waits for finite animations to end. The evidence is attempt 4's
+     artifact, which reports the menu title at 1.15:1 mid-fade. **This failure was not reproduced
+     locally.** A throttled local comparison failed once on the old test by timing out, which is
+     not the same failure, so it is not offered as proof.
+   - `invitation-operations.spec.ts` and `invitation-binding.spec.ts`: a refresh still in flight
+     when the test ends no longer fails it. Both use the `unrouteAll` cleanup that three other
+     specs already use. The evidence is attempt 8's trace.
+
+**Still undiagnosed.** Attempt 5 also failed `invitation-binding.spec.ts:225` and
+`request.spec.ts:837`. That job was cancelled before Playwright printed its failure details, and
+no artifact was kept, so neither cause is known. The first has the same shape as attempt 8's
+failure and is covered by the same cleanup, but that is an inference. The second passed 30 of 30
+repeated local runs and was left unchanged. Nine other specs use the same fetch-and-patch handlers
+without the cleanup; they have not failed and were not changed.
+
+**Local checks on `3be88cc`** (Node 24.17.0, WSL2, `NODE_ENV` unset): secret scan passed; lint, no
+findings; types, no errors; unit, 70 files and 1052 of 1052; build exit 0; isolated profile lane,
+32 of 32; `mds`, `invitation-operations` and `invitation-binding` specs, 50 of 50. The full
+`npm run test:a11y` suite was not run locally. CI is that run.
+
+**Open before acceptance:** green CI on the final head; Codex's review of these two commits; the
+owner's review of the comparison images; and the manual checks that have not been performed: real
+phones, a screen reader, forced colours, 200% browser zoom beyond the 320 px reflow check, and a
+side-by-side comparison with the reference PDFs. The comparison images are review material, not
+baselines, and no visual baseline was changed.
