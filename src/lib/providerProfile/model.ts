@@ -1,7 +1,8 @@
-// Dynamic provider profile — presentation view model (exploration; see
+// Dynamic provider profile — presentation view model (TRACE-156; see
 // docs/agent/DYNAMIC-PROFILES-HANDOFF.md). Pure functions over rows shaped like today's public
 // reads. Eligibility, price meaning and coverage stay with their existing helpers; this module
-// only decides what a card or profile shows for a chosen service. It is not wired to live routes.
+// only decides what a card or profile shows for a chosen service. The directory (P2A) and the
+// provider profile route (P2B) both read it; the gated review gallery reads it with fixtures.
 
 import { EARLY_ACCESS_CTA } from "@/lib/earlyAccessExperience";
 import { addonPriceLabel, formatCents, toCents, walkthroughLabel, type PricingMode } from "@/lib/pricingContent";
@@ -40,6 +41,9 @@ export type ProfileTier = {
   price_max?: number | null;
   includes?: string[] | null;
   rule_question_key?: string | null;
+  /** The bounds of a rule_question_key rule; the request step's server calculation applies them. */
+  rule_min?: number | null;
+  rule_max?: number | null;
   rule_conditions?: unknown;
   sort_order: number;
 };
@@ -98,12 +102,36 @@ export type ProfileQuestion = {
 
 export type ProfileServiceArea = { areas: PublicServiceArea[]; hasListedZips: boolean };
 
+/**
+ * Supported business information from the public listing that the gallery composition has no
+ * slot for. A live profile keeps it rather than silently dropping it (TRACE-156 P2B).
+ */
+export type ProfileBusiness = {
+  yearsExperience: number | null;
+  ourPromise: string | null;
+  verifiedSpecialty: string | null;
+  videoUrl: string | null;
+  /** Homeowner-confirmed completions through Mercurius; null when unknown or unreadable. */
+  completedJobs: number | null;
+};
+
+/** The bedroom size guide (TRACE-122) for one offer, when its price levels depend on bedrooms. */
+export type ProfileSizeGuide = { summary: string; note: string | null };
+
 export type ProfileData = {
   provider: ProfileProvider;
   packages: ProfilePackage[];
+  /**
+   * ready: `packages` is the provider's complete published set (possibly empty).
+   * unavailable: the offers could not be read completely. Nothing is priced, and nothing says
+   * the provider publishes no offers. Omitted means ready (the gallery's fixtures).
+   */
+  offersStatus?: "ready" | "unavailable";
   /** services_catalog names by id. */
   serviceNames: Record<string, string>;
   media: ProfileMedia[];
+  /** The gallery read failed: no photo is shown and the cover says so. Omitted means ready. */
+  mediaStatus?: "ready" | "unavailable";
   /** null: the public review read failed. */
   reviews: PublicReviews | null;
   /** null: the provider's service-ZIP read failed. */
@@ -111,6 +139,11 @@ export type ProfileData = {
   /** Active coverage_areas ZIPs (the Marketplace allowlist); null when unreadable. */
   marketplaceZips: readonly string[] | null;
   questions: ProfileQuestion[];
+  /** The public listing's services array (services with a live eligible offering). */
+  listedServiceIds?: readonly string[];
+  business?: ProfileBusiness;
+  /** Size guides by offer (package) id. */
+  sizeGuides?: Readonly<Record<string, ProfileSizeGuide>>;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -126,6 +159,13 @@ export type OfferCadence = {
   levels: number;
   ruleBased: boolean;
   includes: string[];
+  /**
+   * The level a request may be bound to before any answer: only when this cadence publishes
+   * exactly one level and that level has no answer rule. Otherwise null, and the request step's
+   * server calculation resolves the level from the homeowner's answers. The cheapest of several
+   * levels is never presented as the homeowner's level.
+   */
+  boundTier: { id: string; name: string; includes: string[] } | null;
   requiredAddons: ProfileAddon[];
   optionalAddons: ProfileAddon[];
 };
@@ -203,6 +243,9 @@ function fixedCadences(item: ProfilePackage): OfferCadence[] {
         levels: levels.length,
         ruleBased,
         includes: lowest.includes ?? [],
+        boundTier: levels.length === 1 && !ruleBased
+          ? { id: lowest.id, name: lowest.name, includes: lowest.includes ?? [] }
+          : null,
         requiredAddons,
         optionalAddons: applicable.filter((addon) => !addon.is_required),
       }];
@@ -628,18 +671,130 @@ export function checkZip(
 // Next step (current access states: TRACE-103 / the MDS R0 addendum)
 // ---------------------------------------------------------------------------------------------
 
-/** public: anyone not admitted (anonymous, waiting, revoked). invited: an admitted homeowner. */
-export type ProfileViewer = "public" | "invited";
+/**
+ * Who is looking, as the live admission read (useTrialAccess, TRACE-103) reports it.
+ * - public: the gallery's stand-in for anyone not admitted.
+ * - signed_out / not_homeowner: join early access.
+ * - waiting / unavailable / revoked: a signed-in homeowner whose booking is closed; the
+ *   existing request route explains which, and keeps history and support reachable.
+ * - loading / error: admission is not known. Nothing is offered as bookable, and an error is
+ *   never read as access.
+ * - invited: an admitted homeowner. The request command still enforces admission itself.
+ */
+export type ProfileViewer =
+  | "public" | "invited" | "signed_out" | "not_homeowner"
+  | "waiting" | "unavailable" | "revoked" | "loading" | "error";
+
+/** The admission read as a profile viewer. Only an active cell with the homeowner role invites. */
+export function profileViewer(
+  trial: { status: "loading" } | { status: "signed_out" } | { status: "error" } | { status: "ready"; access: { homeowner: boolean; cells: readonly { state: string }[] } },
+): ProfileViewer {
+  if (trial.status !== "ready") return trial.status;
+  const { homeowner, cells } = trial.access;
+  if (homeowner && cells.some((cell) => cell.state === "active")) return "invited";
+  if (!homeowner) return "not_homeowner";
+  if (cells.some((cell) => cell.state === "unavailable")) return "unavailable";
+  if (cells.some((cell) => cell.state === "revoked")) return "revoked";
+  return "waiting";
+}
+
+export type NextStepKind = "request" | "early_access" | "closed" | "retry" | "pending" | "choose_service";
 
 /**
  * The profile's single next action. Wording for a visitor who is not admitted is the live
- * early-access wording; a design image never overrides it.
+ * early-access wording; a design image never overrides it. In the All services view an invited
+ * homeowner chooses a service first, so the request keeps this provider bound to it.
  */
-export function nextStepCopy(viewer: ProfileViewer, view: "all" | "fixed" | "quote"): { label: string; note: string } {
-  if (viewer !== "invited") return { label: EARLY_ACCESS_CTA, note: "Booking opens by invitation as services are ready in your area." };
-  if (view === "fixed") return { label: "Continue to request", note: "Confirm your home and scheduling details next." };
-  if (view === "quote") return { label: "Request a quote", note: "Mercurius will coordinate scope and pricing before booking is confirmed." };
-  return { label: "Request this provider", note: "Choose a service here or in the request step." };
+export function nextStepCopy(
+  viewer: ProfileViewer,
+  view: "all" | "fixed" | "quote",
+  options: { hasServices?: boolean } = {},
+): { label: string; note: string; kind: NextStepKind } {
+  switch (viewer) {
+    case "loading":
+      return { label: "Checking booking access", note: "One moment while we check whether your account can book.", kind: "pending" };
+    case "error":
+      return { label: "Check booking access again", note: "We couldn't confirm your booking access. Nothing has been requested.", kind: "retry" };
+    case "waiting":
+      return { label: "See my early-access status", note: "Your account isn't invited to book yet. Booking opens by invitation.", kind: "closed" };
+    case "revoked":
+      return { label: "Go to my dashboard", note: "Your invitation to book has ended. Your existing requests stay available.", kind: "closed" };
+    case "unavailable":
+      return { label: "Go to my dashboard", note: "Your invited service or area isn't active right now, so new requests are closed.", kind: "closed" };
+    case "invited":
+      if (view === "fixed") return { label: "Continue to request", note: "Confirm your home and scheduling details next.", kind: "request" };
+      if (view === "quote") return { label: "Request a quote", note: "Mercurius will coordinate scope and pricing before booking is confirmed.", kind: "request" };
+      return options.hasServices === false
+        ? { label: "Request this provider", note: "Mercurius will confirm scope, availability and price before booking.", kind: "request" }
+        : { label: "Request this provider", note: "Choose a service first, so your request goes to this provider.", kind: "choose_service" };
+    default:
+      return { label: EARLY_ACCESS_CTA, note: "Booking opens by invitation as services are ready in your area.", kind: "early_access" };
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Directory context and return (TRACE-156 P2B)
+// ---------------------------------------------------------------------------------------------
+
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_SEARCH = 100;
+
+/** A service or category id as the catalog writes them, or null. */
+export function validSlug(value: string | null | undefined): string | null {
+  const id = value?.trim();
+  return id && SLUG.test(id) ? id : null;
+}
+
+export function validProviderId(value: string | null | undefined): string | null {
+  const id = value?.trim();
+  return id && UUID.test(id) ? id : null;
+}
+
+/** Directory search text as carried in a link: control characters removed, bounded length. */
+export function validSearch(value: string | null | undefined): string | null {
+  const text = (value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, MAX_SEARCH);
+  return text || null;
+}
+
+/** Where a profile was opened from in the directory. Every field is validated, never a URL. */
+export type DirectoryContext = { search: string | null; categoryId: string | null };
+
+export function directoryContextFrom(params: Pick<URLSearchParams, "get">): DirectoryContext {
+  return { search: validSearch(params.get("q")), categoryId: validSlug(params.get("category")) };
+}
+
+/**
+ * The profile link a directory card opens. `service` is the card's lead service (validated);
+ * `q` and `category` carry the directory's state so the profile can build its return link.
+ */
+export function providerProfileHref(providerId: string, options: { serviceId?: string | null } & Partial<DirectoryContext> = {}): string {
+  const params = new URLSearchParams();
+  const service = validSlug(options.serviceId);
+  const search = validSearch(options.search);
+  const category = validSlug(options.categoryId);
+  if (service) params.set("service", service);
+  if (search) params.set("q", search);
+  if (category) params.set("category", category);
+  const query = params.toString();
+  return `/providers/${encodeURIComponent(providerId)}${query ? `?${query}` : ""}`;
+}
+
+/**
+ * The directory link a profile returns to. It is always built here from validated parts —
+ * never taken from the address — so it cannot point anywhere but the directory. `provider`
+ * asks the directory to bring that provider's card back into view and focus it.
+ */
+export function providerDirectoryHref(context: Partial<DirectoryContext> & { providerId?: string | null } = {}): string {
+  const params = new URLSearchParams();
+  const search = validSearch(context.search);
+  const category = validSlug(context.categoryId);
+  const provider = validProviderId(context.providerId);
+  if (search) params.set("q", search);
+  if (category) params.set("category", category);
+  if (provider) params.set("provider", provider);
+  const query = params.toString();
+  return `/providers${query ? `?${query}` : ""}`;
 }
 
 // ---------------------------------------------------------------------------------------------

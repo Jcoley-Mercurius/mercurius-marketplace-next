@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, BadgeCheck, Check, RefreshCw, Star } from "lucide-react";
+import { ProfileBusinessFacts } from "@/components/provider-profile/ProfileBusinessFacts";
 import { ProfileMediaGallery } from "@/components/provider-profile/ProfileMediaGallery";
 import { BusinessSummary, OfferSummary, PackageSelector, ServiceList } from "@/components/provider-profile/ProfileOfferPanels";
 import { ProfileServiceArea } from "@/components/provider-profile/ProfileServiceArea";
@@ -13,6 +14,7 @@ import { Select } from "@/components/ui/select";
 import { displayedProviderBadges } from "@/lib/providerBadges";
 import {
   cadenceLabel,
+  cadencePriceLabel,
   catalogServiceName,
   mediaForService,
   nextStepCopy,
@@ -23,6 +25,9 @@ import {
   resolveServiceSelection,
   selectedOffer,
   selectionAnnouncement,
+  serviceDisplayName,
+  validSlug,
+  type NextStepKind,
   type OfferSelection,
   type ProfileData,
   type ProfileViewer,
@@ -35,6 +40,8 @@ export type NextStepContext = {
   offerId: string | null;
   frequency: string | null;
   addons: Record<string, number>;
+  /** What the action does for this viewer (see nextStepCopy). */
+  kind: NextStepKind;
 };
 
 const anywhere = "[overflow-wrap:anywhere]";
@@ -42,12 +49,15 @@ const sectionLink = "inline-flex min-h-11 items-center border-b-2 border-transpa
 
 /**
  * Shared provider profile composition. It follows the profile interior reference (visual
- * direction approved by the owner, 2026-11-05) and explores the optional service focus
- * (approved for further exploration the same day). The built page itself has not been accepted
- * by the owner. It renders only what it is given: eligibility, prices, reviews and coverage are
- * decided before the data arrives here.
+ * direction approved by the owner, 2026-11-05) and the initial gallery layout/design the owner
+ * approved on 2026-11-17 as the implementation baseline. The live route (/providers/[id],
+ * TRACE-156 P2B) and the gated review gallery both render it. It renders only what it is given:
+ * eligibility, prices, reviews, coverage and admission are decided before the data arrives here.
  */
-export function ProviderProfileView({ data, requestedServiceId, onServiceChange, viewer, directoryHref, onNextStep, onRetryReviews, onRetryCoverage }: {
+export function ProviderProfileView({
+  data, requestedServiceId, onServiceChange, viewer, directoryHref, onNextStep,
+  onRetryReviews, onRetryCoverage, onRetryOffers, interactiveExtras = true,
+}: {
   data: ProfileData;
   /** The URL's service choice; null or empty is All services. */
   requestedServiceId: string | null;
@@ -57,13 +67,24 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
   onNextStep: (context: NextStepContext) => void;
   onRetryReviews?: () => void;
   onRetryCoverage?: () => void;
+  onRetryOffers?: () => void;
+  /**
+   * true (the gallery): optional extras are chosen here with a local service-subtotal preview.
+   * false (live profiles): extras are published information and are chosen in the request step,
+   * whose server calculation is the only price authority (TRACE-112).
+   */
+  interactiveExtras?: boolean;
 }) {
   const id = useId();
   const { provider } = data;
-  const services = useMemo(() => profileServices(data), [data]);
-  const selection = resolveServiceSelection(requestedServiceId, services);
+  const offersUnavailable = data.offersStatus === "unavailable";
+  const services = useMemo(() => (offersUnavailable ? [] : profileServices(data)), [data, offersUnavailable]);
+  // With unreadable offers a linked service can be neither shown nor called withdrawn.
+  const uncheckedId = offersUnavailable ? validSlug(requestedServiceId) : null;
+  const selection = resolveServiceSelection(offersUnavailable ? null : requestedServiceId, services);
   const service = selection.kind === "service" ? selection.service : null;
-  const viewKey = service?.id ?? (selection.kind === "unavailable" ? `unavailable:${selection.requestedId}` : "all");
+  const viewKey = service?.id
+    ?? (selection.kind === "unavailable" ? `unavailable:${selection.requestedId}` : uncheckedId ? `unchecked:${uncheckedId}` : "all");
 
   // Package, cadence and extras belong to one service view. Any change of view, including
   // Back and Forward, discards them, so a choice made for one service never prices another.
@@ -73,7 +94,9 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
   if (seenView !== viewKey) {
     setSeenView(viewKey);
     setStored(null);
-    setAnnouncement(selectionAnnouncement(provider.name, selection, services));
+    setAnnouncement(uncheckedId
+      ? `Prices for ${provider.name} couldn't be read, so the linked service can't be shown right now.`
+      : selectionAnnouncement(provider.name, selection, services));
   }
   const offerSelection = service ? reconcileOfferSelection(service, stored) : null;
   const chosen = service && offerSelection ? selectedOffer(service, offerSelection) : null;
@@ -101,25 +124,70 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
     setStored(reconciled);
     const { offer, cadence } = selectedOffer(service, reconciled);
     setAnnouncement(cadence
-      ? `${offer.name}, ${cadenceLabel(cadence.frequency).toLowerCase()}: ${pricePreview(offer, cadence, reconciled.addons).totalLabel} service subtotal.`
+      ? interactiveExtras
+        ? `${offer.name}, ${cadenceLabel(cadence.frequency).toLowerCase()}: ${pricePreview(offer, cadence, reconciled.addons).totalLabel} service subtotal.`
+        : `${offer.name}, ${cadenceLabel(cadence.frequency).toLowerCase()}: ${cadencePriceLabel(cadence)}.`
       : `${offer.name}: quote after walkthrough.`);
   };
 
   const media = mediaForService(data.media, service?.id ?? null);
   const questions = service ? questionsForService(data.questions, service.id) : [];
   const badges = displayedProviderBadges(provider.badges);
-  const step = nextStepCopy(viewer, chosen ? chosen.offer.kind : "all");
-  const next = () => onNextStep({
-    serviceId: service?.id ?? null,
-    offerId: chosen?.offer.id ?? null,
-    frequency: chosen?.cadence?.frequency ?? null,
-    addons: offerSelection?.addons ?? {},
-  });
+  const step = nextStepCopy(viewer, chosen ? chosen.offer.kind : "all", { hasServices: services.length > 0 });
+  const next = () => {
+    if (step.kind === "pending") return;
+    if (step.kind === "choose_service") {
+      // The request must stay bound to a service of this provider, so one is chosen here first.
+      focusChooser.current = true;
+      if (services.length === 1) onServiceChange(services[0].id);
+      else {
+        focusChooser.current = false;
+        if (dropdown.current && dropdown.current.getClientRects().length > 0) dropdown.current.focus();
+        else chips.current?.querySelector<HTMLInputElement>("input:checked, input")?.focus();
+        setAnnouncement(`Choose a service to request from ${provider.name}.`);
+      }
+      return;
+    }
+    onNextStep({
+      serviceId: service?.id ?? null,
+      offerId: chosen?.offer.id ?? null,
+      frequency: chosen?.cadence?.frequency ?? null,
+      addons: interactiveExtras ? offerSelection?.addons ?? {} : {},
+      kind: step.kind,
+    });
+  };
   // The requested id comes from the link: it is only ever looked up as an own catalog name.
   const unavailableName = selection.kind === "unavailable" ? catalogServiceName(data.serviceNames, selection.requestedId) : null;
+  const uncheckedName = uncheckedId ? catalogServiceName(data.serviceNames, uncheckedId) : null;
+  const listedServices = (data.listedServiceIds ?? []).map((serviceId) => serviceDisplayName(serviceId, data.serviceNames));
   const summary = (headingId: string) => service && offerSelection
-    ? <OfferSummary service={service} selection={offerSelection} headingId={headingId} />
-    : <BusinessSummary providerName={provider.name} services={services} headingId={headingId} />;
+    ? <OfferSummary
+      service={service}
+      selection={offerSelection}
+      headingId={headingId}
+      interactiveExtras={interactiveExtras}
+      sizeGuide={chosen ? data.sizeGuides?.[chosen.offer.id] ?? null : null}
+    />
+    : <BusinessSummary
+      providerName={provider.name}
+      services={services}
+      headingId={headingId}
+      offersUnavailable={offersUnavailable}
+      listedServices={listedServices}
+      onRetry={onRetryOffers}
+    />;
+  const action = (className: string) => <Button
+    type="button"
+    variant="commitment"
+    size="lg"
+    className={className}
+    onClick={next}
+    loading={step.kind === "pending"}
+    focusableWhenDisabled
+    data-next-step={step.kind}
+  >
+    {step.label}{step.kind === "retry" ? <RefreshCw aria-hidden="true" /> : <ArrowRight aria-hidden="true" />}
+  </Button>;
 
   return <div data-profile={provider.id} data-profile-view={service?.id ?? "all"} className="mx-auto w-full max-w-6xl px-4 pb-36 pt-4 sm:px-8 lg:pb-16">
     <Link href={directoryHref} className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-sage-dark">
@@ -185,6 +253,15 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
 
     <p role="status" aria-live="polite" data-profile-announcement className="sr-only">{announcement}</p>
 
+    {uncheckedId && <div data-unchecked-service role="note" className="mt-4 rounded-xl border border-border-strong bg-secondary p-4">
+      <p className={cn("text-base font-semibold text-foreground", anywhere)}>
+        {uncheckedName ?? "The linked service"} can&apos;t be shown right now.
+      </p>
+      <p className="mt-1 text-sm text-foreground">
+        We couldn&apos;t read {provider.name}&apos;s published prices, so we can&apos;t confirm what they offer. Nothing has been assumed.
+      </p>
+    </div>}
+
     {selection.kind === "unavailable" && <div data-unavailable-service role="note" className="mt-4 rounded-xl border border-border-strong bg-secondary p-4">
       <p className={cn("text-base font-semibold text-foreground", anywhere)}>
         {unavailableName ?? "The linked service"} is not currently offered by {provider.name}.
@@ -215,19 +292,18 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
           items={media.items}
           general={media.general}
           serviceName={service?.name ?? null}
+          unavailable={data.mediaStatus === "unavailable"}
         />
 
         {service && offerSelection
-          ? <PackageSelector key={service.id} service={service} selection={offerSelection} onChange={changeOffer} idPrefix={`${id}-${service.id}`} />
+          ? <PackageSelector key={service.id} service={service} selection={offerSelection} onChange={changeOffer} idPrefix={`${id}-${service.id}`} interactiveExtras={interactiveExtras} />
           : services.length > 0 && <ServiceList heading="Explore services" headingId={`${id}-explore`} services={services} onSelect={selectFromList} />}
       </div>
 
       <aside className="hidden lg:block">
         <div className="sticky top-24 rounded-xl bg-card p-6 ring-1 ring-border-strong">
           {summary(`${id}-summary-aside`)}
-          <Button type="button" variant="commitment" size="lg" className="mt-5 w-full text-base" onClick={next}>
-            {step.label}<ArrowRight aria-hidden="true" />
-          </Button>
+          {action("mt-5 w-full text-base")}
           <p className="mt-2 text-center text-sm text-muted-foreground">{step.note}</p>
           <a href="#profile-area" className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-sage-dark">See service area<ArrowRight aria-hidden="true" className="size-4" /></a>
         </div>
@@ -245,6 +321,7 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
             <BadgeCheck aria-hidden="true" className="size-4" />{badge}
           </li>)}
         </ul>}
+        {data.business && <ProfileBusinessFacts business={data.business} providerName={provider.name} />}
       </section>
 
       <section id="profile-reviews" aria-labelledby={`${id}-reviews`} className="scroll-mt-24 border-t border-border pt-8">
@@ -313,7 +390,7 @@ export function ProviderProfileView({ data, requestedServiceId, onServiceChange,
 
     {/* Phones and tablets: one visible action, clear of the device safe area. */}
     <div data-profile-action-bar className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-3 lg:hidden">
-      <Button type="button" variant="commitment" size="lg" className="w-full text-base" onClick={next}>{step.label}<ArrowRight aria-hidden="true" /></Button>
+      {action("w-full text-base")}
       <p className="mt-1 text-center text-xs text-muted-foreground">{step.note}</p>
     </div>
   </div>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Minus, Plus } from "lucide-react";
+import { ArrowRight, Check, Minus, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCents } from "@/lib/pricingContent";
@@ -22,7 +22,9 @@ import {
   type ProfileAddon,
   type ProfileOffer,
   type ProfileService,
+  type ProfileSizeGuide,
 } from "@/lib/providerProfile/model";
+import { HOME_SIZE_GUIDE } from "@/lib/homeSizeGuide";
 import type { PricingFrequency } from "@/lib/vendorPricing";
 import { cn } from "@/lib/utils";
 
@@ -32,13 +34,21 @@ const anywhere = "[overflow-wrap:anywhere]";
 // Selected-offer summary: one price, with its scope and conditions beside it
 // ---------------------------------------------------------------------------------------------
 
-export function OfferSummary({ service, selection, headingId }: {
+export function OfferSummary({ service, selection, headingId, interactiveExtras = true, sizeGuide = null }: {
   service: ProfileService;
   selection: OfferSelection;
   headingId: string;
+  /**
+   * false (live profiles, TRACE-156 P2B): optional extras are published information only. They
+   * are chosen in the request step, whose server calculation prices them, so no local subtotal
+   * is shown here.
+   */
+  interactiveExtras?: boolean;
+  /** TRACE-122: the bedroom size guide, when this offer's price levels depend on bedrooms. */
+  sizeGuide?: ProfileSizeGuide | null;
 }) {
   const { offer, cadence } = selectedOffer(service, selection);
-  const preview = cadence ? pricePreview(offer, cadence, selection.addons) : null;
+  const preview = cadence && interactiveExtras ? pricePreview(offer, cadence, selection.addons) : null;
   const extrasChosen = (preview?.lines.length ?? 0) > 1;
 
   return <div data-offer-summary={offer.kind}>
@@ -56,10 +66,13 @@ export function OfferSummary({ service, selection, headingId }: {
         <ul className="mt-2 space-y-1">{cadence.requiredAddons.map((addon) => <AddonRow key={addon.id} addon={addon} />)}</ul>
       </div>}
 
-      {cadence.optionalAddons.length > 0 && !extrasChosen && <div className="mt-4 border-t border-border pt-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Optional extras</p>
+      {cadence.optionalAddons.length > 0 && !extrasChosen && <div data-optional-extras-info className="mt-4 border-t border-border pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{interactiveExtras ? "Optional extras" : "Optional extras · chosen in the request step"}</p>
         <ul className="mt-2 space-y-1">{cadence.optionalAddons.map((addon) => <AddonRow key={addon.id} addon={addon} />)}</ul>
+        {!interactiveExtras && <p className="mt-2 text-xs leading-5 text-muted-foreground">Not included in the price shown. The request step prices any extras you choose.</p>}
       </div>}
+
+      {sizeGuide && <SizeGuide guide={sizeGuide} />}
 
       {preview && extrasChosen && <div data-price-preview className="mt-4 rounded-xl bg-secondary p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate">Price preview</p>
@@ -97,13 +110,30 @@ function AddonRow({ addon }: { addon: ProfileAddon }) {
 }
 
 /** The All services summary: no single price stands in for the business. */
-export function BusinessSummary({ providerName, services, headingId }: {
+export function BusinessSummary({ providerName, services, headingId, offersUnavailable = false, listedServices = [], onRetry }: {
   providerName: string;
   services: readonly ProfileService[];
   headingId: string;
+  /** The published offers could not be read: say so, and state no price and no absence. */
+  offersUnavailable?: boolean;
+  /** Catalog names from the public listing, for a profile with no readable or published offer. */
+  listedServices?: readonly string[];
+  onRetry?: () => void;
 }) {
   const fixed = services.filter((service) => service.mode !== "quote").length;
   const quoted = services.filter((service) => service.mode !== "fixed").length;
+  const listed = listedServices.length > 0 ? `Listed for ${listedServices.join(" · ")}.` : null;
+
+  if (offersUnavailable) {
+    return <div data-offer-summary="unavailable">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">All services</p>
+      <h2 id={headingId} className={cn("mt-2 text-xl font-semibold leading-7 text-foreground", anywhere)}>Prices unavailable right now</h2>
+      <p className={cn("mt-2 text-sm text-foreground", anywhere)}>We couldn&apos;t read {providerName}&apos;s published prices and quotes, so none are shown. This doesn&apos;t mean they have none.</p>
+      {listed && <p className={cn("mt-1 text-sm text-muted-foreground", anywhere)}>{listed}</p>}
+      {onRetry && <Button type="button" variant="outline" className="mt-3" onClick={onRetry}><RefreshCw aria-hidden="true" />Try again</Button>}
+    </div>;
+  }
+
   return <div data-offer-summary="all">
     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">All services</p>
     <h2 id={headingId} className={cn("mt-2 text-xl font-semibold leading-7 text-foreground", anywhere)}>
@@ -117,6 +147,19 @@ export function BusinessSummary({ providerName, services, headingId }: {
           quoted > 0 ? `${quoted} quoted after a walkthrough` : null,
         ].filter(Boolean).join(" · ") + ". Choose a service to see its offer, scope and price."}
     </p>
+    {services.length === 0 && listed && <p className={cn("mt-1 text-sm text-muted-foreground", anywhere)}>{listed}</p>}
+  </div>;
+}
+
+/** TRACE-122: the bedroom size guide, beside the offer whose price levels depend on it. */
+function SizeGuide({ guide }: { guide: ProfileSizeGuide }) {
+  return <div data-size-guide className="mt-4 rounded-xl border border-border p-3">
+    <h3 className="text-sm font-semibold text-foreground">How we size your home</h3>
+    <p className="mt-1 text-xs text-muted-foreground">{guide.summary} Approximate home size by bedrooms:</p>
+    {guide.note && <p className="mt-1 text-xs text-muted-foreground">{guide.note}</p>}
+    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      {HOME_SIZE_GUIDE.map((row) => <div key={row.bedrooms} className="contents"><dt className="font-medium text-foreground">{row.bedrooms}</dt><dd className="text-muted-foreground">{row.squareFeet}</dd></div>)}
+    </dl>
   </div>;
 }
 
@@ -124,11 +167,13 @@ export function BusinessSummary({ providerName, services, headingId }: {
 // Package, cadence and extras selection
 // ---------------------------------------------------------------------------------------------
 
-export function PackageSelector({ service, selection, onChange, idPrefix }: {
+export function PackageSelector({ service, selection, onChange, idPrefix, interactiveExtras = true }: {
   service: ProfileService;
   selection: OfferSelection;
   onChange: (next: OfferSelection) => void;
   idPrefix: string;
+  /** false: optional extras are not chosen here (see OfferSummary). */
+  interactiveExtras?: boolean;
 }) {
   const { offer, cadence } = selectedOffer(service, selection);
   const several = service.offers.length > 1;
@@ -192,7 +237,7 @@ export function PackageSelector({ service, selection, onChange, idPrefix }: {
       </div>
     </fieldset>}
 
-    {cadence && cadence.optionalAddons.length > 0 && <div data-optional-extras>
+    {interactiveExtras && cadence && cadence.optionalAddons.length > 0 && <div data-optional-extras>
       <h3 className="text-base font-semibold text-foreground">Optional extras</h3>
       <ul className="mt-2 divide-y divide-border rounded-xl border border-border bg-card">
         {cadence.optionalAddons.map((addon) => {
