@@ -89,7 +89,7 @@ const pkg = (id: string, service_id: string, name: string, extra: Partial<Profil
   is_active: true, needs_review: false, sort_order: order++, included_scope: [], tiers: [], addons: [], ...extra,
 });
 const media = (id: string, scene: keyof typeof scenes, caption: string, service_id: string | null = null): ProfileMedia =>
-  ({ id, image_url: illustration(scene), caption, sort_order: order++, service_id });
+  ({ id, image_url: illustration(scene), caption, sort_order: order++, service_ids: service_id ? [service_id] : [] });
 const areasFor = (zips: string[]) => ({ areas: publicServiceAreas(zips, SYNTHETIC_COVERAGE_AREAS), hasListedZips: zips.length > 0 });
 
 export type ProfileScenario = {
@@ -349,7 +349,7 @@ const caloosa: ProfileScenario = {
       }),
       pkg("cr-landscape", "landscape-maintenance", "Landscape maintenance, irrigation check and palm trimming plan", { pricing_mode: "custom_quote" }),
     ],
-    media: [{ id: "cr-m1", image_url: "/mds/profiles/synthetic-missing-photo.jpg", caption: "A photo that fails to load.", sort_order: 0, service_id: "seasonal-home-watch" }],
+    media: [{ id: "cr-m1", image_url: "/mds/profiles/synthetic-missing-photo.jpg", caption: "A photo that fails to load.", sort_order: 0, service_ids: ["seasonal-home-watch"] }],
     reviews: null,
     serviceArea: null,
     marketplaceZips: null,

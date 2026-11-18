@@ -289,7 +289,7 @@ export function ProviderProfileView({
         <div className="lg:hidden">{summary(`${id}-summary-inline`)}</div>
 
         <ProfileMediaGallery
-          key={viewKey}
+          key={`${provider.id}:${viewKey}`}
           providerName={provider.name}
           logoUrl={provider.logo_url}
           items={media.items}

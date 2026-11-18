@@ -331,16 +331,64 @@ describe("media and questions follow the selected service", () => {
     const rows = [
       { id: "general", image_url: "/shared.jpg", caption: null, sort_order: 0 },
       { id: "copy", image_url: " /shared.jpg ", caption: null, sort_order: 1 },
-      { id: "linked", image_url: "/shared.jpg", service_id: "pool-service", caption: null, sort_order: 2 },
-      { id: "other", image_url: "/other.jpg", service_id: "lawn-mowing", caption: null, sort_order: 3 },
+      { id: "linked", image_url: "/shared.jpg", service_ids: ["pool-service"], caption: null, sort_order: 2 },
+      { id: "other", image_url: "/other.jpg", service_ids: ["lawn-mowing"], caption: null, sort_order: 3 },
       { id: "empty", image_url: " ", caption: null, sort_order: 4 },
       { id: "general", image_url: "/conflicting-row.jpg", caption: null, sort_order: 5 },
       { id: "variant", image_url: "/shared.jpg?variant=detail", caption: null, sort_order: 6 },
     ];
-    expect(mediaForService(rows, null).items.map((item) => item.id)).toEqual(["general", "variant"]);
+    expect(mediaForService(rows, null).items.map((item) => item.id)).toEqual(["general", "other", "variant"]);
     expect(mediaForService(rows, "pool-service")).toMatchObject({ general: false, items: [{ id: "linked" }] });
     expect(mediaForService(rows, "unmapped").items.map((item) => item.id)).toEqual(["general", "variant"]);
     expect(rows).toHaveLength(7);
+  });
+
+  describe("saved service links (TRACE-156)", () => {
+    const photo = (id: string, sort_order: number, service_ids?: string[]) =>
+      ({ id, image_url: `/${id}.jpg`, caption: null, sort_order, service_ids });
+    const saved = [
+      photo("general", 0, []),
+      photo("gutter-only", 1, ["gutter-cleaning"]),
+      photo("both", 2, ["gutter-cleaning", "pool-service"]),
+      photo("pool-only", 3, ["pool-service"]),
+      photo("unlinked-field-absent", 4),
+    ];
+    const ids = (serviceId: string | null) => mediaForService(saved, serviceId).items.map((item) => item.id);
+
+    it("shows a photo under every service it is linked to, from one stored row", () => {
+      expect(ids("gutter-cleaning")).toEqual(["gutter-only", "both"]);
+      expect(ids("pool-service")).toEqual(["both", "pool-only"]);
+      expect(mediaForService(saved, "pool-service").general).toBe(false);
+    });
+
+    it("never borrows a photo linked only to another service", () => {
+      expect(ids("window-cleaning")).toEqual(["general", "unlinked-field-absent"]);
+      expect(mediaForService(saved, "window-cleaning").general).toBe(true);
+      expect(mediaForService([photo("gutter-only", 0, ["gutter-cleaning"])], "pool-service")).toEqual({ items: [], general: true });
+    });
+
+    it("keeps general photos out of a service that has its own", () => {
+      expect(ids("gutter-cleaning")).not.toContain("general");
+    });
+
+    it("shows every photo once, in stable order, for All services", () => {
+      expect(ids(null)).toEqual(["general", "gutter-only", "both", "pool-only", "unlinked-field-absent"]);
+      expect(mediaForService([...saved].reverse(), null).items.map((item) => item.id)).toEqual(ids(null));
+    });
+
+    it("shows one slide when the same image is stored twice with different links", () => {
+      const copies = [
+        { id: "a", image_url: "/same.jpg", caption: null, sort_order: 0, service_ids: ["gutter-cleaning"] },
+        { id: "b", image_url: "/same.jpg", caption: null, sort_order: 1, service_ids: ["pool-service"] },
+      ];
+      expect(mediaForService(copies, null).items.map((item) => item.id)).toEqual(["a"]);
+      expect(mediaForService(copies, "pool-service").items.map((item) => item.id)).toEqual(["b"]);
+    });
+
+    it("does not read a service from a caption", () => {
+      const captioned = [{ id: "c", image_url: "/c.jpg", caption: "Pool service before and after", sort_order: 0, service_ids: [] }];
+      expect(mediaForService(captioned, "pool-service")).toMatchObject({ general: true, items: [{ id: "c" }] });
+    });
   });
 
   it("prefers media linked to the service", () => {
@@ -349,7 +397,7 @@ describe("media and questions follow the selected service", () => {
 
   it("falls back to general media, flagged, and never borrows another service's media", () => {
     expect(mediaForService(media, "drywall-repair")).toMatchObject({ general: true, items: [{ id: "hl-m3" }] });
-    expect(mediaForService(media, null)).toMatchObject({ general: true, items: [{ id: "hl-m3" }] });
+    expect(mediaForService(media, null).items.map((item) => item.id)).toEqual(["hl-m1", "hl-m2", "hl-m3"]);
     expect(mediaForService([], "drywall-repair")).toEqual({ general: true, items: [] });
   });
 

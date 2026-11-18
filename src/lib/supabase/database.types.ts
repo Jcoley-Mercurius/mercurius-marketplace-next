@@ -137,6 +137,42 @@ export type Database = {
           },
         ]
       }
+      contractor_gallery_services: {
+        Row: {
+          contractor_id: string
+          created_at: string
+          gallery_id: string
+          service_id: string
+        }
+        Insert: {
+          contractor_id: string
+          created_at?: string
+          gallery_id: string
+          service_id: string
+        }
+        Update: {
+          contractor_id?: string
+          created_at?: string
+          gallery_id?: string
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractor_gallery_services_photo_fkey"
+            columns: ["gallery_id", "contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_gallery"
+            referencedColumns: ["id", "contractor_id"]
+          },
+          {
+            foreignKeyName: "contractor_gallery_services_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contractor_service_zips: {
         Row: {
           contractor_id: string
@@ -7696,6 +7732,14 @@ export type Database = {
         Args: { _request_id: string }
         Returns: string
       }
+      contractor_photo_service_options: {
+        Args: { p_contractor_id: string }
+        Returns: {
+          is_applicable: boolean
+          service_id: string
+          service_name: string
+        }[]
+      }
       create_job_offer: {
         Args: {
           _contractor_id: string
@@ -8916,6 +8960,10 @@ export type Database = {
         Returns: Json
       }
       service_review: { Args: { _job_id: string }; Returns: Json }
+      set_contractor_gallery_photo_services: {
+        Args: { p_gallery_id: string; p_service_ids: string[] }
+        Returns: string[]
+      }
       set_completion_evidence_rule: {
         Args: { _minimum_photos: number; _reason: string; _service_id: string }
         Returns: undefined
