@@ -4,6 +4,8 @@ Date: 2026-11-17 ET. Traceability: TRACE-156, proposed in PR #173.
 Source baseline inspected: main `3327c83a36c1fee6a7e33d9689293b537a627c14`.
 Status: owner-approved initial layout/design; P2A implementation authorized; source changes and release still require review.
 
+**Status update — 2026-11-17 ET (recorded on the P2B branch).** P2A merged to `main` as `ba7db9c` (PR #174, final head `f67bb3f`). Codex's retrospective closeout review ([5948874109](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/174#pullrequestreview-5948874109)) found no new blocker and confirmed P2B as the next bounded slice. P2B is in implementation on `claude/trace156-p2b-profile-route` as a draft PR; it is not accepted, merged or released. The original status line above and the P2A section below are kept as the historical record of what was authorized.
+
 ## Owner direction and approval scope
 
 Josh identified the local gallery at `http://127.0.0.1:3123/mds/profiles` and stated:
@@ -75,6 +77,8 @@ The owner permits profile work alongside Phase 7. This is a bounded sequencing e
 - Report exact candidate commit, changed files, checks actually run, comparison images, remaining manual checks and current CI. Do not convert reported evidence from #171 into new checks on this candidate.
 
 ## P2B — integrate the dynamic profile interior (next bounded slice)
+
+*In implementation since 2026-11-17 ET (draft PR, not accepted). The implemented plan, the decisions made within these constraints and the evidence are in the [task checkpoint](../docs/agent/DYNAMIC-PROFILES-HANDOFF.md#p2b--the-real-provider-profile-uses-the-approved-interior-trace-156-2026-11-17-et). The constraints below are unchanged.*
 
 Prepare the detailed P2B plan after P2A review, using these constraints:
 

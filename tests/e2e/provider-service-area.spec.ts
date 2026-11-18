@@ -1,9 +1,12 @@
 // TRACE-105: the public provider profile shows the provider's own service ZIPs on a drawn
-// Lee County map, with the list grouped by community from the active coverage allowlist
-// behind a disclosure. Synthetic readbacks only.
+// Lee County map, with the list grouped by community from the active coverage allowlist.
+// TRACE-156 (P2B): the profile now uses the approved interior's service-area section, which
+// lists the communities beside the map (no disclosure) and reads its ZIPs with an exact count.
+// Synthetic readbacks only.
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
+import { fulfillRows } from "../fixtures/postgrest";
 
 const contractor = "00000000-0000-4000-8000-000000000075";
 
@@ -14,20 +17,20 @@ const coverage = [
 async function open(page: Page, zips: string[] | "error", width = 1440, areas = coverage) {
   await page.route("**/*", route => ["http://127.0.0.1:3103", "http://127.0.0.1:55831"].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort());
   // Later routes take precedence: everything else the page reads is empty.
-  await page.route("**/rest/v1/**", route => route.fulfill({ json: [] }));
+  await page.route("**/rest/v1/**", route => fulfillRows(route, []));
   await page.route("**/rpc/pricing_server_now", route => route.fulfill({ json: new Date().toISOString() }));
   await page.route("**/rpc/r0_public_providers", route => route.fulfill({ json: {
     id: contractor, name: "Synthetic Cleaning Co", logo_url: null, bio: "Synthetic description", location: "Lee County, FL",
     badges: [], services: [], years_experience: 5, special_offer: null, our_promise: null, verified_specialty: null,
     tagline: null, video_url: null, website: null,
   } }));
-  await page.route("**/rest/v1/coverage_areas?*", route => route.fulfill({ json: areas }));
+  await page.route("**/rest/v1/coverage_areas?*", route => fulfillRows(route, areas));
   await page.route("**/rest/v1/contractor_service_zips?*", route => zips === "error"
     ? route.fulfill({ status: 500, json: { message: "Synthetic failure" } })
-    : route.fulfill({ json: zips.map(zip_code => ({ zip_code })) }));
+    : fulfillRows(route, zips.map(zip_code => ({ zip_code }))));
   await page.setViewportSize({ width, height: 900 });
   await page.goto(`/providers/${contractor}`);
-  await expect(page.getByRole("heading", { name: "Synthetic Cleaning Co" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Synthetic Cleaning Co" })).toBeVisible();
 }
 
 for (const width of [320, 1440]) {
@@ -38,13 +41,12 @@ for (const width of [320, 1440]) {
     await expect(map.locator("path[data-served]")).toHaveCount(3);
     for (const zip of ["33901", "33904", "33909"]) await expect(map.locator(`path[data-zip="${zip}"]`)).toHaveAttribute("data-served", "true");
     await expect(map.locator('path[data-zip="33905"]')).not.toHaveAttribute("data-served");
-    await expect(page.getByText("3 ZIP codes in Lee County, FL")).toBeVisible();
+    await expect(page.getByText("3 listed ZIP codes in Lee County, FL")).toBeVisible();
 
-    const list = page.locator("details").filter({ hasText: "See ZIP codes by community" });
-    await expect(list.getByText("33904, 33909", { exact: true })).toBeHidden();
-    await list.getByText("See ZIP codes by community").click();
+    // The communities are listed beside the map, each with its listed ZIPs.
+    const list = page.getByRole("region", { name: "Service area" }).getByRole("list");
     await expect(list.getByText("Cape Coral", { exact: true })).toBeVisible();
-    await expect(list.getByText("33904, 33909", { exact: true })).toBeVisible();
+    await expect(list.getByText("· 33904, 33909", { exact: true })).toBeVisible();
     await expect(list.getByText("Fort Myers", { exact: true })).toBeVisible();
     await expect(page.getByText("34102")).toHaveCount(0);
     await expect(page.getByText("Coverage is confirmed for your service address.")).toHaveCount(0);
@@ -65,7 +67,7 @@ for (const width of [320, 1440]) {
     const map = page.getByRole("img", { name: /Map of Lee County, Florida/ });
     await expect(map.locator('path[data-zip="33957"]')).not.toHaveAttribute("data-served");
     await expect(map.locator('path[data-zip="33936"]')).toHaveAttribute("data-served", "true");
-    await expect(page.getByText(`${zips.length} ZIP codes in Lee County, FL`)).toBeVisible();
+    await expect(page.getByText(`${zips.length} listed ZIP codes in Lee County, FL`)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     await map.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `test-results/provider-service-area-broad-${width}.png` });
@@ -74,7 +76,7 @@ for (const width of [320, 1440]) {
 
 test("a provider serving only PO-box ZIPs gets the list without an empty map", async ({ page }) => {
   await open(page, ["33902"], 1440, [{ zip_code: "33902", city: "Fort Myers" }]);
-  await expect(page.getByText("1 ZIP code in Lee County, FL")).toBeVisible();
+  await expect(page.getByText("1 listed ZIP code in Lee County, FL")).toBeVisible();
   await expect(page.getByRole("img", { name: /Map of Lee County, Florida/ })).toHaveCount(0);
 });
 
@@ -98,5 +100,6 @@ for (const width of [320, 1440]) {
 test("a failed service-area read does not invent coverage", async ({ page }) => {
   await open(page, "error");
   await expect(page.getByText("Service area unavailable")).toBeVisible();
-  await expect(page.getByText("Please refresh to try again.")).toBeVisible();
+  await expect(page.getByText("The listed ZIP codes could not be read. Nothing is assumed about this provider's area.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Service area" }).getByRole("button", { name: "Try again" })).toBeVisible();
 });

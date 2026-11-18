@@ -416,7 +416,7 @@ test("search filters providers, services and cities and survives a visit to a pr
 
   await page.locator(`[data-provider-card="${HARBOR}"]`).getByRole("link", { name: /^View profile/ }).click();
   // The profile is a heavier route; give its own reads room on a loaded machine.
-  await expect(page.getByRole("heading", { name: "Harborline Remodeling" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Harborline Remodeling" })).toBeVisible({ timeout: 15_000 });
   await page.goBack();
   // The directory-side state comes back from the address, not from memory. Profile-side return
   // control and list-position restoration are P2B and are not claimed here.

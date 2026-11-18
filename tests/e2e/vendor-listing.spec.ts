@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 import { syntheticSession } from "../fixtures/browser-session";
+import { fulfillRows } from "../fixtures/postgrest";
 
 // TRACE-134 (6.11B) synthetic browser evidence: no Plans or "coming soon" teasers; Special Offer is
 // gone from the vendor editor, prompts and public profile (DEC-2026-055 item 1); no legacy promotion
@@ -131,18 +132,19 @@ test("the public profile shows offered services and no Current Offer, whatever t
   const contractor = "00000000-0000-4000-8000-000000000c99";
   await blockOutside(page);
   // Later routes take precedence: everything else the public page reads is empty.
-  await page.route("**/rest/v1/**", route => route.fulfill({ json: [] }));
+  await page.route("**/rest/v1/**", route => fulfillRows(route, []));
   await page.route("**/rpc/pricing_server_now", route => route.fulfill({ json: new Date().toISOString() }));
   await page.route("**/rpc/r0_public_providers", route => route.fulfill({ json: {
     id: contractor, name: "Synthetic Offer Co", logo_url: null, bio: "Synthetic description", location: "Lee County, FL",
     badges: [], services: ["synthetic-lawn"], years_experience: 5, special_offer: "Synthetic 20% off", our_promise: null, verified_specialty: null,
     tagline: null, video_url: null, website: null } }));
   await page.route("**/rest/v1/services_catalog?*", route => route.fulfill({ json: [{ id: "synthetic-lawn", name: "Synthetic lawn care" }] }));
-  for (const table of ["contractor_service_zips", "coverage_areas", "contractor_gallery"]) await page.route(`**/rest/v1/${table}?*`, route => route.fulfill({ json: [] }));
+  for (const table of ["contractor_service_zips", "coverage_areas", "contractor_gallery"]) await page.route(`**/rest/v1/${table}?*`, route => fulfillRows(route, []));
   await page.setViewportSize({ width: 320, height: 900 });
   await page.goto(`/providers/${contractor}`);
-  await expect(page.getByRole("heading", { name: "Synthetic Offer Co" })).toBeVisible();
-  await expect(page.getByText("Synthetic lawn care")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Synthetic Offer Co" })).toBeVisible();
+  // TRACE-156 (P2B): with no readable offer, the summary names what the listing is for.
+  await expect(page.getByText("Listed for Synthetic lawn care.").filter({ visible: true })).toBeVisible();
   await expect(page.getByText("Current Offer")).toHaveCount(0);
   await expect(page.getByText("Synthetic 20% off")).toHaveCount(0);
 });

@@ -1,7 +1,8 @@
-// TRACE-156 (P2A): the published offers behind the provider directory's cards.
+// TRACE-156 (P2A): the published offers behind the provider directory's cards, and (P2B) behind
+// the provider profile, which reads one provider through the same function.
 //
-// Columns, filters and ordering follow the public provider storefront
-// (src/app/providers/[id]/page.tsx) so the directory and the profile publish the same offers.
+// Columns, filters and ordering are the public provider storefront's, so the directory and the
+// profile publish the same offers.
 // Reads are batched by the listed providers: the packages read, then the levels and extras read
 // for the packages that came back. No card reads on its own.
 //
@@ -18,7 +19,7 @@ import { isPricingFrequency, type PricingFrequency } from "@/lib/vendorPricing";
 const PACKAGE_COLUMNS =
   "id, contractor_id, service_id, name, description, pricing_mode, default_frequency, deposit_amount, is_active, needs_review, sort_order, included_scope";
 const TIER_COLUMNS =
-  "id, package_id, name, price, frequency, price_kind, price_max, includes, rule_question_key, rule_conditions, sort_order";
+  "id, package_id, name, price, frequency, price_kind, price_max, includes, rule_question_key, rule_min, rule_max, rule_conditions, sort_order";
 const ADDON_COLUMNS =
   "id, package_id, name, description, price, price_kind, price_max, unit_label, min_quantity, max_quantity, is_required, frequencies, sort_order";
 
@@ -60,6 +61,9 @@ export type TierRow = {
   price_max: number | string | null;
   includes: string[] | null;
   rule_question_key: string | null;
+  /** Kept with the level's rule so the profile carries the whole published rule (P2B). */
+  rule_min?: number | string | null;
+  rule_max?: number | string | null;
   rule_conditions: unknown;
   sort_order: number | null;
 };
@@ -111,6 +115,8 @@ function toTier(row: TierRow, fallback: PricingFrequency): ProfileTier {
     price_max: amount(row.price_max),
     includes: row.includes,
     rule_question_key: row.rule_question_key,
+    rule_min: amount(row.rule_min),
+    rule_max: amount(row.rule_max),
     rule_conditions: row.rule_conditions,
     sort_order: sortOrder(row.sort_order),
   };
@@ -177,7 +183,7 @@ export function groupPublicPackages(
   return grouped;
 }
 
-type RowPage = { data: unknown; error: unknown; count?: number | null };
+export type RowPage = { data: unknown; error: unknown; count?: number | null };
 
 /**
  * Every row of one read, or null when its completeness cannot be established.
@@ -191,7 +197,7 @@ type RowPage = { data: unknown; error: unknown; count?: number | null };
  * mismatch, a missing count, a failed later page or a read that will not end is null — never
  * the rows that did arrive.
  */
-async function readAllRows<TRow>(
+export async function readAllRows<TRow>(
   label: string,
   request: (from: number, to: number, withCount: boolean) => PromiseLike<RowPage>,
 ): Promise<TRow[] | null> {

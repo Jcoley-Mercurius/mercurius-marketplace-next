@@ -11,13 +11,15 @@ import type { ProfileMedia } from "@/lib/providerProfile/model";
  * One image at a time with explicit previous and next controls. Images that fail to load are
  * dropped; with nothing left to show, the provider's logo carries the cover.
  */
-export function ProfileMediaGallery({ providerName, logoUrl, items, general, serviceName }: {
+export function ProfileMediaGallery({ providerName, logoUrl, items, general, serviceName, unavailable = false }: {
   providerName: string;
   logoUrl: string | null;
   items: readonly ProfileMedia[];
   /** The items are general business media, not linked to the selected service. */
   general: boolean;
   serviceName: string | null;
+  /** The gallery read failed: the logo carries the cover and says photos couldn't be loaded. */
+  unavailable?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<readonly string[]>([]);
@@ -27,7 +29,7 @@ export function ProfileMediaGallery({ providerName, logoUrl, items, general, ser
   if (usable.length === 0) {
     return <figure data-profile-media="logo" className="overflow-hidden rounded-xl ring-1 ring-border">
       <ProviderCover name={providerName} logoUrl={logoUrl} ratio="lead" />
-      {items.length > 0 && <figcaption className="border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground">Photos for this provider could not be loaded.</figcaption>}
+      {(items.length > 0 || unavailable) && <figcaption data-media-unavailable className="border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground">Photos for this provider could not be loaded.</figcaption>}
     </figure>;
   }
 
@@ -48,7 +50,8 @@ export function ProfileMediaGallery({ providerName, logoUrl, items, general, ser
     </div>
     <figcaption className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        {general && serviceName && <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">General business photo</p>}
+        {/* Photos carry no service link today (TRACE-156), so a service view says what they are. */}
+        {general && serviceName && <p data-media-general className="text-xs font-semibold uppercase tracking-wide text-muted-foreground [overflow-wrap:anywhere]">General business photo · not specific to {serviceName.toLowerCase()}</p>}
         {current.caption && <p className="text-sm text-foreground [overflow-wrap:anywhere]">{current.caption}</p>}
       </div>
       {usable.length > 1 && <div className="flex shrink-0 items-center gap-2">

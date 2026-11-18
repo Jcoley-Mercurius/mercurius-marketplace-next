@@ -21,7 +21,7 @@ import {
  * invented, to satisfy the composition.
  */
 export function ProviderDirectoryCard({
-  provider, card, media, href, headingLevel = "h3", unpriced = "no_offer", listedServices = [], anchorId,
+  provider, card, media, href, headingLevel = "h3", unpriced = "no_offer", listedServices = [], anchorId, onOpen,
 }: {
   provider: Pick<ProfileProvider, "id" | "name" | "logo_url" | "location">;
   card: CardOffer | null;
@@ -34,6 +34,8 @@ export function ProviderDirectoryCard({
   listedServices?: readonly string[];
   /** Kept for the directory's existing in-page provider targeting. */
   anchorId?: string;
+  /** Called as the profile link is followed (the directory records its return position). */
+  onOpen?: () => void;
 }) {
   const Heading = headingLevel;
   // Only a photo linked to this service leads the card; general media stays on the profile.
@@ -62,7 +64,7 @@ export function ProviderDirectoryCard({
       </p>
 
       <div className="mt-auto pt-4">
-        <Link href={href} className="flex min-h-11 items-center justify-between gap-3 border-t border-border pt-3 text-base font-semibold leading-[1.375rem] text-sage-dark">
+        <Link href={href} onClick={onOpen} data-provider-profile-link className="flex min-h-11 items-center justify-between gap-3 border-t border-border pt-3 text-base font-semibold leading-[1.375rem] text-sage-dark">
           <span>View profile<span className="sr-only">: {provider.name}{card ? `, ${card.offer.name}` : ""}</span></span>
           <ArrowRight aria-hidden="true" className="size-5 shrink-0 text-foreground" />
         </Link>

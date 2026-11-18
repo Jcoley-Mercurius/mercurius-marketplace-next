@@ -3,12 +3,13 @@
 // Synthetic readbacks only.
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { fulfillRows } from "../fixtures/postgrest";
 
 const contractor = "00000000-0000-4000-8000-000000000143";
 
 async function open(page: Page, badges: string[], width: number) {
   await page.route("**/*", route => ["http://127.0.0.1:3103", "http://127.0.0.1:55831"].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort());
-  await page.route("**/rest/v1/**", route => route.fulfill({ json: [] }));
+  await page.route("**/rest/v1/**", route => fulfillRows(route, []));
   await page.route("**/rpc/pricing_server_now", route => route.fulfill({ json: new Date().toISOString() }));
   await page.route("**/rpc/r0_public_providers", route => route.fulfill({ json: {
     id: contractor, name: "Synthetic Badge Co", logo_url: null, bio: "Synthetic description", location: "Lee County, FL",
@@ -17,16 +18,17 @@ async function open(page: Page, badges: string[], width: number) {
   } }));
   await page.setViewportSize({ width, height: 900 });
   await page.goto(`/providers/${contractor}`);
-  await expect(page.getByRole("heading", { name: "Synthetic Badge Co" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Synthetic Badge Co" })).toBeVisible();
 }
 
 for (const width of [320, 1440]) {
   test(`profile credentials omit Top Rated at ${width}px`, async ({ page }) => {
     await open(page, ["Licensed", "Top Rated", "Insured"], width);
-    // The section title is a card title (not a heading), so the section is found by its text.
-    await expect(page.getByText("Credentials", { exact: true })).toBeVisible();
-    await expect(page.getByText("Licensed", { exact: true })).toBeVisible();
-    await expect(page.getByText("Insured", { exact: true })).toBeVisible();
+    // TRACE-156 (P2B): the credentials are a named list in the About section.
+    const credentials = page.getByRole("list", { name: "Credentials" });
+    await expect(credentials).toBeVisible();
+    await expect(credentials.getByText("Licensed", { exact: true })).toBeVisible();
+    await expect(credentials.getByText("Insured", { exact: true })).toBeVisible();
     await expect(page.getByText(/top rated/i)).toHaveCount(0);
     expect((await new AxeBuilder({ page }).include("main").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
@@ -35,6 +37,6 @@ for (const width of [320, 1440]) {
 
 test("a provider whose only badge is Top Rated shows no Credentials section", async ({ page }) => {
   await open(page, ["Top Rated"], 1440);
-  await expect(page.getByText("Credentials", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "Credentials" })).toHaveCount(0);
   await expect(page.getByText(/top rated/i)).toHaveCount(0);
 });

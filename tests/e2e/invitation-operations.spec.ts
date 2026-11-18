@@ -10,6 +10,10 @@ const version = "00000000-0000-4000-8000-000000000051";
 const attemptId = "00000000-0000-4000-8000-000000000053";
 const recipientAuthUser = "00000000-0000-4000-8000-000000000054";
 
+// A refresh still in flight when a test ends is cut off with the page. That disposed
+// response must not fail the finished test (CI run 44215656433, attempt 8).
+test.afterEach(async ({ page }) => page.unrouteAll({ behavior: "ignoreErrors" }));
+
 type Attempt = {
   attempt_id: string;
   status: string;

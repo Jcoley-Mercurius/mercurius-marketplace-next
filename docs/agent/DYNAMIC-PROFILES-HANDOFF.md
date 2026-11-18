@@ -3,7 +3,15 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
-## Current status — 2026-11-17
+## Current status — P2B awaiting CI, review and owner visual acceptance (2026-11-18 ET)
+
+P2B remains a draft on PR #175. It is not accepted, merged or released. The CI diagnosis and the two commits it produced are in [P2B CI closeout](#p2b-ci-closeout-2026-11-18-et) at the end of this file. The result of CI on the final head is reported on the PR, because recording it here would change that head. The owner's visual acceptance and the manual checks listed there are still open. The status note below is the earlier record and is kept as written.
+
+## Earlier status — P2B in implementation (2026-11-17 ET)
+
+P2A is merged to `main` as `ba7db9c` (PR #174, final head `f67bb3f`); Codex's retrospective closeout review [5948874109](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/174#pullrequestreview-5948874109) found no new blocker. P2B — the real `/providers/[id]` route on the approved interior — is on `claude/trace156-p2b-profile-route` in `../mercurius-profile-p2b`, as a draft PR for Codex review. See [the P2B section](#p2b--the-real-provider-profile-uses-the-approved-interior-trace-156-2026-11-17-et) at the end. Not accepted, merged or released. The status notes below are the earlier record and are kept as written.
+
+## Earlier status — 2026-11-17
 
 PR #171 is merged as `a44a062`. Codex's retrospective review of final head `b4eb800` is recorded as [review #5941302731](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/171#pullrequestreview-5941302731): both earlier P2 findings resolved; no new blocking code findings in that scope. Exact-head CI 44007255413 passed backend/lifecycle/application (1,021 unit, 793 non-visual browser tests); independent focused model checks passed 78 assertions.
 
@@ -746,3 +754,208 @@ values, exit 0):
 - No manual, real-phone, screen-reader, forced-colors or text-size check has been performed, and
   none is claimed. The owner decides whether any of them is required.
 - The owner's merge, which is the release (DEC-2026-037). There is no migration to push first.
+
+# P2B — the real provider profile uses the approved interior (TRACE-156), 2026-11-17 ET
+
+This section is the checkpoint for the P2B slice. The sections above stay as written; nothing in
+them was re-tested here.
+
+## Slice
+
+- **Name:** TRACE-156 / P2B — integrate the approved dynamic profile interior into `/providers/[id]`.
+- **Branch / worktree:** `claude/trace156-p2b-profile-route` in `../mercurius-profile-p2b`.
+- **Base:** `origin/main` `ba7db9c` (P2A, #174). Clean at start. The main checkout (`a44a062`),
+  the P2A worktree and every Phase 7 worktree, branch, port and process were left untouched.
+- **Authority:** the owner's initial layout/design approval and Codex's P2B constraints in
+  [DYNAMIC-PROFILES-INTEGRATION](../../governance/DYNAMIC-PROFILES-INTEGRATION.md), with the source
+  constraints of Codex's retrospective review
+  [5948874109](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/174#pullrequestreview-5948874109).
+- **Traceability:** the existing TRACE-156 row is updated to record P2A merged and P2B in
+  implementation; its earlier text is kept.
+
+## What it does
+
+- **Reads (`src/lib/providerProfile/publicProfile.ts`).** The same public reads the inherited
+  storefront made: `r0_public_providers` (decides whether a profile exists), P2A's paged,
+  count-checked offer reader for packages/levels/extras, `package_qualifying_questions`,
+  `public_provider_reviews`, `contractor_gallery`, `contractor_service_zips`, `coverage_areas`,
+  `services_catalog` and `get_completed_job_counts`. No new grant, write, schema or service-role
+  access. Legacy promotions stay closed (no promotion or clock read).
+- **Failure is reported per section.** An incomplete or failed package, level or extra read is
+  `offersStatus: "unavailable"`: no amount anywhere, "Prices unavailable right now … This doesn't
+  mean they have none", the listing's services named, and a retry. A linked service then reads
+  "can't be shown right now", never "not offered". *This fixes an inherited defect:* the old
+  storefront priced fixed packages without their required extras when the extras read failed.
+  Reviews, photos and coverage each have their own unavailable state.
+- **Supported business information kept:** tagline, bio, credentials, experience, completed jobs
+  through Mercurius, verified specialty, the provider's promise and video (the inherited
+  YouTube/Vimeo/direct player). Photos are labelled "General business photo · not specific to
+  {service}" in a service view, because `contractor_gallery` has no service link. No service FAQ
+  is shown: no published source exists.
+- **Extras are information.** Live profiles pass `interactiveExtras={false}`: optional extras are
+  listed as "Optional extras · chosen in the request step … Not included in the price shown";
+  there are no quantity controls and no local subtotal. Required extras stay in the price.
+  "Quote after walkthrough" and the separate deposit wording are unchanged. The gallery keeps its
+  interactive extras.
+- **Service links.** `?service=` opens that service; withdrawn, unknown, inherited-name
+  (`__proto__`) and malformed ids show the "not currently offered" notice and All services. A
+  change replaces the history entry (Back leaves the profile in one step), resets package and
+  cadence, and keeps the typed and checked ZIP. The bedroom size guide (TRACE-122) appears beside
+  the offer whose levels depend on bedrooms.
+- **Provider changes.** The route is keyed by provider id, so a move to another provider starts
+  from nothing (package, ZIP, media failures, reviews). Every load takes a ticket; only the
+  newest may change the page, so a slow retry, refresh or realtime-triggered read cannot
+  overwrite a newer one or reach the next provider.
+- **Refresh and withdrawal.** The inherited 60-second refresh and realtime subscription stay. A
+  withdrawn offer becomes the "not currently offered" notice with an announcement; a provider
+  leaving the listing becomes "Provider not found"; a refresh that cannot read the listing keeps
+  the page, hides every price and offers a retry (it no longer replaces the page, and the ZIP).
+- **Access.** `useTrialAccess` drives the action: loading ("Checking booking access", busy,
+  inert), error (retry the admission read), signed out / not a homeowner (early access with the
+  chosen service), waiting ("See my early-access status" → `/dashboard`), revoked/unavailable
+  ("Go to my dashboard"), invited (request). An error is never read as access.
+- **Request continuation** uses the existing entry (`homePlanSelection`,
+  `preferredProviderSelection`, `/request?provider=…&service=…`): provider, service, package,
+  cadence and pricing mode are bound. **A level is bound only when the cadence publishes exactly
+  one level without an answer rule**; otherwise no `tierId` is sent and the request's server
+  calculation resolves it from answers. The inherited page sent the cheapest of several
+  non-rule levels; that is no longer presented as the homeowner's level. Qualifying questions
+  travel with the package; if they could not be read they are left out (not sent as none) and
+  the request falls back to the server preview's `question_details`, whose `answers_required`
+  outcome still enforces them (`src/app/request/page.tsx:655`). Promotions are never handed over.
+  In All services an invited homeowner is asked to choose a service first (focus moves to the
+  chooser), so the request stays bound to one of this provider's services.
+- **Directory return.** Category cards link to `/providers/<id>?service=<lead>&q=<search>&category=<id>`
+  (validated slugs and bounded search text). The profile's "Providers" link is built from those
+  validated values — never from an address — as `/providers?q=…&category=…&provider=<id>`. Opening
+  a card also records `provider`/`category` in the directory's own entry, so the browser's Back
+  restores the same way: the directory scrolls the card into view, focuses its link, then removes
+  the marker and keeps `?q=`.
+- **Rule bounds.** P2A's tier reader now also selects `rule_min`/`rule_max`, so the shared shape
+  carries each level's whole published rule (Codex review constraint).
+
+## Decisions and findings for Codex
+
+1. **"Managed by Mercurius" banner removed.** The inherited storefront said the provider "is
+   monitored and performance-tracked as part of the Mercurius network". The approved
+   composition has no such panel and the claim's operational basis is not established here
+   (MPS §8: describe only checks performed). Flagged as a content change; restore if wanted.
+2. **Early access from All services sends no service.** The inherited page preselected the
+   provider's first listed service; nothing was chosen, so none is sent now.
+3. **Non-rule multi-level packages bind no level** (see above). The server's own candidate
+   choice is unchanged; only the profile's claim about the homeowner's level is removed.
+4. **Website** is still not shown (the inherited page did not show it either).
+5. **Test-only access to `window.next.router`** (exposed by Next.js for debugging) is used in
+   one spec to make a genuine client-side provider-to-provider navigation.
+6. **Shared CI budget.** The new spec adds about 50 s to the default browser lane, which `main`
+   already overruns at the `application` job's 20-minute cap (run 44206655843 on `ba7db9c` was
+   cancelled there). Not changed here; it remains the shared follow-up Codex named.
+
+## Run it
+
+```bash
+cd ../mercurius-profile-p2b
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55851 NEXT_PUBLIC_SUPABASE_ANON_KEY=mds-synthetic-anon-key \
+  MDS_CATALOG_ENABLED=1 MERCURIUS_BUILD_WORKERS=2 npm run build
+npx playwright test --config playwright.provider-profile.config.ts   # port 3153, no fixture server
+```
+
+The lane fails closed if its port is taken (`PROVIDER_PROFILE_PORT=<port>` moves it). The spec
+serves every public read itself from the gallery's synthetic providers and aborts everything
+outside the app's origin. Review images go to `test-results/provider-profile-route/`, including
+`compare-<provider>-<width>-gallery.png` / `-live.png` pairs. The worktree has no `.env.local`.
+Without a stub, a live `next start` on that build shows the honest "Provider profile
+unavailable" state, because nothing answers on the synthetic Supabase URL.
+
+## Results
+
+Run on 2026-11-17 ET in this worktree, Node 24.17.0, npm 11.13.0, WSL2, `NODE_ENV` unset.
+
+| Check | Command | Result |
+|---|---|---|
+| Secret scan | `npm run scan:secrets` | Passed |
+| Lint | `npm run lint` | No findings |
+| Types | `npm run typecheck` | No errors |
+| Unit | `npx vitest run` | 70 files, 1052 of 1052 passed (15 new in `provider-profile-route.test.ts`) |
+| Build | `npm run build` with synthetic public values (both 55851 and 55831 lanes) | Exit 0 |
+| Profile lane, isolated | `npx playwright test --config playwright.provider-profile.config.ts` (3153) | 32 of 32 passed |
+| Default lane, affected specs | `provider-profile-route`, `provider-directory-cards`, `provider-service-area`, `provider-badges`, `vendor-listing`, `pricing-approval`, `profile-gallery` with `--grep-invert @visual` (3103 / 55831) | 165 of 165 passed |
+| Default lane, request consumers | `request.spec.ts`, `early-access.spec.ts` | 138 of 138 passed |
+
+The new browser spec covers, from synthetic readbacks: the composition at 320, 390, 768, 1024
+and 1440 px with whole-page axe (WCAG 2.0/2.1/2.2 A/AA), reflow and one 44 px action; business
+facts, promise and video; the general-media label; no FAQ; required extras in the price and
+optional extras as information only; deposit apart from the quote; the size guide; direct,
+withdrawn, unknown, `__proto__` and malformed service links; unlisted and malformed provider ids
+(the malformed one is not read); history replacement, Back/Forward, cadence reset and ZIP
+retention; dropdown/chip keyboard choice; failed and capped extras, failed levels and recovery;
+failed reviews/photos/coverage; refresh withdrawal, refresh failure and listing withdrawal; a
+failed first read; provider-to-provider reset with a late response in flight; directory search,
+category and position return through the profile link and the browser's Back, and a crafted
+return address; every admission state; and the request handoff (binding, no cheapest
+answer-based level, questions, unreadable questions).
+
+**Existing specs updated, meaning kept:** the detail-route specs (`provider-service-area`,
+`provider-badges`, `vendor-listing`, `pricing-approval`) now answer reads with an exact count
+(`tests/fixtures/postgrest.ts`), find the provider heading at level 1 (the profile adds "About
+…"), and assert the same facts against the approved composition (map and community list, ZIP
+counts, credentials list without Top Rated, required extra in `$99`, "From $100 / set by your
+answers", the estimate, the size guide, no private notes). One P2A directory test now finds the
+profile heading at level 1.
+
+**Found while verifying:** a business-facts `<dl>` nested `dt`/`dd` too deep (axe
+`definition-list`), now a list; and a first default-lane run had one gallery test
+(`long names and failed reads 390px`) time out at 30 s while a build ran beside it; it passed in
+2.1 s on the rerun and is treated as load, not a defect.
+
+**Not run / not claimed:** the full `npm run test:a11y` suite, `npm run test:visual`, database
+tests (no data contract changed), real phones, screen readers, forced colours, 200 % browser zoom
+beyond the 320 px reflow, and owner visual acceptance. The comparison images are review material,
+not baselines. No merge, deploy, migration, hosted query, gate change or Phase 7 edit.
+
+## P2B CI closeout (2026-11-18 ET)
+
+This section supersedes finding 6 above ("Shared CI budget … Not changed here") and adds to the
+"Not run / not claimed" list. The earlier text stays as the record of 2026-11-17.
+
+**What the runs showed.** PR run 44215697628 passed on `b33a63b`. Push run 44215656433 on the same
+commit never passed in eight attempts, for three separate reasons:
+
+| Attempt | `application` result | Browser tests | Cause |
+|---|---|---|---|
+| 1 | Cancelled at start | None | The PR run on the same branch replaced it (shared concurrency group) |
+| 2 | Cancelled at 20 m | Not reached | Job time limit |
+| 3, 6, 7 | Cancelled at 20 m | 735, 817 and 762 of 846, none failed | Job time limit on a slower runner |
+| 4 | Failed | 845 of 846 | `mds.spec.ts:50`: axe scanned the mobile menu during its fade |
+| 5 | Cancelled at 20 m | 758 of 846, 2 failed | Job time limit, plus the two failures below |
+| 8 | Failed | 845 of 846 | `invitation-operations.spec.ts:185`: "Response has been disposed" |
+
+**Repairs, each its own commit. No test, assertion, worker setting or security check was removed.**
+
+1. `11f459f` raises only the `application` job's `timeout-minutes` from 20 to 30, as Codex directed.
+2. `3be88cc` removes two test races. No application code changes.
+   - `mds.spec.ts`: the scan now waits for finite animations to end. The evidence is attempt 4's
+     artifact, which reports the menu title at 1.15:1 mid-fade. **This failure was not reproduced
+     locally.** A throttled local comparison failed once on the old test by timing out, which is
+     not the same failure, so it is not offered as proof.
+   - `invitation-operations.spec.ts` and `invitation-binding.spec.ts`: a refresh still in flight
+     when the test ends no longer fails it. Both use the `unrouteAll` cleanup that three other
+     specs already use. The evidence is attempt 8's trace.
+
+**Still undiagnosed.** Attempt 5 also failed `invitation-binding.spec.ts:225` and
+`request.spec.ts:837`. That job was cancelled before Playwright printed its failure details, and
+no artifact was kept, so neither cause is known. The first has the same shape as attempt 8's
+failure and is covered by the same cleanup, but that is an inference. The second passed 30 of 30
+repeated local runs and was left unchanged. Nine other specs use the same fetch-and-patch handlers
+without the cleanup; they have not failed and were not changed.
+
+**Local checks on `3be88cc`** (Node 24.17.0, WSL2, `NODE_ENV` unset): secret scan passed; lint, no
+findings; types, no errors; unit, 70 files and 1052 of 1052; build exit 0; isolated profile lane,
+32 of 32; `mds`, `invitation-operations` and `invitation-binding` specs, 50 of 50. The full
+`npm run test:a11y` suite was not run locally. CI is that run.
+
+**Open before acceptance:** green CI on the final head; Codex's review of these two commits; the
+owner's review of the comparison images; and the manual checks that have not been performed: real
+phones, a screen reader, forced colours, 200% browser zoom beyond the 320 px reflow check, and a
+side-by-side comparison with the reference PDFs. The comparison images are review material, not
+baselines, and no visual baseline was changed.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
 import {
   Bug,
@@ -27,7 +27,15 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
-import { cardOfferFor, profileServices, type CardContext, type ProfileService } from "@/lib/providerProfile/model";
+import {
+  cardOfferFor,
+  profileServices,
+  providerProfileHref,
+  validProviderId,
+  validSlug,
+  type CardContext,
+  type ProfileService,
+} from "@/lib/providerProfile/model";
 import { fetchPublicProviderOffers, type ProviderOffers } from "@/lib/providerProfile/publicOffers";
 
 type Category = {
@@ -253,6 +261,42 @@ export default function ProvidersPage() {
 
   const totalVendors = data?.contractors.length ?? 0;
 
+  /**
+   * TRACE-156 (P2B): the directory side of a profile's return. Opening a profile first records
+   * which card was opened in this entry's address (replacing it), so the browser's Back returns
+   * here with it; the profile's own "Providers" link builds the same address. Once the listing
+   * has rendered, that card is brought back into view and its profile link takes focus, and the
+   * marker is removed so a later reload starts at the top. Search (?q=) stays.
+   */
+  const rememberOpened = useCallback((providerId: string, categoryId: string) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("provider", providerId);
+    const category = validSlug(categoryId);
+    if (category) params.set("category", category);
+    else params.delete("category");
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+  }, []);
+
+  const positionRestored = useRef(false);
+  useEffect(() => {
+    if (isLoading || !data || positionRestored.current) return;
+    positionRestored.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const providerId = validProviderId(params.get("provider"));
+    const categoryId = validSlug(params.get("category"));
+    if (!params.has("provider") && !params.has("category")) return;
+    params.delete("provider");
+    params.delete("category");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    if (!providerId) return;
+    const cards = [...document.querySelectorAll<HTMLElement>(`[data-provider-card="${CSS.escape(providerId)}"]`)];
+    const card = cards.find((element) => categoryId && element.closest(`[data-directory-category="${CSS.escape(categoryId)}"]`)) ?? cards[0];
+    if (!card) return;
+    card.scrollIntoView({ block: "center" });
+    card.querySelector<HTMLElement>("[data-provider-profile-link]")?.focus({ preventScroll: true });
+  }, [isLoading, data]);
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -330,6 +374,7 @@ export default function ProvidersPage() {
                 <section
                   key={category.id}
                   id={`cat-${category.id}`}
+                  data-directory-category={category.id}
                   className={cn(
                     "scroll-mt-32 border-b border-border/40 py-14 md:py-20",
                     index % 2 === 1 ? "bg-muted/40" : "bg-background",
@@ -358,18 +403,27 @@ export default function ProvidersPage() {
                         // A category group leads with an offer from that category, never another's.
                         const inCategory = categoryServiceIds.get(category.id);
                         const context: CardContext = inCategory ? { kind: "category", serviceIds: inCategory } : { kind: "all" };
+                        const card = cardOfferFor(servicesByProvider.get(contractor.id) ?? [], context);
                         return (
                           <ProviderDirectoryCard
                             key={contractor.id}
                             anchorId={`provider-${contractor.id}`}
                             provider={contractor}
-                            card={cardOfferFor(servicesByProvider.get(contractor.id) ?? [], context)}
+                            card={card}
                             unpriced={offersUnavailable ? "unavailable" : "no_offer"}
                             listedServices={(contractor.services ?? []).map(
                               (serviceId) => serviceNames.get(serviceId) ?? formatServiceName(serviceId),
                             )}
                             media={[]}
-                            href={`/providers/${contractor.id}`}
+                            // A category card opens on the service it leads with; the profile
+                            // offers All services from there. Search and category travel as
+                            // validated values for the profile's return link.
+                            href={providerProfileHref(contractor.id, {
+                              serviceId: context.kind === "category" ? card?.service.id : null,
+                              search,
+                              categoryId: category.id,
+                            })}
+                            onOpen={() => rememberOpened(contractor.id, category.id)}
                           />
                         );
                       })}

@@ -16,6 +16,10 @@ const receipt = {
   for_current_version: true, bound: false,
 };
 
+// A refresh still in flight when a test ends is cut off with the page. That disposed
+// response must not fail the finished test (CI run 44215656433, attempt 8).
+test.afterEach(async ({ page }) => page.unrouteAll({ behavior: "ignoreErrors" }));
+
 test.beforeEach(async ({ page }) => {
   await page.route("**/*", route => {
     const origin = new URL(route.request().url()).origin;
