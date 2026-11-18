@@ -29,6 +29,10 @@ async function open(page: Page, path: string, width = 1440) {
   await page.setViewportSize({ width, height: 900 });
   await page.goto(path);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // Settled means React has revealed every streamed segment. Until it does, a hidden
+  // <div hidden id="S:n"> can still hold a second copy of the page beside the live one, and a
+  // CSS locator such as [data-profile] would resolve to both (CI run 44186485645, attempt 2).
+  await expect(page.locator('div[hidden][id^="S:"]')).toHaveCount(0);
   await page.evaluate(() => document.fonts.ready);
 }
 

@@ -172,7 +172,11 @@ function appliesTo(addon: ProfileAddon, frequency: PricingFrequency) {
   return !addon.frequencies?.length || addon.frequencies.includes(frequency);
 }
 
-const bySortOrder = <T extends { sort_order: number }>(left: T, right: T) => left.sort_order - right.sort_order;
+const byId = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+
+/** The provider's order, with an id tie-break so equal sort values do not depend on row order. */
+const bySortOrder = <T extends { id: string; sort_order: number }>(left: T, right: T) =>
+  left.sort_order - right.sort_order || byId(left.id, right.id);
 
 /** Mirrors the current profile's cadence rule: lowest level, required extras included. */
 function fixedCadences(item: ProfilePackage): OfferCadence[] {
@@ -181,7 +185,7 @@ function fixedCadences(item: ProfilePackage): OfferCadence[] {
     .flatMap((frequency) => {
       const levels = item.tiers
         .filter((tier) => tierPricingFrequency(tier, fallback) === frequency)
-        .sort((left, right) => left.price - right.price);
+        .sort((left, right) => left.price - right.price || byId(left.id, right.id));
       const lowest = levels[0];
       if (!lowest) return [];
       const applicable = item.addons.filter((addon) => appliesTo(addon, frequency)).sort(bySortOrder);
@@ -514,14 +518,59 @@ export function addonUnitLabel(addon: ProfileAddon) {
 export type CardOffer = { service: ProfileService; offer: ProfileOffer; line: ReturnType<typeof offerPriceLine> };
 
 /**
+ * What the directory knows about the service a card should lead with.
+ * - service: an explicit service context. Only that service's offer may lead.
+ * - category: a category group. The lead offer must belong to a service in that category, so a
+ *   card never answers one category with another category's price.
+ * - all: no narrower context. The provider's first published offer leads.
+ * A free-text search is not a service context; it does not narrow this.
+ */
+export type CardContext =
+  | { kind: "all" }
+  | { kind: "service"; serviceId: string }
+  | { kind: "category"; serviceIds: ReadonlySet<string> };
+
+/** The offer a directory card shows, or null when the context has no published offer. */
+export function cardOfferFor(services: readonly ProfileService[], context: CardContext): CardOffer | null {
+  const service = context.kind === "service"
+    ? services.find((candidate) => candidate.id === context.serviceId)
+    : context.kind === "category"
+      ? services.find((candidate) => context.serviceIds.has(candidate.id))
+      : services[0];
+  const offer = service?.offers[0];
+  return service && offer ? { service, offer, line: offerPriceLine(offer) } : null;
+}
+
+/**
  * The offer a directory card shows. With a service context it is that service's first
  * published offer, or null (the card is left out of that result). Without one it is the
  * provider's first published offer; a provider-chosen lead service has no data source yet.
  */
 export function cardOffer(services: readonly ProfileService[], serviceId: string | null): CardOffer | null {
-  const service = serviceId ? services.find((candidate) => candidate.id === serviceId) : services[0];
-  const offer = service?.offers[0];
-  return service && offer ? { service, offer, line: offerPriceLine(offer) } : null;
+  return cardOfferFor(services, serviceId ? { kind: "service", serviceId } : { kind: "all" });
+}
+
+/**
+ * no_offer: the provider publishes no offer in this context. unavailable: the published offers
+ * could not be read. The two are never merged, and neither states an amount.
+ */
+export type CardUnpricedReason = "no_offer" | "unavailable";
+
+export type CardUnpricedLine = { reason: CardUnpricedReason; amount: string; detail: string };
+
+/** The price slot of a card with no offer to show. It stays truthful about which case it is. */
+export function cardUnpricedLine(reason: CardUnpricedReason): CardUnpricedLine {
+  return reason === "unavailable"
+    ? {
+      reason,
+      amount: "Pricing unavailable right now",
+      detail: "We could not read this provider's published prices. Their profile has the rest of their details.",
+    }
+    : {
+      reason,
+      amount: "No published price yet",
+      detail: "This provider has not published a price here. Their profile shows what they offer.",
+    };
 }
 
 // ---------------------------------------------------------------------------------------------

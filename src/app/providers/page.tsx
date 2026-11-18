@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
 import {
-  ArrowRight,
   Bug,
   Droplets,
   Home as HomeIcon,
   Leaf,
-  MapPin,
   Search,
   ShieldCheck,
   Sparkles,
@@ -21,6 +19,7 @@ import {
 } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { ProviderDirectoryCard } from "@/components/provider-profile/ProviderDirectoryCard";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +27,8 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { EARLY_ACCESS_CTA, EARLY_ACCESS_PATH } from "@/lib/earlyAccessExperience";
+import { cardOfferFor, profileServices, type CardContext, type ProfileService } from "@/lib/providerProfile/model";
+import { fetchPublicProviderOffers, type ProviderOffers } from "@/lib/providerProfile/publicOffers";
 
 type Category = {
   id: string;
@@ -59,6 +60,8 @@ type DirectoryData = {
   categories: Category[];
   services: CatalogService[];
   contractors: Contractor[];
+  /** Published offers for the listed providers, or the fact that they could not be read. */
+  offers: ProviderOffers;
 };
 
 type ProviderGroup = {
@@ -91,6 +94,28 @@ export default function ProvidersPage() {
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
 
+  /**
+   * TRACE-156: the search text lives in the address (?q=), so opening a provider and coming
+   * back returns the same result list and the browser's own scroll position. Read natively:
+   * this page prerenders, and useSearchParams would need its own boundary around it.
+   */
+  useEffect(() => {
+    const read = () => setSearch(new URLSearchParams(window.location.search).get("q") ?? "");
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+
+  const updateSearch = useCallback((value: string) => {
+    setSearch(value);
+    const params = new URLSearchParams(window.location.search);
+    if (value.trim()) params.set("q", value);
+    else params.delete("q");
+    const query = params.toString();
+    // Replace, not push: typing does not fill the history stack, and Back leaves the directory.
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -110,11 +135,18 @@ export default function ProvidersPage() {
         if (servicesResult.error) throw servicesResult.error;
         if (contractorsResult.error) throw contractorsResult.error;
 
+        const contractors = (contractorsResult.data ?? []) as Contractor[];
+        // TRACE-156: published offers for exactly the listed providers, read in batches. A
+        // failure here leaves the directory standing with unpriced cards; it is not a reason to
+        // hide a listed provider, and it never shows a lower amount.
+        const offers = await fetchPublicProviderOffers(contractors.map((contractor) => contractor.id), supabase);
+
         if (!cancelled) {
           setData({
             categories: (categoriesResult.data ?? []) as Category[],
             services: (servicesResult.data ?? []) as CatalogService[],
-            contractors: (contractorsResult.data ?? []) as Contractor[],
+            contractors,
+            offers,
           });
         }
       } catch (error) {
@@ -136,9 +168,43 @@ export default function ProvidersPage() {
     [data],
   );
 
+  /** The catalog names the shared profile model reads, as its own record. */
+  const catalogNames = useMemo(
+    () => Object.fromEntries((data?.services ?? []).map((service) => [service.id, service.name])),
+    [data],
+  );
+
+  /**
+   * Each listed provider's published services, from the one batched offer read. A provider with
+   * no published offer simply has none; `offersUnavailable` is the separate case where the read
+   * failed and no absence can be claimed.
+   */
+  const offersUnavailable = data?.offers.status === "unavailable";
+  const servicesByProvider = useMemo(() => {
+    const byProvider = new Map<string, ProfileService[]>();
+    if (data?.offers.status !== "ready") return byProvider;
+    for (const [providerId, packages] of data.offers.packages) {
+      byProvider.set(providerId, profileServices({ packages, serviceNames: catalogNames }));
+    }
+    return byProvider;
+  }, [data, catalogNames]);
+
+  /** The catalog services in each category, so a card's lead offer stays inside its group. */
+  const categoryServiceIds = useMemo(() => {
+    const byCategory = new Map<string, Set<string>>();
+    for (const service of data?.services ?? []) {
+      byCategory.set(service.category_id, (byCategory.get(service.category_id) ?? new Set()).add(service.id));
+    }
+    return byCategory;
+  }, [data]);
+
   const grouped = useMemo<ProviderGroup[]>(() => {
     if (!data) return [];
 
+    // The listing's own services array decides the groups, unchanged. It is not the provider's
+    // declared services: r0_public_providers returns the active catalog services that have a
+    // live, review-cleared, unarchived eligible offering, so a provider with none comes back
+    // with an empty array and falls to the catch-all group.
     const serviceToCategory = new Map(data.services.map((service) => [service.id, service.category_id]));
     const groups = data.categories
       .map((category) => ({
@@ -212,7 +278,7 @@ export default function ProvidersPage() {
                 aria-label="Search providers"
                 placeholder="Search providers, services, or cities…"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => updateSearch(event.target.value)}
                 className="h-14 rounded-full bg-background pl-12 text-base shadow-sm"
               />
             </div>
@@ -232,7 +298,9 @@ export default function ProvidersPage() {
                   >
                     <Icon className="h-4 w-4" />
                     {category.name}
-                    <span className="text-xs opacity-60">({vendors.length})</span>
+                    {/* The count is essential information, so it carries the secondary text
+                        semantic at full strength rather than a dimmed copy of the label. */}
+                    <span className="text-xs text-slate">({vendors.length})</span>
                   </a>
                 );
               })}
@@ -251,7 +319,7 @@ export default function ProvidersPage() {
             <div className="container-wide py-20 text-center">
               <Search className="mx-auto h-9 w-9 text-muted-foreground" />
               <p className="mt-4 text-lg text-muted-foreground">No providers match your search.</p>
-              <Button variant="outline" className="mt-4" onClick={() => setSearch("")}>
+              <Button variant="outline" className="mt-4" onClick={() => updateSearch("")}>
                 Clear search
               </Button>
             </div>
@@ -286,9 +354,25 @@ export default function ProvidersPage() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                      {vendors.map((contractor) => (
-                        <ProviderCard key={contractor.id} contractor={contractor} serviceNames={serviceNames} />
-                      ))}
+                      {vendors.map((contractor) => {
+                        // A category group leads with an offer from that category, never another's.
+                        const inCategory = categoryServiceIds.get(category.id);
+                        const context: CardContext = inCategory ? { kind: "category", serviceIds: inCategory } : { kind: "all" };
+                        return (
+                          <ProviderDirectoryCard
+                            key={contractor.id}
+                            anchorId={`provider-${contractor.id}`}
+                            provider={contractor}
+                            card={cardOfferFor(servicesByProvider.get(contractor.id) ?? [], context)}
+                            unpriced={offersUnavailable ? "unavailable" : "no_offer"}
+                            listedServices={(contractor.services ?? []).map(
+                              (serviceId) => serviceNames.get(serviceId) ?? formatServiceName(serviceId),
+                            )}
+                            media={[]}
+                            href={`/providers/${contractor.id}`}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 </section>
@@ -300,7 +384,9 @@ export default function ProvidersPage() {
         <section className="bg-primary/5 py-16">
           <div className="container-wide mx-auto max-w-2xl text-center">
             <h2 className="mb-4 text-2xl font-bold text-foreground md:text-3xl">Booking Is Opening by Invitation</h2>
-            <p className="mb-6 text-muted-foreground">
+            {/* On the tinted band the secondary text semantic carries this copy; the muted
+                foreground is specified against the plain background, not this one. */}
+            <p className="mb-6 text-slate">
               Join early access and we&apos;ll invite Lee County homeowners in stages as approved providers and services are ready in their area.
             </p>
             <Link
@@ -317,72 +403,6 @@ export default function ProvidersPage() {
       </main>
       <Footer />
     </div>
-  );
-}
-
-function ProviderCard({
-  contractor,
-  serviceNames,
-}: {
-  contractor: Contractor;
-  serviceNames: Map<string, string>;
-}) {
-  return (
-    <Card id={`provider-${contractor.id}`} className="group scroll-mt-28 border border-border transition-all hover:-translate-y-0.5 hover:shadow-lg">
-      <CardContent className="flex h-full flex-col gap-4 p-6">
-        <div className="flex items-start gap-4">
-          {contractor.logo_url ? (
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-border bg-white p-1">
-              {/* Provider logos are user-managed external assets, so a standard image avoids remote-host restrictions. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={contractor.logo_url} alt={`${contractor.name} logo`} className="h-full w-full object-contain" />
-            </div>
-          ) : (
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-accent/10">
-              <ShieldCheck className="h-7 w-7 text-accent" />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <Link href={`/providers/${contractor.id}`} className="block truncate font-semibold text-foreground transition-colors group-hover:text-accent">
-              {contractor.name}
-            </Link>
-            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-              {contractor.location && (
-                <span className="flex min-w-0 items-center gap-1 truncate">
-                  <MapPin className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{contractor.location}</span>
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {contractor.bio && <p className="line-clamp-2 text-sm text-muted-foreground">{contractor.bio}</p>}
-
-        <div className="flex flex-wrap gap-1.5">
-          {contractor.services?.slice(0, 3).map((serviceId) => (
-            <Badge key={serviceId} variant="secondary" className="text-[11px] font-normal">
-              {serviceNames.get(serviceId) ?? formatServiceName(serviceId)}
-            </Badge>
-          ))}
-          {(contractor.services?.length ?? 0) > 3 && (
-            <Badge variant="secondary" className="text-[11px] font-normal">
-              +{(contractor.services?.length ?? 0) - 3}
-            </Badge>
-          )}
-        </div>
-
-        <Link
-          href={`/providers/${contractor.id}`}
-          className={cn(
-            buttonVariants({ variant: "outline" }),
-            "mt-auto transition-colors group-hover:border-accent group-hover:text-accent",
-          )}
-        >
-          View Full Profile <ArrowRight className="ml-1 h-4 w-4" />
-        </Link>
-      </CardContent>
-    </Card>
   );
 }
 

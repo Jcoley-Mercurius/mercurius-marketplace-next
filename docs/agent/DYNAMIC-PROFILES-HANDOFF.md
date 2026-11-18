@@ -308,3 +308,441 @@ images show it pinned.
 **The review server on port 3123** was started from the reviewed build and was not stopped or
 restarted. The build directory has since been replaced, so restart it before looking at the
 gallery (the command is under "Run it").
+
+# P2A — the real provider directory uses the approved card (TRACE-156), 2026-11-17 ET
+
+This section is the checkpoint for the integration slice. The gallery sections above stay as
+written; nothing in them was re-tested here.
+
+## Slice
+
+- **Name:** TRACE-156 / P2A — integrate the approved provider cards into `/providers`.
+- **Branch / worktree:** `claude/trace156-p2a-provider-cards` in `../mercurius-profile-integration`.
+- **Base:** `origin/main` `3327c83a36c1fee6a7e33d9689293b537a627c14` (#172, the Next.js 16.4.6
+  security patch). Clean at start. The Phase 7 worktrees, branches, ports and processes were
+  not touched.
+- **Authority:** the owner's approval of the initial gallery layout/design, recorded once in
+  [OWNER-APPROVALS](../../governance/OWNER-APPROVALS.md#initial-profile-gallery-layout-and-design--2026-11-17),
+  and Codex's scope in [DYNAMIC-PROFILES-INTEGRATION](../../governance/DYNAMIC-PROFILES-INTEGRATION.md)
+  (*corrected 2026-11-17:* PR #173 was already merged to `main` as `d0c767d` at 17:42Z. This
+  branch's base `3327c83` predates that merge and was not rebased, but CI's `pull_request`
+  merge ref includes #173, and the PR merges cleanly).
+  The approval authorizes the presentation work and reasonable refinement. It is not Phase 7
+  acceptance, a release, or a claim that any manual, screen-reader, real-phone or production
+  check has passed.
+- **Traceability:** TRACE-156 is used as the slice name Codex assigned in the handoff.
+  *Corrected 2026-11-17:* the TRACE-156 row already exists on `main` (added by #173). It records
+  P2A as authorized but "live integration not yet implemented or accepted". This branch does not
+  edit `TRACEABILITY.md`; Codex or the owner updates that row's evidence and status at acceptance.
+
+## What it does
+
+- `/providers` renders every listed provider through the approved `ProviderDirectoryCard`
+  instead of the former identity-and-badges card. Category discovery, counts, the chip rail,
+  `#cat-<id>` anchors, `#provider-<id>` targeting, the provider URL, the search field and the
+  loading, failed, empty and no-match states all stay where they were.
+- A new reader, `src/lib/providerProfile/publicOffers.ts`, supplies the real offers: one
+  `vendor_packages` read for all the listed provider ids, then one `package_tiers` and one
+  `package_addons` read for the packages that came back, batched 100 identifiers at a time.
+  Columns, filters (`is_active`, `needs_review`, own offered add-ons) and ordering follow the
+  public provider storefront, so the directory and the profile publish the same offers. There is
+  no per-card request, no `select("*")`, no new grant, migration or schema change, and no write.
+- Eligibility, price meaning, cadence and the price line stay with the existing helpers
+  (`vendorPricing`, `pricingContent`) through the shared profile model. A row that arrives but is
+  withdrawn or under review still cannot price a card.
+- In a category group the lead offer must belong to a service in that category
+  (`cardOfferFor`, context `category`); it never shows another category's price. With no
+  narrower context the provider's first published offer leads. Free-text search is not treated
+  as a service context.
+- Packages, levels and extras are ordered by the provider's sort order with an id tie-break, so
+  equal sort values no longer depend on the order rows arrive in.
+- Missing and failed offers are different facts, and neither states an amount:
+  `No published price yet` for a provider that publishes nothing in that context, and
+  `Pricing unavailable right now` when a read failed. Both keep the card, its cover, identity
+  and layout, and the unpriced card names the provider's listed catalog services instead. A
+  failed level or add-on read is never priced from the rows that did arrive, because a missing
+  required extra would advertise a lower starting price than the provider published.
+- The search text is carried in the address (`?q=`), replacing the history entry, so opening a
+  provider and coming back returns the same result list. It is read with the native History API
+  rather than `useSearchParams`, which would need its own boundary on this prerendered page
+  (`node_modules/next/dist/docs/01-app/02-guides/single-page-applications.md`, "Shallow routing
+  on the client").
+- No service photo leads a directory card: `contractor_gallery` has no service link, so the
+  cover is the real business logo or its initials fallback, and the directory reads no gallery.
+
+## Run it
+
+Local lane, isolated from the default one (3103 / 55831) and from the gallery lane (3123),
+either of which another session may be using:
+
+```bash
+cd ../mercurius-profile-integration
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55841 NEXT_PUBLIC_SUPABASE_ANON_KEY=mds-synthetic-anon-key \
+  MERCURIUS_BUILD_WORKERS=2 npm run build
+npx playwright test --config playwright.provider-directory.config.ts   # port 3133, no fixture server
+```
+
+The lane fails closed if its port is taken; `PROVIDER_DIRECTORY_PORT=<port>` moves it. The spec
+stubs every public read itself and aborts every request outside the app's origin, so it needs no
+database and reaches no network. It writes its review images to
+`test-results/provider-directory-cards/` on every run.
+
+The same spec also runs in the repository's default lane (`npm run test:a11y`), so CI covers it.
+
+To look at the route itself on this build:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55841 NEXT_PUBLIC_SUPABASE_ANON_KEY=mds-synthetic-anon-key \
+  node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3133
+# http://127.0.0.1:3133/providers
+```
+
+With that synthetic Supabase value nothing answers, so the route shows its honest
+"temporarily unavailable" state. The card rendering itself is reviewed through the spec's
+images, which are produced from synthetic readbacks shaped like the current public responses.
+The worktree has no `.env.local`, and none was copied; no production credential was used.
+
+## Gaps and findings for Codex
+
+1. **Category membership comes from the public listing's own services array** — corrected after
+   Codex's review, which found the earlier wording wrong. That array is *not* the provider's
+   declared services: `r0_public_providers`
+   (`supabase/migrations/20261105001000_phase6_vendor_listing.sql`, the 2026-11-05 redefinition)
+   derives it from active catalog services that have a live, review-cleared, unarchived eligible
+   offering — a fixed price with valid exact levels, a Custom Quote, or a quote with a deposit.
+   SQL 105 asserts that a declared service without such an offering is left out. A provider whose
+   declared services have no live offering is still listable (`r0_provider_listable` only needs
+   content and an active declared service) and simply comes back with an empty array. Grouping is
+   unchanged, and no membership or count policy is proposed.
+2. **The provider's description no longer appears on a directory card.** The approved
+   composition answers offer, business, location and price; `bio` was on the former card. It is
+   still on the profile. Flagged as a content change the approval implies but does not state.
+3. **Return restoration is partial, as the handoff allows.** The directory restores its search
+   from `?q=` on Back and the browser restores scroll position. The profile side (returning to a
+   remembered list position, and a directory return control) is P2B; no claim is made for it here.
+4. **No service query parameter is added to the card link.** The detail route does not consume
+   one, so the link stays `/providers/<id>`.
+5. **A deposit is not shown on a card.** A `deposit_quote` offer reads "Quote after walkthrough",
+   with the deposit kept on the profile under current policy.
+
+## Not done
+
+No merge, deploy, migration, hosted query, secret, email or production change of any kind. No
+Phase 7 file, no `TRACEABILITY.md`, `OWNER-APPROVALS.md`, governance authority or gate was
+edited, and no dependency changed. P2B (the dynamic profile interior) is not started: the
+provider detail route is untouched. Database tests were not run, because no data contract
+changed. No real phone, screen reader, forced-colors, non-zoom text-size or side-by-side
+reference comparison was performed, and no visual baseline was updated.
+
+## Results
+
+Run on 2026-11-17 in this worktree, Node 24.17.0, npm 11.13.0, WSL2. The code and tests are the
+commit recorded in the PR; this section is the commit that carries it.
+
+| Check | Command | Result |
+|---|---|---|
+| Secret scan | `npm run scan:secrets` | Passed |
+| Lint | `npm run lint` | No findings |
+| Types | `npm run typecheck` | No errors |
+| Unit | `npx vitest run` | 69 files, 1033 of 1033 passed (15 new in `provider-directory-cards.test.ts`) |
+| Build | `npm run build` with the synthetic public values | Exit 0 |
+| Directory browser lane, isolated | `npx playwright test --config playwright.provider-directory.config.ts` (port 3133) | 15 of 15 passed |
+| Default lane, directory-adjacent specs | `npx playwright test provider-directory-cards.spec.ts vendor-listing.spec.ts provider-badges.spec.ts provider-service-area.spec.ts profile-gallery.spec.ts --grep-invert @visual` (3103 / 55831, both free at the time) | 115 of 115 passed |
+
+The new browser spec covers, from synthetic readbacks: the approved card and its 2:1 cover at
+320, 390, 768, 1024 and 1440 px, with axe (WCAG 2.0/2.1/2.2 A and AA) and reflow at each width;
+a fixed one-time price that includes its required extra and its scope; a recurring offer's
+starting price; a custom quote with a published estimate; a deposit quote whose deposit is not a
+job price; an under-review package and a withdrawn one, neither of which prices a card; a
+provider with no package; an unlisted provider's package, which gets no card; a very long
+business name; a logo that fails to load, falling back to initials; a failed package, level and
+add-on read, each leaving every provider listed, unpriced and amount-free; a category lead that
+cannot cross into another category; category counts, the chip rail, `#cat-` anchors and
+`#provider-` targeting; provider, city and catalog-service search, `?q=`, Back from a profile,
+and clearing; and each card link's accessible name, focus and 44 px target.
+
+**Pre-existing contrast, found.** With providers rendered, axe reported two colour-contrast
+failures on `/providers`: the category chip's provider count (`text-xs opacity-60`, 4.06:1) and
+the closing invitation paragraph. This candidate excluded them by name and reported them instead
+of repairing them. **Superseded by the revision below**, which repairs both and removes the
+exclusions; pre-existing status is not an approved accessibility exception.
+
+**Not run:** the full browser suite (`npm run test:a11y`), `npm run test:visual`, and database
+tests (no data contract changed). CI on the PR is the full run; its result for this candidate is
+not recorded here.
+
+**Local note.** This shell had `NODE_ENV=production` set, which makes `npm ci` skip dev
+dependencies and makes two `application-notification-tracing` unit assertions fail on the
+logger's reported environment (`local` instead of `test`). Both are environmental: with
+`NODE_ENV` unset the whole suite passes. Nothing in that logger was touched.
+
+**Review images.** The spec writes them to `test-results/provider-directory-cards/` on every
+run: the directory at 320, 390 and 1440 px full page, and the failed-offer-read state at
+1440 px. They are not committed.
+
+## Revision of 2026-11-17 (Codex P2A review of `e7cf134`)
+
+Codex requested changes on PR #174 (review `5943079065`). Both P2 findings are repaired here and
+the six dispositions are applied. The slice, base, authority and boundaries above are unchanged.
+
+### 1. A capped response is no longer taken as the whole set
+
+Codex reproduced the defect independently: batching 100 identifiers bounds the query string, not
+the returned rows. PostgREST caps a response (1,000 rows by default) and that cap is a
+*successful* response, so one short answer was accepted as complete. With 100 providers, each
+priced $100 with eleven required $1 extras, the 1,100 add-on rows met the ceiling and the last
+provider's card read $100 where the provider published $111.
+
+`fetchPublicProviderOffers` now reads every table through one paging helper:
+
+- each request takes an explicit window (`range`) over a stable server-side order — `sort_order`,
+  then `id`, so windows neither overlap nor skip;
+- the window advances by the rows that actually arrived, whatever the server's own ceiling;
+- the set ends only when the server reports nothing past it;
+- the total is checked against the exact count the server reported for the first window
+  (`count: "exact"`, requested once per read);
+- a failed later page, a missing count, a count that disagrees with the rows received, or a read
+  that will not finish within a bounded number of requests all return `unavailable`. The partial
+  rows are never used, and no hosted row limit is raised.
+
+Regression coverage in `tests/unit/provider-directory-cards.test.ts` reproduces the reviewer's
+scenario against the real reader and model: it first asserts that one capped response alone
+yields `$100`, then that the reader yields `$111`; that the add-on windows advance `0, 500,
+1000, 1100`; that the ceiling cuts through a package's required extras rather than between
+packages; that 150 providers page inside *both* identifier batches, not only the first; that a
+failed later page is `unavailable`; and that rows falling short of the reported count are
+`unavailable` rather than priced.
+
+### 2. The directory's contrast is repaired and nothing is excused
+
+Both failures are fixed with existing approved semantics, not a global palette change:
+
+- the category chip's count drops `opacity-60` and takes `text-slate` — it is essential
+  information, not a dimmed copy of the label;
+- the closing invitation paragraph takes `text-slate` on the tinted band, where the muted
+  foreground is specified against the plain background.
+
+`PRE_EXISTING` and the selector-based filtering are gone. The spec now asserts the whole rendered
+page clean at 320, 390, 768, 1024 and 1440 px, asserts the cards clean separately, and measures
+the repaired text's actual painted contrast — compositing every translucent band it sits on — at
+rest, on hover and on focus, requiring 4.5:1 at every width. The hovered and focused states are
+also re-run through axe while the state is held. Measured ratios are printed by the run and are
+recorded below.
+
+### 3. Dispositions applied
+
+1. **Category source corrected.** Grouping still uses the public RPC's services array, and the
+   description of that array is fixed throughout (Gaps item 1, the comment in
+   `src/app/providers/page.tsx` and the spec's header): it is derived from active catalog
+   services with a live, review-cleared, unarchived eligible offering, not from declared
+   services. The normal browser fixtures now match that contract — every listed service has an
+   eligible offering, and the provider that publishes nothing comes back with an empty array and
+   lands in the catch-all group, which is also where its under-review and withdrawn packages are
+   proved unable to price a card. Responses that disagree with the contract are kept, relabelled
+   as explicitly defensive scenarios.
+2. **Card description:** accepted as written; the bio stays on the profile.
+3. **Contrast:** repaired locally as above; no global token approval sought or needed.
+4. **Return restoration:** the spec no longer implies a full round trip. It states that the
+   directory-side state returns from the address and that profile-side return control and
+   list-position restoration are P2B.
+5. **Card links:** unchanged at `/providers/<id>`.
+6. **NODE_ENV:** every install and check in this revision ran with `NODE_ENV` unset. The logger
+   and its assertions are untouched.
+
+### Revision results
+
+Run on 2026-11-17 in this worktree, Node 24.17.0, npm 11.13.0, WSL2. Every install and check in
+this revision ran with **`NODE_ENV` unset** (`env -u NODE_ENV …`); the earlier candidate's two
+environmental unit failures do not recur, and no logger or assertion was changed.
+
+| Check | Command | Result |
+|---|---|---|
+| Secret scan | `npm run scan:secrets` | Passed |
+| Lint | `npm run lint` | No findings |
+| Types | `npm run typecheck` | No errors |
+| Unit | `npx vitest run` | 69 files, 1037 of 1037 passed (19 in `provider-directory-cards.test.ts`, 4 of them the response-ceiling regressions) |
+| Build | `npm run build` with the synthetic public values | Exit 0 |
+| Directory browser lane, isolated | `npx playwright test --config playwright.provider-directory.config.ts` (port 3133) | 21 of 21 passed |
+| Default lane, directory-adjacent specs | `npx playwright test provider-directory-cards.spec.ts vendor-listing.spec.ts provider-badges.spec.ts provider-service-area.spec.ts --grep-invert @visual` (3103 / 55831) | 39 of 39 passed |
+
+**Measured contrast (the evidence for finding 2).** The spec paints each element's real
+composited colours on a canvas, so the oklab tints are measured as rendered, and prints every
+ratio. At all five widths: chip label 14.28 at rest and 5.84 hovered and focused; chip count
+6.88 at rest and 6.15 hovered and focused; invitation paragraph 6.53 in every state. All exceed
+the 4.5:1 requirement, and the whole page — not an allowlisted subset — is asserted clean by axe
+at rest and while each state is held.
+
+**Two test-harness defects were found and fixed while verifying this** (both in the new spec,
+not in the application): the stub answered `range()` from a `Range` header, but PostgREST sends
+`offset`/`limit` query parameters, so windows never advanced; and the first contrast helper
+parsed colour strings itself, which produced nonsense for the `oklab()` values Tailwind emits
+for tinted backgrounds. While the first defect was present the reader behaved exactly as
+designed — it refused to price anything it could not prove complete.
+
+**Not run:** the full browser suite (`npm run test:a11y`), `npm run test:visual`, and database
+tests (no data contract changed). CI on the PR is the full run.
+
+**Lane budgets.** Two budget problems were found and fixed, neither a test failure:
+
+- A first default-lane run of this revision timed out in six tests while the machine was loaded —
+  including the untouched `provider-service-area` spec, which is why the cause is read as load
+  against that lane's 30 s per-test budget rather than the change. The new spec was split per
+  width, so each test fits well inside it; the rerun above passes 39 of 39.
+- CI run 44154503451 on `313f667` then **cancelled** the `application` job at its 20-minute
+  `timeout-minutes` cap, during the browser step. Lint, the secret scan, types, unit, the
+  production audit and the build all succeeded first, and `lifecycle` passed (the earlier
+  infrastructure failure did not recur). The same job takes about 14 m 50 s on `main`, so the
+  new spec's roughly thirty axe scans consumed the headroom. The scans are now twelve, with no
+  loss of what they prove: the whole page is scanned at every width at rest (which also covers
+  the cards, since nothing is excluded any more), the held hover and focus states are scanned at
+  the narrowest and widest widths, the contrast is still *measured* in every state at all five
+  widths, and one of the three identical failed-read pages carries the scan. The isolated lane
+  went from 1 m 06 s to 53 s for the same 21 tests. No workflow file or timeout was changed.
+
+## Candidate `535d722` — Codex re-review and exact-head CI (2026-11-17)
+
+Codex re-reviewed `535d722` and closed both P2 findings (the response ceiling and the
+directory's contrast). Nothing was reimplemented after that review. This section adds only
+evidence, and it is a documentation-only commit on top of the candidate.
+
+**Exact-head CI: run 44168091887, `pull_request` on `535d722`, all required jobs passed.**
+
+| Job | Result | Duration |
+|---|---|---|
+| `backend` | Passed | 9 m 33 s |
+| `lifecycle` | Passed | 3 m 31 s |
+| `application` | Passed | 16 m 20 s (cap 20 m) |
+| Supabase Preview | Skipped (no migration) | — |
+
+Inside `application`, lint, the secret scan, types, the production audit and the build all
+passed. Unit tests ran 69 files and passed 1037 of 1037. The browser step (`npm run test:a11y`)
+passed 814 tests in 14.0 m, with no flaky, retried or skipped tests, and all 21 tests in
+`provider-directory-cards.spec.ts` ran. The run that `313f667` cancelled at the cap now fits,
+with about 3 m 40 s of headroom. No workflow file or timeout was changed.
+
+The closeout gates first listed here are superseded by the section below. That list wrongly said
+#173 was not on `main` and that the TRACE-156 row still had to be entered.
+
+## Documentation head `11e8d54` failed CI: an order-dependent unit-test mock (2026-11-17)
+
+CI run 44173445715 on `11e8d54` (a documentation-only commit on top of `535d722`) failed in job
+134366945834, in `application` → Unit tests. One test failed, 1036 passed:
+`tests/unit/application-notification-tracing.test.ts:621`, "logs an intake guard refusal with
+its enumerated reason", which expected 429 and received 201. `backend` and `lifecycle` passed. P2A
+does not touch that file or the route, so the same file on `main` carries the same defect.
+
+**Cause: a race between two module mocks, found in the test file and in vitest 4.1.11.** The
+journey `beforeEach` calls `vi.resetModules()` and queues
+`vi.doMock("@/lib/intakeProtection", … intakeGuardRefusal: () => null)`. The failing test then
+queued a second `doMock` of the same id with `() => "trap"` before its first import. Vitest
+resolves queued mocks only at the next import, and `resolveMocks()` resolves each run of
+consecutive "mock" entries **concurrently** (`Promise.all`). Each entry registers once its own
+async `resolveId` returns, and the last registration replaces the earlier one. When the
+`beforeEach` factory registers last, the guard passes, the route saves the application and
+answers 201. The route itself behaves correctly in both orders; only the test's set-up was
+order-dependent.
+
+**Reproduced locally on the unchanged file:** 2 of 15 full-file runs failed with the identical
+`expected 201 to be 429`. The filtered runs (0 of 25) never failed.
+
+**Repair (test only, assertion unchanged):** the `beforeEach` intake mock now returns a per-test
+`intakeRefusal` value (default `null`), and this test sets it to `"trap"` instead of registering a
+competing mock. This is the same pattern the file already uses for `storageError` and
+`insertError`. The test still asserts 429, no insert, exactly one `application_submission.refused`
+line with `intake_trap`, and no sensitive data. No production code changed. After the repair, 0 of
+40 full-file runs failed. The other unit files that use `vi.doMock` (`invitation-open-link`,
+`vendor-readiness`, `owner-email-ledger`) were checked: each flushes its queued mock with an
+import before the same module is mocked again, so none carries this race.
+
+**Phase 7 coordination.** The file belongs to TRACE-151 (Phase 7.1, merged on `main` in
+`438714c`). No Phase 7 branch, worktree or open PR modifies it, so the change does not overlap
+Phase 7 work. It is kept to one test-set-up hunk so that Codex can carry it independently of P2A
+if preferred.
+
+**Checks after the repair** (Node 24.17.0, `NODE_ENV` unset): secret scan passed; lint, no
+findings; types, no errors; unit, 69 files, 1037 of 1037. The application, browser specs and build
+are unchanged from `535d722`, so the browser lane was not rerun locally. CI on the new head is the
+full run.
+
+**`main` state confirmed:** `origin/main` is `d0c767d` (the #173 merge). #173 carries the owner
+approval record, `DYNAMIC-PROFILES-INTEGRATION.md`, `DYNAMIC-PROFILES-REVIEW.md` and the
+TRACE-156 row.
+
+**Closeout gates still open:**
+
+- Green exact-head CI on the head that carries this repair.
+- Codex's review of the test repair (a TRACE-151 test file), the PR's approval, and its move out
+  of draft.
+- Codex or the owner updates the existing TRACE-156 row with P2A's evidence and status at
+  acceptance.
+- No manual, real-phone, screen-reader, forced-colors or text-size check has been performed, and
+  none is claimed. The owner decides whether any of them is required before release.
+- The owner merges the PR, which is the release approval (DEC-2026-037). There is no migration,
+  so nothing is pushed to the hosted database first.
+
+P2B (the dynamic profile interior) has not started. No Phase 7 product code or Phase 7 branch was
+touched. The only Phase 7 file changed is the test set-up described above.
+
+## CI on `2bb0ca8`: a timeout across the whole suite, then a gallery-spec race (2026-11-17)
+
+The closeout gates in the section above are superseded by the list at the end of this one.
+
+**Attempt 1 of run 44186485645 hit the job's time limit.** `backend` and `lifecycle` passed. In
+`application`, the unit tests passed 69 of 69 files, including the repaired TRACE-151 test. The
+job was then cancelled at its 20-minute `timeout-minutes` during the browser step, after 792 of
+814 tests had passed and none had failed or retried. Every spec ran about 25–30% slower than on
+`535d722`. For example, `request.spec` took 174 s against 144 s, and the directory spec 27.5 s
+against 20.8 s. That pattern points to a slower runner, not to a test.
+
+**The time limit was already a problem on `main`.** The `application` job on `main`'s last
+three pushes was also cancelled at 20 minutes, during the single-worker browser step:
+
+| Run | Commit | Browser tests passed |
+|---|---|---|
+| 44139983494 | `d0c767d` (#173) | 793 of 793, still cancelled |
+| 44117454907 | `3327c83` (#172) | 734 of 793 |
+| 44095862042 | `a44a062` (#171) | 750 of 793 |
+
+P2A adds about 21–28 s. **Decision for Codex or the owner, shared with Phase 7:** raise the
+`application` timeout, or shard the browser step or give it more workers. No workflow file was
+changed here.
+
+**Attempt 2 (a re-run for exact-head evidence) finished within the limit and found one failure.**
+The browser step passed 813 of 814 tests in 13.2 m, and the unit tests passed 1037 of 1037. The
+failure was `profile-gallery.spec.ts:91`, "profile mixed quoted service 1024px", with
+`locator('[data-profile]')` resolving to two elements, a strict-mode violation. That spec is the
+P1 gallery from #171, and P2A does not touch its route or its spec.
+
+**Cause, read from the CI trace (`accessibility-evidence` artifact).** The final DOM snapshot
+holds the live `main#main-content > div[data-profile]`, and also a second copy inside
+`body > div#S:0[hidden] > main#main-content`. That second copy is React's streamed Suspense
+segment, which had not yet been revealed and removed. The hidden copy is outside the
+accessibility tree and nobody can see it, but a bare CSS locator counts it. Playwright reports a
+strict-mode violation immediately instead of retrying, so the assertion failed on that moment.
+This was not reproduced locally; the evidence is the CI trace.
+
+**Repair (test only, in the spec's `open()` helper):** after the heading is visible, `open()`
+now asserts that no `div[hidden][id^="S:"]` segment remains before anything else is checked.
+This is stricter than before: a segment that never resolved would now fail the test instead of
+being masked. No assertion was loosened, and no application code changed.
+
+**Checks after the repair** (Node 24.17.0, `NODE_ENV` unset; build with the synthetic public
+values, exit 0):
+
+- Lint: no findings. Types: no errors.
+- Isolated gallery lane (`playwright.profile-gallery.config.ts`, port 3143): 82 of 82 passed.
+- The 45 profile-view tests repeated 4 times (`--repeat-each=4`): 180 of 180 passed, none flaky.
+
+**Closeout gates still open:**
+
+- Green exact-head CI on the head that carries both test repairs. Because of the time-limit
+  problem above, a run can still be cancelled through runner speed alone.
+- A decision on the `application` job's CI budget.
+- Codex's review of the two test-only repairs (`application-notification-tracing.test.ts` from
+  TRACE-151 and `profile-gallery.spec.ts` from #171), the PR's approval, and its move out of
+  draft.
+- Codex or the owner updates the existing TRACE-156 row with P2A's evidence and status at
+  acceptance.
+- No manual, real-phone, screen-reader, forced-colors or text-size check has been performed, and
+  none is claimed. The owner decides whether any of them is required.
+- The owner's merge, which is the release (DEC-2026-037). There is no migration to push first.
