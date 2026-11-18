@@ -5,7 +5,7 @@ not change any authority, roadmap phase or release gate.
 
 ## Current status — saved photo-to-service links in draft (2026-11-18 ET)
 
-Saved photo-to-service associations are implemented on `claude/trace156-photo-service-links`, stacked on PR #177, as a draft PR for Codex review. The additive migration is not applied to hosted, and nothing is merged or deployed. The migration must reach hosted before this code is merged. Scope, decisions, evidence and open gates are in [PROFILE-MEDIA-CLEANUP](PROFILE-MEDIA-CLEANUP.md#saved-photo-to-service-associations-2026-11-18-et).
+Saved photo-to-service associations are implemented on `claude/trace156-photo-service-links`, stacked on PR #177, as a draft PR for Codex review. The additive migration has not been pushed to the production database, and nothing is merged or deployed. The repository's automatic Supabase Preview applies it to a separate preview branch database for this PR. The migration must reach production before this code is merged. Scope, decisions, evidence and open gates are in [PROFILE-MEDIA-CLEANUP](PROFILE-MEDIA-CLEANUP.md#saved-photo-to-service-associations-2026-11-18-et).
 
 ## Earlier status — P2C merged; media cleanup prepared (2026-11-18 ET)
 

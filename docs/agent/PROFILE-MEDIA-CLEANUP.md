@@ -61,7 +61,9 @@ No merge, deployment, hosted write or Phase 7 change is included here.
 
 Branch `claude/trace156-photo-service-links` in `../mercurius-profile-photo-services`, built on
 the PR #177 head `db163c3`, whose deduplication and whole-image fitting are kept. The draft PR
-targets that branch, so its diff shows this slice only. Not merged, deployed or applied to hosted.
+targets that branch, so its diff shows this slice only. Not merged or deployed, and no command was
+run against the production database. Opening the draft PR started the repository's automatic
+Supabase Preview, which applies this migration to a separate preview branch database.
 
 ### What changed
 
@@ -137,4 +139,4 @@ Synthetic data on an isolated local stack. These are review material, not visual
 - Manual checks not performed: real phones, screen readers, forced colours and 200% browser zoom.
 - Owner visual acceptance of the comparison images.
 
-No hosted migration, merge, deployment or Phase 7 change is included.
+No production migration, merge, deployment or Phase 7 change is included.
