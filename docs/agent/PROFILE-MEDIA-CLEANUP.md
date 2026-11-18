@@ -61,9 +61,8 @@ No merge, deployment, hosted write or Phase 7 change is included here.
 
 Branch `claude/trace156-photo-service-links` in `../mercurius-profile-photo-services`, built on
 the PR #177 head `db163c3`, whose deduplication and whole-image fitting are kept. The draft PR
-targets that branch, so its diff shows this slice only. Not merged or deployed, and no command was
-run against the production database. Opening the draft PR started the repository's automatic
-Supabase Preview, which applies this migration to a separate preview branch database.
+targets that branch, so its diff shows this slice only. Not merged or deployed. The migration is on
+production, pushed on the owner's instruction: see [Production migration](#production-migration).
 
 ### What changed
 
@@ -129,14 +128,28 @@ Synthetic data on an isolated local stack. These are review material, not visual
 - [Service with no matching photo](evidence/trace156-photo-services/compare-no-matching-photo-desktop.png)
 - [Vendor management and editor](evidence/trace156-photo-services/manage-vendor-and-editor.png)
 
+### Production migration
+
+Josh instructed the push on 2026-11-18 ET, after the draft PR opened and before Codex review.
+
+- **Dry run:** listed only `20261125001000_trace156_gallery_photo_services.sql`, with no seeds or roles.
+- **Before the push:** head `20261124001000`, 229 migrations, 90 gallery photos.
+- **After the push:** head `20261125001000`, 230 migrations, 90 gallery photos, 0 service links.
+- **Readback:** the table has RLS with one public read policy, and clients hold `SELECT` only. The
+  constraints, trigger and indexes are present. All five function bodies match the migration file
+  by MD5. Only the two public functions are executable by signed-in users, and neither by anonymous
+  visitors.
+- **Money fingerprint:** unchanged at `58 | af0fae6e0c5b604e9073e10bc060957e`.
+
+The deployed site does not read the new table yet, so existing photos and pages are unchanged. No
+photo can be linked in production until this code is released. If Codex review changes the
+migration, the fix must be a new forward migration.
+
 ### Open before release
 
 - Codex review, and CI on the final head. The full default browser suite was not run locally.
 - PR #177 merges first. This PR then retargets `main`.
-- **Release order:** with the owner's authorization, dry-run and push the migration to hosted
-  before merging. The new readers select the link table, so deploying first would show the public
-  photo failure state and stop the vendor and operator pages from loading.
 - Manual checks not performed: real phones, screen readers, forced colours and 200% browser zoom.
 - Owner visual acceptance of the comparison images.
 
-No production migration, merge, deployment or Phase 7 change is included.
+No merge, deployment or Phase 7 change is included.
