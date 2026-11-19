@@ -65,6 +65,18 @@ import {
 } from "@/lib/vendorMedia";
 import { calculateVendorProfileStrength, VENDOR_PROFILE_STRENGTH_MAX, vendorBioPoints } from "@/lib/vendorProfileStrength";
 import { VendorCoverageReadback } from "@/components/vendor/VendorCoverageReadback";
+import {
+  NewPhotoServicePicker,
+  PhotoServiceEditor,
+  usePhotoServiceOptions,
+} from "@/components/provider-profile/PhotoServiceAssignment";
+import {
+  assignNewPhoto,
+  GALLERY_PHOTO_COLUMNS,
+  GENERAL_BUSINESS_LABEL,
+  galleryPhotosFromRows,
+  type GalleryPhoto,
+} from "@/lib/providerProfile/photoServices";
 
 type Profile = {
   id: string;
@@ -87,13 +99,6 @@ type PageMode = "loading" | "live" | "unlinked" | "error";
 type ContactRow = {
   email: string | null;
   phone: string | null;
-};
-
-type GalleryItem = {
-  id: string;
-  image_url: string;
-  caption: string | null;
-  sort_order: number;
 };
 
 type StrengthAction = {
@@ -129,7 +134,8 @@ export default function VendorProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mode, setMode] = useState<PageMode>("loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [gallery, setGallery] = useState<GalleryPhoto[]>([]);
+  const [newPhotoServices, setNewPhotoServices] = useState<string[]>([]);
   const [newService, setNewService] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -143,6 +149,7 @@ export default function VendorProfilePage() {
   const [passwordError, setPasswordError] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const photoServices = usePhotoServiceOptions(profile?.id ?? null);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -172,9 +179,10 @@ export default function VendorProfilePage() {
         }),
         supabase
           .from("contractor_gallery")
-          .select("id, image_url, caption, sort_order")
+          .select(GALLERY_PHOTO_COLUMNS)
           .eq("contractor_id", data.id)
-          .order("sort_order"),
+          .order("sort_order")
+          .order("id"),
       ]);
 
       if (contactResult.error) throw contactResult.error;
@@ -184,7 +192,9 @@ export default function VendorProfilePage() {
       ) as ContactRow | null;
 
       if (galleryResult.error) throw galleryResult.error;
-      setGallery((galleryResult.data ?? []) as GalleryItem[]);
+      const photos = galleryPhotosFromRows(galleryResult.data ?? []);
+      if (!photos) throw new Error("Your photo services could not be read.");
+      setGallery(photos);
 
       setProfile({
         ...data,
@@ -383,7 +393,9 @@ export default function VendorProfilePage() {
       return;
     }
 
-    const created: GalleryItem[] = [];
+    const created: GalleryPhoto[] = [];
+    const assignment = newPhotoServices;
+    let unassigned = 0;
     setGalleryUploadProgress({ completed: 0, total: selected.length });
     try {
       for (const [index, file] of selected.entries()) {
@@ -395,7 +407,7 @@ export default function VendorProfilePage() {
             image_url: uploaded.signedUrl,
             sort_order: gallery.length + index,
           })
-          .select("id, image_url, caption, sort_order")
+          .select(GALLERY_PHOTO_COLUMNS)
           .single();
 
         if (insert.error) {
@@ -407,7 +419,9 @@ export default function VendorProfilePage() {
           throw insert.error;
         }
 
-        created.push(insert.data as GalleryItem);
+        const { photo, assigned } = await assignNewPhoto(createClient(), insert.data, assignment);
+        if (!assigned) unassigned += 1;
+        created.push(photo);
         setGalleryUploadProgress({ completed: created.length, total: selected.length });
       }
 
@@ -415,6 +429,13 @@ export default function VendorProfilePage() {
       toast.success(`${created.length} ${created.length === 1 ? "photo" : "photos"} added`, {
         description: "Your public project gallery has been updated.",
       });
+      if (unassigned) {
+        toast.error(`${unassigned} ${unassigned === 1 ? "photo was" : "photos were"} saved as ${GENERAL_BUSINESS_LABEL}`, {
+          description: "The services could not be saved. Use Edit services on the photo to try again.",
+        });
+      } else {
+        setNewPhotoServices([]);
+      }
     } catch (error) {
       if (created.length) setGallery((current) => [...current, ...created]);
       toast.error("Gallery upload stopped", {
@@ -425,7 +446,7 @@ export default function VendorProfilePage() {
     }
   }
 
-  async function removeGalleryImage(item: GalleryItem) {
+  async function removeGalleryImage(item: GalleryPhoto) {
     if (!profile || !user || mode !== "live") return;
     if (!window.confirm("Remove this image from your public project gallery?")) return;
 
@@ -520,6 +541,7 @@ export default function VendorProfilePage() {
       setProfile((current) =>
         current ? { ...current, ...payload } : current,
       );
+      photoServices.reload();
       toast.success("Profile saved", {
         description: "Your vendor listing details have been updated.",
       });
@@ -839,6 +861,13 @@ export default function VendorProfilePage() {
                 />
               </div>
 
+              <NewPhotoServicePicker
+                services={photoServices}
+                selected={newPhotoServices}
+                onChange={setNewPhotoServices}
+                disabled={Boolean(galleryUploadProgress)}
+              />
+
               {gallery.length === 0 ? (
                 <button
                   type="button"
@@ -853,7 +882,7 @@ export default function VendorProfilePage() {
               ) : (
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {gallery.map((item) => (
-                    <figure key={item.id} className="group relative overflow-hidden rounded-xl border bg-muted shadow-sm">
+                    <figure key={item.id} className="group relative flex flex-col overflow-hidden rounded-xl border bg-muted shadow-sm">
                       <div className="aspect-square overflow-hidden">
                         <img src={item.image_url} alt={item.caption || `${profile.name} completed project`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
                       </div>
@@ -867,6 +896,14 @@ export default function VendorProfilePage() {
                       >
                         {removingGalleryId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </button>
+                      <PhotoServiceEditor
+                        photoId={item.id}
+                        imageUrl={item.image_url}
+                        photoName={item.caption || `${profile.name} completed project`}
+                        serviceIds={item.service_ids}
+                        services={photoServices}
+                        onSaved={(serviceIds) => setGallery((current) => current.map((photo) => photo.id === item.id ? { ...photo, service_ids: serviceIds } : photo))}
+                      />
                     </figure>
                   ))}
                 </div>
