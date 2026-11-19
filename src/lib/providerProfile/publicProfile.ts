@@ -16,6 +16,7 @@
 // No write, no new grant and no service-role access: the browser client reads only what RLS
 // already exposes to anyone.
 
+import { fetchGalleryPairs, withGalleryPairs } from "@/lib/providerProfile/galleryManagement";
 import { fetchCompletedJobCounts } from "@/lib/completedJobs";
 import { homeSizeGuideText } from "@/lib/homeSizeGuide";
 import type { PublicReviews } from "@/lib/reviews/serviceReview";
@@ -91,7 +92,7 @@ export async function fetchPublicProviderProfile(providerId: string, client?: Cl
   const row = listing.data as PublicProviderRow | null;
   if (!row || row.id !== providerId) return { status: "missing" };
 
-  const [offers, catalog, reviews, galleryRows, zips, coverage, completed] = await Promise.all([
+  const [offers, catalog, reviews, galleryRows, zips, coverage, completed, pairs] = await Promise.all([
     fetchPublicProviderOffers([providerId], supabase),
     supabase.from("services_catalog").select("id, name").eq("is_active", true),
     supabase.rpc("public_provider_reviews", { _contractor_id: providerId }),
@@ -120,6 +121,7 @@ export async function fetchPublicProviderProfile(providerId: string, client?: Cl
         console.warn("Public completed-job count is unavailable", reason);
         return null;
       }),
+    fetchGalleryPairs(providerId, supabase),
   ]);
 
   // Unreadable service links make the gallery unavailable: a photo is never assumed to be general.
@@ -166,7 +168,7 @@ export async function fetchPublicProviderProfile(providerId: string, client?: Cl
     packages,
     offersStatus: offers.status,
     serviceNames: Object.fromEntries((catalog.error ? [] : catalog.data ?? []).map((service) => [service.id, service.name])),
-    media: gallery ?? [],
+    media: withGalleryPairs(gallery ?? [], pairs ?? []),
     mediaStatus: gallery ? "ready" : "unavailable",
     reviews: reviewData,
     serviceArea: zips && coverage

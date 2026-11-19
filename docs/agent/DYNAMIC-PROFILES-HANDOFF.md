@@ -1,5 +1,13 @@
 # Dynamic profiles — local review gallery (checkpoint)
 
+## Gallery management — 2026-11-19 ET
+
+#178 was merged into the already-merged cleanup branch, leaving its service editor off main.
+Recovery and owner-authorized bulk/caption/order/before-after improvements are on
+`codex/trace156-gallery-management` from main `1327a58`. See
+[GALLERY-MANAGEMENT.md](GALLERY-MANAGEMENT.md) for scope, evidence and release gates.
+No Phase 7 or production-provider changes are included.
+
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 

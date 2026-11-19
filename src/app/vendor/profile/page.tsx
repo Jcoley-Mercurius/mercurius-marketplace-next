@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GalleryManager } from "@/components/provider-profile/GalleryManager";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
@@ -67,7 +68,6 @@ import { calculateVendorProfileStrength, VENDOR_PROFILE_STRENGTH_MAX, vendorBioP
 import { VendorCoverageReadback } from "@/components/vendor/VendorCoverageReadback";
 import {
   NewPhotoServicePicker,
-  PhotoServiceEditor,
   usePhotoServiceOptions,
 } from "@/components/provider-profile/PhotoServiceAssignment";
 import {
@@ -134,6 +134,7 @@ export default function VendorProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mode, setMode] = useState<PageMode>("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const [galleryEditing, setGalleryEditing] = useState(false);
   const [gallery, setGallery] = useState<GalleryPhoto[]>([]);
   const [newPhotoServices, setNewPhotoServices] = useState<string[]>([]);
   const [newService, setNewService] = useState("");
@@ -376,7 +377,7 @@ export default function VendorProfilePage() {
   }
 
   async function addGalleryImages(files: FileList) {
-    if (!profile || !user || mode !== "live") return;
+    if (!profile || !user || mode !== "live" || galleryEditing) return;
     const selected = Array.from(files);
     if (!selected.length) return;
     if (selected.length > 10) {
@@ -405,7 +406,7 @@ export default function VendorProfilePage() {
           .insert({
             contractor_id: profile.id,
             image_url: uploaded.signedUrl,
-            sort_order: gallery.length + index,
+            sort_order: Math.max(-1, ...gallery.map((photo) => photo.sort_order)) + 1 + index,
           })
           .select(GALLERY_PHOTO_COLUMNS)
           .single();
@@ -842,7 +843,7 @@ export default function VendorProfilePage() {
                   variant="outline"
                   size="sm"
                   className="shrink-0"
-                  disabled={Boolean(galleryUploadProgress)}
+                  disabled={Boolean(galleryUploadProgress) || galleryEditing}
                   onClick={() => galleryInputRef.current?.click()}
                 >
                   {galleryUploadProgress ? <Loader2 className="animate-spin" /> : <Plus />}
@@ -865,49 +866,11 @@ export default function VendorProfilePage() {
                 services={photoServices}
                 selected={newPhotoServices}
                 onChange={setNewPhotoServices}
-                disabled={Boolean(galleryUploadProgress)}
+                disabled={Boolean(galleryUploadProgress) || galleryEditing}
               />
 
-              {gallery.length === 0 ? (
-                <button
-                  type="button"
-                  className="mt-4 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-4 py-10 text-center transition-colors hover:border-accent/50 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  disabled={Boolean(galleryUploadProgress)}
-                  onClick={() => galleryInputRef.current?.click()}
-                >
-                  <Camera className="h-7 w-7 text-accent" aria-hidden="true" />
-                  <span className="mt-3 text-sm font-medium">Add completed-project photos</span>
-                  <span className="mt-1 text-xs text-muted-foreground">JPG, PNG, or WebP; 10 MB maximum per image.</span>
-                </button>
-              ) : (
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {gallery.map((item) => (
-                    <figure key={item.id} className="group relative flex flex-col overflow-hidden rounded-xl border bg-muted shadow-sm">
-                      <div className="aspect-square overflow-hidden">
-                        <img src={item.image_url} alt={item.caption || `${profile.name} completed project`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                      </div>
-                      {item.caption && <figcaption className="truncate border-t bg-background/95 px-3 py-2 text-xs text-muted-foreground">{item.caption}</figcaption>}
-                      <button
-                        type="button"
-                        className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-background/95 text-muted-foreground shadow-md transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
-                        disabled={removingGalleryId === item.id}
-                        onClick={() => void removeGalleryImage(item)}
-                        aria-label="Remove gallery image"
-                      >
-                        {removingGalleryId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      </button>
-                      <PhotoServiceEditor
-                        photoId={item.id}
-                        imageUrl={item.image_url}
-                        photoName={item.caption || `${profile.name} completed project`}
-                        serviceIds={item.service_ids}
-                        services={photoServices}
-                        onSaved={(serviceIds) => setGallery((current) => current.map((photo) => photo.id === item.id ? { ...photo, service_ids: serviceIds } : photo))}
-                      />
-                    </figure>
-                  ))}
-                </div>
-              )}
+              <GalleryManager key={profile.id} contractorId={profile.id} photos={gallery} services={photoServices}
+                onChange={setGallery} onBusyChange={setGalleryEditing} onRemove={removeGalleryImage} disabled={Boolean(galleryUploadProgress) || removingGalleryId !== null} />
             </section>
 
             <p className="rounded-lg bg-accent/8 px-3 py-2 text-xs leading-5 text-muted-foreground">

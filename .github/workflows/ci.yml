@@ -56,6 +56,8 @@ jobs:
             | sed -E 's/eyJ[A-Za-z0-9._-]+/[redacted]/g; s/sb_[a-z]+_[A-Za-z0-9_-]+/[redacted]/g' | tail -40 || true
       - name: Database role and money contracts
         run: sh scripts/phase5-db.sh test
+      - name: Concurrent gallery captions, ordering, pairs and bulk edits (TRACE-156)
+        run: node scripts/gallery-management-concurrency.mjs
       - name: Concurrent checkout, webhook and refund reservations
         run: node scripts/phase5-concurrency.mjs
       - name: Concurrent lifecycle appeals and ACH preparation

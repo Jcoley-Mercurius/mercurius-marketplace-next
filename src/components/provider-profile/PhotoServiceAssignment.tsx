@@ -31,7 +31,7 @@ export type PhotoServiceOptions = {
 
 /** The services this provider's photos can be linked to, as the server reports them. */
 export function usePhotoServiceOptions(contractorId: string | null): PhotoServiceOptions {
-  const [result, setResult] = useState<{ key: string; status: "ready" | "error"; options: PhotoServiceOption[] } | null>(null);
+  const [result, setResult] = useState<{ key: string; contractorId: string; status: "ready" | "error"; options: PhotoServiceOption[] } | null>(null);
   const [version, setVersion] = useState(0);
   const key = `${contractorId}:${version}`;
 
@@ -39,21 +39,21 @@ export function usePhotoServiceOptions(contractorId: string | null): PhotoServic
     if (!contractorId) return;
     let current = true;
     fetchPhotoServiceOptions(createClient(), contractorId)
-      .then((options) => { if (current) setResult({ key, status: "ready", options }); })
+      .then((options) => { if (current) setResult({ key, contractorId, status: "ready", options }); })
       .catch((reason) => {
         console.warn("Photo service options are unavailable", reason);
-        if (current) setResult((previous) => ({ key, status: "error", options: previous?.options ?? [] }));
+        if (current) setResult((previous) => ({ key, contractorId, status: "error", options: previous?.contractorId === contractorId ? previous.options : [] }));
       });
     return () => { current = false; };
   }, [contractorId, key]);
 
   const reload = useCallback(() => setVersion((value) => value + 1), []);
   // A reload keeps the last answer on screen until the new one arrives.
-  if (!result) return { status: "loading", options: [], reload };
+  if (!result || result.contractorId !== contractorId) return { status: "loading", options: [], reload };
   return { status: result.key === key || result.status === "ready" ? result.status : "loading", options: result.options, reload };
 }
 
-function ServiceChecklist({ legend, options, selected, onChange, disabled }: {
+export function ServiceChecklist({ legend, options, selected, onChange, disabled }: {
   legend: string;
   options: readonly PhotoServiceOption[];
   selected: readonly string[];

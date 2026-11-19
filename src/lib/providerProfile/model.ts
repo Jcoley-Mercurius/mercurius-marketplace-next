@@ -89,6 +89,10 @@ export type ProfileMedia = {
   caption: string | null;
   sort_order: number;
   service_ids?: readonly string[];
+  pair_id?: string;
+  pair_role?: "before" | "after";
+  project_title?: string;
+  companion_id?: string;
 };
 
 /** PROPOSED content: published service answers have no data source today. */

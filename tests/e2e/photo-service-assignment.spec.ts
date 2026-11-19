@@ -20,6 +20,8 @@ type World = {
   saves: Record<string, unknown>[];
   failSaves: number;
   failOptions: number;
+  pairs: { id: string; contractor_id: string; before_id: string; after_id: string; title: string }[];
+  failWrites: number;
 };
 
 const serviceOptions: Option[] = [
@@ -34,7 +36,7 @@ const existingPhotos = (): Photo[] => [
 const asRow = ({ service_ids, ...photo }: Photo) => ({ ...photo, contractor_gallery_services: service_ids.map((service_id) => ({ service_id })) });
 
 async function serve(page: Page, role: "vendor" | "admin", overrides: Partial<World> = {}) {
-  const world: World = { photos: existingPhotos(), options: serviceOptions, saves: [], failSaves: 0, failOptions: 0, ...overrides };
+  const world: World = { photos: existingPhotos(), options: serviceOptions, saves: [], failSaves: 0, failOptions: 0, pairs: [], failWrites: 0, ...overrides };
   await page.route("**/*", (route) => {
     const url = new URL(route.request().url());
     return url.protocol === "data:" || ["http://127.0.0.1:3103", "http://127.0.0.1:55831"].includes(url.origin) ? route.continue() : route.abort();
@@ -53,7 +55,7 @@ async function serve(page: Page, role: "vendor" | "admin", overrides: Partial<Wo
       world.photos.push(photo);
       return route.fulfill({ status: 201, json: asRow(photo) });
     }
-    return route.fulfill({ json: world.photos.map(asRow) });
+    return route.fulfill({ json: [...world.photos].sort((a,b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)).map(asRow) });
   });
   await page.route("**/rpc/contractor_photo_service_options", (route) => {
     if (world.failOptions > 0) {
@@ -73,6 +75,38 @@ async function serve(page: Page, role: "vendor" | "admin", overrides: Partial<Wo
     world.photos = world.photos.map((photo) => photo.id === body.p_gallery_id ? { ...photo, service_ids: saved } : photo);
     return route.fulfill({ json: saved });
   });
+  await page.route("**/rest/v1/contractor_gallery_pairs?*", (route) => route.fulfill({ json: world.pairs, headers: { "content-range": `0-${Math.max(0, world.pairs.length - 1)}/${world.pairs.length}` } }));
+  for (const command of ["bulk_contractor_gallery_services", "save_contractor_gallery_caption", "reorder_contractor_gallery", "create_contractor_gallery_pair", "remove_contractor_gallery_pair"]) {
+    await page.route(`**/rpc/${command}`, async (route) => {
+      const body = route.request().postDataJSON();
+      world.saves.push({ command, ...body });
+      if (world.failWrites-- > 0) return route.fulfill({ status: 503, json: { message: "Synthetic outage" } });
+      if (command === "save_contractor_gallery_caption") {
+        const photo = world.photos.find((p) => p.id === body.p_gallery_id)!;
+        if (photo.caption !== body.p_expected_caption) return route.fulfill({ status: 409, json: { code: "40001", message: "Caption changed" } });
+        photo.caption = body.p_caption.trim() || null;
+        return route.fulfill({ json: photo.caption });
+      }
+      if (command === "bulk_contractor_gallery_services") {
+        const rows = world.photos.filter((p) => body.p_gallery_ids.includes(p.id)).map((photo) => {
+          photo.service_ids = body.p_mode === "clear" ? [] : body.p_mode === "add" ? [...new Set([...photo.service_ids, ...body.p_service_ids])] : body.p_service_ids;
+          return { gallery_id: photo.id, service_ids: photo.service_ids };
+        });
+        return route.fulfill({ json: rows });
+      }
+      if (command === "reorder_contractor_gallery") {
+        world.photos.forEach((p) => { p.sort_order = body.p_ordered_ids.indexOf(p.id); });
+        return route.fulfill({ json: body.p_ordered_ids });
+      }
+      if (command === "create_contractor_gallery_pair") {
+        const pair = { id: "00000000-0000-4000-8000-0000000000f1", contractor_id: contractor, before_id: body.p_before_id, after_id: body.p_after_id, title: body.p_title.trim() };
+        world.pairs.push(pair);
+        return route.fulfill({ json: pair });
+      }
+      world.pairs = world.pairs.filter((p) => p.id !== body.p_pair_id);
+      return route.fulfill({ status: 204 });
+    });
+  }
   await page.route("**/storage/v1/object/sign/**", (route) => route.fulfill({ json: { signedURL: "/object/sign/vendor-media/synthetic.png?token=synthetic" } }));
   await page.route("**/storage/v1/object/vendor-media/**", (route) => route.fulfill({ json: { Id: "synthetic", Key: "vendor-media/synthetic.png" } }));
   await syntheticSession(page.context(), role);
@@ -81,7 +115,7 @@ async function serve(page: Page, role: "vendor" | "admin", overrides: Partial<Wo
   return world;
 }
 
-const tile = (page: Page, name: string) => page.locator("figure, div.space-y-2").filter({ has: page.getByRole("button", { name: `Edit services for ${name}` }) }).last();
+const tile = (page: Page, name: string) => page.locator("[data-gallery-photo]").filter({ has: page.getByRole("button", { name: `Edit services for ${name}` }) }).last();
 const label = (page: Page, name: string) => tile(page, name).locator("[data-photo-services]");
 const editor = (page: Page) => page.getByRole("dialog", { name: "Services in this photo" });
 async function edit(page: Page, name: string) {
@@ -231,5 +265,120 @@ for (const width of [320, 768, 1440]) {
     await page.keyboard.press("Escape");
     await expect(editor(page)).toHaveCount(0);
     await expect(trigger).toBeFocused();
+  });
+}
+
+for (const role of ["vendor", "admin"] as const) {
+  test(`${role}: caption changes require Save, retain failed drafts and survive reload`, async ({ page }) => {
+    const world = await serve(page, role, { failWrites: 1 });
+    const card = page.locator('[data-gallery-photo]').first();
+    await card.getByLabel("Caption", { exact: true }).fill("Before gutter cleaning");
+    await card.getByLabel("Caption", { exact: true }).blur();
+    expect(world.saves).toHaveLength(0);
+    await card.getByRole("button", { name: "Save caption", exact: true }).click();
+    await expect(card.getByRole("alert")).toContainText("Your edits are kept");
+    await expect(card.getByLabel("Caption", { exact: true })).toHaveValue("Before gutter cleaning");
+    expect(world.photos[0].caption).toBe("Cleared gutter run");
+    await card.getByRole("button", { name: "Save caption", exact: true }).click();
+    await expect(card.getByText("Caption saved.", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.locator('[data-gallery-photo]').first().getByLabel("Caption", { exact: true })).toHaveValue("Before gutter cleaning");
+  });
+
+  test(`${role}: bulk add preserves labels, replace and clear are explicit, and filters show counts`, async ({ page }) => {
+    const world = await serve(page, role);
+    const manager = page.locator('[data-gallery-manager]');
+    await manager.getByRole("button", { name: "Select visible photos" }).click();
+    await expect(manager.getByText("2 selected · 2 shown")).toBeVisible();
+    await manager.getByLabel("Filter photos").selectOption("pool-service");
+    await expect(manager.getByText("2 selected · 1 shown")).toBeVisible();
+    await manager.getByRole("button", { name: "Edit selected services" }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit services for 2 photos" });
+    await dialog.getByRole("checkbox", { name: "Gutter cleaning", exact: true }).check();
+    await dialog.getByRole("button", { name: "Save selected services" }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(world.photos[1].service_ids).toEqual(["pool-service", "gutter-cleaning"]);
+    await manager.getByRole("button", { name: "Edit selected services" }).click();
+    await dialog.getByLabel("Assignment action").selectOption("replace");
+    await dialog.getByRole("checkbox", { name: "Window cleaning", exact: true }).check();
+    await dialog.getByRole("button", { name: "Save selected services" }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(world.photos.every((p) => p.service_ids.join() === "window-cleaning")).toBe(true);
+    await manager.getByLabel("Filter photos").selectOption("all");
+    await manager.getByRole("button", { name: "Edit selected services" }).click();
+    await dialog.getByLabel("Assignment action").selectOption("clear");
+    await expect(dialog).toContainText("Every selected photo will become General business.");
+    await dialog.getByRole("button", { name: "Save selected services" }).click();
+    await expect(manager.locator('[data-photo-services]').filter({ hasText: 'General business' })).toHaveCount(2);
+    await page.reload();
+    await expect(manager.getByLabel("Filter photos").getByRole("option", { name: "General business (2)" })).toHaveCount(1);
+  });
+
+  test(`${role}: order survives refresh and before/after pairing keeps the originals`, async ({ page }) => {
+    const world = await serve(page, role);
+    await page.getByRole("button", { name: "Move Pool deck earlier", exact: true }).click();
+    await expect(page.locator('[data-gallery-photo]').first().getByLabel("Caption", { exact: true })).toHaveValue("Pool deck");
+    await page.reload();
+    const manager = page.locator('[data-gallery-manager]');
+    await expect(manager.locator('[data-gallery-photo]').first().getByLabel("Caption", { exact: true })).toHaveValue("Pool deck");
+    await manager.getByRole("button", { name: "Select visible photos" }).click();
+    await manager.getByRole("button", { name: "Pair before and after", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Pair before and after", exact: true });
+    await dialog.getByLabel("Project title").fill("Gutter project");
+    await dialog.getByLabel("Before photo").selectOption(existingPhotos()[0].id);
+    await dialog.getByRole("button", { name: "Save pair", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(world.pairs[0]).toMatchObject({ before_id: existingPhotos()[0].id, after_id: existingPhotos()[1].id, title: "Gutter project" });
+    expect(world.photos).toHaveLength(2);
+    expect(world.photos[1].service_ids).toEqual(["pool-service"]);
+    await page.reload();
+    await expect(manager.getByRole("button", { name: "Unpair project" })).toHaveCount(2);
+    page.once("dialog", (d) => d.accept());
+    await manager.getByRole("button", { name: "Unpair project" }).first().click();
+    await expect(manager.getByRole("button", { name: "Unpair project" })).toHaveCount(0);
+    expect(world.photos).toHaveLength(2);
+  });
+}
+
+test("bulk errors preserve the selection and draft, with cancel leaving saved labels alone", async ({ page }) => {
+  const world = await serve(page, "vendor", { failWrites: 1 });
+  await page.getByRole("button", { name: "Select visible photos" }).click();
+  await page.getByRole("button", { name: "Edit selected services" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit services for 2 photos" });
+  await dialog.getByRole("checkbox", { name: "Window cleaning", exact: true }).check();
+  await dialog.getByRole("button", { name: "Save selected services" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("could not be saved");
+  await expect(dialog.getByRole("checkbox", { name: "Window cleaning", exact: true })).toBeChecked();
+  expect(world.photos[1].service_ids).toEqual(["pool-service"]);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByText("2 selected · 2 shown")).toBeVisible();
+});
+
+test("stale caption conflicts keep the user's draft", async ({ page }) => {
+  const world = await serve(page, "vendor");
+  const card = page.locator('[data-gallery-photo]').first();
+  await card.getByLabel("Caption", { exact: true }).fill("My draft");
+  world.photos[0].caption = "Saved elsewhere";
+  await card.getByRole("button", { name: "Save caption", exact: true }).click();
+  await expect(card.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(card.getByLabel("Caption", { exact: true })).toHaveValue("My draft");
+  expect(world.photos[0].caption).toBe("Saved elsewhere");
+});
+
+for (const width of [320, 768, 1440]) {
+  test(`bulk and pair dialogs at ${width}px: accessibility and reflow`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await serve(page, "vendor");
+    await page.getByRole("button", { name: "Select visible photos" }).click();
+    for (const name of ["Edit selected services", "Pair before and after"]) {
+      await page.getByRole("button", { name, exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(tags).analyze()).violations).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByRole("button", { name, exact: true })).toBeFocused();
+    }
   });
 }

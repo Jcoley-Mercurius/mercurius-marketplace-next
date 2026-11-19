@@ -39,7 +39,7 @@ test.beforeEach(async ({ page, baseURL }) => {
 // ---------------------------------------------------------------------------------------------
 
 type Table = "vendor_packages" | "package_tiers" | "package_addons" | "package_qualifying_questions"
-  | "contractor_gallery" | "contractor_service_zips" | "coverage_areas" | "services_catalog";
+  | "contractor_gallery_pairs" | "contractor_gallery" | "contractor_service_zips" | "coverage_areas" | "services_catalog";
 type Trial = "signed_out" | "invited" | "waiting" | "revoked" | "unavailable" | "not_homeowner" | "error" | "hold";
 
 type Provider = { id: string; data: ProfileData; listed: boolean; questions: Record<string, unknown>[]; completed: number | null; business: Record<string, unknown> };
@@ -84,6 +84,10 @@ const rowsFor = (world: World, table: Table): Record<string, unknown>[] => {
         ...addon, package_id: item.id }))));
     case "package_qualifying_questions":
       return all.flatMap(({ questions }) => questions);
+    case "contractor_gallery_pairs":
+      return all.flatMap(({ id, data }) => data.media.filter((photo) => photo.pair_role === "before" && photo.pair_id && photo.companion_id).map((photo) => ({
+        id: photo.pair_id, contractor_id: id, before_id: photo.id, after_id: photo.companion_id, title: photo.project_title,
+      })));
     case "contractor_gallery":
       // The reader's embedded links, as PostgREST returns them. No link is a general business photo.
       return all.flatMap(({ id, data }) => data.media.map((item) => ({
@@ -152,7 +156,7 @@ async function serve(page: Page, providers: Provider[], options: Partial<Pick<Wo
   // Later routes take precedence: anything the page reads that is not served below is empty.
   await page.route("**/rest/v1/**", (route) => route.fulfill({ json: [] }));
   await page.route("**/rest/v1/rpc/**", (route) => route.fulfill({ json: null }));
-  for (const table of ["vendor_packages", "package_tiers", "package_addons", "package_qualifying_questions", "contractor_gallery",
+  for (const table of ["vendor_packages", "package_tiers", "package_addons", "package_qualifying_questions", "contractor_gallery", "contractor_gallery_pairs",
     "contractor_service_zips", "coverage_areas", "services_catalog"] as Table[]) {
     await page.route(`**/rest/v1/${table}?*`, (route) => serveTable(world, table, route));
   }
@@ -1091,3 +1095,21 @@ for (const width of [390, 1440]) {
     }
   });
 }
+
+
+test("explicit before and after projects follow service filters without borrowing photos", async ({ page }) => {
+  const item = linkedProvider();
+  const first = item.data.media[0];
+  const second = item.data.media[1];
+  first.service_ids = ["gutter-cleaning"];
+  second.service_ids = ["gutter-cleaning"];
+  Object.assign(first, { pair_id: "project-1", pair_role: "before", companion_id: second.id, project_title: "Gutter cleanup" });
+  Object.assign(second, { pair_id: "project-1", pair_role: "after", companion_id: first.id, project_title: "Gutter cleanup" });
+  await serve(page, [item]);
+  await page.goto(`/providers/${item.id}?service=gutter-cleaning`);
+  await expect(page.locator("[data-project-role]")).toHaveText("Before · Gutter cleanup");
+  await page.getByRole("button", { name: "View paired after photo" }).click();
+  await expect(page.locator("[data-project-role]")).toHaveText("After · Gutter cleanup");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "View paired after photo" })).toBeVisible();
+});
