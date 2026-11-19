@@ -3,6 +3,9 @@
 // acknowledgement and contact-detail RPCs and the resend route are served from an in-memory
 // store that applies the page's own keyset cursor, filter and limit, and mirrors the database's
 // attestation and operator rules. The database contract itself is SQL 120.
+// TRACE-155 (7.3C-1): the store also serves owner_email_evidence for the requested rows and
+// owner_email_evidence_counts. By default every row reads rule 10 and the receiver is unarmed,
+// as production does until 7.3D; the evidence contract itself is SQL 122.
 import { test, expect, type Page, type Route } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -33,6 +36,20 @@ const row = (n: number, state: string, extra: Partial<Row> = {}): Row => ({
 const renewalRow = (n: number, state: string, extra: Partial<Row> = {}) => row(n, state, { kind: "renewal_document", ...extra });
 const BUSINESS = "Synthetic Renewal Provider";
 
+type Summary = { rule: number; delivered_fact: boolean; non_delivery_proven: boolean; needs_review: boolean; reported: string[] };
+type Report = { fact: string; provider_created_at: string | null; bounce_type: string | null; bounce_subtype: string | null; excluded: string | null };
+type EvidenceAttempt = Summary & { attempt: number; has_conflict: boolean; reports: Report[] };
+type Evidence = { attempt: number; summary: Summary; has_conflict: boolean; conflict_reasons: string[]; attempts: EvidenceAttempt[] };
+const summaryFor = (rule: number, reported: string[] = []): Summary => ({
+  rule, reported, delivered_fact: [1, 2, 3, 4].includes(rule), non_delivery_proven: rule === 5, needs_review: [1, 2, 3, 5, 6].includes(rule),
+});
+const report = (fact: string, extra: Partial<Report> = {}): Report => ({ fact, provider_created_at: "2026-11-18T15:00:00+00:00", bounce_type: null, bounce_subtype: null, excluded: null, ...extra });
+const ZERO_COUNTS = {
+  checked_at: "2026-11-12T16:00:00+00:00", receiver_armed: false, not_delivered: 0, to_review: 0, conflicting_rows: 0,
+  conflicting_reports: { conflict_disagree: 0, conflict_id_ambiguous: 0, conflict_tag_invalid: 0, content_conflict: 0 },
+  unmatched_reports: { total: 0, by_type: {} }, retention_backlog: { expired: 0, expired_over_cap: false, oldest_expires_at: null },
+};
+
 class Store {
   rows: Row[];
   overviewCalls: Array<Record<string, unknown>> = [];
@@ -45,6 +62,12 @@ class Store {
   holdNext: Promise<void> | null = null;
   detailRefusal: { status: number; code: string } | null = null;
   resendResponse: { status: number; body: Record<string, unknown> } = { status: 200, body: { state: "sent", message: "Resend accepted the email. Confirm it arrived in the owner inbox." } };
+  evidenceCalls: Array<Record<string, unknown>> = [];
+  countsCalls = 0;
+  evidence: Record<string, Partial<Evidence>> = {};
+  evidenceCounts: Record<string, unknown> = ZERO_COUNTS;
+  failEvidence = false;
+  failCounts = false;
   constructor(rows: Row[]) { this.rows = rows; }
   sorted() { return [...this.rows].sort((a, b) => (a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : a.created_at < b.created_at ? 1 : -1)); }
   overview(body: Record<string, unknown>) {
@@ -82,6 +105,23 @@ class Store {
       if (this.holdNext) { const held = this.holdNext; this.holdNext = null; await held; }
       if (this.failOverview > 0) { this.failOverview -= 1; return json(500, { code: "XX000", message: "Synthetic outage" }); }
       return json(200, this.overview(body));
+    }
+    if (name === "owner_email_evidence") {
+      this.evidenceCalls.push(body);
+      if (this.failEvidence) return json(500, { code: "XX000", message: "Synthetic evidence outage" });
+      const sources = (body.p_sources ?? []) as string[];
+      return json(200, {
+        checked_at: "2026-11-12T16:00:00+00:00",
+        items: this.rows.filter((r) => sources.includes(r.source_id)).map((r) => ({
+          kind: r.kind, source_id: r.source_id, attempt: r.attempts, summary: summaryFor(10), has_conflict: false, conflict_reasons: [], attempts: [],
+          ...this.evidence[r.source_id],
+        })),
+      });
+    }
+    if (name === "owner_email_evidence_counts") {
+      this.countsCalls += 1;
+      if (this.failCounts) return json(500, { code: "XX000", message: "Synthetic counts outage" });
+      return json(200, this.evidenceCounts);
     }
     if (name === "owner_email_contact_submission") {
       this.detailCalls.push(body);
@@ -600,6 +640,165 @@ for (const theme of ["light", "dark"]) {
       await page.keyboard.press("Escape");
       await rowFor(page, 2).getByRole("button", { name: "View submission" }).click();
       await expect(page.getByRole("dialog", { name: "Contact submission" })).toContainText(SENTINEL.subject);
+      await accessible(page);
+    });
+  }
+}
+
+// 7.3C-1 ------------------------------------------------------------------------------------
+const count = (page: Page, term: string) => page.locator("dl > div").filter({ has: page.locator("dt", { hasText: new RegExp(`^${term.replace(/[()]/g, "\\$&")}$`) }) }).locator("dd");
+
+function evidenceFixture() {
+  const store = new Store([row(1, "sent"), row(2, "sent"), row(3, "sent"), row(4, "unknown"), row(5, "failed", { attempts: 2 }), renewalRow(6, "sent")]);
+  store.evidence = {
+    [sourceId(1)]: { summary: summaryFor(4), attempts: [{ attempt: 1, has_conflict: false, ...summaryFor(4), reports: [report("delivered"), report("accepted", { provider_created_at: null })] }] },
+    [sourceId(2)]: { summary: summaryFor(5, ["bounced_permanent"]), attempts: [{ attempt: 1, has_conflict: false, ...summaryFor(5, ["bounced_permanent"]),
+      reports: [report("bounced_permanent", { bounce_type: "permanent", bounce_subtype: "no_email" })] }] },
+    [sourceId(3)]: { summary: summaryFor(2, ["bounced_permanent"]), has_conflict: true, conflict_reasons: ["stored_conflict"],
+      attempts: [{ attempt: 1, has_conflict: true, ...summaryFor(2, ["bounced_permanent"]), reports: [
+        report("delivered"), report("bounced_permanent", { bounce_type: "permanent", provider_created_at: "2026-11-18T15:00:00+00:00" }),
+        report("complained", { excluded: "stored_conflict", provider_created_at: null }),
+      ] }] },
+    [sourceId(4)]: { summary: summaryFor(10), has_conflict: true, conflict_reasons: ["current_conflict"],
+      attempts: [{ attempt: 1, has_conflict: true, ...summaryFor(10), reports: [report("delivered", { excluded: "current_conflict" })] }] },
+    [sourceId(5)]: { attempt: 2, summary: summaryFor(10), attempts: [{ attempt: 1, has_conflict: false, ...summaryFor(6), reports: [report("bounced_transient", { bounce_type: "transient", bounce_subtype: "mailbox_full" })] }] },
+    [sourceId(6)]: { summary: summaryFor(1), attempts: [{ attempt: 1, has_conflict: false, ...summaryFor(1), reports: [report("delivered"), report("complained")] }] },
+  };
+  store.evidenceCounts = {
+    ...ZERO_COUNTS, receiver_armed: true, not_delivered: 1, to_review: 2, conflicting_rows: 2,
+    conflicting_reports: { conflict_disagree: 1, conflict_id_ambiguous: 0, conflict_tag_invalid: 2, content_conflict: 1 },
+    unmatched_reports: { total: 7, by_type: { "email.delivered": 7 } },
+    retention_backlog: { expired: 3, expired_over_cap: false, oldest_expires_at: "2026-11-10T12:00:00+00:00" },
+  };
+  return store;
+}
+
+test("7.3C-1: each row shows its evidence summary, disclaimer, conflict signal and per-attempt history", async ({ page }) => {
+  const store = evidenceFixture();
+  await open(page, store);
+  await page.getByRole("button", { name: "Show all tracked emails" }).click();
+  await expect(rows(page)).toHaveCount(6);
+  await expect(rowFor(page, 1)).toContainText("Delivery evidence: Handed to the recipient's mail server. Not proof it reached the inbox or was read");
+  await expect(rowFor(page, 2)).toContainText("Delivery evidence: Not delivered: Resend reported a permanent bounce");
+  await expect(rowFor(page, 3)).toContainText("Provider reports disagree: handed to the mail server, and also reported bounced permanently");
+  await expect(rowFor(page, 3)).toContainText("Conflicting provider report — excluded from this summary.");
+  await expect(rowFor(page, 3)).not.toContainText("can count again");
+  await expect(rowFor(page, 4)).toContainText("Delivery evidence: Delivery evidence not available");
+  await expect(rowFor(page, 4)).toContainText("excluded while current email records disagree with it. If the conflicting record is removed, this report can count again.");
+  await expect(rowFor(page, 5)).toContainText("Delivery evidence (attempt 2): Delivery evidence not available");
+  await expect(rowFor(page, 6)).toContainText("Handed to the mail server; the recipient marked it as spam");
+  // The row's state badge is unchanged by evidence: a sent row still reads "Accepted by Resend".
+  await expect(rowFor(page, 2).getByText("Accepted by Resend", { exact: true })).toBeVisible();
+  // History is collapsed until opened, per attempt, with provider times as received.
+  const history = rowFor(page, 3).getByText("Provider report history");
+  await expect(rowFor(page, 3).getByText("Excluded: conflicting report")).toBeHidden();
+  await history.click();
+  await expect(rowFor(page, 3).getByText(/^Attempt 1: Provider reports disagree/)).toBeVisible();
+  await expect(rowFor(page, 3).getByText(/Handed to the mail server; the recipient marked it as spam · Provider time not given · Excluded: conflicting report/)).toBeVisible();
+  await rowFor(page, 5).getByText("Provider report history").click();
+  await expect(rowFor(page, 5)).toContainText("Attempt 1: Bounce reported (temporary or undetermined); delivery not established");
+  await expect(rowFor(page, 5)).toContainText("Temporary bounce reported (inconclusive) (mailbox full)");
+  await rowFor(page, 4).getByText("Provider report history").click();
+  await expect(rowFor(page, 4)).toContainText("Excluded while current email records disagree with it");
+  // Evidence never removes or adds an action.
+  await expect(rowFor(page, 5).getByRole("button", { name: "Resend email" })).toBeVisible();
+  await expect(rowFor(page, 2).getByRole("button", { name: "Resend email" })).toHaveCount(0);
+  // S-50: no label says Delivered, Received, Read or Confirmed alone, and nothing says "later".
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/\b(Delivered|Received|Read|Confirmed)\b/);
+  expect(text).not.toMatch(/\blater\b/i);
+});
+
+test("7.3C-1: the additive counts sit beside the unchanged attention counts", async ({ page }) => {
+  const store = evidenceFixture();
+  await open(page, store);
+  await expect(page.getByText("Delivery evidence from Resend", { exact: true })).toBeVisible();
+  await expect(count(page, "Not delivered (Resend reported)")).toHaveText("1");
+  await expect(count(page, "Provider reports to review")).toHaveText("2");
+  await expect(count(page, "Emails with conflicting provider reports")).toHaveText("2");
+  await expect(count(page, "Conflicting provider reports (all emails)")).toHaveText("4");
+  await expect(count(page, "Unmatched provider reports")).toHaveText("7");
+  await expect(count(page, "Expired reports awaiting deletion")).toHaveText("3");
+  await expect(page.getByText(/Oldest expired report: Nov 10, 2026/)).toBeVisible();
+  await expect(page.getByText("Resend delivery reports are not being collected yet", { exact: false })).toHaveCount(0);
+  // The existing attention summary is unchanged.
+  await expect(summary(page, "Total")).toHaveText("2");
+  await expect(summary(page, "Contact form")).toHaveText("2");
+  await expect(summary(page, "Renewal documents")).toHaveText("0");
+  expect(store.countsCalls).toBe(1);
+});
+
+test("7.3C-1: unarmed, every row reads rule 10 and the counts say reports are not collected", async ({ page }) => {
+  const store = new Store([row(1, "failed"), row(2, "unknown"), renewalRow(3, "missed")]);
+  await open(page, store);
+  await expect(rows(page)).toHaveCount(3);
+  for (const n of [1, 2, 3]) await expect(rowFor(page, n)).toContainText("Delivery evidence: Delivery evidence not available");
+  await expect(page.getByText("Resend delivery reports are not being collected yet, so emails show “Delivery evidence not available”.")).toBeVisible();
+  await expect(count(page, "Not delivered (Resend reported)")).toHaveText("0");
+  await expect(page.getByText("Provider report history")).toHaveCount(0);
+  await expect(page.getByText(/Oldest expired report/)).toHaveCount(0);
+});
+
+test("7.3C-1: evidence is read for exactly the visible rows, page by page, and reset on reload", async ({ page }) => {
+  const store = new Store(fixture());
+  await open(page, store);
+  await expect(rows(page)).toHaveCount(50);
+  await expect.poll(() => store.evidenceCalls.length).toBe(1);
+  const visible = await rows(page).locator("span.font-mono").allTextContents();
+  expect((store.evidenceCalls[0].p_sources as string[]).map((id) => `Ref ${id.slice(0, 8)}`)).toEqual(visible);
+  expect(store.evidenceCalls[0].p_kind).toBeNull();
+  await page.getByRole("button", { name: "Load older" }).click();
+  await expect(rows(page)).toHaveCount(100);
+  await expect.poll(() => store.evidenceCalls.length).toBe(2);
+  expect(store.evidenceCalls[1].p_sources).toHaveLength(50);
+  expect(new Set([...(store.evidenceCalls[0].p_sources as string[]), ...(store.evidenceCalls[1].p_sources as string[])]).size).toBe(100);
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect.poll(() => store.evidenceCalls.length).toBe(3);
+  expect(store.evidenceCalls[2].p_sources).toHaveLength(50);
+  expect(store.countsCalls).toBe(2);
+});
+
+test("7.3C-1: a failed evidence read leaves the list and actions working and says so", async ({ page }) => {
+  const store = new Store([row(1, "failed"), row(2, "unknown")]);
+  store.failEvidence = true;
+  store.failCounts = true;
+  await open(page, store);
+  await expect(rows(page)).toHaveCount(2);
+  await expect(page.getByRole("alert").filter({ hasText: "Delivery evidence could not be loaded. The email states and actions below are unaffected." })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Delivery evidence counts could not be loaded." })).toBeVisible();
+  await expect(rowFor(page, 1)).not.toContainText("Delivery evidence:");
+  await expect(rowFor(page, 1).getByRole("button", { name: "Resend email" })).toBeVisible();
+  await expect(summary(page, "Total")).toHaveText("2");
+  store.failEvidence = false;
+  store.failCounts = false;
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(rowFor(page, 1)).toContainText("Delivery evidence: Delivery evidence not available");
+  await expect(page.getByRole("alert").filter({ hasText: "Delivery evidence could not be loaded" })).toHaveCount(0);
+});
+
+test("7.3C-1: the history disclosure is keyboard operable", async ({ page }) => {
+  await open(page, evidenceFixture());
+  await page.getByRole("button", { name: "Show all tracked emails" }).click();
+  const disclosure = rowFor(page, 2).locator("summary", { hasText: "Provider report history" });
+  await disclosure.focus();
+  await expect(disclosure).toBeFocused();
+  await expect(rowFor(page, 2).getByText(/^Attempt 1:/)).toBeHidden();
+  await page.keyboard.press("Enter");
+  await expect(rowFor(page, 2).getByText("Attempt 1: Not delivered: Resend reported a permanent bounce")).toBeVisible();
+  await expect(rowFor(page, 2)).toContainText("Permanent bounce reported (no such mailbox)");
+  await page.keyboard.press("Enter");
+  await expect(rowFor(page, 2).getByText(/^Attempt 1:/)).toBeHidden();
+});
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [320, 1440]) {
+    test(`7.3C-1 owner emails ${theme} ${width}px: axe and reflow with evidence, counts and open history`, async ({ page }) => {
+      await open(page, evidenceFixture(), { theme, width });
+      await page.getByRole("button", { name: "Show all tracked emails" }).click();
+      await expect(rows(page)).toHaveCount(6);
+      await accessible(page);
+      for (const n of [3, 4, 5]) await rowFor(page, n).getByText("Provider report history").click();
+      await expect(rowFor(page, 3).getByText(/^Attempt 1:/)).toBeVisible();
       await accessible(page);
     });
   }

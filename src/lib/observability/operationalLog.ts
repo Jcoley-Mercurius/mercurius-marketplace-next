@@ -51,6 +51,9 @@ const EVENTS_V2 = [
   "owner_email.recorded",
   "owner_email.record_failed",
   "owner_email.background_failed",
+  // TRACE-155 (Phase 7.3C-1): the attempt is sent untagged because its correlation reference
+  // was unavailable. Carries no tag, ref or provider value.
+  "owner_email.correlation_unavailable",
   "owner_email_resend.requested",
   "owner_email_resend.refused",
   "owner_email_resend.completed",
@@ -142,6 +145,7 @@ const ERROR_CODES = [
   "webhook_payload_invalid_encoding",
   "webhook_signature_invalid",
   "webhook_payload_invalid",
+  "correlation_ref_unavailable",
   "unexpected",
 ] as const;
 export type OperationalErrorCode = (typeof ERROR_CODES)[number];
@@ -270,7 +274,8 @@ function levelFor(event: OperationalLogRecord["event"] | OperationalEventV2, out
     event.endsWith(".upload_url_failed") ||
     event.endsWith(".not_claimed") ||
     event.endsWith(".rejected") ||
-    event.endsWith(".conflict")
+    event.endsWith(".conflict") ||
+    event.endsWith(".correlation_unavailable")
   ) {
     return "warn" as const;
   }

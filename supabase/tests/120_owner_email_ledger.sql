@@ -12,6 +12,16 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- TRACE-155 (7.3C-1, Codex review 5926523770 item 3): the original 7.2C owner-email functions
+-- by exact signature. Later slices add owner_email_* functions (correlation ref, evidence
+-- readback) that are tested in their own files; a name filter would silently widen these checks.
+create function pg_temp.legacy_owner_email_functions() returns oid[] language sql as $$
+ select array['private.owner_email_require_kind(text)','private.owner_email_state(text,timestamptz,timestamptz)',
+  'private.owner_email_log(uuid,text,uuid,text,text,integer,uuid,text,text,text)','private.owner_email_lock(text,uuid)',
+  'private.owner_email_refuse_untracked(text,uuid)','private.owner_email_contact_create()','public.owner_email_claim(text,uuid,text)',
+  'public.owner_email_record(text,uuid,uuid,text,text,text)','public.owner_email_request_resend(text,uuid,boolean)',
+  'public.owner_email_acknowledge(text,uuid,text,boolean)','public.owner_email_overview(text,boolean,timestamptz,uuid,integer)',
+  'public.owner_email_contact_submission(uuid)','private.owner_email_renewal_create()']::regprocedure[]::oid[] $$;
 
 -- 1 admin operator, 2 homeowner, 3 vendor.
 insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
@@ -78,16 +88,16 @@ select ok(has_function_privilege('authenticated',f,'EXECUTE') and not has_functi
   'public.owner_email_overview(text,boolean,timestamp with time zone,uuid,integer)','public.owner_email_contact_submission(uuid)']) f;
 select ok(not has_function_privilege(r,p.oid,'EXECUTE'),'private helper is not executable: '||p.proname||' by '||r)
  from pg_proc p join pg_namespace n on n.oid=p.pronamespace, unnest(array['anon','authenticated','service_role']) r
- where n.nspname='private' and p.proname like 'owner\_email\_%';
+ where n.nspname='private' and p.oid = any(pg_temp.legacy_owner_email_functions());
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname in ('public','private') and p.proname like 'owner\_email\_%' and not p.prosecdef
+  where p.oid = any(pg_temp.legacy_owner_email_functions()) and not p.prosecdef
     and p.proname not in ('owner_email_require_kind','owner_email_state')),0,
  'every owner-email function that touches data is security definer');
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname in ('public','private') and p.proname like 'owner\_email\_%'
+  where p.oid = any(pg_temp.legacy_owner_email_functions())
     and not coalesce(p.proconfig @> array['search_path=""'],false)),0,'every owner-email function pins an empty search_path');
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='public' and p.proname like 'owner\_email\_%'
+  where n.nspname='public' and p.oid = any(pg_temp.legacy_owner_email_functions())
     and exists (select 1 from unnest(p.proargtypes::oid[]) t where t in (select oid from pg_type where typcategory='A'))),0,
  'no owner-email command takes a list: one row per call, no bulk acknowledgement');
 select is((select string_agg(tgname,',') from pg_trigger where tgrelid='public.contact_submissions'::regclass and not tgisinternal),
@@ -720,10 +730,10 @@ select is(md5(pg_get_functiondef('public.vendor_submit_renewal_document(text,uui
 -- 7.2C-2 adds only its trigger function; the twelve 7.2C-1 ledger functions are not restated.
 select is((select count(*)::text||'|'||md5(string_agg(pg_get_functiondef(p.oid), E'\n' order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)))
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname in ('public','private') and p.proname like 'owner\_email\_%' and p.proname <> 'owner_email_renewal_create'),
+  where p.oid = any(pg_temp.legacy_owner_email_functions()) and p.proname <> 'owner_email_renewal_create'),
  '12|016c0e683cb19c4c68769d87f5215ff1','the 7.2C-1 owner-email ledger functions are byte-identical');
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname in ('public','private') and p.proname like 'owner\_email\_%'),13,'7.2C-2 adds exactly one owner-email function');
+  where p.oid = any(pg_temp.legacy_owner_email_functions())),13,'7.2C-2 adds exactly one owner-email function (all 13 original signatures exist)');
 select is((select md5(string_agg(format('%s %s %s', c.relname, a.attname, format_type(a.atttypid,a.atttypmod)), ',' order by c.relname, a.attnum))
   from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='private' and c.relname in ('r0_application_notifications','r0_application_notification_events') and a.attnum>0 and not a.attisdropped),
