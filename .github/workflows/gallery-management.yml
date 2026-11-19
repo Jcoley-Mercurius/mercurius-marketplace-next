@@ -48,7 +48,8 @@ jobs:
       - name: Both photo managers, bulk editing, ordering, pairs, axe and focus
         run: npx playwright test photo-service-assignment.spec.ts --output test-results/gallery-management
       - name: Settled request-confirmation accessibility regression
-        run: npx playwright test request.spec.ts --grep 'confirmation (light|dark): axe' --output test-results/request-confirmation
+        run: >-
+          npx playwright test request.spec.ts --grep 'confirmation (light|dark): axe' --output test-results/request-confirmation
       - name: Keep synthetic gallery review images and failure evidence
         if: always()
         uses: actions/upload-artifact@v4
