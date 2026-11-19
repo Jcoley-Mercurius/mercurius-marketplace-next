@@ -680,11 +680,71 @@ test("unknown admission offers nothing bookable; a failed read can be retried", 
 
 const illustration = (page: Page) => page.locator("[data-service-illustration]");
 const imageryShots = "test-results/provider-profile-imagery";
-const imageLoaded = (page: Page) => expect.poll(() => illustration(page).locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0));
+const imageLoaded = (page: Page) => expect.poll(() => illustration(page).locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
 async function showIllustration(page: Page) {
   await illustration(page).scrollIntoViewIfNeeded();
   await imageLoaded(page);
 }
+
+for (const width of [320, 768, 1440]) {
+  test(`gallery cleanup ${width}px: unique slides and whole portrait/panorama images`, async ({ page }) => {
+    const svg = (w: number, h: number, label: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect x="4" y="4" width="${w - 8}" height="${h - 8}" fill="#e7eee8" stroke="#263d35" stroke-width="8"/><text x="50%" y="50%" text-anchor="middle" font-size="24">${label}</text></svg>`)}`;
+    const portrait = svg(300, 900, "Portrait");
+    const panorama = svg(1200, 200, "Panorama");
+    const item = palmettoLive();
+    item.data = { ...item.data, media: [
+      { id: "portrait", image_url: portrait, caption: "Portrait work photo", sort_order: 0 },
+      { id: "portrait-copy", image_url: portrait, caption: "Duplicate upload", sort_order: 1 },
+      { id: "panorama", image_url: panorama, caption: "Panoramic work photo", sort_order: 2 },
+    ] };
+    await serve(page, [item]);
+    await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, width);
+    const gallery = page.locator('[data-profile-media="photo"]');
+    await expect(gallery).toHaveCount(1);
+    await expect(gallery.getByText("Business photos", { exact: true })).toBeVisible();
+    await expect(gallery.getByText("1 of 2", { exact: true })).toBeVisible();
+    for (const caption of ["Portrait work photo", "Panoramic work photo"]) {
+      await expect(gallery.getByText(caption, { exact: true })).toBeVisible();
+      await expect.poll(() => gallery.locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+      expect(await gallery.locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
+      const box = (await gallery.locator("img").boundingBox())!;
+      expect(Math.abs(box.width / box.height - 16 / 9)).toBeLessThan(0.03);
+      await expectNoOverflow(page);
+      await gallery.screenshot({ path: `${shots}/cleanup-${width}-${caption.startsWith("Portrait") ? "portrait" : "panorama"}.png` });
+      await gallery.getByRole("button", { name: "Next photo" }).click();
+    }
+    await expect(gallery.getByText("1 of 2", { exact: true })).toBeVisible();
+    await expect(gallery.getByText("Duplicate upload", { exact: true })).toHaveCount(0);
+  });
+}
+
+test("a long provider name cannot stretch the service image beyond its reserved crop", async ({ page }) => {
+  const item = palmettoLive();
+  item.data = { ...item.data, provider: { ...item.data.provider, name: "Synthetic long provider name ".repeat(18) } };
+  await serve(page, [item]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, 768);
+  await showIllustration(page);
+  const box = (await illustration(page).locator("img").boundingBox())!;
+  expect(Math.abs(box.width / box.height - 4 / 3)).toBeLessThan(0.03);
+  await expectNoOverflow(page);
+});
+
+test("pool and gutter selections each keep exactly one matching service example", async ({ page }) => {
+  const item = palmettoLive();
+  const gutter = item.data.packages.find((offer) => offer.service_id === "gutter-cleaning")!;
+  item.data = { ...item.data, packages: [...item.data.packages, { ...gutter, id: "synthetic-pool", service_id: "pool-service", name: "Pool cleaning" }] };
+  await serve(page, [item]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, 390);
+  for (const service of ["pool-service", "gutter-cleaning", "pool-service"]) {
+    await dropdown(page).selectOption(service);
+    // Wait for this service's example first: the previous one is replaced as the view changes.
+    await expect(illustration(page)).toHaveAttribute("data-service-illustration", service);
+    await expect(illustration(page)).toHaveCount(1);
+    await showIllustration(page);
+    expect(await illustration(page).locator("img").evaluate((image: HTMLImageElement) => new URL(image.currentSrc).pathname)).toContain(`/images/services/${service}-`);
+    await expect(page.locator("[data-profile-media]")).toHaveCount(1);
+  }
+});
 
 test("a mapped service shows a labelled photo apart from the provider's own media", async ({ page }) => {
   const outside: string[] = [];

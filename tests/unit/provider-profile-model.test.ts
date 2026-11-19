@@ -327,6 +327,22 @@ describe("directory card offer", () => {
 describe("media and questions follow the selected service", () => {
   const media = data("harborline-remodeling").media;
 
+  it("shows each exact asset once, retaining stable order and service context", () => {
+    const rows = [
+      { id: "general", image_url: "/shared.jpg", caption: null, sort_order: 0 },
+      { id: "copy", image_url: " /shared.jpg ", caption: null, sort_order: 1 },
+      { id: "linked", image_url: "/shared.jpg", service_id: "pool-service", caption: null, sort_order: 2 },
+      { id: "other", image_url: "/other.jpg", service_id: "lawn-mowing", caption: null, sort_order: 3 },
+      { id: "empty", image_url: " ", caption: null, sort_order: 4 },
+      { id: "general", image_url: "/conflicting-row.jpg", caption: null, sort_order: 5 },
+      { id: "variant", image_url: "/shared.jpg?variant=detail", caption: null, sort_order: 6 },
+    ];
+    expect(mediaForService(rows, null).items.map((item) => item.id)).toEqual(["general", "variant"]);
+    expect(mediaForService(rows, "pool-service")).toMatchObject({ general: false, items: [{ id: "linked" }] });
+    expect(mediaForService(rows, "unmapped").items.map((item) => item.id)).toEqual(["general", "variant"]);
+    expect(rows).toHaveLength(7);
+  });
+
   it("prefers media linked to the service", () => {
     expect(mediaForService(media, "bathroom-remodeling")).toMatchObject({ general: false, items: [{ id: "hl-m1" }] });
   });
