@@ -176,7 +176,7 @@ export function GalleryManager({ contractorId, photos, services, onChange, onRem
       <div className="grid grid-cols-2 gap-3">{[beforeId, afterId].map((id, index) => <figure key={index} className="min-w-0 space-y-1"><figcaption className="text-sm font-medium">{index === 0 ? "Before" : "After"}</figcaption><div className="aspect-[4/3] rounded-lg bg-secondary"><img src={photos.find((p) => p.id === id)?.image_url} alt={index === 0 ? "Selected before photo" : "Selected after photo"} className="h-full w-full object-contain" /></div></figure>)}</div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setPairOpen(false)}>Cancel</Button><Button type="button" disabled={busy || !title.trim() || beforeId === afterId || chosen.length !== 2} onClick={() => safe(run(async () => {
-        const { data, error } = await createClient().rpc("create_contractor_gallery_pair", { p_contractor_id: contractorId, p_before_id: beforeId, p_after_id: afterId, p_title: title });
+        const { data, error } = await createClient().rpc("create_contractor_gallery_pair", { p_contractor_id: contractorId, p_before_id: beforeId, p_after_id: afterId, p_title: title }).single<GalleryPair>();
         if (error) throw error;
         if (!data?.id) throw new Error("Project readback unavailable");
         setPairs((current) => [...current, data]); setPairOpen(false);

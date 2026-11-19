@@ -99,6 +99,7 @@ async function serve(page: Page, role: "vendor" | "admin", overrides: Partial<Wo
         return route.fulfill({ json: body.p_ordered_ids });
       }
       if (command === "create_contractor_gallery_pair") {
+        expect(route.request().headers()["accept"]).toContain("application/vnd.pgrst.object+json");
         const pair = { id: "00000000-0000-4000-8000-0000000000f1", contractor_id: contractor, before_id: body.p_before_id, after_id: body.p_after_id, title: body.p_title.trim() };
         world.pairs.push(pair);
         return route.fulfill({ json: pair });
