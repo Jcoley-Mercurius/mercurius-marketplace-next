@@ -3,7 +3,11 @@
 This file is the checkpoint for one slice only. It does not replace `HANDOFF.md`, and it does
 not change any authority, roadmap phase or release gate.
 
-## Current status — P2C merged; media cleanup prepared (2026-11-18 ET)
+## Current status — saved photo-to-service links in draft (2026-11-18 ET)
+
+Saved photo-to-service associations are implemented on `claude/trace156-photo-service-links`, stacked on PR #177, as a draft PR for Codex review. The additive migration was pushed to production on the owner's instruction on 2026-11-18 ET and read back. Nothing is merged or deployed. Scope, decisions, evidence and open gates are in [PROFILE-MEDIA-CLEANUP](PROFILE-MEDIA-CLEANUP.md#saved-photo-to-service-associations-2026-11-18-et).
+
+## Earlier status — P2C merged; media cleanup prepared (2026-11-18 ET)
 
 PR #176 is merged as `f449b3f`. Josh subsequently requested duplicate-gallery and image-fit
 cleanup, plus service-matched provider photos. The rendering patch, verification limits and

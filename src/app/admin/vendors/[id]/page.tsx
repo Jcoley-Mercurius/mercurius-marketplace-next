@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { ExistingProviderAccess } from "@/components/admin/ExistingProviderAccess";
 import { VendorAccountLinking } from "@/components/admin/VendorAccountLinking";
 import { VendorOnboardingChecklist } from "@/components/admin/VendorOnboardingChecklist";
+import { NewPhotoServicePicker, PhotoServiceEditor, usePhotoServiceOptions } from "@/components/provider-profile/PhotoServiceAssignment";
 import { ManagedPricingEditor } from "@/components/vendor/ManagedPricingEditor";
 import { VendorPackagePrices } from "@/components/admin/VendorPackagePrices";
 import { AddCatalogServiceButton, OfferCustomQuote } from "@/components/admin/VendorServiceActions";
@@ -35,6 +36,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { assignNewPhoto, GALLERY_PHOTO_COLUMNS, GENERAL_BUSINESS_LABEL, galleryPhotosFromRows, type GalleryPhoto } from "@/lib/providerProfile/photoServices";
 import { createClient } from "@/lib/supabase/client";
 import { ProviderBadges } from "@/components/admin/ProviderBadges";
 import { completedJobsText, loadVerifiedProviderStats, reviewSummaryText, type VerifiedProviderStats } from "@/lib/adminOperations";
@@ -63,7 +65,6 @@ type VendorForm = {
   marketing_enabled: boolean;
 };
 
-type GalleryItem = { id: string; image_url: string; caption: string | null; sort_order: number };
 type Service = { id: string; name: string };
 type CoverageArea = { zip_code: string; city: string; state: string };
 type Mode = "loading" | "ready" | "error" | "missing";
@@ -76,7 +77,8 @@ const APPLICATION_SELECT = "business_description, website, years_experience, ema
 export default function AdminVendorDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [form, setForm] = useState<VendorForm | null>(null);
-  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [gallery, setGallery] = useState<GalleryPhoto[]>([]);
+  const [newPhotoServices, setNewPhotoServices] = useState<string[]>([]);
   const [serviceZips, setServiceZips] = useState<Set<string>>(new Set());
   const [services, setServices] = useState<Service[]>([]);
   const [areas, setAreas] = useState<CoverageArea[]>([]);
@@ -94,6 +96,8 @@ export default function AdminVendorDetailPage() {
   const [stats, setStats] = useState<VerifiedProviderStats | undefined>(undefined);
   const logoInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
+  const photoServices = usePhotoServiceOptions(form?.id ?? null);
+  const reloadPhotoServices = photoServices.reload;
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -103,7 +107,7 @@ export default function AdminVendorDetailPage() {
     try {
       const [vendorResult, galleryResult, zipResult, serviceResult, areaResult, contactResult, applicationResult, packageResult, draftResult, specialOfferResult] = await Promise.all([
         supabase.from("contractors").select(SAFE_SELECT).eq("id", id).maybeSingle(),
-        supabase.from("contractor_gallery").select("id, image_url, caption, sort_order").eq("contractor_id", id).order("sort_order"),
+        supabase.from("contractor_gallery").select(GALLERY_PHOTO_COLUMNS).eq("contractor_id", id).order("sort_order").order("id"),
         supabase.from("contractor_service_zips").select("zip_code").eq("contractor_id", id),
         supabase.from("services_catalog").select("id, name").eq("is_active", true).order("name"),
         supabase.from("coverage_areas").select("zip_code, city, state").eq("is_active", true).order("city").order("zip_code"),
@@ -134,7 +138,10 @@ export default function AdminVendorDetailPage() {
       const fields = fill ? Object.keys(fill.profile).length : 0;
       setForm(fill ? { ...loaded, ...fill.profile } : loaded);
       setPrefilled(fill && (fields || fill.zipCodes.length || fill.unmatchedServices.length) ? { fields, zips: fill.zipCodes.length, unmatchedServices: fill.unmatchedServices } : null);
-      setGallery((galleryResult.data ?? []) as GalleryItem[]);
+      const photos = galleryPhotosFromRows(galleryResult.data ?? []);
+      if (!photos) throw new Error("This vendor's photo services could not be read.");
+      setGallery(photos);
+      reloadPhotoServices();
       setSavedServices(loaded.services);
       setPricedServices({
         packages: ((packageResult.data ?? []) as { service_id: string }[]).map((row) => row.service_id),
@@ -149,7 +156,7 @@ export default function AdminVendorDetailPage() {
       setError(reason instanceof Error ? reason.message : "The vendor profile could not be loaded.");
       setMode("error");
     }
-  }, [id]);
+  }, [id, reloadPhotoServices]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
@@ -186,21 +193,27 @@ export default function AdminVendorDetailPage() {
   const addGallery = async (files: FileList) => {
     if (!form) return;
     setUploading(true);
+    const assignment = newPhotoServices;
+    let unassigned = 0;
     try {
       for (const file of Array.from(files)) {
         const imageUrl = await uploadMedia(file, "gallery");
         if (!imageUrl) continue;
-        const result = await createClient().from("contractor_gallery").insert({ contractor_id: form.id, image_url: imageUrl, sort_order: gallery.length }).select("id, image_url, caption, sort_order").single();
+        const result = await createClient().from("contractor_gallery").insert({ contractor_id: form.id, image_url: imageUrl, sort_order: gallery.length }).select(GALLERY_PHOTO_COLUMNS).single();
         if (result.error) throw result.error;
-        setGallery((current) => [...current, result.data as GalleryItem]);
+        const { photo, assigned } = await assignNewPhoto(createClient(), result.data, assignment);
+        if (!assigned) unassigned += 1;
+        setGallery((current) => [...current, photo]);
       }
       toast.success("Gallery updated");
+      if (unassigned) toast.error(`${unassigned} ${unassigned === 1 ? "photo was" : "photos were"} saved as ${GENERAL_BUSINESS_LABEL}`, { description: "The services could not be saved. Use Edit services on the photo to try again." });
+      else setNewPhotoServices([]);
     } catch (reason) {
       toast.error("Gallery upload failed", { description: reason instanceof Error ? reason.message : "Please try again." });
     } finally { setUploading(false); }
   };
 
-  const removeGallery = async (item: GalleryItem) => {
+  const removeGallery = async (item: GalleryPhoto) => {
     if (!window.confirm("Remove this image from the vendor gallery?")) return;
     const result = await createClient().from("contractor_gallery").delete().eq("id", item.id);
     if (result.error) return toast.error("Image could not be removed", { description: result.error.message });
@@ -208,7 +221,7 @@ export default function AdminVendorDetailPage() {
     toast.success("Image removed");
   };
 
-  const saveCaption = async (item: GalleryItem, caption: string) => {
+  const saveCaption = async (item: GalleryPhoto, caption: string) => {
     setGallery((current) => current.map((image) => image.id === item.id ? { ...image, caption } : image));
     const result = await createClient().from("contractor_gallery").update({ caption: caption.trim() || null }).eq("id", item.id);
     if (result.error) toast.error("Caption could not be saved", { description: result.error.message });
@@ -253,6 +266,7 @@ export default function AdminVendorDetailPage() {
         if (insertZips.error) throw insertZips.error;
       }
       setSavedServices(changes.services);
+      reloadPhotoServices();
       toast.success("Services saved", { description: `Saved ${changes.services.length} service${changes.services.length === 1 ? "" : "s"} and ${serviceZips.size} ZIP code${serviceZips.size === 1 ? "" : "s"}. Visibility and marketing were not changed.` });
     } catch (reason) {
       toast.error("Services could not be fully saved", { description: reason instanceof Error ? reason.message : "Please try again." });
@@ -304,7 +318,7 @@ export default function AdminVendorDetailPage() {
 
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Award className="h-4 w-4" />Stand Out</CardTitle><CardDescription>Optional trust messaging shown with this provider.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="space-y-1"><p className="text-sm font-medium">Special offer (not shown publicly)</p><p className="text-sm text-muted-foreground">{form.special_offer?.trim() || "None recorded"}</p><p className="text-xs text-muted-foreground">Kept for reference only. Offers are not shown on profiles or used in matching (DEC-2026-055).</p></div><Field label="Our promise"><Input value={form.our_promise ?? ""} onChange={(event) => update({ our_promise: event.target.value })} placeholder='"Done right or we come back free"' /></Field><Field label="Verified specialty"><Input value={form.verified_specialty ?? ""} onChange={(event) => update({ verified_specialty: event.target.value })} placeholder='"Pet-safe products only"' /></Field><Field label="Promotional video URL"><Input value={form.video_url ?? ""} onChange={(event) => update({ video_url: event.target.value })} placeholder="YouTube or Vimeo URL" /></Field></CardContent></Card>
 
-        <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><ImageIcon className="h-4 w-4" />Before &amp; After Gallery</CardTitle><CardDescription>Operationally managed public portfolio images.</CardDescription></div><Button variant="outline" size="sm" disabled={uploading} onClick={() => galleryInput.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Plus />}Add Photos</Button><input ref={galleryInput} hidden type="file" accept="image/*" multiple onChange={(event) => { if (event.target.files?.length) void addGallery(event.target.files); event.target.value = ""; }} /></div></CardHeader><CardContent>{gallery.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No gallery photos have been uploaded.</p> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{gallery.map((item) => <div key={item.id} className="space-y-2"><div className="group relative aspect-square overflow-hidden rounded-xl bg-muted"><img src={item.image_url} alt={item.caption || "Vendor project"} className="h-full w-full object-cover" /><button type="button" onClick={() => void removeGallery(item)} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" aria-label="Remove image"><Trash2 className="h-4 w-4" /></button></div><Input defaultValue={item.caption ?? ""} onBlur={(event) => void saveCaption(item, event.target.value)} placeholder="Caption" className="h-8 text-xs" /></div>)}</div>}</CardContent></Card>
+        <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><ImageIcon className="h-4 w-4" />Before &amp; After Gallery</CardTitle><CardDescription>Operationally managed public portfolio images.</CardDescription></div><Button variant="outline" size="sm" disabled={uploading} onClick={() => galleryInput.current?.click()}>{uploading ? <Loader2 className="animate-spin" /> : <Plus />}Add Photos</Button><input ref={galleryInput} hidden type="file" accept="image/*" multiple onChange={(event) => { if (event.target.files?.length) void addGallery(event.target.files); event.target.value = ""; }} /></div></CardHeader><CardContent className="space-y-4"><NewPhotoServicePicker services={photoServices} selected={newPhotoServices} onChange={setNewPhotoServices} disabled={uploading} />{gallery.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No gallery photos have been uploaded.</p> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{gallery.map((item) => <div key={item.id} className="space-y-2"><div className="group relative aspect-square overflow-hidden rounded-xl bg-muted"><img src={item.image_url} alt={item.caption || "Vendor project"} className="h-full w-full object-cover" /><button type="button" onClick={() => void removeGallery(item)} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" aria-label="Remove image"><Trash2 className="h-4 w-4" /></button></div><Input defaultValue={item.caption ?? ""} onBlur={(event) => void saveCaption(item, event.target.value)} placeholder="Caption" className="h-8 text-xs" /><div className="overflow-hidden rounded-lg border"><PhotoServiceEditor photoId={item.id} imageUrl={item.image_url} photoName={item.caption || "Vendor project"} serviceIds={item.service_ids} services={photoServices} onSaved={(serviceIds) => setGallery((current) => current.map((photo) => photo.id === item.id ? { ...photo, service_ids: serviceIds } : photo))} /></div></div>)}</div>}</CardContent></Card>
 
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Briefcase className="h-4 w-4" />Managed Pricing</CardTitle><CardDescription>Activate Mercurius templates for this vendor. Template levels are copied without their questions or rules, so homeowners see the lowest level as a starting price. For rule-based levels, build a draft package in Vendor prices and send it to the vendor for approval.</CardDescription></CardHeader><CardContent><ManagedPricingEditor contractorId={id} operator /></CardContent></Card>
 

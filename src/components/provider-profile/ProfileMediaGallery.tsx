@@ -52,7 +52,7 @@ export function ProfileMediaGallery({ providerName, logoUrl, items, general, ser
     <figcaption className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-foreground">{general || !serviceName ? "Business photos" : `${serviceName} photos`}</p>
-        {/* Photos carry no service link today (TRACE-156), so a service view says what they are. */}
+        {/* No photo is saved for this service, so the view says what these photos are (TRACE-156). */}
         {general && serviceName && <p data-media-general className="text-xs font-semibold uppercase tracking-wide text-muted-foreground [overflow-wrap:anywhere]">General business photo · not specific to {serviceName.toLowerCase()}</p>}
         {current.caption && <p className="text-sm text-foreground [overflow-wrap:anywhere]">{current.caption}</p>}
       </div>

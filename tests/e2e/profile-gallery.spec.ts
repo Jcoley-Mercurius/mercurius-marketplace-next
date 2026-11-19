@@ -174,7 +174,8 @@ test("choosing a service updates offer, scope, price, media and questions; ident
   });
   const before = await identity();
   expect(before).toEqual({ name: "Brightbin Can Care", reviews: "4.7 (3 public reviews)", list: 3 });
-  await expect(page.locator("[data-profile-media]")).toHaveAttribute("data-profile-media", "logo");
+  // All services shows each of the provider's photos once, including service-linked ones (TRACE-156).
+  await expect(page.locator("[data-profile-media]")).toHaveAttribute("data-profile-media", "photo");
   await expect(page.getByRole("heading", { name: /^Questions about/ })).toHaveCount(0);
 
   const entries = (await history(page)).length;

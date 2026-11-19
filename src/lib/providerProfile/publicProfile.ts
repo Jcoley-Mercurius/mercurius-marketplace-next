@@ -26,8 +26,9 @@ import {
   isPubliclyEligibleQuotePackage,
   type PackageQualifyingQuestion,
 } from "@/lib/vendorPricing";
+import { GALLERY_PHOTO_COLUMNS, galleryPhotosFromRows, type GalleryPhoto } from "@/lib/providerProfile/photoServices";
 import { fetchPublicProviderOffers, readAllRows } from "@/lib/providerProfile/publicOffers";
-import type { ProfileData, ProfileMedia, ProfilePackage, ProfileSizeGuide } from "@/lib/providerProfile/model";
+import type { ProfileData, ProfilePackage, ProfileSizeGuide } from "@/lib/providerProfile/model";
 
 const QUESTION_COLUMNS = "id, package_id, question_key, question_label, input_type, unit, options, is_required, sort_order";
 
@@ -90,13 +91,13 @@ export async function fetchPublicProviderProfile(providerId: string, client?: Cl
   const row = listing.data as PublicProviderRow | null;
   if (!row || row.id !== providerId) return { status: "missing" };
 
-  const [offers, catalog, reviews, gallery, zips, coverage, completed] = await Promise.all([
+  const [offers, catalog, reviews, galleryRows, zips, coverage, completed] = await Promise.all([
     fetchPublicProviderOffers([providerId], supabase),
     supabase.from("services_catalog").select("id, name").eq("is_active", true),
     supabase.rpc("public_provider_reviews", { _contractor_id: providerId }),
-    readAllRows<ProfileMedia>("Public provider gallery", (from, to, withCount) => supabase
+    readAllRows<Omit<GalleryPhoto, "service_ids"> & { contractor_gallery_services: unknown }>("Public provider gallery", (from, to, withCount) => supabase
       .from("contractor_gallery")
-      .select("id, image_url, caption, sort_order", withCount ? { count: "exact" } : undefined)
+      .select(GALLERY_PHOTO_COLUMNS, withCount ? { count: "exact" } : undefined)
       .eq("contractor_id", providerId)
       .order("sort_order", { ascending: true })
       .order("id", { ascending: true })
@@ -121,6 +122,8 @@ export async function fetchPublicProviderProfile(providerId: string, client?: Cl
       }),
   ]);
 
+  // Unreadable service links make the gallery unavailable: a photo is never assumed to be general.
+  const gallery = galleryRows ? galleryPhotosFromRows(galleryRows) : null;
   const packages = offers.status === "ready" ? offers.packages.get(providerId) ?? [] : [];
   const eligibleIds = packages.filter(eligible).map((item) => item.id);
   let questions: Map<string, PackageQualifyingQuestion[]> | null = new Map();
