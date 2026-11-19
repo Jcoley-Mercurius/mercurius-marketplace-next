@@ -838,6 +838,10 @@ test.describe("accessibility matrix (I7)", () => {
       await intake(page, { width: 320, theme });
       await submitButton(page).click();
       await expect(page.getByRole("heading", { name: "Your request is saved" })).toBeVisible();
+      // The fixture automatically attempts checkout, then returns a definite refusal. Scan the
+      // settled confirmation, not a button changing between its busy and enabled states.
+      await expect(page.getByRole("region", { name: "Secure checkout", exact: true }).getByRole("alert")).toContainText("Synthetic checkout is unavailable.");
+      await expect(page.getByRole("button", { name: "Continue to secure checkout" })).toBeEnabled();
       await expectAccessible(page);
     });
     test(`refusal ${theme}: errors focus and pass axe at 320px`, async ({ page }) => {

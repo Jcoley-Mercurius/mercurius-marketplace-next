@@ -80,15 +80,19 @@ export type ProfilePackage = {
 };
 
 /**
- * A gallery item. `service_id` is PROPOSED: contractor_gallery has only an image and a caption
- * today, so a production profile cannot yet link media to a service.
+ * A gallery item. `service_ids` are the services saved for this photo (TRACE-156); none means a
+ * General business photo. They only ever come from a saved link, never from a caption or image.
  */
 export type ProfileMedia = {
   id: string;
   image_url: string;
   caption: string | null;
   sort_order: number;
-  service_id?: string | null;
+  service_ids?: readonly string[];
+  pair_id?: string;
+  pair_role?: "before" | "after";
+  project_title?: string;
+  companion_id?: string;
 };
 
 /** PROPOSED content: published service answers have no data source today. */
@@ -636,16 +640,17 @@ function uniqueMedia(media: readonly ProfileMedia[]): ProfileMedia[] {
 }
 
 /**
- * Media for a service: items linked to it first; otherwise the provider's unlinked media,
- * flagged general so the profile can label it. Media linked to another service is never used.
+ * Media for a view of the profile. All services (no id) shows each of the provider's photos once.
+ * A service shows the photos linked to it; with none, the provider's unlinked photos, flagged
+ * general so the profile can label them. A photo linked only to other services is never used.
  */
 export function mediaForService(media: readonly ProfileMedia[], serviceId: string | null): ServiceMedia {
   const sorted = [...media].sort(bySortOrder);
-  const general = uniqueMedia(sorted.filter((item) => !item.service_id));
-  if (!serviceId) return { items: general, general: true };
+  if (!serviceId) return { items: uniqueMedia(sorted), general: true };
   // Filter before deduplicating: a general copy must not hide an explicitly service-linked one.
-  const linked = uniqueMedia(sorted.filter((item) => item.service_id === serviceId));
-  return linked.length ? { items: linked, general: false } : { items: general, general: true };
+  const linked = uniqueMedia(sorted.filter((item) => item.service_ids?.includes(serviceId)));
+  if (linked.length) return { items: linked, general: false };
+  return { items: uniqueMedia(sorted.filter((item) => !item.service_ids?.length)), general: true };
 }
 
 export function questionsForService(questions: readonly ProfileQuestion[], serviceId: string) {

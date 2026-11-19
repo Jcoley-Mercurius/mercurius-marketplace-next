@@ -39,7 +39,7 @@ test.beforeEach(async ({ page, baseURL }) => {
 // ---------------------------------------------------------------------------------------------
 
 type Table = "vendor_packages" | "package_tiers" | "package_addons" | "package_qualifying_questions"
-  | "contractor_gallery" | "contractor_service_zips" | "coverage_areas" | "services_catalog";
+  | "contractor_gallery_pairs" | "contractor_gallery" | "contractor_service_zips" | "coverage_areas" | "services_catalog";
 type Trial = "signed_out" | "invited" | "waiting" | "revoked" | "unavailable" | "not_homeowner" | "error" | "hold";
 
 type Provider = { id: string; data: ProfileData; listed: boolean; questions: Record<string, unknown>[]; completed: number | null; business: Record<string, unknown> };
@@ -60,8 +60,10 @@ type World = {
 function provider(slug: string, extra: Partial<Provider> = {}): Provider {
   const data = scenario(slug).data;
   const id = IDS[slug];
+  // Like an existing upload, a fixture photo has no saved link unless a test gives it one.
+  const media = data.media.map((item) => without(item, "service_ids") as ProfileData["media"][number]);
   return {
-    id, data: { ...data, provider: { ...data.provider, id } }, listed: true, completed: null, questions: [],
+    id, data: { ...data, media, provider: { ...data.provider, id } }, listed: true, completed: null, questions: [],
     business: { years_experience: null, our_promise: null, verified_specialty: null, video_url: null }, ...extra,
   };
 }
@@ -82,9 +84,16 @@ const rowsFor = (world: World, table: Table): Record<string, unknown>[] => {
         ...addon, package_id: item.id }))));
     case "package_qualifying_questions":
       return all.flatMap(({ questions }) => questions);
+    case "contractor_gallery_pairs":
+      return all.flatMap(({ id, data }) => data.media.filter((photo) => photo.pair_role === "before" && photo.pair_id && photo.companion_id).map((photo) => ({
+        id: photo.pair_id, contractor_id: id, before_id: photo.id, after_id: photo.companion_id, title: photo.project_title,
+      })));
     case "contractor_gallery":
-      // contractor_gallery has no service link: every live photo is general business media.
-      return all.flatMap(({ id, data }) => data.media.map((item) => without({ ...item, contractor_id: id }, "service_id")));
+      // The reader's embedded links, as PostgREST returns them. No link is a general business photo.
+      return all.flatMap(({ id, data }) => data.media.map((item) => ({
+        ...without({ ...item, contractor_id: id }, "service_ids"),
+        contractor_gallery_services: (item.service_ids ?? []).map((service_id) => ({ service_id })),
+      })));
     case "contractor_service_zips":
       return all.flatMap(({ id, data }) => (data.serviceArea?.areas ?? []).flatMap((area) => area.zips.map((zip_code) => ({ contractor_id: id, zip_code }))));
     case "coverage_areas":
@@ -147,7 +156,7 @@ async function serve(page: Page, providers: Provider[], options: Partial<Pick<Wo
   // Later routes take precedence: anything the page reads that is not served below is empty.
   await page.route("**/rest/v1/**", (route) => route.fulfill({ json: [] }));
   await page.route("**/rest/v1/rpc/**", (route) => route.fulfill({ json: null }));
-  for (const table of ["vendor_packages", "package_tiers", "package_addons", "package_qualifying_questions", "contractor_gallery",
+  for (const table of ["vendor_packages", "package_tiers", "package_addons", "package_qualifying_questions", "contractor_gallery", "contractor_gallery_pairs",
     "contractor_service_zips", "coverage_areas", "services_catalog"] as Table[]) {
     await page.route(`**/rest/v1/${table}?*`, (route) => serveTable(world, table, route));
   }
@@ -718,6 +727,168 @@ for (const width of [320, 768, 1440]) {
   });
 }
 
+// ---------------------------------------------------------------------------------------------
+// Saved photo-to-service links (TRACE-156)
+// ---------------------------------------------------------------------------------------------
+
+const labelledPhoto = (label: string, fill: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800"><rect width="1200" height="800" fill="${fill}"/><text x="600" y="420" font-family="sans-serif" font-size="72" text-anchor="middle" fill="#fff">${label}</text></svg>`)}`;
+
+/** Gutter and window photos, one photo on both, one general photo, and a pool service with none. */
+function linkedProvider() {
+  const item = palmettoLive();
+  const gutter = item.data.packages.find((offer) => offer.service_id === "gutter-cleaning")!;
+  item.data = {
+    ...item.data,
+    packages: [...item.data.packages, { ...gutter, id: "synthetic-pool", service_id: "pool-service", name: "Pool cleaning" }],
+    media: [
+      { id: "photo-general", image_url: labelledPhoto("General", "#3f5b4b"), caption: "Our crew and truck", sort_order: 0, service_ids: [] },
+      { id: "photo-gutter", image_url: labelledPhoto("Gutter", "#28536b"), caption: "Cleared gutter run", sort_order: 1, service_ids: ["gutter-cleaning"] },
+      { id: "photo-both", image_url: labelledPhoto("Gutter and window", "#6b3d28"), caption: "Gutters and windows on one home", sort_order: 2, service_ids: ["gutter-cleaning", "window-cleaning"] },
+      { id: "photo-window", image_url: labelledPhoto("Window", "#54366b"), caption: "Front windows after cleaning", sort_order: 3, service_ids: ["window-cleaning"] },
+    ],
+  };
+  return item;
+}
+
+const carousel = (page: Page) => page.locator('[data-profile-media="photo"]');
+/** Every caption in the carousel, in order, walking it once from the first slide. */
+async function slides(page: Page) {
+  const gallery = carousel(page);
+  const next = gallery.getByRole("button", { name: "Next photo" });
+  const count = await next.count() ? Number((await gallery.getByText(/^\d+ of \d+$/).innerText()).split(" of ")[1]) : 1;
+  const captions: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    captions.push(await gallery.locator("img").getAttribute("alt") ?? "");
+    if (count > 1) await next.click();
+  }
+  return captions;
+}
+
+test("a selected service shows only its own saved photos, and they replace the stock example", async ({ page }) => {
+  await serve(page, [linkedProvider()]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  await expect(carousel(page)).toHaveCount(1);
+  await expect(carousel(page).getByText("Gutter cleaning photos", { exact: true })).toBeVisible();
+  expect(await slides(page)).toEqual(["Cleared gutter run", "Gutters and windows on one home"]);
+  await expect(page.locator("[data-media-general]")).toHaveCount(0);
+  await expect(illustration(page)).toHaveCount(0);
+
+  // The photo linked to two services appears under the other one as well.
+  await pick(page, "Window cleaning");
+  await expect(carousel(page).getByText("Window cleaning photos", { exact: true })).toBeVisible();
+  expect(await slides(page)).toEqual(["Gutters and windows on one home", "Front windows after cleaning"]);
+  await expect(illustration(page)).toHaveCount(0);
+});
+
+test("a service with no saved photo falls back to labelled general photos and the stock example", async ({ page }) => {
+  await serve(page, [linkedProvider()]);
+  await open(page, `/providers/${PALMETTO}?service=pool-service`);
+  expect(await slides(page)).toEqual(["Our crew and truck"]);
+  await expect(carousel(page).getByText("Business photos", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-media-general]")).toHaveText("General business photo · not specific to pool service");
+  await showIllustration(page);
+  await expect(illustration(page)).toHaveAttribute("data-service-illustration", "pool-service");
+  await expect(illustration(page)).toContainText("Illustrative service photo");
+});
+
+test("no photo linked only to another service is borrowed, even with no general photo to show", async ({ page }) => {
+  const item = linkedProvider();
+  item.data = { ...item.data, media: item.data.media.filter((photo) => photo.service_ids?.length) };
+  await serve(page, [item]);
+  await open(page, `/providers/${PALMETTO}?service=pool-service`);
+  await expect(carousel(page)).toHaveCount(0);
+  await expect(page.locator('[data-profile-media="logo"]')).toHaveCount(1);
+  await expect(page.locator("[data-media-unavailable]")).toHaveCount(0);
+  await showIllustration(page);
+});
+
+test("All services shows every photo once in saved order, and switching keeps one carousel", async ({ page }) => {
+  await serve(page, [linkedProvider()]);
+  await open(page, `/providers/${PALMETTO}`);
+  const all = ["Our crew and truck", "Cleared gutter run", "Gutters and windows on one home", "Front windows after cleaning"];
+  expect(await slides(page)).toEqual(all);
+  await expect(page.locator("[data-media-general]")).toHaveCount(0);
+  await expect(illustration(page)).toHaveCount(0);
+
+  for (const [service, expected] of [["Gutter cleaning", 2], ["Pool service", 1], ["Window cleaning", 2], ["All services", 4]] as const) {
+    await pick(page, service);
+    await expect(carousel(page)).toHaveCount(1);
+    // The view has changed once the counter matches, so the walk below reads the new photos.
+    if (expected > 1) await expect(carousel(page).getByText(`1 of ${expected}`, { exact: true })).toBeVisible();
+    else await expect(carousel(page).getByRole("button", { name: "Next photo" })).toHaveCount(0);
+    expect(await slides(page)).toHaveLength(expected);
+  }
+  expect(await slides(page)).toEqual(all);
+});
+
+test("a refresh keeps the selected service's photos and picks up saved changes", async ({ page }) => {
+  const item = linkedProvider();
+  const world = await serve(page, [item]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  expect(await slides(page)).toHaveLength(2);
+  item.data = { ...item.data, media: item.data.media.map((photo) => photo.id === "photo-general" ? { ...photo, service_ids: ["gutter-cleaning"] } : photo) };
+  world.providers.set(item.id, item);
+  await page.reload();
+  await settle(page);
+  expect(serviceParam(page)).toBe("gutter-cleaning");
+  expect(await slides(page)).toEqual(["Our crew and truck", "Cleared gutter run", "Gutters and windows on one home"]);
+});
+
+test("moving between providers never carries one provider's photos to the next", async ({ page }) => {
+  const other = provider("harborline-remodeling");
+  other.data = { ...other.data, media: [{ id: "other-photo", image_url: labelledPhoto("Harborline", "#28536b"), caption: "Harborline kitchen", sort_order: 0, service_ids: [] }] };
+  await serve(page, [linkedProvider(), other]);
+  await open(page, `/providers/${PALMETTO}`);
+  await carousel(page).getByRole("button", { name: "Next photo" }).click();
+  await expect(carousel(page).getByText("2 of 4", { exact: true })).toBeVisible();
+  await open(page, `/providers/${other.id}`);
+  expect(await slides(page)).toEqual(["Harborline kitchen"]);
+  await expect(page.getByText("Cleared gutter run")).toHaveCount(0);
+});
+
+test("a broken saved photo is dropped, and a service with only broken photos says so without stock", async ({ page }) => {
+  const item = linkedProvider();
+  const broken = "/images/synthetic-missing-provider-photo.jpg";
+  item.data = { ...item.data, media: item.data.media.map((photo) => photo.id === "photo-gutter" ? { ...photo, image_url: broken } : photo) };
+  await serve(page, [item]);
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  await expect(carousel(page).locator("img")).toHaveAttribute("alt", "Gutters and windows on one home");
+  await expect(carousel(page).getByRole("button", { name: "Next photo" })).toHaveCount(0);
+
+  item.data = { ...item.data, media: item.data.media.map((photo) => photo.service_ids?.includes("gutter-cleaning") ? { ...photo, image_url: broken } : photo) };
+  await page.reload();
+  await settle(page);
+  await expect(page.locator("[data-media-unavailable]")).toHaveText("Photos for this provider could not be loaded.");
+  await expect(illustration(page)).toHaveCount(0);
+});
+
+test("unreadable service links show the photo failure state instead of unlabelled photos", async ({ page }) => {
+  const world = await serve(page, [linkedProvider()]);
+  world.fail.add("contractor_gallery");
+  await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`);
+  await expect(carousel(page)).toHaveCount(0);
+  await expect(page.locator("[data-media-unavailable]")).toHaveText("Photos for this provider could not be loaded.");
+});
+
+for (const width of [320, 768, 1440]) {
+  test(`saved service photos at ${width}px: whole images, accessible controls and reflow`, async ({ page }) => {
+    await serve(page, [linkedProvider()]);
+    await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, width);
+    await expect.poll(() => carousel(page).locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+    expect(await carousel(page).locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
+    expect((await carousel(page).getByRole("button", { name: "Next photo" }).boundingBox())!.height).toBeGreaterThanOrEqual(36);
+    expect(await axe(page)).toEqual([]);
+    await expectNoOverflow(page);
+    await carousel(page).screenshot({ path: `${shots}/saved-links-${width}-gutter.png` });
+    await page.screenshot({ path: `${shots}/saved-links-${width}-gutter-page.png`, fullPage: true });
+    await open(page, `/providers/${PALMETTO}?service=pool-service`, width);
+    await showIllustration(page);
+    expect(await axe(page)).toEqual([]);
+    await expectNoOverflow(page);
+    await page.screenshot({ path: `${shots}/saved-links-${width}-pool-fallback-page.png`, fullPage: true });
+  });
+}
+
 test("a long provider name cannot stretch the service image beyond its reserved crop", async ({ page }) => {
   const item = palmettoLive();
   item.data = { ...item.data, provider: { ...item.data.provider, name: "Synthetic long provider name ".repeat(18) } };
@@ -924,3 +1095,21 @@ for (const width of [390, 1440]) {
     }
   });
 }
+
+
+test("explicit before and after projects follow service filters without borrowing photos", async ({ page }) => {
+  const item = linkedProvider();
+  const first = item.data.media[0];
+  const second = item.data.media[1];
+  first.service_ids = ["gutter-cleaning"];
+  second.service_ids = ["gutter-cleaning"];
+  Object.assign(first, { pair_id: "project-1", pair_role: "before", companion_id: second.id, project_title: "Gutter cleanup" });
+  Object.assign(second, { pair_id: "project-1", pair_role: "after", companion_id: first.id, project_title: "Gutter cleanup" });
+  await serve(page, [item]);
+  await page.goto(`/providers/${item.id}?service=gutter-cleaning`);
+  await expect(page.locator("[data-project-role]")).toHaveText("Before · Gutter cleanup");
+  await page.getByRole("button", { name: "View paired after photo" }).click();
+  await expect(page.locator("[data-project-role]")).toHaveText("After · Gutter cleanup");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "View paired after photo" })).toBeVisible();
+});

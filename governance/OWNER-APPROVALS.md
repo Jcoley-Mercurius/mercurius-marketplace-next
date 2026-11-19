@@ -73,3 +73,13 @@ Josh replied "approved" to the P2B comparison images and the P2C contact sheet, 
 | P2C illustrative service photos (PR #176) | All 11 photos in [the manifest](../docs/imagery/service-imagery-manifest.json), for the labelled panel below a provider's own media, including the Interior Painting photo showing a worker from behind | Merge or release of PR #176, Codex review, any other placement, and any photo for pressure washing, window cleaning or tree trimming |
 
 The photos remain illustrative. This approval does not allow them to be presented as a provider's team, completed work, customer results or before-and-after evidence.
+
+## Gallery management implementation — 2026-11-19
+
+Josh authorized Codex to handle the three proposed increments: recovery of #178 onto main,
+bulk service editing with clear caption/save controls, and ordering plus explicit before/after
+pairing: “Can you do that now for me handle 1-3?”
+
+Scope and acceptance evidence: [TRACE-156 gallery management](../docs/agent/GALLERY-MANAGEMENT.md).
+This is implementation authorization; it does not claim visual acceptance, a hosted migration
+push, merge/deployment, provider-photo tagging or Phase 7 acceptance.

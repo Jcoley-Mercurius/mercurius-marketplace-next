@@ -105,7 +105,7 @@ const healthy = (): Record<string, Answer> => ({
   package_addons: { rows: addons },
   package_qualifying_questions: { rows: questions },
   services_catalog: { rows: [{ id: "gutter-cleaning", name: "Gutter cleaning" }, { id: "pressure-washing", name: "Pressure washing" }] },
-  contractor_gallery: { rows: [{ id: "g1", contractor_id: PROVIDER, image_url: "https://synthetic.invalid/1.jpg", caption: "Synthetic", sort_order: 0 }] },
+  contractor_gallery: { rows: [{ id: "g1", contractor_id: PROVIDER, image_url: "https://synthetic.invalid/1.jpg", caption: "Synthetic", sort_order: 0, contractor_gallery_services: [{ service_id: "gutter-cleaning" }] }] },
   contractor_service_zips: { rows: [{ contractor_id: PROVIDER, zip_code: "33904" }] },
   coverage_areas: { rows: coverage },
 });
@@ -185,6 +185,23 @@ describe("the profile reads one provider through the existing public reads", () 
     expect(byPackage).toBeNull();
     expect(data.sizeGuides).toEqual({});
     expect(data.offersStatus).toBe("ready");
+  });
+
+  it("carries each photo's saved service links, and none means general business", async () => {
+    const rows = [
+      { id: "g1", contractor_id: PROVIDER, image_url: "https://synthetic.invalid/1.jpg", caption: null, sort_order: 0, contractor_gallery_services: [{ service_id: "gutter-cleaning" }, { service_id: "pressure-washing" }] },
+      { id: "g2", contractor_id: PROVIDER, image_url: "https://synthetic.invalid/2.jpg", caption: null, sort_order: 1, contractor_gallery_services: [] },
+    ];
+    const { data } = ready((await read({ ...healthy(), contractor_gallery: { rows } })).result);
+    expect(data.mediaStatus).toBe("ready");
+    expect(data.media.map((item) => item.service_ids)).toEqual([["gutter-cleaning", "pressure-washing"], []]);
+  });
+
+  it("treats unreadable service links as an unavailable gallery, never as general photos", async () => {
+    const rows = [{ id: "g1", contractor_id: PROVIDER, image_url: "https://synthetic.invalid/1.jpg", caption: null, sort_order: 0 }];
+    const { data } = ready((await read({ ...healthy(), contractor_gallery: { rows } })).result);
+    expect(data.mediaStatus).toBe("unavailable");
+    expect(data.media).toEqual([]);
   });
 
   it("marks each other unreadable section separately", async () => {

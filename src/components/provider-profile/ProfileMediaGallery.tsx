@@ -35,6 +35,7 @@ export function ProfileMediaGallery({ providerName, logoUrl, items, general, ser
 
   const current = usable[Math.min(index, usable.length - 1)];
   const position = usable.indexOf(current);
+  const companion = current.companion_id ? usable.find((item) => item.id === current.companion_id) : null;
   const step = (delta: number) => setIndex((position + delta + usable.length) % usable.length);
 
   return <figure data-profile-media="photo" className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
@@ -52,8 +53,10 @@ export function ProfileMediaGallery({ providerName, logoUrl, items, general, ser
     <figcaption className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-foreground">{general || !serviceName ? "Business photos" : `${serviceName} photos`}</p>
-        {/* Photos carry no service link today (TRACE-156), so a service view says what they are. */}
+        {/* No photo is saved for this service, so the view says what these photos are (TRACE-156). */}
         {general && serviceName && <p data-media-general className="text-xs font-semibold uppercase tracking-wide text-muted-foreground [overflow-wrap:anywhere]">General business photo · not specific to {serviceName.toLowerCase()}</p>}
+        {current.pair_id && <p data-project-role className="text-sm font-medium text-foreground [overflow-wrap:anywhere]">{current.pair_role === "before" ? "Before" : "After"} · {current.project_title}</p>}
+        {companion && <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => setIndex(usable.indexOf(companion))}>View paired {current.pair_role === "before" ? "after" : "before"} photo</Button>}
         {current.caption && <p className="text-sm text-foreground [overflow-wrap:anywhere]">{current.caption}</p>}
       </div>
       {usable.length > 1 && <div className="flex shrink-0 items-center gap-2">
