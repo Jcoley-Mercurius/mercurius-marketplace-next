@@ -12,8 +12,9 @@
   - unchanged: legacy `12 | 016c0e68…` and money fingerprint `58 | af0fae6e…`.
   Browser: see the record §3.4.
 - **For Codex:** D-1..D-10, especially D-4 (literal item 2 excludes an earlier attempt's report once a later attempt records another ID) and D-5 (current-conflict wording).
-- **Not done:** hosted dry run or push, merge, deploy, secrets, webhook, arming, email. 7.3C-2, the 7.3B push-provenance, preflight and 503-probe items, EO-1..EO-8 and every carried check remain open.
-- **Next:** Codex implementation review and green exact-head CI; then, with separate owner authorization, the dry run and push before merge (record §5).
+- **Hosted (2026-11-19, owner instruction):** `20261125001000` was already taken on hosted by the TRACE-156 photo-services migration (on #179's branch), so this migration was renumbered to `20261125002000`. Dry run, push and read-only readback match (record §5.1). #179's next push needs this file in its local folder.
+- **Not done:** merge, deploy, secrets, webhook, arming, email. 7.3C-2, the 7.3B push-provenance, preflight and 503-probe items, EO-1..EO-8 and every carried check remain open.
+- **Next:** Codex implementation review and green exact-head CI (`request.spec.ts:837` failed on the first run); then merge = deploy.
 
 # Phase 7.3C-1 Owner Emails evidence handoff (TRACE-155) — 2026-11-16 ET
 

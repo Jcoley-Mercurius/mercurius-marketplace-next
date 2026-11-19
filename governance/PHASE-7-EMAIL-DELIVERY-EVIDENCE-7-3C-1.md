@@ -1,6 +1,6 @@
 # Phase 7.3C-1 — Owner Emails correlation tags and delivery-evidence readback: implementation (TRACE-155)
 
-**Status: IMPLEMENTED LOCALLY on a draft PR; DORMANT.** Codex implementation review pending. Not pushed to hosted, merged or deployed. No secret, webhook registration, receiver arming, `armed_at` write or email. Application and price-draft tagging is 7.3C-2.
+**Status: IMPLEMENTED on a draft PR; DORMANT.** Codex implementation review pending. **Migration `20261125002000` pushed to hosted on 2026-11-19 on the owner's instruction (§5.1)**; not merged or deployed. No secret, webhook registration, receiver arming, `armed_at` write or email. Application and price-draft tagging is 7.3C-2.
 **Authority:** Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770) on the [handoff](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1-HANDOFF.md) (C3C-1..C3C-6 accepted, five integration requirements) and the owner's 7.3C-1 implementation instruction (2026-11-18), under the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §7.1–§7.5, §8.3–§8.4, §9.1, §11.4 and §13.3. Clearance covers this local, dormant slice only.
 **Branch:** `claude/phase7-3c1-correlation-readback`, in its own worktree, based on `main` `1327a58` (§1).
 
@@ -137,11 +137,27 @@ New tests:
 - **D-9** `owner_email_evidence` echoes `source_id`, which the caller passed and the overview already returns, so rows can be joined. It returns no ledger row ID, provider email ID, tag, svix-id or secret slot (tested).
 - **D-10** The migration-lock script change in §2.4 is test tooling only.
 
-## 5. Rollout and rollback (not done here; each step needs separate owner authorization)
+## 5. Rollout and rollback
+
+### 5.1 Hosted push (2026-11-19, on the owner's instruction "Please go ahead and push migration")
+
+| Step | Result |
+|---|---|
+| State when authorized | Codex implementation review of #180 had **not** happened. PR CI 44591952614 on `0eabd63`: backend and lifecycle passed; application failed only at `request.spec.ts:837`, the carried intermittent contrast failure on a page this PR does not touch (873 other browser tests passed). Not rerun (owner handles reruns) |
+| **Version collision found** | Hosted already recorded `20261125001000` as `trace156_gallery_photo_services`. That migration came from #178, which merged into a TRACE-156 side branch; it is carried by open #179, not by `main`. Pushing this file under that version would have read as applied and never run. None of the ten 7.3C-1 functions existed on hosted |
+| Renumber | Moved to **`20261125002000`** (commit `77e153a`), content unchanged. That sorts after the hosted head and before #179's `20261126001000`, so neither workstream is pushed out of order. Replayed locally after the profile migration: SQL 120–122 671/671, migration-lock PASS |
+| Push directory | `supabase db push` refuses when hosted has a version the local folder lacks. The push ran from a scratch copy of this branch's `supabase/` folder, plus a byte copy of the hosted profile migration from `origin/codex/trace156-gallery-management`. Neither branch's content changed; the 7.3C-1 file in it is identical to the branch (`cmp`) |
+| Dry run | Listed only `20261125002000_phase7_email_evidence_readback.sql` |
+| Push | Applied 21:41:14–21:41:18 UTC, with no lock timeout |
+| Readback (read-only) | Migration head `20261125002000` (`phase7_email_evidence_readback`, 15 statements). All ten functions are present; their `md5(prosrc)` equals the local build; volatility, definer settings, empty `search_path` and grants are as designed (lookup: service role only; readback and counts: authenticated only; private helpers: no grants). Unchanged: 7.2C-1 `12 \| 016c0e68…`, 7.3B six `6 \| 57277a24…`, renewal trigger `b1607618…`, money fingerprint `58 \| af0fae6e…`. 0 receipts and an empty arming record |
+| Effect | None until merge: nothing calls the functions before the new application code deploys |
+| **Consequence for #179** | Hosted now holds `20261125002000`, which #179's branch lacks. Its `db push` will refuse until its local folder contains this file: after #180 merges and #179 rebases, or with the same scratch-folder approach. Its `20261126001000` still sorts after this one, so `--include-all` is not needed |
+
+### 5.2 Remaining steps (each needs separate owner authorization)
 
 1. Codex implementation review and **green exact-head CI** (the application job now has 30 minutes).
-2. Before merge (DEC-2026-037): `supabase db push --linked --dry-run` must list only `20261125002000`; then `supabase db push --linked`. Functions only: no table lock beyond the catalog, and the 2 s lock timeout aborts cleanly on contention.
-3. Read-only hosted readback: the ten functions, their volatility, definer settings and grants; the frozen hashes in §3.1 and the money fingerprint unchanged; `owner_email_evidence_counts()` all zero with `receiver_armed` false.
+2. ~~Before merge: dry run and push~~ **Done 2026-11-19 (§5.1).**
+3. ~~Read-only hosted readback~~ **Done (§5.1).** Not yet done: calling `owner_email_evidence_counts()` as an operator session after deploy, expecting all zero with `receiver_armed` false.
 4. Merge = production deploy. Effects:
    - production owner-email sends gain three opaque tags whenever the lookup answers in time; recipient, content, claims and keys are unchanged;
    - Owner Emails shows "Delivery evidence not available" on every row and says reports are not being collected.
