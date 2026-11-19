@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 
 const container = process.env.R0_DB_CONTAINER ?? 'supabase_db_mercurius-phase5-isolated';
 const migration = readFileSync('supabase/migrations/20261124001000_phase7_email_provider_events.sql', 'utf8');
-const readback = readFileSync('supabase/migrations/20261125001000_phase7_email_evidence_readback.sql', 'utf8');
+const readback = readFileSync('supabase/migrations/20261125002000_phase7_email_evidence_readback.sql', 'utf8');
 const readbackFunctions = readback.match(/revoke all on function\n([\s\S]*?)\nfrom public/)[1]
   .split(',\n').map(signature => signature.trim());
 assert.equal(readbackFunctions.length, 10, 'the 7.3C-1 migration revokes its ten functions in one block');

@@ -2,7 +2,7 @@
 
 - **Base:** `main` `1327a58` (the named start `ba7db9c` was verified, then fast-forwarded over the #175–#177 profile merges). Branch `claude/phase7-3c1-correlation-readback` in its own worktree, draft PR. Record: [7.3C-1](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1.md).
 - **Built (dormant):**
-  - migration `20261125001000`, functions only: the service-role correlation lookup; one stable trust/expiry predicate implementing all three §7.3 checks; the rules 1–10 summary; operator readback and count functions;
+  - migration `20261125002000`, functions only: the service-role correlation lookup; one stable trust/expiry predicate implementing all three §7.3 checks; the rules 1–10 summary; operator readback and count functions;
   - opt-in sender tags, after a claim, with a 1.5 s bounded lookup and an untagged fallback;
   - the Owner Emails summary, history, conflict signal and additive counts.
 - **Evidence:**

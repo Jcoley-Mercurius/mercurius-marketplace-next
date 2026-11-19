@@ -17,7 +17,7 @@
 
 ## 2. What changed
 
-### 2.1 Migration `20261125001000_phase7_email_evidence_readback.sql` (functions and grants only)
+### 2.1 Migration `20261125002000_phase7_email_evidence_readback.sql` (functions and grants only)
 
 | Function | Access | Purpose |
 |---|---|---|
@@ -140,7 +140,7 @@ New tests:
 ## 5. Rollout and rollback (not done here; each step needs separate owner authorization)
 
 1. Codex implementation review and **green exact-head CI** (the application job now has 30 minutes).
-2. Before merge (DEC-2026-037): `supabase db push --linked --dry-run` must list only `20261125001000`; then `supabase db push --linked`. Functions only: no table lock beyond the catalog, and the 2 s lock timeout aborts cleanly on contention.
+2. Before merge (DEC-2026-037): `supabase db push --linked --dry-run` must list only `20261125002000`; then `supabase db push --linked`. Functions only: no table lock beyond the catalog, and the 2 s lock timeout aborts cleanly on contention.
 3. Read-only hosted readback: the ten functions, their volatility, definer settings and grants; the frozen hashes in §3.1 and the money fingerprint unchanged; `owner_email_evidence_counts()` all zero with `receiver_armed` false.
 4. Merge = production deploy. Effects:
    - production owner-email sends gain three opaque tags whenever the lookup answers in time; recipient, content, claims and keys are unchanged;

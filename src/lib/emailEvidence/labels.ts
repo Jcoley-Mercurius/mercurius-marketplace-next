@@ -1,5 +1,5 @@
 // TRACE-155 (Phase 7.3C-1, C3C-4): operator wording for provider delivery evidence. The database
-// decides every rule, flag and exclusion reason (migration 20261125001000); this file only maps
+// decides every rule, flag and exclusion reason (migration 20261125002000); this file only maps
 // those values to the plan's §5 and §8.3 labels. No label says "Delivered", "Received", "Read" or
 // "Confirmed" alone, a server hand-off always carries its disclaimer, and two reports are said to
 // be "also reported", never "later".
