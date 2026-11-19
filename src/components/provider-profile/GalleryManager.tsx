@@ -137,7 +137,7 @@ export function GalleryManager({ contractorId, photos, services, onChange, onRem
         const name = photo.caption || `Photo ${position + 1}`;
         return <fieldset key={photo.id} disabled={blocked} data-gallery-photo={photo.id} className="min-w-0 space-y-3 rounded-xl border bg-card p-3">
           <legend className="px-1 text-sm font-medium">Photo {position + 1}</legend>
-          <Checkbox label={`Select ${name}`} checked={chosen.includes(photo.id)} disabled={blocked || (!chosen.includes(photo.id) && chosen.length >= 100)} onChange={(event) => setSelected(event.target.checked ? [...chosen, photo.id] : chosen.filter((id) => id !== photo.id))} />
+          <Checkbox className="[overflow-wrap:anywhere]" label={`Select ${name}`} checked={chosen.includes(photo.id)} disabled={blocked || (!chosen.includes(photo.id) && chosen.length >= 100)} onChange={(event) => setSelected(event.target.checked ? [...chosen, photo.id] : chosen.filter((id) => id !== photo.id))} />
           <div className="aspect-[4/3] overflow-hidden rounded-lg bg-secondary"><img src={photo.image_url} alt={name} className="h-full w-full object-contain" /></div>
           <CaptionEditor key={photo.id} photo={photo} disabled={blocked} onSave={(caption) => run(async () => {
             const { data, error } = await createClient().rpc("save_contractor_gallery_caption", { p_gallery_id: photo.id, p_caption: caption, p_expected_caption: photo.caption });
@@ -145,7 +145,7 @@ export function GalleryManager({ contractorId, photos, services, onChange, onRem
             onChange((current) => current.map((p) => p.id === photo.id ? { ...p, caption: data } : p));
           }, "Caption saved.")} />
           <div className="overflow-hidden rounded-lg border"><PhotoServiceEditor photoId={photo.id} imageUrl={photo.image_url} photoName={name} serviceIds={photo.service_ids} services={services} onSaved={(serviceIds) => onChange((current) => current.map((p) => p.id === photo.id ? { ...p, service_ids: serviceIds } : p))} /></div>
-          {details?.pair_id && <div className="space-y-1 text-sm"><p><strong>{details.pair_role === "before" ? "Before" : "After"}:</strong> {details.project_title}</p><Button type="button" variant="outline" className="min-h-10" disabled={blocked} onClick={() => {
+          {details?.pair_id && <div className="space-y-1 text-sm [overflow-wrap:anywhere]"><p><strong>{details.pair_role === "before" ? "Before" : "After"}:</strong> {details.project_title}</p><Button type="button" variant="outline" className="min-h-10" disabled={blocked} onClick={() => {
             if (!window.confirm("Remove this before and after pairing? Both photos will stay in the gallery.")) return;
             safe(run(async () => { const { error } = await createClient().rpc("remove_contractor_gallery_pair", { p_pair_id: details.pair_id! }); if (error) throw error; setPairs((p) => p.filter((item) => item.id !== details.pair_id)); }, "Pair removed. Both photos remain."));
           }}>Unpair project</Button></div>}

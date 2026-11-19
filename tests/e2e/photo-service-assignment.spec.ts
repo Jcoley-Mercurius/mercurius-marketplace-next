@@ -75,7 +75,7 @@ async function serve(page: Page, role: "vendor" | "admin", overrides: Partial<Wo
     world.photos = world.photos.map((photo) => photo.id === body.p_gallery_id ? { ...photo, service_ids: saved } : photo);
     return route.fulfill({ json: saved });
   });
-  await page.route("**/rest/v1/contractor_gallery_pairs?*", (route) => route.fulfill({ json: world.pairs, headers: { "content-range": `0-${Math.max(0, world.pairs.length - 1)}/${world.pairs.length}` } }));
+  await page.route("**/rest/v1/contractor_gallery_pairs?*", (route) => route.fulfill({ json: world.pairs, headers: { "access-control-expose-headers": "content-range", "content-range": `0-${Math.max(0, world.pairs.length - 1)}/${world.pairs.length}` } }));
   for (const command of ["bulk_contractor_gallery_services", "save_contractor_gallery_caption", "reorder_contractor_gallery", "create_contractor_gallery_pair", "remove_contractor_gallery_pair"]) {
     await page.route(`**/rpc/${command}`, async (route) => {
       const body = route.request().postDataJSON();
@@ -334,6 +334,7 @@ for (const role of ["vendor", "admin"] as const) {
     expect(world.photos[1].service_ids).toEqual(["pool-service"]);
     await page.reload();
     await expect(manager.getByRole("button", { name: "Unpair project" })).toHaveCount(2);
+    await manager.screenshot({ path: `${shots}/${role}-saved-project.png` });
     page.once("dialog", (d) => d.accept());
     await manager.getByRole("button", { name: "Unpair project" }).first().click();
     await expect(manager.getByRole("button", { name: "Unpair project" })).toHaveCount(0);
@@ -377,6 +378,7 @@ for (const width of [320, 768, 1440]) {
       await expect(dialog).toBeVisible();
       expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(tags).analyze()).violations).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: `${shots}/${name === "Edit selected services" ? "bulk" : "pair"}-dialog-${width}.png` });
       await page.keyboard.press("Escape");
       await expect(dialog).toHaveCount(0);
       await expect(page.getByRole("button", { name, exact: true })).toBeFocused();

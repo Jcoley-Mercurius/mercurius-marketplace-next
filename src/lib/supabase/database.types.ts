@@ -138,13 +138,49 @@ export type Database = {
         ]
       }
       contractor_gallery_pairs: {
-        Row: { id: string; contractor_id: string; before_id: string; after_id: string; title: string }
-        Insert: { id?: string; contractor_id: string; before_id: string; after_id: string; title: string }
-        Update: { id?: string; contractor_id?: string; before_id?: string; after_id?: string; title?: string }
+        Row: {
+          after_id: string
+          before_id: string
+          contractor_id: string
+          id: string
+          title: string
+        }
+        Insert: {
+          after_id: string
+          before_id: string
+          contractor_id: string
+          id?: string
+          title: string
+        }
+        Update: {
+          after_id?: string
+          before_id?: string
+          contractor_id?: string
+          id?: string
+          title?: string
+        }
         Relationships: [
-          { foreignKeyName: "contractor_gallery_pairs_before_photo_fkey"; columns: ["before_id", "contractor_id"]; isOneToOne: false; referencedRelation: "contractor_gallery"; referencedColumns: ["id", "contractor_id"] },
-          { foreignKeyName: "contractor_gallery_pairs_after_photo_fkey"; columns: ["after_id", "contractor_id"]; isOneToOne: false; referencedRelation: "contractor_gallery"; referencedColumns: ["id", "contractor_id"] },
-          { foreignKeyName: "contractor_gallery_pairs_contractor_id_fkey"; columns: ["contractor_id"]; isOneToOne: false; referencedRelation: "contractors"; referencedColumns: ["id"] },
+          {
+            foreignKeyName: "contractor_gallery_pairs_after_photo_fkey"
+            columns: ["after_id", "contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_gallery"
+            referencedColumns: ["id", "contractor_id"]
+          },
+          {
+            foreignKeyName: "contractor_gallery_pairs_before_photo_fkey"
+            columns: ["before_id", "contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_gallery"
+            referencedColumns: ["id", "contractor_id"]
+          },
+          {
+            foreignKeyName: "contractor_gallery_pairs_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
         ]
       }
       contractor_gallery_services: {
@@ -8971,22 +9007,58 @@ export type Database = {
       }
       service_review: { Args: { _job_id: string }; Returns: Json }
       bulk_contractor_gallery_services: {
-        Args: { p_contractor_id: string; p_gallery_ids: string[]; p_service_ids: string[]; p_mode: string }
-        Returns: { gallery_id: string; service_ids: string[] }[]
+        Args: {
+          p_contractor_id: string
+          p_gallery_ids: string[]
+          p_mode: string
+          p_service_ids: string[]
+        }
+        Returns: {
+          gallery_id: string
+          service_ids: string[]
+        }[]
       }
       save_contractor_gallery_caption: {
-        Args: { p_gallery_id: string; p_caption: string; p_expected_caption: string | null }
+        Args: {
+          p_caption: string
+          p_expected_caption: string | null
+          p_gallery_id: string
+        }
         Returns: string | null
       }
       reorder_contractor_gallery: {
-        Args: { p_contractor_id: string; p_expected_ids: string[]; p_ordered_ids: string[] }
+        Args: {
+          p_contractor_id: string
+          p_expected_ids: string[]
+          p_ordered_ids: string[]
+        }
         Returns: string[]
       }
       create_contractor_gallery_pair: {
-        Args: { p_contractor_id: string; p_before_id: string; p_after_id: string; p_title: string }
-        Returns: { id: string; contractor_id: string; before_id: string; after_id: string; title: string }
+        Args: {
+          p_after_id: string
+          p_before_id: string
+          p_contractor_id: string
+          p_title: string
+        }
+        Returns: {
+          after_id: string
+          before_id: string
+          contractor_id: string
+          id: string
+          title: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "contractor_gallery_pairs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      remove_contractor_gallery_pair: { Args: { p_pair_id: string }; Returns: undefined }
+      remove_contractor_gallery_pair: {
+        Args: { p_pair_id: string }
+        Returns: undefined
+      }
       set_contractor_gallery_photo_services: {
         Args: { p_gallery_id: string; p_service_ids: string[] }
         Returns: string[]

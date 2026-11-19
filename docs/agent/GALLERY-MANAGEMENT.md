@@ -42,12 +42,14 @@ offerings, pricing, Phase 7, booking and payment semantics are outside this slic
 
 ## Database and release
 
-- #178's migration `20261125001000` is recovered byte-for-byte. Its production push is reported
-  in #178; it was not independently re-read from hosted in this task.
+- #178's migration `20261125001000` is recovered byte-for-byte. Production migration history
+  was independently read on 2026-11-19 and confirms it is already the hosted head.
 - New forward migration: `20261126001000_trace156_gallery_management.sql`. It adds the pair
   table and five commands. Existing gallery rows and policies are preserved.
-- Supabase type declarations are extended to match the new contract; a full CLI regeneration
-  against the reconstructed schema remains a review check.
+- The PR preview branch was verified as isolated (`with_data=false`), healthy and migrated.
+  Its generated new-table/RPC declarations were consumed, including composite return metadata.
+  Caption argument/return nullability is explicitly retained because SQL accepts/returns NULL
+  while the generator reports plain text for function signatures. No unrelated type blocks change.
 - Before any merge: verify hosted history, dry-run the new migration, apply it with owner
   authorization, then merge the reviewed application to main. Main auto-deploys. A previous
   application can still run with this additive schema; database recovery is a forward fix.
@@ -60,8 +62,14 @@ offerings, pricing, Phase 7, booking and payment semantics are outside this slic
   schema and the exact #178 and new migration files. Covers ownership, role-negative cases,
   invalid service rollback, stale captions/orders, cross-provider pairs, reuse across roles,
   unpair preservation and delete-cascade semantics. This is not full Supabase replay/RLS proof.
-- Full SQL reset/pgTAP, real-session concurrency and browser/accessibility execution are CI
-  checks. `scripts/gallery-management-concurrency.mjs` is pinned to the disposable CI container
+- CI run `44575311801`, runtime head `5d3f3f8`: backend and lifecycle passed. Full clean SQL
+  replay passed twice (114 files / 7,923 assertions); all four new real-session concurrency
+  proofs passed. Application lint, types, units and build passed. Browser: 897 passed, six failed. Five pairing
+  tests lacked the CORS-exposed Content-Range header in the synthetic pair fixture, so the reader
+  correctly treated it as unavailable. That fixture is fixed. The sixth was the existing request
+  confirmation axe scan racing its automatic synthetic checkout refusal; the test now waits for
+  the refusal and enabled checkout control before scanning. No axe rule is excluded, retried or
+  weakened, and no request/checkout product code changes. `scripts/gallery-management-concurrency.mjs` is pinned to the disposable CI container
   and covers competing captions, stale reorders, cross-role pair races and atomic bulk races.
 - Browser cases cover both editors, bulk add/replace/clear/cancel/failure, retained draft on
   failure/conflict, refresh persistence, order, pair/unpair, public paired navigation and 320/
@@ -69,6 +77,15 @@ offerings, pricing, Phase 7, booking and payment semantics are outside this slic
   socket creation. No local browser pass, screenshot comparison or visual acceptance is claimed.
 - Real phones, screen readers, forced colours, 200% browser zoom and owner visual acceptance
   remain open. No production provider content was read or changed in this task.
+
+## Finishing review
+
+Long captions and project titles wrap within photo cards. The final review follow-up contains
+these wrapping classes, preview-generated contract declarations, fixture/timing repairs, a
+focused gallery verification workflow and evidence documentation;
+no database or command behavior changes. The focused workflow exercises all photo-manager
+cases plus both request-confirmation scans and retains synthetic review screenshots even on
+success. Its own CI and full final-head CI remain release checks.
 
 ## Next action
 

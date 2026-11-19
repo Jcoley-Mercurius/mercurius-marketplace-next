@@ -1,0 +1,60 @@
+name: Gallery management
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/provider-profile/**'
+      - 'src/lib/providerProfile/**'
+      - 'src/app/vendor/profile/**'
+      - 'src/app/admin/vendors/**'
+      - 'tests/e2e/photo-service-assignment.spec.ts'
+      - 'tests/e2e/request.spec.ts'
+      - '.github/workflows/gallery-management.yml'
+  push:
+    paths:
+      - 'src/components/provider-profile/**'
+      - 'src/lib/providerProfile/**'
+      - 'src/app/vendor/profile/**'
+      - 'src/app/admin/vendors/**'
+      - 'tests/e2e/photo-service-assignment.spec.ts'
+      - 'tests/e2e/request.spec.ts'
+      - '.github/workflows/gallery-management.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gallery-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  gallery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:55831
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: mds-synthetic-anon-key
+      MDS_CATALOG_ENABLED: '1'
+      MERCURIUS_BUILD_WORKERS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Both photo managers, bulk editing, ordering, pairs, axe and focus
+        run: npx playwright test photo-service-assignment.spec.ts --output test-results/gallery-management
+      - name: Settled request-confirmation accessibility regression
+        run: npx playwright test request.spec.ts --grep 'confirmation (light|dark): axe' --output test-results/request-confirmation
+      - name: Keep synthetic gallery review images and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallery-management-review
+          retention-days: 7
+          path: |
+            test-results/
+            playwright-report/
