@@ -75,7 +75,16 @@ async function serve(page: Page, role: "vendor" | "admin", overrides: Partial<Wo
     world.photos = world.photos.map((photo) => photo.id === body.p_gallery_id ? { ...photo, service_ids: saved } : photo);
     return route.fulfill({ json: saved });
   });
-  await page.route("**/rest/v1/contractor_gallery_pairs?*", (route) => route.fulfill({ json: world.pairs, headers: { "access-control-expose-headers": "content-range", "content-range": `0-${Math.max(0, world.pairs.length - 1)}/${world.pairs.length}` } }));
+  await page.route("**/rest/v1/contractor_gallery_pairs?*", (route) => {
+    const url = new URL(route.request().url());
+    const from = Number(url.searchParams.get("offset") ?? 0);
+    const limit = Number(url.searchParams.get("limit") ?? 500);
+    const rows = world.pairs.slice(from, from + limit);
+    return route.fulfill({ json: rows, headers: {
+      "access-control-expose-headers": "content-range",
+      "content-range": `${from}-${from + Math.max(0, rows.length - 1)}/${world.pairs.length}`,
+    } });
+  });
   for (const command of ["bulk_contractor_gallery_services", "save_contractor_gallery_caption", "reorder_contractor_gallery", "create_contractor_gallery_pair", "remove_contractor_gallery_pair"]) {
     await page.route(`**/rpc/${command}`, async (route) => {
       const body = route.request().postDataJSON();

@@ -66,7 +66,10 @@ offerings, pricing, Phase 7, booking and payment semantics are outside this slic
   replay passed twice (114 files / 7,923 assertions); all four new real-session concurrency
   proofs passed. Application lint, types, units and build passed. Browser: 897 passed, six failed. Five pairing
   tests lacked the CORS-exposed Content-Range header in the synthetic pair fixture, so the reader
-  correctly treated it as unavailable. That fixture is fixed. The sixth was the existing request
+  correctly treated it as unavailable. That fixture is fixed, including its offset/limit handling and terminal empty page after a
+  saved project is reloaded. Focused run `44582772936` passed 25/27 editor tests (all mobile
+  dialog axe/focus/reflow cases passed) and caught the pagination omission in the remaining two;
+  the corrected fixture is under re-verification. The sixth was the existing request
   confirmation axe scan racing its automatic synthetic checkout refusal; the test now waits for
   the refusal and enabled checkout control before scanning. No axe rule is excluded, retried or
   weakened, and no request/checkout product code changes. `scripts/gallery-management-concurrency.mjs` is pinned to the disposable CI container
