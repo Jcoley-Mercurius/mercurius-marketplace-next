@@ -737,9 +737,10 @@ test("pool and gutter selections each keep exactly one matching service example"
   await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, 390);
   for (const service of ["pool-service", "gutter-cleaning", "pool-service"]) {
     await dropdown(page).selectOption(service);
-    await showIllustration(page);
-    await expect(illustration(page)).toHaveCount(1);
+    // Wait for this service's example first: the previous one is replaced as the view changes.
     await expect(illustration(page)).toHaveAttribute("data-service-illustration", service);
+    await expect(illustration(page)).toHaveCount(1);
+    await showIllustration(page);
     expect(await illustration(page).locator("img").evaluate((image: HTMLImageElement) => new URL(image.currentSrc).pathname)).toContain(`/images/services/${service}-`);
     await expect(page.locator("[data-profile-media]")).toHaveCount(1);
   }
