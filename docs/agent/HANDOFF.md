@@ -1,3 +1,22 @@
+# Phase 7.3C-1 Owner Emails correlation tags and evidence readback (TRACE-155) — 2026-11-19 ET
+
+- **Base:** `main` `1327a58` (the named start `ba7db9c` was verified, then fast-forwarded over the #175–#177 profile merges). Branch `claude/phase7-3c1-correlation-readback` in its own worktree, draft PR. Record: [7.3C-1](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1.md).
+- **Built (dormant):**
+  - migration `20261125002000`, functions only: the service-role correlation lookup; one stable trust/expiry predicate implementing all three §7.3 checks; the rules 1–10 summary; operator readback and count functions;
+  - opt-in sender tags, after a claim, with a 1.5 s bounded lookup and an untagged fallback;
+  - the Owner Emails summary, history, conflict signal and additive counts.
+- **Evidence:**
+  - SQL 122 169/169 (9 mutations caught); full SQL 113 files / 7,982;
+  - unit 72 / 1,105 (4 mutations caught);
+  - concurrency: S-37 race and locked-replay PASS, plus the existing scripts;
+  - unchanged: legacy `12 | 016c0e68…` and money fingerprint `58 | af0fae6e…`.
+  Browser: see the record §3.4.
+- **For Codex:** D-1..D-10, especially D-4 (literal item 2 excludes an earlier attempt's report once a later attempt records another ID) and D-5 (current-conflict wording).
+- **Hosted (2026-11-19, owner instruction):** `20261125001000` was already taken on hosted by the TRACE-156 photo-services migration (on #179's branch), so this migration was renumbered to `20261125002000`. Dry run, push and read-only readback match (record §5.1). #179's next push needs this file in its local folder.
+- **After #179 merged (2026-11-19):** rebased (TRACEABILITY rows only). Found that #179's `20261126001000` had deployed without reaching production; pushed it on the owner's authorization and read it back. Deleted only the stale PR 180 Supabase preview branch (record §5.1a).
+- **Not done:** merge, deploy, secrets, webhook, arming, email. 7.3C-2, the 7.3B push-provenance, preflight and 503-probe items, EO-1..EO-8 and every carried check remain open.
+- **Next:** Codex implementation review and green exact-head CI (`request.spec.ts:837` failed on the first run); then merge = deploy.
+
 # Phase 7.3C-1 Owner Emails evidence handoff (TRACE-155) — 2026-11-16 ET
 
 - **Base:** `main` `e25e7f8` (#169 merged 16:38 UTC). Branch `claude/phase7-3c1-evidence-readback-handoff`, draft PR. Documentation only. Record: [7.3C-1 handoff](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1-HANDOFF.md).

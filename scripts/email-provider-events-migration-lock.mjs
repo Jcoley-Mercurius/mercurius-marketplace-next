@@ -10,6 +10,10 @@
 // 3. Applies the file up to its final resets inside a rolled-back transaction, to show the 2 s
 //    lock timeout and the 5 s statement timeout are in force at the ledger-index statements.
 // 4. Applies it with no contention (committed), restoring the schema, and records the time.
+// 5. TRACE-155 (7.3C-1): the later evidence-readback migration has functions that take the
+//    receipt table's row type, so they are dropped before step 1 and that unchanged file is
+//    re-applied after step 4, proving it still applies on top. Its function list is read from
+//    the file's own revoke block.
 // Run against a disposable isolated database only; CI runs a clean reset afterwards.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -17,6 +21,10 @@ import assert from 'node:assert/strict';
 
 const container = process.env.R0_DB_CONTAINER ?? 'supabase_db_mercurius-phase5-isolated';
 const migration = readFileSync('supabase/migrations/20261124001000_phase7_email_provider_events.sql', 'utf8');
+const readback = readFileSync('supabase/migrations/20261125002000_phase7_email_evidence_readback.sql', 'utf8');
+const readbackFunctions = readback.match(/revoke all on function\n([\s\S]*?)\nfrom public/)[1]
+  .split(',\n').map(signature => signature.trim());
+assert.equal(readbackFunctions.length, 10, 'the 7.3C-1 migration revokes its ten functions in one block');
 function psql(source, { stopOnError = true } = {}) {
   return new Promise((resolve, reject) => {
     const args = ['exec', '-i', container, 'psql', '-X', '-q', '-At', '-v', `ON_ERROR_STOP=${stopOnError ? 1 : 0}`, '-U', 'postgres', '-d', 'postgres'];
@@ -47,6 +55,9 @@ const objects = `select num_nonnulls(
   to_regclass('private.package_draft_email_notices_provider_message_id'))`;
 
 assert.equal(await sql('select count(*) from private.email_provider_events'), '0', 'Run on an empty receipt table (before other fixtures).');
+const readbackPresent = `select num_nonnulls(${readbackFunctions.map(signature => `to_regprocedure('${signature}')`).join(', ')})`;
+assert.equal(await sql(readbackPresent), '10', 'the 7.3C-1 readback functions are present before the test');
+await sql(`drop function ${readbackFunctions.join(', ')};`);
 await sql(`begin;
 drop table private.email_provider_events, private.email_provider_event_purges, private.email_evidence_config;
 drop function private.email_provider_events_guard(), private.email_provider_event_retention(boolean),
@@ -86,4 +97,9 @@ assert.equal(await sql(objects), '8', 'the uncontended migration applies every o
 assert.equal(await sql(`select count(*) from pg_indexes where schemaname='private' and indexname like '%\\_provider_message_id' and indexdef not like '%UNIQUE%'`), '3',
   'three non-unique ledger indexes');
 console.log(`uncontended apply (whole file, one transaction, including psql transport): ${elapsed} ms`);
+await sql(`begin;\n${readback}\ncommit;`);
+assert.equal(await sql(readbackPresent), '10', 'the unchanged 7.3C-1 migration re-applies on top of the restored 7.3B objects');
+assert.equal(await sql(`select has_function_privilege('authenticated','public.owner_email_evidence(text,uuid[])','EXECUTE')
+  and has_function_privilege('service_role','public.owner_email_correlation_ref(text,uuid)','EXECUTE')
+  and not has_function_privilege('anon','public.owner_email_evidence_counts()','EXECUTE')`), 't', 'with its grants');
 console.log('email provider events migration lock PASS');

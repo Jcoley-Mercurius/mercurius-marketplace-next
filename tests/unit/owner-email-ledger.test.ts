@@ -18,6 +18,7 @@ import {
   type OperationalLogInput,
 } from "../../src/lib/observability/operationalLog";
 import {
+  CORRELATION_REF_TIMEOUT_MS,
   contactNotificationMessage,
   deliverOwnerEmail,
   ownerEmailKey,
@@ -114,6 +115,9 @@ function expectNoSensitiveData(raw: string[]) {
 
 type RpcCall = { name: string; args: Record<string, unknown> };
 type Fault = "error" | "throw" | "commit_then_lose" | "malformed" | null;
+/** TRACE-155 (7.3C-1): how the fake answers owner_email_correlation_ref. */
+type RefFault = "error" | "throw" | "null" | "invalid" | "hang" | null;
+const LEDGER_ROW_ID = "0e0e0e0e-1111-4222-8333-444444444444";
 
 /**
  * A model of the owner-email ledger: one claim per permitted attempt, outcome only for the
@@ -127,7 +131,9 @@ function ownerLedger(
 ) {
   const ledger = { ...initial, stale: initial.stale ?? false, claim: null as string | null };
   const calls: RpcCall[] = [];
-  const faults = { claim: null as Fault, record: null as "error" | "throw" | null };
+  const faults = { claim: null as Fault, record: null as "error" | "throw" | null, ref: null as RefFault };
+  // The correlation lookup is read-only and kept apart from the ledger transitions in `calls`.
+  const refCalls: Array<Record<string, unknown>> = [];
   const view = () => (ledger.stale && ledger.state === "pending" ? "missed" : ledger.stale && ledger.state === "sending" ? "unknown" : ledger.state);
   const claim = () => {
     ledger.state = "sending";
@@ -138,6 +144,15 @@ function ownerLedger(
   };
   const client = {
     rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+      if (name === "owner_email_correlation_ref") {
+        refCalls.push(args);
+        if (faults.ref === "throw") throw new TypeError("fetch failed");
+        if (faults.ref === "hang") return new Promise<never>(() => {});
+        if (faults.ref === "error") return { data: null, error: { code: "08006", message: `connection lost ${SENTINEL.email}` } };
+        if (faults.ref === "null") return { data: null, error: null };
+        if (faults.ref === "invalid") return { data: SENTINEL.email, error: null };
+        return { data: LEDGER_ROW_ID, error: null };
+      }
       calls.push({ name, args });
       await Promise.resolve();
       if (name === "owner_email_claim") {
@@ -178,7 +193,7 @@ function ownerLedger(
     ledger.stale = false;
     return { data: { state: "resend_requested", attempt: ledger.attempts }, error: null };
   };
-  return { client: client as unknown as SupabaseClient, calls, ledger, faults, requestResend, view };
+  return { client: client as unknown as SupabaseClient, calls, refCalls, ledger, faults, requestResend, view };
 }
 
 function stubProvider(respond: () => Promise<Response>) {
@@ -253,6 +268,7 @@ describe("operational log v2 (C-5): owner-email events, v1 unchanged", () => {
   it.each([
     ["owner_email.claim_failed", "error"], ["owner_email.record_failed", "error"], ["owner_email.background_failed", "error"],
     ["owner_email.not_claimed", "warn"], ["contact_submission.refused", "warn"], ["owner_email_resend.refused", "warn"],
+    ["owner_email.correlation_unavailable", "warn"],
     ["contact_submission.saved", "info"], ["owner_email.recorded", "info"],
   ] as const)("%s logs at %s", (event, level) => {
     expect(buildOperationalLogRecord({ ...base, event })).toMatchObject({ level, schema: "mercurius.oplog.v2" });
@@ -1126,5 +1142,141 @@ describe("7.2C-2: renewal-document owner emails", { timeout: 60_000 }, () => {
       expect(fake.requestResend(false).error?.code).toBe("55000");
       expect(fake.requestResend(true).data?.state).toBe("resend_requested");
     });
+  });
+});
+
+// TRACE-155 (Phase 7.3C-1): correlation tags on owner-email sends. The lookup comes after a
+// successful claim, is bounded, and on any failure sends exactly the pre-7.3C body untagged.
+describe("7.3C-1: correlation tags on owner-email sends", () => {
+  const bodyOf = (fetchMock: ReturnType<typeof stubProvider>, call = 0) => String(fetchMock.mock.calls[call][1].body);
+  const keyOf = (fetchMock: ReturnType<typeof stubProvider>, call = 0) =>
+    (fetchMock.mock.calls[call][1].headers as Record<string, string>)["Idempotency-Key"];
+  const withoutTags = (body: string) => {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    delete parsed.tags;
+    return JSON.stringify(parsed);
+  };
+
+  it("tags the claimed attempt with its ledger row; recipient, content, key, claim and record are unchanged", async () => {
+    const fetchMock = stubProvider(async () => new Response(JSON.stringify({ id: SENTINEL.providerMessageId }), { status: 200 }));
+    const fake = ownerLedger();
+    const logs = captureLogs();
+    expect(await deliverOwnerEmail(fake.client, "contact_submission", sourceId, "initial", sendOwnerNotification, trace)).toEqual({ state: "sent", attempt: 1 });
+    expect(fake.refCalls).toEqual([{ p_kind: "contact_submission", p_source: sourceId }]);
+    expect(fake.calls.map((call) => call.name)).toEqual(["owner_email_claim", "owner_email_record"]);
+    expect(fake.calls[1].args).toEqual({
+      p_kind: "contact_submission", p_source: sourceId, p_claim: `${SENTINEL.claimId}-1`, p_outcome: "sent",
+      p_provider_id: SENTINEL.providerMessageId, p_error_code: null,
+    });
+    const body = JSON.parse(bodyOf(fetchMock));
+    expect(body.tags).toEqual([
+      { name: "mm_ledger", value: "owner_email" }, { name: "mm_ref", value: LEDGER_ROW_ID }, { name: "mm_attempt", value: "1" },
+    ]);
+    expect(body).toMatchObject({ to: ["owner@example.test"], reply_to: SENTINEL.email, subject: contactNotificationMessage(submission).subject });
+    expect(body.text).toBe(contactNotificationMessage(submission).text);
+    expect(keyOf(fetchMock)).toBe(ownerEmailKey("contact_submission", sourceId, 1));
+    expect(logs.events()).toEqual(["owner_email.claimed", "owner_email.provider_result", "owner_email.recorded"]);
+    expectNoSensitiveData(logs.raw);
+    expect(logs.raw.join("\n")).not.toContain(LEDGER_ROW_ID);
+  });
+
+  it("the tagged body is the untagged body plus only the tags key", async () => {
+    const tagged = stubProvider(async () => new Response(JSON.stringify({ id: "msg" }), { status: 200 }));
+    captureLogs();
+    await deliverOwnerEmail(ownerLedger().client, "contact_submission", sourceId, "initial", sendOwnerNotification, trace);
+    const taggedBody = bodyOf(tagged);
+    vi.restoreAllMocks();
+    const untagged = stubProvider(async () => new Response(JSON.stringify({ id: "msg" }), { status: 200 }));
+    const fallback = ownerLedger();
+    fallback.faults.ref = "null";
+    captureLogs();
+    await deliverOwnerEmail(fallback.client, "contact_submission", sourceId, "initial", sendOwnerNotification, trace);
+    expect(withoutTags(taggedBody)).toBe(bodyOf(untagged));
+    expect(Object.keys(JSON.parse(taggedBody))).toEqual([...Object.keys(JSON.parse(bodyOf(untagged))), "tags"]);
+  });
+
+  it.each(["error", "throw", "null", "invalid"] as const)("a lookup that %ss sends untagged, logs one allowlisted code, and still records", async (fault) => {
+    const fetchMock = stubProvider(async () => new Response(JSON.stringify({ id: SENTINEL.providerMessageId }), { status: 200 }));
+    const fake = ownerLedger();
+    fake.faults.ref = fault;
+    const logs = captureLogs();
+    expect(await deliverOwnerEmail(fake.client, "contact_submission", sourceId, "initial", sendOwnerNotification, trace)).toEqual({ state: "sent", attempt: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(bodyOf(fetchMock))).not.toHaveProperty("tags");
+    expect(keyOf(fetchMock)).toBe(ownerEmailKey("contact_submission", sourceId, 1));
+    expect(fake.refCalls).toHaveLength(1);
+    expect(fake.calls.map((call) => call.name)).toEqual(["owner_email_claim", "owner_email_record"]);
+    expect(fake.calls[1].args).toMatchObject({ p_claim: `${SENTINEL.claimId}-1`, p_outcome: "sent", p_provider_id: SENTINEL.providerMessageId });
+    expect(logs.events()).toEqual(["owner_email.claimed", "owner_email.correlation_unavailable", "owner_email.provider_result", "owner_email.recorded"]);
+    expect(logs.lines()[1]).toMatchObject({
+      schema: "mercurius.oplog.v2", level: "warn", error_code: "correlation_ref_unavailable", attempt: 1,
+      source_kind: "contact_submission", source_id: sourceId, outcome: null,
+    });
+    expectNoSensitiveData(logs.raw);
+  });
+
+  it("a lookup that hangs is abandoned after the bound and the attempt goes out untagged, once", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const fetchMock = stubProvider(async () => new Response(JSON.stringify({ id: "msg" }), { status: 200 }));
+      const fake = ownerLedger();
+      fake.faults.ref = "hang";
+      captureLogs();
+      const delivery = deliverOwnerEmail(fake.client, "contact_submission", sourceId, "initial", sendOwnerNotification, trace);
+      await vi.advanceTimersByTimeAsync(CORRELATION_REF_TIMEOUT_MS - 1);
+      expect(fetchMock).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await delivery).toEqual({ state: "sent", attempt: 1 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(bodyOf(fetchMock))).not.toHaveProperty("tags");
+      expect(fake.ledger).toMatchObject({ state: "sent", attempts: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("no lookup happens without a claim", async () => {
+    for (const setup of [{ state: "sent", attempts: 1 }, { state: "pending", attempts: 0, stale: true }]) {
+      const fake = ownerLedger(setup);
+      captureLogs();
+      const send = vi.fn();
+      expect((await deliverOwnerEmail(fake.client, "contact_submission", sourceId, "initial", send, trace)).state).toBe("not_claimed");
+      expect(fake.refCalls).toHaveLength(0);
+      expect(send).not.toHaveBeenCalled();
+      vi.restoreAllMocks();
+    }
+    for (const fault of ["error", "throw", "commit_then_lose", "malformed"] as const) {
+      const fake = ownerLedger();
+      fake.faults.claim = fault;
+      captureLogs();
+      expect(await deliverOwnerEmail(fake.client, "contact_submission", sourceId, "initial", vi.fn(), trace)).toEqual({ state: "claim_failed" });
+      expect(fake.refCalls).toHaveLength(0);
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("an authorized resend is attempt 2 with its own key and attempt tag; a renewal email is tagged the same way", async () => {
+    const fetchMock = stubProvider(async () => new Response(JSON.stringify({ id: "msg" }), { status: 200 }));
+    const fake = ownerLedger({ state: "failed", attempts: 1 });
+    captureLogs();
+    fake.requestResend(false);
+    expect(await deliverOwnerEmail(fake.client, "contact_submission", sourceId, "resend", sendOwnerNotification, trace)).toEqual({ state: "sent", attempt: 2 });
+    expect(keyOf(fetchMock)).toBe(ownerEmailKey("contact_submission", sourceId, 2));
+    expect(JSON.parse(bodyOf(fetchMock)).tags).toContainEqual({ name: "mm_attempt", value: "2" });
+    const renewal = ownerLedger(undefined, { kind: "renewal_document", source: renewalDocument });
+    await deliverOwnerEmail(renewal.client, "renewal_document", renewalId, "initial", sendOwnerNotification, renewalTrace);
+    expect(renewal.refCalls).toEqual([{ p_kind: "renewal_document", p_source: renewalId }]);
+    expect(JSON.parse(bodyOf(fetchMock, 1)).tags).toEqual([
+      { name: "mm_ledger", value: "owner_email" }, { name: "mm_ref", value: LEDGER_ROW_ID }, { name: "mm_attempt", value: "1" },
+    ]);
+  });
+
+  it("S-51: a stale worker's tagged send is still refused at record time (40001 → unrecorded)", async () => {
+    stubProvider(async () => new Response(JSON.stringify({ id: "msg" }), { status: 200 }));
+    const fake = ownerLedger();
+    fake.faults.record = "error";
+    captureLogs();
+    expect(await deliverOwnerEmail(fake.client, "contact_submission", sourceId, "initial", sendOwnerNotification, trace)).toEqual({ state: "unrecorded", attempt: 1 });
+    expect(fake.ledger.state).toBe("sending");
   });
 });

@@ -1,5 +1,7 @@
 # Phase 7.3A — Email delivery evidence and safe recovery: characterization and plan (TRACE-155)
 
+> **Amended 2026-11-19 (7.3C-1, under Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770), C3C-2 and C3C-3):** §7.3, §7.5, §13.3 and S-57 now state current-snapshot exclusion for derived conflicts and the untagged fallback. The superseded wording is kept in §18.3. The rest of this plan is unchanged.
+
 **Status:** PLAN, REVISED AFTER CODEX REVIEW [#5891386779](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891386779) (at `7c2d0e5`) AND RE-REVIEW [#5891897514](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891897514) (at `5d577f0`; corrections C1–C3, §18.2), for final Codex plan clearance. Documentation only. Approves nothing, activates nothing. **No 7.3B implementation clearance has been given.**
 **Branch:** `claude/phase7-3a-email-evidence-plan`. First written on `main` `24dd455` (§1.1). Rebased onto `main` **`8a9603b94ea908e83742cbc2548d40f63ba4263b`** for this revision (§1.2).
 **Authority:**
@@ -380,6 +382,13 @@ Every read recomputes the provider-ID candidate `I'` for each linked receipt, us
 
 An `id_conflict` is derived, not stored. It excludes the receipt exactly as a stored conflict does. **No read-time check can upgrade a receipt-time conflict to trusted.**
 
+**Durability (amended 2026-11-19, C3C-3: current-snapshot exclusion).** The two kinds of conflict differ in how long they last:
+- A **stored** conflict (`conflict_disagree`, `conflict_id_ambiguous`, `conflict_tag_invalid`, or the `content_conflict` flag) is written once at receipt and guarded immutable. It stays excluded for the receipt's whole retained life, including after the row its tag or ID names is deleted.
+- A **derived** `id_conflict` is recomputed from the current ledger snapshot at every read. It excludes the receipt only while the disagreement exists. If the competing record disappears (for example, its source is deleted and its ledger row cascades), the receipt passes all three checks again and **can count again** at the next read. Nothing on the read side writes, so nothing records that it was once excluded.
+- Item 2 applies to the linked row as a whole. Once a later attempt of the same row records a different provider ID, an earlier attempt's tagged receipt is excluded as `id_conflict`, even though it described a real email.
+
+The summary, history, counts and conflict signal all read receipts through one predicate, so no surface gives a different trust answer.
+
 Example (Codex's case): a receipt tagged for attempt A of row X (A is `unknown`, so X never records an ID) carries an `email_id` that row Y already recorded, in the same ledger or another. At receipt this is `conflict_disagree`. If Y records that ID only **after** the receipt, the receipt is linked `tag_only` at first, and then becomes `id_conflict` at the first read after Y's record.
 
 ### 7.4 Conflicts (R4, C2)
@@ -395,7 +404,7 @@ Example (Codex's case): a receipt tagged for attempt A of row X (A is `unknown`,
 
 | Case | Behavior |
 |---|---|
-| Early callback (receipt before `*_record`) | `tag_only` at receipt. Trusted while the ID is unknown or agrees; `id_conflict` if any row later records a different identity (§7.3). Untagged: `unmatched` (only possible before 7.3C ships; the receiver is unarmed until then, §13.3) |
+| Early callback (receipt before `*_record`) | `tag_only` at receipt. Trusted while the ID is unknown or agrees; `id_conflict` if any row later records a different identity (§7.3). Untagged: `unmatched`. **Amended 2026-11-19 (C3C-2):** this stays possible after 7.3C, because a send whose correlation-reference lookup fails, times out or returns nothing goes out untagged. Such a callback arriving before `*_record` stays `unmatched` and is **never rematched on read**, even after the row records its ID. This is an accepted degradation; it does not relax any 7.3D proof or gate |
 | Lost API response (`unknown`) | `tag_only`; evidence shown while the recheck passes. The row stays `unknown` and its attested recovery is unchanged |
 | Tag names unknown attempt A; ID already belongs to B (same or other ledger) | `conflict_disagree`; unlinked; excluded |
 | Same ID recorded in two ledgers (impossible by construction; forced in tests) | `conflict_id_ambiguous`, or `id_conflict` if it becomes ambiguous after linking |
@@ -693,7 +702,7 @@ The plan's recommendation is **P-2 with an evidenced weekly operator purge** (D 
 | Slice | Content | Gate |
 |---|---|---|
 | **7.3C** | Opt-in validated tags on the shared sender for the three ledger helpers (an additive parameter; keys stay per attempt, so no 409 from a reused key); read-time agreement and summary function; arming record use; readback columns, counts and history (owner emails first); browser tests (MDS, axe, 320 px) | Codex review |
-| **7.3D** | Hosted push, secrets, registration, domain readback, controlled acceptance (§12), rotation, expiry readback, dated evidence. **The receiver is armed only after 7.3C is deployed**, so every ledger send is tagged | EO-1, EO-2, EO-3, EO-6, EO-7 |
+| **7.3D** | Hosted push, secrets, registration, domain readback, controlled acceptance (§12), rotation, expiry readback, dated evidence. **The receiver is armed only after both 7.3C slices are deployed**, so every ledger send is tagged whenever its correlation reference is available. *(Amended 2026-11-19, C3C-2: a send whose lookup failed goes out untagged, so coverage is not universal; see §7.5)* | EO-1, EO-2, EO-3, EO-6, EO-7 |
 | **7.3E** | Suppression, only as approved | EO-4, EO-5 |
 | **7.3F** | Resend after proven non-delivery | EC-10, deferred |
 | **7.6** | Alerts (evidence gaps, unmatched spikes, endpoint disablement), log drain, CFG-011 for logs | Existing |
@@ -755,7 +764,7 @@ All cases use locally generated secrets and synthetic payloads. "Rejected" means
 | S-54 | Valid tag for row X attempt 1; the ID belongs to row X's sent attempt 2 | `conflict_disagree` (attempt differs) |
 | S-55 | **ID collision across ledgers** (forced): two rows in different ledgers, and two rows in one ledger, hold the same ID; tagged and untagged variants | `conflict_id_ambiguous`; no FK; excluded; never linked to either |
 | S-56 | **Invalid tag (missing row, future attempt, partial or malformed) with an ID that matches one row uniquely** | `conflict_tag_invalid`; **no fallback** to the ID; excluded |
-| S-57 | Valid tag, no ID at receipt; S-52's Y then records the receipt's ID; and, separately, an `id_only` receipt whose ID another ledger then records | Both trusted before; `id_conflict` at the next read and excluded after; never restored to trusted |
+| S-57 | Valid tag, no ID at receipt; S-52's Y then records the receipt's ID; and, separately, an `id_only` receipt whose ID another ledger then records | Both trusted before; `id_conflict` at the next read and excluded after. *Amended 2026-11-19 (C3C-3):* excluded **while** the other row holds the ID; if that row disappears, the receipt is trusted again. Stored conflicts are never restored (§7.3) |
 | S-58 | **Concurrent receive and source deletion** (real database, repeated): a receipt linking to row X while X's source is deleted | Either the receipt commits linked and is then cascade-deleted, or the receive gets `23503` → 5xx (no 2xx) and the retry is classed `conflict_tag_invalid`. Never a linked receipt to a missing row, never a 2xx before commit |
 | S-59 | **Immutable expiry:** a duplicate delivery 10 days after the first; a content-conflict update; a direct `update … set expires_at` as the table owner | `expires_at` unchanged; the direct update is rejected by the trigger |
 | S-60 | **Backlog larger than the batch:** 1,000 expired rows, then 3 receives with no operator purge | 300 deleted, oldest first; the remaining 700 are still stored and logically excluded. Proves that no per-row deadline follows from receipts alone |
@@ -872,6 +881,19 @@ R2's physical-retention statement and R2/R4's linkage were corrected again by C2
 | **C2** | Tag-first linkage with only a linked-row ID check can trust a receipt whose ID identifies a different ledger or attempt | §7.2: the tag candidate and the provider-ID candidate (across **all three** ledgers) are resolved **independently**. Linked only when they agree or exactly one is present; disagreement, ID ambiguity and any present invalid tag are conflicts, **never linked**, never trusted, and there is no fallback from an invalid tag to the ID. §7.3: a read-time recheck of every linked receipt catches IDs recorded later and can only remove trust, never restore it. §8.1: `identity_class` with linkage-coherence checks and ledger ID indexes; §7.4/§9.1 conflict counting. Retention consequence stated: conflicted receipts do not cascade and are bounded by their short expiry | S-31, S-32, S-52 to S-58 (Codex's same-ledger and cross-ledger A/B cases, ID collision, invalid tag with matching ID, later-recorded IDs, concurrent receive and deletion), S-62 |
 | **C3** | "Gone at the next receipt or purge" was wrong; there is no finite physical bound without traffic or a purge | §11.4 item 4 now says what the batch does and does not guarantee, including the unbounded case. Expiry is immutable at receipt time (a trigger rejects changes; duplicates never extend it). Logical exclusion is in the only (database) read path. Purge is deterministic, oldest first, `skip locked`, with a clamped operator limit and backlog return values. **EO-2 must choose P-1 (unbounded lag accepted) or P-2 (deadline D)** and an accountable purge mechanism; under P-2 a separately authorized schedule or an evidenced operator procedure, plus backlog monitoring and capacity. Nothing authorizes automation | S-34 to S-36, S-59 to S-61 |
 | §15.3 answers | Conditions on FKs, batch, wording, headers, UTF-8, verifier | Applied as listed in §15.3 (opaque `svix-id`, header boundary fixtures, "also reported", rotation-branch restriction) | S-2, S-2a, S-15a, S-42 |
+
+### 18.3 Amendments with 7.3C-1 (2026-11-19, Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770))
+
+Codex accepted C3C-1..C3C-6 and asked for the governing wording to be synchronized in the implementation PR. Superseded wording, kept as written:
+
+| Where | Before | After |
+|---|---|---|
+| §7.3 | "No read-time check can upgrade a receipt-time conflict to trusted" (unchanged), and §18.2 C2's "can only remove trust, never restore it" | Unchanged for stored conflicts. A derived `id_conflict` uses current-snapshot exclusion and can count again when the competing record disappears. Item 2 excludes an earlier attempt's tagged receipt once a later attempt records a different ID |
+| §7.5, early callback | "Untagged: `unmatched` (only possible before 7.3C ships; the receiver is unarmed until then, §13.3)" | An untagged early callback stays possible after 7.3C (lookup fallback), stays `unmatched`, and is never rematched on read |
+| §13.3, 7.3D | "The receiver is armed only after 7.3C is deployed, so every ledger send is tagged" | Armed only after both 7.3C slices; every send is tagged whenever its reference is available, not universally |
+| §14, S-57 | "never restored to trusted" | Excluded while the other row holds the ID; trusted again if that row disappears. Stored conflicts are never restored |
+
+No other plan text changed. EO-1..EO-8 remain open, and no 7.3D gate is relaxed.
 
 ## 19. Revision validation
 

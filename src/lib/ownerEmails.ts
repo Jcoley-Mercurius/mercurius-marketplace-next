@@ -1,5 +1,6 @@
 // TRACE-154 (Phase 7.2C): presentation of the owner-email ledger for operators. The
 // database decides every state and permission; these only label it.
+import type { BounceSubtype, EvidenceFact, EvidenceSummary, ExclusionReason } from "@/lib/emailEvidence/labels";
 import { notificationStateLabel, type NotificationState } from "@/lib/recruitingReadiness";
 
 export type OwnerEmailState = Exclude<NotificationState, "untracked">;
@@ -59,6 +60,45 @@ export type ContactSubmissionDetail = {
 };
 
 export const OWNER_EMAIL_PAGE_SIZE = 50;
+
+// TRACE-155 (Phase 7.3C-1): provider delivery evidence for the visible rows, from
+// owner_email_evidence. It carries labels' inputs only: never a provider ID, tag or svix-id.
+export type OwnerEmailEvidenceReport = {
+  fact: EvidenceFact;
+  provider_created_at: string | null;
+  bounce_type: "permanent" | "transient" | "undetermined" | "other" | null;
+  bounce_subtype: BounceSubtype | null;
+  excluded: ExclusionReason | null;
+};
+
+export type OwnerEmailEvidenceAttempt = EvidenceSummary & {
+  attempt: number;
+  has_conflict: boolean;
+  reports: OwnerEmailEvidenceReport[];
+};
+
+export type OwnerEmailEvidenceItem = {
+  kind: OwnerEmailKind;
+  source_id: string;
+  attempt: number;
+  summary: EvidenceSummary;
+  has_conflict: boolean;
+  conflict_reasons: ExclusionReason[];
+  attempts: OwnerEmailEvidenceAttempt[];
+};
+
+export type OwnerEmailEvidence = { checked_at: string; items: OwnerEmailEvidenceItem[] };
+
+export type OwnerEmailEvidenceCounts = {
+  checked_at: string;
+  receiver_armed: boolean;
+  not_delivered: number;
+  to_review: number;
+  conflicting_rows: number;
+  conflicting_reports: { conflict_disagree: number; conflict_id_ambiguous: number; conflict_tag_invalid: number; content_conflict: number };
+  unmatched_reports: { total: number; by_type: Record<string, number> };
+  retention_backlog: { expired: number; expired_over_cap: boolean; oldest_expires_at: string | null };
+};
 
 export function ownerEmailStateLabel(state: OwnerEmailState): string {
   // A previous release may have sent without claiming the ledger row during rollout.

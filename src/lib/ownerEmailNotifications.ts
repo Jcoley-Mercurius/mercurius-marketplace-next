@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { outcomeState, providerErrorCode } from "@/lib/applicationNotifications";
+import { buildCorrelationTags } from "@/lib/emailEvidence/correlationTags";
 import { sendOwnerNotification } from "@/lib/ownerNotifications";
 import { renewalDocumentKindLabel, type RenewalDocumentKind } from "@/lib/renewalDocuments";
 import {
@@ -147,6 +148,28 @@ function ownerEmailMessage(claim: Extract<Claim, { claimed: true }>) {
     : contactNotificationMessage(claim.source);
 }
 
+/** How long a send waits for its correlation reference before going out untagged. */
+export const CORRELATION_REF_TIMEOUT_MS = 1_500;
+
+/**
+ * The owner-email ledger row ID for (kind, source), or null on any error, timeout or invalid
+ * answer. Never throws, never retries, and never delays the send past the bound.
+ */
+async function correlationRef(serviceClient: SupabaseClient, kind: OwnerEmailKind, sourceId: string): Promise<string | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const lookup = Promise.resolve(serviceClient.rpc("owner_email_correlation_ref", { p_kind: kind, p_source: sourceId }))
+      .then((result) => (result.error ? null : result.data), () => null);
+    const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), CORRELATION_REF_TIMEOUT_MS); });
+    const value: unknown = await Promise.race([lookup, timeout]);
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export async function deliverOwnerEmail(
   serviceClient: SupabaseClient,
   kind: OwnerEmailKind,
@@ -182,10 +205,24 @@ export async function deliverOwnerEmail(
   const { attempt, claim_id: claimId } = data;
   logOperationalEvent({ ...context, attempt, event: "owner_email.claimed", outcome: "claimed" });
 
+  // TRACE-155 (7.3C-1, C3C-2): tag this attempt with its ledger row. The lookup is bounded and
+  // best effort: any error, timeout, null or invalid answer sends untagged, exactly as before.
+  const ref = await correlationRef(serviceClient, kind, sourceId);
+  const tags = buildCorrelationTags("owner_email", ref, attempt);
+  if (!tags) {
+    logOperationalEvent({
+      ...context,
+      attempt,
+      event: "owner_email.correlation_unavailable",
+      errorCode: "correlation_ref_unavailable",
+    });
+  }
+
   const sendStarted = Date.now();
   const result = await send({
     ...ownerEmailMessage(data),
     idempotencyKey: ownerEmailKey(kind, sourceId, attempt),
+    ...(tags ? { tags } : {}),
   });
   const state = outcomeState(result);
   const errorCode = providerErrorCode(result);

@@ -23,10 +23,21 @@ import {
   ownerEmailStateLabel,
   resendAttestation,
   type OwnerEmailCursor,
+  type OwnerEmailEvidence,
+  type OwnerEmailEvidenceCounts,
+  type OwnerEmailEvidenceItem,
   type OwnerEmailFilter,
   type OwnerEmailItem,
   type OwnerEmailOverview,
 } from "@/lib/ownerEmails";
+import {
+  bounceSubtypeLabel,
+  conflictSignalLabels,
+  evidenceFactLabel,
+  evidenceIsInconclusive,
+  evidenceSummaryLabel,
+  exclusionLabel,
+} from "@/lib/emailEvidence/labels";
 import { cn } from "@/lib/utils";
 
 // TRACE-154 (Phase 7.2C): owner emails for saved contact submissions (7.2C-1) and provider
@@ -36,6 +47,12 @@ import { cn } from "@/lib/utils";
 // Compliance Expiry. Pages are bounded; the attention counts are exact for the whole ledger,
 // in total and per kind (C-8). A filter change, refresh or completed action reloads from the
 // first page, and a response for an earlier load is discarded. Nothing is optimistic.
+//
+// TRACE-155 (Phase 7.3C-1): after each page, the provider delivery evidence for exactly the
+// visible rows is read from owner_email_evidence, and the additive evidence counts from
+// owner_email_evidence_counts. The database decides every rule, flag and exclusion; the page
+// only labels them. Evidence never gates a resend or acknowledgement, and a failed evidence read
+// leaves the list and its actions unchanged.
 type Counts = OwnerEmailOverview["attention_count"];
 type Data = {
   checkedAt: string;
@@ -63,6 +80,18 @@ async function fetchPage(filter: OwnerEmailFilter, includeSettled: boolean, curs
   return data as OwnerEmailOverview;
 }
 
+async function fetchEvidence(sources: string[]) {
+  const { data, error } = await createClient().rpc("owner_email_evidence", { p_kind: null, p_sources: sources });
+  if (error) throw error;
+  return data as OwnerEmailEvidence;
+}
+
+async function fetchEvidenceCounts() {
+  const { data, error } = await createClient().rpc("owner_email_evidence_counts");
+  if (error) throw error;
+  return data as OwnerEmailEvidenceCounts;
+}
+
 function reason(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message
     : typeof error === "object" && error !== null && typeof (error as { message?: unknown }).message === "string"
@@ -77,13 +106,35 @@ export default function AdminOwnerEmailsPage() {
   const [filter, setFilter] = useState<OwnerEmailFilter>("all");
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState("");
+  const [evidence, setEvidence] = useState<Record<string, OwnerEmailEvidenceItem>>({});
+  const [evidenceFailed, setEvidenceFailed] = useState(false);
+  const [evidenceCounts, setEvidenceCounts] = useState<OwnerEmailEvidenceCounts | null>(null);
+  const [countsFailed, setCountsFailed] = useState(false);
   // Responses for an earlier filter or refresh are discarded.
   const generation = useRef(0);
+
+  const loadEvidence = useCallback(async (ticket: number, items: OwnerEmailItem[]) => {
+    if (items.length === 0) return;
+    try {
+      const result = await fetchEvidence(items.map((item) => item.source_id));
+      if (ticket !== generation.current) return;
+      setEvidence((current) => ({ ...current, ...Object.fromEntries(result.items.map((item) => [item.source_id, item])) }));
+    } catch {
+      if (ticket === generation.current) setEvidenceFailed(true);
+    }
+  }, []);
 
   const load = useCallback(async (kind: OwnerEmailFilter, includeSettled: boolean) => {
     const ticket = ++generation.current;
     setError("");
     setOlderError("");
+    setEvidence({});
+    setEvidenceFailed(false);
+    setCountsFailed(false);
+    void fetchEvidenceCounts().then(
+      (counts) => { if (ticket === generation.current) setEvidenceCounts(counts); },
+      () => { if (ticket === generation.current) { setEvidenceCounts(null); setCountsFailed(true); } },
+    );
     try {
       const page = await fetchPage(kind, includeSettled, null);
       if (ticket !== generation.current) return;
@@ -93,10 +144,11 @@ export default function AdminOwnerEmailsPage() {
         items: page.items,
         cursor: page.next_cursor,
       });
+      void loadEvidence(ticket, page.items);
     } catch (caught) {
       if (ticket === generation.current) setError(reason(caught, "Owner emails could not be loaded."));
     }
-  }, []);
+  }, [loadEvidence]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(filter, showAll), 0);
@@ -119,6 +171,7 @@ export default function AdminOwnerEmailsPage() {
         items: [...current.items, ...page.items],
         cursor: page.next_cursor,
       });
+      void loadEvidence(ticket, page.items);
     } catch (caught) {
       if (ticket === generation.current) setOlderError(reason(caught, "Older emails could not be loaded."));
     } finally {
@@ -227,6 +280,8 @@ export default function AdminOwnerEmailsPage() {
         </CardContent>
       </Card>
 
+      <EvidenceCountsCard counts={evidenceCounts} failed={countsFailed} />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg"><Mail className="h-5 w-5 text-accent" />Tracked owner emails</CardTitle>
@@ -262,6 +317,11 @@ export default function AdminOwnerEmailsPage() {
             <History className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Messages and documents saved before email tracking began are not listed here and cannot be resent.
           </p>
+          {evidenceFailed && (
+            <p role="alert" className="text-sm text-status-warning">
+              Delivery evidence could not be loaded. The email states and actions below are unaffected. Refresh to try again.
+            </p>
+          )}
 
           {data.items.length === 0 ? (
             <p role="status" className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
@@ -269,7 +329,7 @@ export default function AdminOwnerEmailsPage() {
             </p>
           ) : (
             <ul className="divide-y divide-border rounded-xl border border-border" aria-label="Owner emails">
-              {data.items.map((item) => <Row key={item.source_id} item={item} onResend={resend} onAcknowledge={acknowledge} />)}
+              {data.items.map((item) => <Row key={item.source_id} item={item} evidence={evidence[item.source_id]} onResend={resend} onAcknowledge={acknowledge} />)}
             </ul>
           )}
 
@@ -285,8 +345,9 @@ export default function AdminOwnerEmailsPage() {
   );
 }
 
-function Row({ item, onResend, onAcknowledge }: {
+function Row({ item, evidence, onResend, onAcknowledge }: {
   item: OwnerEmailItem;
+  evidence: OwnerEmailEvidenceItem | undefined;
   onResend: (item: OwnerEmailItem, attested: boolean) => Promise<void>;
   onAcknowledge: (item: OwnerEmailItem, reason: string, attested: boolean) => Promise<void>;
 }) {
@@ -321,6 +382,7 @@ function Row({ item, onResend, onAcknowledge }: {
           </p>
         )}
         {item.acknowledged_reason && <p className="mt-1 break-words text-xs text-muted-foreground">Reason: {item.acknowledged_reason}</p>}
+        {evidence && <Evidence evidence={evidence} />}
       </div>
       <div className="flex flex-wrap gap-2">
         {item.kind === "contact_submission" ? (
@@ -371,6 +433,116 @@ function Row({ item, onResend, onAcknowledge }: {
         )}
       </div>
     </li>
+  );
+}
+
+function summaryTone(summary: OwnerEmailEvidenceItem["summary"]) {
+  if (summary.non_delivery_proven) return "text-destructive";
+  if (evidenceIsInconclusive(summary)) return "text-status-warning";
+  return "text-muted-foreground";
+}
+
+/** The current attempt's evidence summary, the conflict signal and the per-attempt history. */
+function Evidence({ evidence }: { evidence: OwnerEmailEvidenceItem }) {
+  const attemptNote = evidence.attempt > 1 ? ` (attempt ${evidence.attempt})` : "";
+  return (
+    <div className="mt-2 space-y-1 text-xs" data-testid="delivery-evidence">
+      <p className="break-words">
+        <span className="font-medium">Delivery evidence{attemptNote}:</span>{" "}
+        <span className={summaryTone(evidence.summary)}>{evidenceSummaryLabel(evidence.summary)}</span>
+      </p>
+      {conflictSignalLabels(evidence.conflict_reasons).map((label) => (
+        <p key={label} className="flex items-start gap-1 break-words text-status-warning">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />{label}
+        </p>
+      ))}
+      {evidence.attempts.length > 0 && (
+        <details className="rounded-md border border-border px-3">
+          <summary className="flex min-h-11 cursor-pointer items-center font-medium">Provider report history</summary>
+          <div className="space-y-3 pb-3">
+            {evidence.attempts.map((attempt) => (
+              <div key={attempt.attempt}>
+                <p className="break-words font-medium">Attempt {attempt.attempt}: {evidenceSummaryLabel(attempt)}</p>
+                {attempt.reports.map((report, index) => (
+                  <p key={index} className="mt-1 break-words text-muted-foreground">
+                    {evidenceFactLabel[report.fact]}
+                    {report.bounce_subtype ? ` (${bounceSubtypeLabel[report.bounce_subtype]})` : ""}
+                    {" · "}Provider time {report.provider_created_at ? formatDateTime(report.provider_created_at) : "not given"}
+                    {report.excluded ? <> · <span className="font-medium text-status-warning">{exclusionLabel[report.excluded]}</span></> : null}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** The additive §9.1 counts. The attention counts above are unchanged and separate. */
+function EvidenceCountsCard({ counts, failed }: { counts: OwnerEmailEvidenceCounts | null; failed: boolean }) {
+  const conflicting = counts
+    ? counts.conflicting_reports.conflict_disagree + counts.conflicting_reports.conflict_id_ambiguous
+      + counts.conflicting_reports.conflict_tag_invalid + counts.conflicting_reports.content_conflict
+    : 0;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Delivery evidence from Resend</CardTitle>
+        <CardDescription>
+          What Resend reported after accepting an email. A hand-off to the recipient&apos;s mail server is not proof it reached the inbox or was read. These counts never change an email&apos;s state or what you can do with it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {failed ? (
+          <p role="alert" className="text-sm text-status-warning">Delivery evidence counts could not be loaded. Refresh to try again.</p>
+        ) : !counts ? (
+          <p className="text-sm text-muted-foreground">Loading delivery evidence…</p>
+        ) : (
+          <>
+            {!counts.receiver_armed && (
+              <p className="text-sm text-muted-foreground">
+                Resend delivery reports are not being collected yet, so emails show “Delivery evidence not available”.
+              </p>
+            )}
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <dt className="text-xs text-muted-foreground">Not delivered (Resend reported)</dt>
+                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.not_delivered}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Provider reports to review</dt>
+                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.to_review}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Emails with conflicting provider reports</dt>
+                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.conflicting_rows}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Conflicting provider reports (all emails)</dt>
+                <dd className="font-heading text-lg font-semibold tabular-nums">{conflicting}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Unmatched provider reports</dt>
+                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.unmatched_reports.total}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Expired reports awaiting deletion</dt>
+                <dd className="font-heading text-lg font-semibold tabular-nums">
+                  {counts.retention_backlog.expired_over_cap ? "Over 10,000" : counts.retention_backlog.expired}
+                </dd>
+              </div>
+            </dl>
+            {counts.retention_backlog.oldest_expires_at && (
+              <p className="text-xs text-muted-foreground">
+                Oldest expired report: {formatDateTime(counts.retention_backlog.oldest_expires_at)}. Expired reports are never shown or counted above.
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

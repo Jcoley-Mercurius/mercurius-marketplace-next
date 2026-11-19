@@ -1,5 +1,6 @@
 import "server-only";
 
+import { validCorrelationTags, type CorrelationTag } from "@/lib/emailEvidence/correlationTags";
 import { getOwnerNotificationEnvironment } from "@/lib/env/server";
 
 // Owner-confirmed fallback recipient (TRACE-104). OWNER_NOTIFICATION_EMAIL overrides it.
@@ -12,6 +13,9 @@ type OwnerNotification = {
   replyTo?: string | null;
   // Resend replays the first result for a repeated key instead of sending again.
   idempotencyKey?: string;
+  // TRACE-155 (7.3C-1): optional correlation tags. Only a valid three-tag set is sent; without
+  // one the request body is byte-for-byte what it was before tags existed.
+  tags?: ReadonlyArray<CorrelationTag> | null;
 };
 
 // `definite` is true when Resend answered with a refusal, or nothing was attempted. A
@@ -49,6 +53,7 @@ export async function sendNotificationEmail(
   }
   const { apiKey, from } = environment;
   const to = recipient ?? (environment.to || DEFAULT_OWNER_EMAIL);
+  const tags = notification.tags ? validCorrelationTags(notification.tags) : null;
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -66,6 +71,7 @@ export async function sendNotificationEmail(
         subject: notification.subject,
         text: notification.text,
         ...(notification.replyTo ? { reply_to: notification.replyTo } : {}),
+        ...(tags ? { tags } : {}),
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),

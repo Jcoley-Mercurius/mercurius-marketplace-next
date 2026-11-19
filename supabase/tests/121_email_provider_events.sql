@@ -10,6 +10,16 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- TRACE-155 (7.3C-1, Codex review 5926523770 item 3): the original 7.2C owner-email functions
+-- by exact signature. Later slices add owner_email_* functions (correlation ref, evidence
+-- readback) that are tested in their own files; a name filter would silently widen these checks.
+create function pg_temp.legacy_owner_email_functions() returns oid[] language sql as $$
+ select array['private.owner_email_require_kind(text)','private.owner_email_state(text,timestamptz,timestamptz)',
+  'private.owner_email_log(uuid,text,uuid,text,text,integer,uuid,text,text,text)','private.owner_email_lock(text,uuid)',
+  'private.owner_email_refuse_untracked(text,uuid)','private.owner_email_contact_create()','public.owner_email_claim(text,uuid,text)',
+  'public.owner_email_record(text,uuid,uuid,text,text,text)','public.owner_email_request_resend(text,uuid,boolean)',
+  'public.owner_email_acknowledge(text,uuid,text,boolean)','public.owner_email_overview(text,boolean,timestamptz,uuid,integer)',
+  'public.owner_email_contact_submission(uuid)','private.owner_email_renewal_create()']::regprocedure[]::oid[] $$;
 
 -- 1 operator, 2 homeowner, 3 vendor.
 insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
@@ -358,10 +368,31 @@ insert into private.email_provider_events(svix_id,received_at,expires_at,secret_
 select is(pg_temp.op('select public.email_provider_events_purge(10)')->>'deleted','1','S-34 one row is due');
 select is((select array_agg(svix_id) from private.email_provider_events),array['msg-s34-live'],
  'S-34 a row at expires_at is expired; one second before it is not');
--- An expired receipt never answers as a duplicate: a replay after expiry is a new receipt.
+-- A replay of an expired receipt that the receipt-time purge reaches is recorded as new.
+-- Corrected 2026-11-19 (Codex review 5926513941): this is not "never a duplicate". The purge
+-- deletes only the 100 oldest unlocked expired rows, so an expired receipt outside that batch
+-- (a larger backlog, or a row another transaction holds) is still stored and the replay answers
+-- duplicate, or conflict for a changed payload. The regression below records that behavior; the
+-- 7.3C readback excludes expired receipts whatever the answer (SQL 122).
 select pg_temp.expired('msg-replay-',1);
-select is(pg_temp.recv('msg-replay-000001','email.delivered','em-none'),'recorded','a replay of an expired receipt is recorded as new');
+select is(pg_temp.recv('msg-replay-000001','email.delivered','em-none'),'recorded','a replay of an expired receipt the purge reaches is recorded as new');
 select ok((pg_temp.ev('msg-replay-000001')).expires_at > now(),'with its own new expiry');
+delete from private.email_provider_events;
+-- More than 100 older expired rows: 250 expire before the target, so neither of the two
+-- replays below purges it.
+select pg_temp.expired('msg-backlog-',250);
+insert into private.email_provider_events(svix_id,received_at,expires_at,secret_slot,processing,event_type,provider_type,provider_email_id,identity_class)
+ values ('msg-backlog-target','2026-01-01T00:00:00Z'::timestamptz + interval '1 hour' - interval '1 day','2026-01-01T00:00:00Z'::timestamptz + interval '1 hour',
+  'current','recorded','email.delivered','email.delivered','em-none','unmatched');
+create temp table backlog_target as select expires_at from private.email_provider_events where svix_id='msg-backlog-target';
+select is(pg_temp.recv('msg-backlog-target','email.delivered','em-none',p_created=>null),'duplicate',
+ 'an expired receipt behind a backlog of more than 100 answers duplicate to an identical replay (it is still stored)');
+select is((select count(*)::int from private.email_provider_events where svix_id like 'msg-backlog-0%'),150,'that receive purged the 100 oldest only');
+select is(pg_temp.recv('msg-backlog-target','email.bounced','em-none',p_bounce=>'permanent',p_created=>null),'conflict',
+ 'a changed replay of the same still-stored expired receipt answers conflict');
+select is(row((pg_temp.ev('msg-backlog-target')).content_conflict,(pg_temp.ev('msg-backlog-target')).event_type,
+  (pg_temp.ev('msg-backlog-target')).expires_at = (select expires_at from backlog_target),(pg_temp.ev('msg-backlog-target')).expires_at <= now())::text,
+ '(t,email.delivered,t,t)','the existing receipt and its expiry are preserved (flag set, still expired); no new receipt or clock');
 delete from private.email_provider_events;
 -- S-35
 select pg_temp.expired('msg-s35-',150);
@@ -403,7 +434,7 @@ select is((select count(*)::text||'|'||md5(string_agg(pg_get_functiondef(p.oid),
  '10|5f14532aa26ed5400e73e210379aa4f8','the vendor-application ledger functions are byte-identical');
 select is((select count(*)::text||'|'||md5(string_agg(pg_get_functiondef(p.oid), E'\n' order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)))
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname in ('public','private') and p.proname like 'owner\_email\_%' and p.proname <> 'owner_email_renewal_create'),
+  where p.oid = any(pg_temp.legacy_owner_email_functions()) and p.proname <> 'owner_email_renewal_create'),
  '12|016c0e683cb19c4c68769d87f5215ff1','the 7.2C-1 owner-email ledger functions are byte-identical');
 select is(md5(pg_get_functiondef('public.vendor_submit_renewal_document(text,uuid)'::regprocedure)),'8c8942365d8f9d34bdcd1d839f86c472',
  'vendor_submit_renewal_document is unchanged');
