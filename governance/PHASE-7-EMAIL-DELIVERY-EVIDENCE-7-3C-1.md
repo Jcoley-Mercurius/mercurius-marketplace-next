@@ -153,6 +153,16 @@ New tests:
 | Effect | None until merge: nothing calls the functions before the new application code deploys |
 | **Consequence for #179** | Hosted now holds `20261125002000`, which #179's branch lacks. Its `db push` will refuse until its local folder contains this file: after #180 merges and #179 rebases, or with the same scratch-folder approach. Its `20261126001000` still sorts after this one, so `--include-all` is not needed |
 
+### 5.1a After #179 merged (2026-11-19, investigated on the owner's request)
+
+| Finding | Detail |
+|---|---|
+| PR conflict | #179 merged into `main` (`39d48a5`), carrying both TRACE-156 migrations (`20261125001000`, `20261126001000`). The only conflict was in `TRACEABILITY.md`: `main` changed the TRACE-156 row and this PR changed the TRACE-155 row. After the rebase, the TRACE-155 row is this PR's and the TRACE-156 row is byte-identical to `main`'s. The PR is mergeable again (head `adea05e`) |
+| Combined tree, local | Migrations apply in the order `20261125001000` → `20261125002000` → `20261126001000`. Full SQL replay **115 files / 8,096 PASS**; unit 74 / 1,132, typecheck and lint pass |
+| "Supabase Preview" on this PR | Failed with "Remote migration versions not found in local migrations directory". This PR's preview database (`with_data=false`) had applied this migration under its first number, `20261125001000`, before the renumber. After the rebase it failed as expected: `function "owner_email_correlation_ref" already exists` (42723). The stale preview needs deleting so the integration can rebuild it; that was **not done** (permission declined, decision left to the owner) |
+| "Supabase Preview" on `main` | Already failing at `1327a58`, before this PR's push, because production held the TRACE-156 `20261125001000` that `main` lacked. Since #179 merged, the only version production has and `main` lacks is this PR's `20261125002000`. Merging #180 removes that difference |
+| **Production gap (TRACE-156, not this PR)** | #179's `20261126001000_trace156_gallery_management.sql` is **not on production**, but its code deployed (GitHub Production deployment 7926745674, 21:49 UTC). Missing: `contractor_gallery_pairs` and five gallery RPCs. Gallery editing (bulk services, captions, reorder, pairs) fails. The public profile treats the unreadable pairs table as "no pairs" and still renders. Its push would likely have been refused because production held this PR's `20261125002000`, which #179's branch lacked. The `main` checkout now contains every production version, so a push from it should list only `20261126001000`. **Not pushed: it needs the owner's separate authorization** |
+
 ### 5.2 Remaining steps (each needs separate owner authorization)
 
 1. Codex implementation review and **green exact-head CI** (the application job now has 30 minutes).
