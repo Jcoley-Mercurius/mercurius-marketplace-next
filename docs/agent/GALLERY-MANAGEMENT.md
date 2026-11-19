@@ -69,7 +69,10 @@ offerings, pricing, Phase 7, booking and payment semantics are outside this slic
   correctly treated it as unavailable. That fixture is fixed, including its offset/limit handling and terminal empty page after a
   saved project is reloaded. Focused run `44582772936` passed 25/27 editor tests (all mobile
   dialog axe/focus/reflow cases passed) and caught the pagination omission in the remaining two;
-  the corrected fixture is under re-verification. The sixth was the existing request
+  the corrected fixture then passed all 27 editor tests in run `44583691890`, including pairing
+  after reload, unpairing, all bulk actions, caption conflict/failure and mobile axe/focus/reflow.
+  The auxiliary request-confirmation scan needs its alert locator scoped to Secure checkout,
+  because the Next.js route announcer is also an alert; that test-only correction is included. The sixth was the existing request
   confirmation axe scan racing its automatic synthetic checkout refusal; the test now waits for
   the refusal and enabled checkout control before scanning. No axe rule is excluded, retried or
   weakened, and no request/checkout product code changes. `scripts/gallery-management-concurrency.mjs` is pinned to the disposable CI container
