@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const sdk = vi.hoisted(() => ({ init: vi.fn(), capture: vi.fn(), register: vi.fn(), identify: vi.fn(), reset: vi.fn(), opt_in_capturing: vi.fn(), opt_out_capturing: vi.fn(), startSessionRecording: vi.fn(), stopSessionRecording: vi.fn() }));
+const sdk = vi.hoisted(() => ({ init: vi.fn(), set_config: vi.fn(), capture: vi.fn(), register: vi.fn(), identify: vi.fn(), reset: vi.fn(), opt_in_capturing: vi.fn(), opt_out_capturing: vi.fn(), startSessionRecording: vi.fn(), stopSessionRecording: vi.fn() }));
 vi.mock("posthog-js", () => ({ default: sdk }));
 import { CONSENT_COOKIE } from "@/lib/analytics/policy";
 

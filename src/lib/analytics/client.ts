@@ -76,6 +76,8 @@ function reconcileConsent() {
     if (initialized) {
       posthog.stopSessionRecording();
       posthog.opt_out_capturing();
+      posthog.set_config({ disable_persistence: true });
+      posthog.reset(true);
       identified = null;
       lastPage = null;
     }
@@ -105,7 +107,7 @@ function reconcileConsent() {
       disable_compression: process.env.NODE_ENV !== "production",
       tracing_headers: ["www.mercuriusmarketplace.com", "mercuriusmarketplace.com", "localhost", "127.0.0.1"],
       session_recording: {
-        maskAllInputs: true, maskTextSelector: "*",
+        maskAllInputs: true, maskTextSelector: "*", maskAllElementAttributes: true,
         blockSelector: "img,video,canvas,iframe,object,embed,[data-private],.ph-no-capture",
         recordCrossOriginIframes: false,
         captureJsonLd: false, recordHeaders: false, recordBody: false,
@@ -118,6 +120,7 @@ function reconcileConsent() {
     });
     initialized = true;
   }
+  posthog.set_config({ disable_persistence: false });
   posthog.opt_in_capturing({ captureEventName: false });
   // Only sanitized campaign tags and the referring origin persist, after permission.
   posthog.register({ ...campaignProperties(location.search), $referrer: safeReferrer(document.referrer) });

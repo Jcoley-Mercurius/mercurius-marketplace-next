@@ -18,8 +18,8 @@ async function isolate(page: Page, options: { outage?: boolean } = {}) {
     if (url.hostname.endsWith("posthog.com")) {
       requests.push(url.pathname);
       if (options.outage) return route.abort();
-      if (/\/static\//.test(url.pathname)) return route.fulfill({ path: resolve("node_modules/posthog-js/dist/recorder.js"), contentType: "application/javascript" });
-      if (/\/flags/.test(url.pathname)) return route.fulfill({ json: { featureFlags: {}, sessionRecording: { endpoint: "/s/", recorderVersion: "v2", sampleRate: "1", minimumDurationMilliseconds: 0, masking: { maskAllInputs: true, maskTextSelector: "*", blockSelector: "img" }, urlBlocklist: [{ url: ".*[?#].*", matching: "regex" }] } } });
+      if (/\/static\//.test(url.pathname)) return route.fulfill({ path: resolve("node_modules/posthog-js/dist", url.pathname.split("/").at(-1)!), contentType: "application/javascript" });
+      if (/\/flags|\/array\/[^/]+\/config$/.test(url.pathname)) return route.fulfill({ json: { featureFlags: {}, sessionRecording: { endpoint: "/s/", sampleRate: "1", minimumDurationMilliseconds: 0, masking: { maskAllInputs: true, maskTextSelector: "*", maskAllElementAttributes: true, blockSelector: "img" }, urlBlocklist: [{ url: ".*[?#].*", matching: "regex" }] } } });
       const buffer = request.postDataBuffer();
       if (buffer) {
         let data = buffer;
@@ -65,31 +65,39 @@ test("no collection before consent; tagged campaign and navigation are redacted 
   const previous = captured.events.length;
   await page.getByRole("link", { name: "Terms of Service", exact: true }).click();
   await expect(page).toHaveURL(/\/terms$/);
+  // Give the SDK's batch timer a chance to expose an incorrectly retained queue.
+  await page.waitForTimeout(3500);
   expect(captured.events.length).toBe(previous);
   expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith("ph_") && !k.includes("opt_in_out")))).toEqual([]);
 });
 
-test("masked public replay excludes text and inputs, and never records the request form", async ({ page }) => {
+test("masked public replay excludes text, attributes and inputs, and never records private forms", async ({ page }) => {
   await page.context().addCookies([{ name: CONSENT_COOKIE, value: "v1-granted", url: host }]);
   const captured = await isolate(page);
   await page.goto("/faq");
   await expect.poll(() => captured.requests.some(path => path.includes("recorder"))).toBe(true);
   await page.evaluate(() => {
     const element = document.createElement("section");
-    element.innerHTML = '<p>PRIVATE_REPLAY_TEXT</p><input value="PRIVATE_REPLAY_INPUT"><img src="/PRIVATE_REPLAY_IMAGE.png">';
+    element.innerHTML = '<p title="PRIVATE_REPLAY_ATTRIBUTE">PRIVATE_REPLAY_TEXT</p><input value="PRIVATE_REPLAY_INPUT"><img src="/PRIVATE_REPLAY_IMAGE.png">';
     document.querySelector("main")!.appendChild(element);
     element.querySelector("input")!.dispatchEvent(new Event("input", { bubbles: true }));
   });
   // Trigger a new snapshot before navigating, then wait for the SDK's recording batch.
   await page.getByRole("heading", { level: 1 }).click();
   await expect.poll(() => captured.replays.length, { timeout: 20_000 }).toBeGreaterThan(0);
-  expect(captured.replays.join("\n")).not.toMatch(/PRIVATE_REPLAY_TEXT|PRIVATE_REPLAY_INPUT|PRIVATE_REPLAY_IMAGE/);
+  expect(captured.replays.join("\n")).not.toMatch(/PRIVATE_REPLAY_TEXT|PRIVATE_REPLAY_INPUT|PRIVATE_REPLAY_IMAGE|PRIVATE_REPLAY_ATTRIBUTE/);
+  await page.getByRole("contentinfo").getByRole("link", { name: "Contact Us", exact: true }).click();
+  await page.getByLabel("First Name", { exact: true }).fill("PRIVATE_CONTACT_NAME");
+  await page.getByLabel("Email", { exact: true }).fill("private-contact@example.invalid");
+  await page.getByRole("contentinfo").getByRole("link", { name: "FAQ", exact: true }).click();
+  await expect.poll(() => captured.events.some(event => event.event === "$pageview" && event.properties.page === "/contact")).toBe(true);
   await page.goto("/login?redirect=%2Frequest&code=PRIVATE_AUTH_CODE");
   await page.getByLabel("Email", { exact: true }).fill("private-person@example.invalid");
   await page.getByLabel("Password", { exact: true }).fill("PRIVATE_PASSWORD_SENTINEL");
-  await expect(page.getByRole("button", { name: "Sign In", exact: true })).toBeVisible();
-  expect(captured.replays.join("\n")).not.toMatch(/private-person|PRIVATE_PASSWORD|PRIVATE_AUTH_CODE/);
-  expect(JSON.stringify(captured.events)).not.toMatch(/private-person|PRIVATE_PASSWORD|PRIVATE_AUTH_CODE/);
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
+  await expect.poll(() => captured.events.some(event => event.event === "login_failed")).toBe(true);
+  expect(captured.replays.join("\n")).not.toMatch(/private-person|PRIVATE_PASSWORD|PRIVATE_AUTH_CODE|PRIVATE_CONTACT_NAME|private-contact/);
+  expect(JSON.stringify(captured.events)).not.toMatch(/private-person|PRIVATE_PASSWORD|PRIVATE_AUTH_CODE|PRIVATE_CONTACT_NAME|private-contact/);
 });
 
 test("browser privacy signals keep tracking off and preferences are usable at 320px", async ({ page }) => {
