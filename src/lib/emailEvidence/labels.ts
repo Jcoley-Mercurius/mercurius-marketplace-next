@@ -3,12 +3,17 @@
 // those values to the plan's §5 and §8.3 labels. No label says "Delivered", "Received", "Read" or
 // "Confirmed" alone, a server hand-off always carries its disclaimer, and two reports are said to
 // be "also reported", never "later".
+//
+// TRACE-155 (Phase 7.3D-1, R3D-2): every summary also carries `coverage`, from the audited arming
+// intervals (migration 20261128001000). Only the no-report rules 9 and 10 read it: a label never
+// claims more collection than the arming history shows.
 
 export type EvidenceFact =
   | "accepted" | "delayed" | "delivered" | "bounced_permanent" | "bounced_transient"
   | "bounced_undetermined" | "complained" | "provider_failed" | "provider_suppressed";
 export type NonDeliveryFact = "bounced_permanent" | "provider_failed" | "provider_suppressed";
 export type EvidenceRule = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type EvidenceCoverage = "unknown" | "before_first_arm" | "gap" | "partial" | "collecting" | "complete";
 export type ExclusionReason = "stored_conflict" | "content_conflict" | "current_conflict";
 export type BounceSubtype =
   | "general" | "no_email" | "mailbox_full" | "message_too_large" | "content_rejected"
@@ -20,6 +25,21 @@ export type EvidenceSummary = {
   non_delivery_proven: boolean;
   needs_review: boolean;
   reported: NonDeliveryFact[];
+  /** Absent only in data read before 7.3D-1; treated as no coverage information. */
+  coverage?: EvidenceCoverage;
+};
+
+/** The retry horizon the database uses for coverage (private.email_evidence_retry_horizon). */
+export const RETRY_HORIZON_HOURS = 28;
+
+/** What the arming history shows about collection for an attempt, by its claim time. */
+export const coverageLabel: Record<EvidenceCoverage, string> = {
+  unknown: "Send time unknown, so collection cannot be shown",
+  before_first_arm: "Sent before provider reports were ever collected",
+  gap: "Sent while provider reports were not being collected",
+  partial: `Sent while reports were collected, but collection stopped within ${RETRY_HORIZON_HOURS} hours, so a report may have been missed`,
+  collecting: `Sent while reports are being collected; still within ${RETRY_HORIZON_HOURS} hours`,
+  complete: `Sent while reports were collected, and collection continued for ${RETRY_HORIZON_HOURS} hours after`,
 };
 
 export const NOT_INBOX_PROOF = "Not proof it reached the inbox or was read";
@@ -41,7 +61,7 @@ function joined(parts: string[]) {
 }
 
 /** The §8.3 summary label for a rule. */
-export function evidenceSummaryLabel(summary: Pick<EvidenceSummary, "rule" | "reported">): string {
+export function evidenceSummaryLabel(summary: Pick<EvidenceSummary, "rule" | "reported" | "coverage">): string {
   const reported = summary.reported ?? [];
   switch (summary.rule) {
     case 1: return "Handed to the mail server; the recipient marked it as spam";
@@ -52,8 +72,13 @@ export function evidenceSummaryLabel(summary: Pick<EvidenceSummary, "rule" | "re
     case 6: return "Bounce reported (temporary or undetermined); delivery not established";
     case 7: return "Delivery delayed; not yet established";
     case 8: return "Accepted by Resend for delivery";
-    case 9: return "No provider report yet";
-    default: return "Delivery evidence not available";
+    case 9:
+      if (summary.coverage === "complete") return `No provider report received in the ${RETRY_HORIZON_HOURS} hours reports were collected after sending`;
+      if (summary.coverage === "partial") return `No provider report received; collection stopped within ${RETRY_HORIZON_HOURS} hours of sending, so a report may have been missed`;
+      return "No provider report yet";
+    default:
+      if (summary.coverage === "gap") return "Delivery evidence not available: reports were not being collected when this was sent";
+      return "Delivery evidence not available";
   }
 }
 

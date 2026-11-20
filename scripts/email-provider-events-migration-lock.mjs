@@ -18,6 +18,10 @@
 //    read the receipt table. They take no receipt row type, so nothing in the catalog forces the
 //    drop, but they are dropped first and that unchanged file is re-applied after 7.3C-1, proving
 //    the whole chain still applies on top of the restored 7.3B objects, with its grants.
+// 7. TRACE-155 (7.3D-1): the arming migration's history table and functions are dropped first
+//    too, and that unchanged file is re-applied last. Re-applying 7.3C-1 restores the original
+//    summary, so this proves the 7.3D-1 file restates it again (its definition hash), recreates
+//    the history and its guard, and keeps its grants.
 // Run against a disposable isolated database only; CI runs a clean reset afterwards.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -33,6 +37,11 @@ const ledgers2 = readFileSync('supabase/migrations/20261127001000_phase7_email_e
 const ledgerFunctions = ledgers2.match(/revoke all on function\n([\s\S]*?)\nfrom public/)[1]
   .split(',\n').map(signature => signature.trim());
 assert.equal(ledgerFunctions.length, 9, 'the 7.3C-2 migration revokes its nine functions in one block');
+const arming = readFileSync('supabase/migrations/20261128001000_phase7_email_evidence_arming.sql', 'utf8');
+const armingFunctions = arming.match(/revoke all on function\n([\s\S]*?)\nfrom public/)[1]
+  .split(',\n').map(signature => signature.trim());
+assert.equal(armingFunctions.length, 9, 'the 7.3D-1 migration revokes its nine functions in one block');
+const RESTATED_SUMMARY = '8eadddd6f47401258d747248a38ce507';
 function psql(source, { stopOnError = true } = {}) {
   return new Promise((resolve, reject) => {
     const args = ['exec', '-i', container, 'psql', '-X', '-q', '-At', '-v', `ON_ERROR_STOP=${stopOnError ? 1 : 0}`, '-U', 'postgres', '-d', 'postgres'];
@@ -67,6 +76,9 @@ const readbackPresent = `select num_nonnulls(${readbackFunctions.map(signature =
 assert.equal(await sql(readbackPresent), '10', 'the 7.3C-1 readback functions are present before the test');
 const ledgerPresent = `select num_nonnulls(${ledgerFunctions.map(signature => `to_regprocedure('${signature}')`).join(', ')})`;
 assert.equal(await sql(ledgerPresent), '9', 'the 7.3C-2 ledger-evidence functions are present before the test');
+const armingPresent = `select num_nonnulls(${armingFunctions.map(signature => `to_regprocedure('${signature}')`).join(', ')}, to_regclass('private.email_evidence_arming_events'))`;
+assert.equal(await sql(armingPresent), '10', 'the 7.3D-1 functions and history are present before the test');
+await sql(`drop table private.email_evidence_arming_events; drop function ${armingFunctions.join(', ')};`);
 await sql(`drop function ${ledgerFunctions.join(', ')};`);
 await sql(`drop function ${readbackFunctions.join(', ')};`);
 await sql(`begin;
@@ -121,4 +133,16 @@ assert.equal(await sql(`select has_function_privilege('authenticated','public.ap
   and not has_function_privilege('service_role','public.package_draft_email_evidence(uuid[])','EXECUTE')
   and not has_function_privilege('authenticated','private.email_evidence_ledger_row(text,uuid)','EXECUTE')`), 't', 'with its grants');
 assert.equal(await sql(`select (private.email_evidence_global_counts()->>'receiver_armed')::boolean`), 'f', 'and its functions run against the restored objects');
+const summaryHash = `select md5(pg_get_functiondef('private.email_evidence_summary(text[],timestamptz)'::regprocedure))`;
+assert.notEqual(await sql(summaryHash), RESTATED_SUMMARY, 're-applying 7.3C-1 restored the original summary');
+await sql(`begin;\n${arming}\ncommit;`);
+assert.equal(await sql(armingPresent), '10', 'the unchanged 7.3D-1 migration re-applies on top of 7.3C-2');
+assert.equal(await sql(summaryHash), RESTATED_SUMMARY, 'and restates the summary again');
+assert.equal(await sql(`select count(*) from pg_trigger where tgrelid = 'private.email_evidence_arming_events'::regclass and not tgisinternal`), '2',
+  'with the history guard triggers');
+assert.equal(await sql(`select has_function_privilege('authenticated','public.email_evidence_arm(text)','EXECUTE')
+  and has_function_privilege('authenticated','public.email_evidence_probe_readback(text)','EXECUTE')
+  and not has_function_privilege('service_role','public.email_evidence_disarm(text)','EXECUTE')
+  and not has_function_privilege('anon','public.email_evidence_arming_readback()','EXECUTE')
+  and not has_function_privilege('authenticated','private.email_evidence_transition(text,text)','EXECUTE')`), 't', 'with its grants');
 console.log('email provider events migration lock PASS');

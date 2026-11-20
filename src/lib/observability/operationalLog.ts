@@ -70,6 +70,12 @@ const EVENTS_V2 = [
   "email_webhook.duplicate",
   "email_webhook.conflict",
   "email_webhook.failed",
+  // TRACE-155 (Phase 7.3D-1): the restricted delivery-evidence probe. Never logs the probe choice,
+  // recipient, provider email ID, idempotency key, subject, body or provider error text;
+  // source_kind and source_id stay null.
+  "email_probe.refused",
+  "email_probe.sent",
+  "email_probe.failed",
 ] as const;
 export type OperationalEventV1 = (typeof EVENTS)[number];
 export type OperationalEventV2 = (typeof EVENTS_V2)[number];
@@ -82,6 +88,7 @@ const ROUTES = [
   "renewal_document_submit",
   "owner_email_resend",
   "resend_webhook",
+  "email_evidence_probe",
   "unattributed",
 ] as const;
 export type OperationalRoute = (typeof ROUTES)[number];
@@ -149,6 +156,9 @@ const ERROR_CODES = [
   "webhook_signature_invalid",
   "webhook_payload_invalid",
   "correlation_ref_unavailable",
+  // TRACE-155 (Phase 7.3D-1): the probe harness is off, or this deployment may not run it.
+  "probe_disabled",
+  "probe_environment_refused",
   "unexpected",
 ] as const;
 export type OperationalErrorCode = (typeof ERROR_CODES)[number];
