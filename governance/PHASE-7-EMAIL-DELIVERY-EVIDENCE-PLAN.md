@@ -14,6 +14,8 @@
 > EO-1..EO-8 remain proposals.
 >
 > **Amended 2026-11-20 (7.3D-1, Codex review [5997315152](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/183#pullrequestreview-5997315152), R3D-1..R3D-4):** §8.3 rule 9, §8.4 and §12 item 1 now state audited arming intervals with coverage labels, and that `resend.dev` probes are unlinked transport evidence only; ledger linking is proven by controlled-mailbox sends through the real paths. §4.1's retry schedule was re-verified (27 h 35 min 5 s of waits; 28 h horizon). Superseded wording is kept in §18.5. Record: [7.3D-1](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md). EO-1..EO-8 remain proposals; nothing is armed.
+>
+> **Amended 2026-11-20 (7.3D-1 review fixes; owner instruction relaying Codex's review of #184):** §8.3's rule 9/10 labels and §8.4 now say that arming records the start and end of a *coverage window*, which neither turns webhook receipt on or off nor proves the receiver was available. A probe's provider ID is excluded as a whole when any unexpired receipt for it is linked, tagged or conflicted. Superseded wording is in §18.6. Record: [7.3D-1 review fixes](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md). EO-1..EO-8 remain proposals.
 
 **Status:** PLAN, REVISED AFTER CODEX REVIEW [#5891386779](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891386779) (at `7c2d0e5`) AND RE-REVIEW [#5891897514](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891897514) (at `5d577f0`; corrections C1–C3, §18.2), for final Codex plan clearance. Documentation only. Approves nothing, activates nothing. **No 7.3B implementation clearance has been given.**
 **Branch:** `claude/phase7-3a-email-evidence-plan`. First written on `main` `24dd455` (§1.1). Rebased onto `main` **`8a9603b94ea908e83742cbc2548d40f63ba4263b`** for this revision (§1.2).
@@ -515,8 +517,8 @@ Only **trusted** receipts are used: `identity_class` ∈ {`id_only`, `tag_only`,
 | 6 | `bounced_transient` or `bounced_undetermined` ∈ F | "Bounce reported (temporary or undetermined); delivery not established" | no | no | yes |
 | 7 | `delayed` ∈ F | "Delivery delayed; not yet established" | no | no | no |
 | 8 | `accepted` ∈ F | "Accepted by Resend for delivery" | no | no | no |
-| 9 | F empty; the attempt was claimed inside an audited armed interval (§8.4: coverage `collecting`, `complete` or `partial`) *(amended 2026-11-20, 7.3D-1)* | By coverage: "No provider report yet" (collecting); "No provider report received in the 28 hours reports were collected after sending" (complete); "No provider report received; collection stopped within 28 hours of sending, so a report may have been missed" (partial) | no | no | no |
-| 10 | Otherwise (coverage `before_first_arm`, `gap` or `unknown`) | "Delivery evidence not available"; for `gap`: "Delivery evidence not available: reports were not being collected when this was sent" *(amended 2026-11-20, 7.3D-1)* | no | no | no |
+| 9 | F empty; the attempt was claimed inside an audited armed interval (§8.4: coverage `collecting`, `complete` or `partial`) *(amended 2026-11-20, 7.3D-1)* | By coverage: "No provider report yet" (collecting); "No provider report received; a coverage window was recorded for 28 hours after sending" (complete); "No provider report received; the recorded coverage window ended within 28 hours of sending, so a report may have been missed" (partial) *(labels amended 2026-11-20, 7.3D-1 review fixes; §18.6)* | no | no | no |
+| 10 | Otherwise (coverage `before_first_arm`, `gap` or `unknown`) | "Delivery evidence not available"; for `gap`: "Delivery evidence not available: no coverage window was recorded when this was sent" *(amended 2026-11-20, 7.3D-1; gap label amended the same day, 7.3D-1 review fixes, §18.6)* | no | no | no |
 
 - **Full history is always shown** under the summary: type, provider time and bounce category, including excluded receipts, which are marked "Excluded: conflicting report".
 - A conflict signal (§7.4) is a **separate** flag, `has_conflict`, shown as "Conflicting provider reports: excluded from this summary". It is independent of the rules.
@@ -528,6 +530,8 @@ Only **trusted** receipts are used: `identity_class` ∈ {`id_only`, `tag_only`,
 `private.email_evidence_config` holds a single row with `armed_at`, set in 7.3D. An attempt whose `claimed_at` is earlier than `armed_at` gets rule 10, not rule 9.
 
 *(Amended 2026-11-20, 7.3D-1; R3D-1, R3D-2.)* `armed_at` is now the current state only. The append-only `private.email_evidence_arming_events` history is the record of when reports were collected; operator-guarded `email_evidence_arm` and `email_evidence_disarm` (session actor, reason required, serialized, duplicates refused) append to it and set or clear `armed_at` together. An attempt's coverage comes from the intervals `[arm, next disarm)` and the retry horizon (28 h): `before_first_arm`, `collecting`, `complete`, `partial`, `gap` or `unknown` (7.3D-1 record §3). Rules 1–8 are unchanged and apply whatever the coverage. Disarm and re-arm never erase history or stored receipts.
+
+*(Amended 2026-11-20, 7.3D-1 review fixes.)* The history records **coverage windows**: an operator's dated declaration of when reports are meant to be collected. Recording a start or end does not turn webhook receipt on or off. The receiver stores verified reports whenever its secret is deployed and the endpoint is registered, and stopping receipt is a separately authorized hosted action (remove the secret, disable or remove the endpoint, or promote an earlier deployment). A window therefore labels emails; it does not prove the receiver was available, and the 28 h horizon is how long a window must stay open, not proof of uninterrupted collection.
 
 ### 8.5 Invariants (unchanged)
 
@@ -933,6 +937,20 @@ Superseded wording, kept as written:
 | Readiness §3.5 | Retry horizon "about 32 h" | 27 h 35 min 5 s documented (fetched 2026-11-20); 28 h used |
 
 One function is deliberately restated, `private.email_evidence_summary` (`e3436221…` → `8eadddd6…`); the receiver, verifier freshness, ledgers, claims, resend rules and money functions are unchanged (7.3D-1 record §4). EO-1..EO-8 remain open, and no 7.3D activation gate is relaxed.
+
+### 18.6 Amendments with the 7.3D-1 review fixes (2026-11-20, owner instruction relaying Codex's review of #184)
+
+Superseded wording, kept as written:
+
+| Where | Before | After |
+|---|---|---|
+| §8.3, rule 9 (complete) | "No provider report received in the 28 hours reports were collected after sending" | "No provider report received; a coverage window was recorded for 28 hours after sending" |
+| §8.3, rule 9 (partial) | "No provider report received; collection stopped within 28 hours of sending, so a report may have been missed" | "No provider report received; the recorded coverage window ended within 28 hours of sending, so a report may have been missed" |
+| §8.3, rule 10 (gap) | "Delivery evidence not available: reports were not being collected when this was sent" | "Delivery evidence not available: no coverage window was recorded when this was sent" |
+| §8.4 | "The append-only … history is the record of when reports were collected" | The history records coverage windows; recording one does not turn receipt on or off or prove receiver availability (§8.4 amendment) |
+| §12 item 1 / 7.3D-1 D-11 | Probe readback excluded an ID only for a non-`unmatched` class or a tag, counting expired receipts | Whole-ID exclusion when any **unexpired** receipt is linked, tagged or conflicted (stored, content or current conflict); expired receipts ignored (`20261129001000`) |
+
+Rules, coverage values and the summary function are unchanged; one function is restated, `public.email_evidence_probe_readback` (`2d02c820…` → `bd5da284…`). EO-1..EO-8 remain open.
 
 ## 19. Revision validation
 

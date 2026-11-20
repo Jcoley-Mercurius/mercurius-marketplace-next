@@ -1,3 +1,17 @@
+# Phase 7.3D-1 review fixes: whole-ID probe exclusion, logical expiry, coverage-window wording, Production-only probes (TRACE-155) — 2026-11-20 ET
+
+- **Base:** `main` `8a40fa4` (#184 merged 22:07:38 UTC; main CI 44826293688 success; GitHub Production deployment for `8a40fa4` success; hosted migrations match through `20261128001000`, read back 23:04 UTC: 0 arming events, no `armed_at`, 0 receipts). Branch `claude/phase7-3d1-review-fixes` in the 7.3D-1 worktree (stack 5606x, browser 3176/56861). Record: [7.3D-1 review fixes](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md).
+- **Built:**
+  - forward migration `20261129001000` (the shipped `20261128001000` is untouched): restates only `public.email_evidence_probe_readback` (`2d02c820…` → `bd5da284…`, same keys and grants). Any unexpired linked, tagged or conflicted receipt excludes the whole provider ID; expired receipts never affect eligibility, verdicts or output;
+  - the TypeScript verdict `not_probe_evidence` also refuses any non-`unlinked` receipt, and the route strips receipts; truthful operator wording;
+  - probe gate: flag `true` **and** `VERCEL_ENV` exactly `production`; missing fails closed; tests mock Production and stub sends;
+  - page, confirmations, history, coverage and rule 9/10 labels, and the delivery-evidence card on Owner Emails, Recruiting and price drafts: arming *records a coverage window*, never enables or disables ingestion or proves availability; the shutdown procedure stays separate; D-3 kept.
+- **Evidence:** SQL 126 fails 9/56 on the unrepaired function, then 58/58; SQL 125 153/153 (one deliberate edit); SQL 122/124 unchanged; full SQL 118 / 8,551; SQL 126 mutations (6 caught behaviourally, 3 equivalent, control passes); migration-lock step 8; concurrency A-1..A-5 and P-1 (96 racing reads, none mixed); unit 79 / 1,214; lint, types, secrets and build pass; browser (isolated) 64/64 across the arming, owner-emails and ledger specs. Exact-head CI: PR body.
+- **Reconciled (dated notes, originals kept):** 7.3D-1 record header, readiness §7 (§3.4's "disarming stops new receipts" corrected), plan header, §8.3, §8.4 and §18.6, TRACE-155.
+- **For Codex:** F-1..F-6 (record §6); the dry run should list only `20261129001000` (record §3.1).
+- **Not done:** hosted push, merge, deploy, secrets, registration, arming, probe enablement, email. Open: `20261128001000` push provenance, O-1..O-9, EO-1..EO-8, carried items. Not Phase 7 acceptance.
+- **Next:** Codex review; then, with owner authorization, the dry run and push of `20261129001000` before merge.
+
 # Phase 7.3D-1 audited arming, interval coverage and a disabled probe harness (TRACE-155) — 2026-11-20 ET
 
 - **Base:** `main` `c5e24cf` (#180, #181, #182 merged). Branch `claude/phase7-3d1-arming-harness` in its own worktree, stack (5606x), browser ports (3176/56861) and build. #183's readiness commit carried by cherry-pick (not merged). Codex review 5997315152 (R3D-1..R3D-4) read. Record: [7.3D-1](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md).

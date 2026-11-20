@@ -5,6 +5,8 @@
 **Branch:** `claude/phase7-3d-readiness-release-evidence`, from `main` `d44342b`.
 **Earlier records are kept as written.** Each gets a dated correction that points here.
 
+> **Corrected 2026-11-20, later (7.3D-1 review fixes):** §3.4 and §3.5 overstate what arming does. The correction is in §7, with the original text kept.
+>
 > **Corrected 2026-11-20 (7.3D-1, Codex review [5997315152](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/183#pullrequestreview-5997315152)):** Codex settled R3D-1..R3D-4 and corrected two checklist items. The original wording below is kept; the corrections are in §6, and 7.3D-1 is implemented locally and dormant in the [7.3D-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md). Nothing here authorizes arming, registration, real email or hosted changes.
 
 ## 1. Release evidence (read-only, observed 2026-11-20)
@@ -217,3 +219,13 @@ Codex review 5997315152 at `89e01fe` cleared §4 for local, dormant implementati
 5. **§3.5 coverage labels** are defined: `before_first_arm`, `collecting`, `complete`, `partial`, `gap` and `unknown` (7.3D-1 record §3).
 
 EO-1..EO-8 remain proposals. Phase 7 and booking readiness remain unaccepted.
+
+## 7. Corrections (2026-11-20, 7.3D-1 review fixes)
+
+Under the owner's review-fix instruction (Codex's review of #184), recorded in the [review-fix record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md). The text above is kept as written:
+
+1. **§3.4, "…or disarming stops new receipts."** Wrong for disarming. The receiver stores a verified report whenever the secret is deployed and the endpoint registered; it never reads the arming record. Removing the secret, deregistering or disabling the webhook, or promoting an older deployment stops receipt (and purge-on-receipt). Each is a separately authorized hosted action: that is the shutdown procedure. A disarm records the end of a coverage window and stops nothing. Purge duty is unchanged: it lasts while anything is stored.
+2. **§3.5, "The audit trail is the record of when reports were collected."** The audit trail records the **coverage windows** operators declared. A window labels emails; it does not show the receiver was available. Coverage labels say a window was recorded, never that reports were collected (review fixes §2.3). The 28 h horizon is how long a window must stay open under Resend's retry schedule, not proof of uninterrupted collection.
+3. **§3.2 / plan §12 item 1, probes.** A provider ID with any current linked, tagged or conflicted receipt is excluded as a whole from probe evidence; expired receipts are ignored (review fixes §2.1–§2.2).
+
+EO-1..EO-8 remain proposals. Nothing here authorizes arming, registration, probe enablement or email.

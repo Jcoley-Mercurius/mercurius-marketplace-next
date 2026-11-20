@@ -4,6 +4,12 @@
 **Authority:** the owner's 7.3D-1 instruction (2026-11-20); Codex review [5997315152](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/183#pullrequestreview-5997315152) at `89e01fe` (R3D-1..R3D-4 and two checklist corrections); the [readiness record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) §3–§4; the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §8.3, §8.4, §11.4 and §12, amended here (§18.5).
 **Base:** `main` `c5e24cfc020797c39bc2303307a3bfda09c2eb89` (#180, #181 and the separate PostHog integration #182 merged). Branch `claude/phase7-3d1-arming-harness`, in its own worktree, synthetic stack (ports 5606x), browser ports 3176/56861 and build directory.
 
+> **Note 2026-11-20 (after merge; [review fixes](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md)).** The text below is kept as written; where it differs from this note, this note and the review-fix record govern.
+> - **Rollout:** #184 merged 22:07:38 UTC as `main` `8a40fa4`; main CI 44826293688 succeeded; the GitHub Production deployment for `8a40fa4` reports success. `20261128001000` was observed applied to the hosted database (read-only, 23:04 UTC: 0 arming events, no `armed_at`, 0 receipts). Who pushed it, and when, is not recorded here. The status line's "nothing… pushed" and §9 steps 2–4 are therefore past. Arming, registration, probe enablement and email have still not happened.
+> - **D-11** was not enforced for an unmatched receipt with the content-conflict flag, and expired receipts still excluded an ID. Forward repair `20261129001000` enforces whole-ID exclusion over unexpired receipts (review fixes §2.1–§2.2). SQL 125's content-conflict probe case is deliberately updated.
+> - **D-8** is superseded: a missing `VERCEL_ENV` now fails closed; only `VERCEL_ENV=production` with the flag opens the route (review fixes §2.4).
+> - **Wording:** "collection", "collecting" and "collected" in §2, §3 and §5.3 describe what the arming commands record, which is the start and end of a *coverage window*. They do not turn webhook receipt on or off and do not prove the receiver was available. The operator page and labels now say so (review fixes §2.3). D-2, D-4 (with this wording) and D-5 are accepted by Codex; D-3's horizon remains a retry-window convention, not proof of uninterrupted collection.
+
 ## 1. Baseline and how #183 is carried
 
 - `origin/main` was `c5e24cf` when this branch was cut; the worktree was clean. No profile or analytics file is touched by this slice.
