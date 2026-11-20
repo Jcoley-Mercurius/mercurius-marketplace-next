@@ -164,7 +164,12 @@ insert into c1_functions values
 grant select on new_functions, c1_functions to public;
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname in ('public','private') and (p.proname like 'email\_evidence\_%' or p.proname like '%email\_evidence%')
-    and p.oid not in (select sig::oid from new_functions) and p.oid not in (select sig::oid from c1_functions)),0,
+    and p.oid not in (select sig::oid from new_functions) and p.oid not in (select sig::oid from c1_functions)
+    -- TRACE-155 (7.3D-1, 20261128001000): its arming, coverage and probe functions, tested in SQL 125.
+    and p.oid <> all(array['private.email_evidence_arming_events_guard()','private.email_evidence_transition(text,text)',
+      'public.email_evidence_arm(text)','public.email_evidence_disarm(text)','private.email_evidence_retry_horizon()',
+      'private.email_evidence_coverage(timestamptz)','public.email_evidence_arming_readback()',
+      'public.email_evidence_probe_authorize()','public.email_evidence_probe_readback(text)']::regprocedure[]::oid[])),0,
  'this slice adds exactly the nine listed functions beside the ten 7.3C-1 functions');
 select is((select count(*)::int from new_functions),9,'nine new functions');
 select is((select string_agg(distinct p.provolatile::text, ',') from pg_proc p where p.oid in (select sig::oid from new_functions)),
@@ -396,6 +401,10 @@ select is(private.email_evidence_ledger_claimed_at('owner_email',pg_temp.oe(3),1
 select pg_temp.put('msg-a11-cc','application',pg_temp.app(11),1,'email.delivered','em-a11-1','tag_only',null,'2026-11-18T10:00:00Z',now()+interval '1 day',true);
 select pg_temp.put('msg-d11-cc','package_draft',pg_temp.notice(11),1,'email.delivered','em-d11-1','tag_only',null,'2026-11-18T10:00:00Z',now()+interval '1 day',true);
 select is((pg_temp.aev(11)->'summary'->>'rule')::int,10,'unarmed: application rule 10');
+-- TRACE-155 (7.3D-1, 20261128001000): rule 9 reads the audited arming intervals, so this case
+-- arms through the history (one arm event and the matching armed_at). Expected rules unchanged.
+insert into private.email_evidence_arming_events(seq, action, occurred_at, actor, reason)
+  values (1, 'arm', now() - interval '1 hour', 'e1240000-0000-4000-8000-000000000001', 'Synthetic arming');
 insert into private.email_evidence_config(singleton, armed_at) values (true, now() - interval '1 hour');
 select is((pg_temp.aev(11)->'summary'->>'rule')::int,9,'armed before attempt 2''s claim: application rule 9');
 select is((select (a->>'rule')::int from jsonb_array_elements(pg_temp.aev(11)->'attempts') a where (a->>'attempt')::int=1),10,
@@ -405,6 +414,9 @@ select is((select (a->>'rule')::int from jsonb_array_elements(pg_temp.dev(11)->'
  'price draft attempt 1''s claim time is unknown: rule 10, never rule 9');
 select is((pg_temp.op('select public.application_email_evidence_counts()')->'all_emails'->>'receiver_armed')::boolean,true,'receiver_armed reads the arming record');
 delete from private.email_evidence_config;
+alter table private.email_evidence_arming_events disable trigger email_evidence_arming_events_guard;
+delete from private.email_evidence_arming_events;
+alter table private.email_evidence_arming_events enable trigger email_evidence_arming_events_guard;
 
 -- 8. Expiry boundaries (S-34, readback side) ----------------------------------------------------
 -- After the last real receive (each receive purges expired rows). One second before expiry is
@@ -485,7 +497,7 @@ select is((select array_agg(distinct k order by k) from app_page, jsonb_object_k
 select is((select array_agg(distinct k order by k) from app_page, jsonb_array_elements(v->'items') i, jsonb_object_keys(i) k),
  array['application_id','attempt','attempts','conflict_reasons','has_conflict','summary'],'application item keys');
 select is((select array_agg(distinct k order by k) from app_page, jsonb_array_elements(v->'items') i, jsonb_array_elements(i->'attempts') a, jsonb_object_keys(a) k),
- array['attempt','delivered_fact','has_conflict','needs_review','non_delivery_proven','reported','reports','rule'],'application history attempt keys');
+ array['attempt','coverage','delivered_fact','has_conflict','needs_review','non_delivery_proven','reported','reports','rule'],'application history attempt keys');
 select is((select array_agg(distinct k order by k) from app_page, jsonb_array_elements(v->'items') i, jsonb_array_elements(i->'attempts') a,
   jsonb_array_elements(a->'reports') r, jsonb_object_keys(r) k),
  array['bounce_subtype','bounce_type','excluded','fact','provider_created_at'],'application history report keys');
@@ -538,7 +550,7 @@ select is(private.email_evidence_ledger_row('package_draft',pg_temp.notice(15)),
  'price-draft evidence equals owner-email evidence for the same receipts');
 select is(private.email_evidence_ledger_row('application',pg_temp.app(18)) - 'attempts',
  jsonb_build_object('attempt',2,'has_conflict',true,'conflict_reasons',jsonb_build_array('content_conflict','current_conflict','stored_conflict'),
-   'summary',jsonb_build_object('rule',2,'delivered_fact',true,'non_delivery_proven',false,'needs_review',true,'reported',jsonb_build_array('bounced_permanent'))),
+   'summary',jsonb_build_object('rule',2,'coverage','unknown','delivered_fact',true,'non_delivery_proven',false,'needs_review',true,'reported',jsonb_build_array('bounced_permanent'))),
  'rule 2 on the sent attempt, with every conflict kind signalled');
 select is((select string_agg((a->>'attempt')||':'||(a->>'rule'), ',' order by (a->>'attempt')::int) from jsonb_array_elements(pg_temp.aev(18)->'attempts') a),
  '1:10,2:2,3:10','history per attempt; a received future tag attempt is a label, never a claim (D-6)');
@@ -592,7 +604,11 @@ select is((select count(*)::text||'|'||md5(string_agg(pg_get_functiondef(p.oid),
  '6|57277a24ac11744bde74a0be96cbd79d','the six 7.3B receiver functions are unchanged');
 select is((select count(*)::text||'|'||md5(string_agg(pg_get_functiondef(p.oid), E'\n' order by p.oid::regprocedure::text))
   from pg_proc p where p.oid in (select sig::oid from c1_functions)),
- '10|8177b42a7194ac42e22bd908558f1dff','the ten 7.3C-1 functions are unchanged (reused, not restated)');
+ -- TRACE-155 (7.3D-1, 20261128001000) deliberately restates one of the ten,
+ -- private.email_evidence_summary (functiondef md5 e3436221f69164c48be9d90f70f3dd6f →
+ -- 8eadddd6f47401258d747248a38ce507), so the set moves from 10|8177b42a7194ac42e22bd908558f1dff.
+ -- The other nine are unchanged; SQL 125 pins them separately.
+ '10|f258d4e1699becf089efb72725581d1c','the ten 7.3C-1 functions: only the deliberately restated summary changed');
 select is((select md5(string_agg(format('%s %s %s %s', c.relname, a.attname, format_type(a.atttypid,a.atttypmod), a.attnotnull), ',' order by c.relname, a.attnum))
   from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='private' and c.relname in ('r0_application_notifications','owner_email_notifications','package_draft_email_notices')

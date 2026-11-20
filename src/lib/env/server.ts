@@ -17,6 +17,8 @@ function serverSource(): EnvironmentSource {
     VENDOR_UPLOAD_HMAC_VERSION: process.env.VENDOR_UPLOAD_HMAC_VERSION,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
     RESEND_WEBHOOK_SECRET_PREVIOUS: process.env.RESEND_WEBHOOK_SECRET_PREVIOUS,
+    EMAIL_EVIDENCE_PROBES_ENABLED: process.env.EMAIL_EVIDENCE_PROBES_ENABLED,
+    VERCEL_ENV: process.env.VERCEL_ENV,
   };
 }
 
@@ -75,5 +77,18 @@ export function getResendWebhookEnvironment() {
   return {
     current: optionalString(source, "RESEND_WEBHOOK_SECRET"),
     previous: optionalString(source, "RESEND_WEBHOOK_SECRET_PREVIOUS"),
+  } as const;
+}
+
+/**
+ * TRACE-155 (Phase 7.3D-1): the delivery-evidence probe harness. Off unless
+ * EMAIL_EVIDENCE_PROBES_ENABLED is exactly "true"; refused in any Vercel environment other than
+ * Production (so never in Preview). Never throws.
+ */
+export function getEmailEvidenceProbeEnvironment() {
+  const source = serverSource();
+  return {
+    enabled: source.EMAIL_EVIDENCE_PROBES_ENABLED === "true",
+    vercelEnvironment: optionalString(source, "VERCEL_ENV"),
   } as const;
 }

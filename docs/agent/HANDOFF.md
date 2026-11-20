@@ -1,3 +1,17 @@
+# Phase 7.3D-1 audited arming, interval coverage and a disabled probe harness (TRACE-155) — 2026-11-20 ET
+
+- **Base:** `main` `c5e24cf` (#180, #181, #182 merged). Branch `claude/phase7-3d1-arming-harness` in its own worktree, stack (5606x), browser ports (3176/56861) and build. #183's readiness commit carried by cherry-pick (not merged). Codex review 5997315152 (R3D-1..R3D-4) read. Record: [7.3D-1](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md).
+- **Built (dormant):**
+  - migration `20261128001000`: append-only arming history; operator-only `email_evidence_arm`/`disarm` (session actor, serialized, duplicates refused, audit and record together); coverage from audited intervals with a 28 h horizon (Resend's documented 27 h 35 min 5 s); arming/retention readback; unlinked probe readback;
+  - **one restated function**, `private.email_evidence_summary` (`e3436221…` → `8eadddd6…`): rules 1–8 unchanged, rule 9 by interval, `coverage` added;
+  - `POST /api/admin/email-evidence-probe`: off unless `EMAIL_EVIDENCE_PROBES_ENABLED=true`, refused in Preview, operator per call, `{choice}` only, fixed untagged email to a Resend test address, per-day key, no retry, no ID returned or logged;
+  - `/admin/email-evidence`: state, start/stop (reason; start also needs the EO-1 attestation), history, coverage meanings, retention and purge duty, probe control.
+- **Evidence:** SQL 125 153/153; SQL 122/124 pass after the listed deliberate edits; full SQL 117 / 8,493; 16/16 SQL and 16/16 unit mutations caught (controls pass; one void batch recorded); arming concurrency A-1..A-5 and the extended migration-lock pass; unit 79 / 1,207; lint, types, secrets, build pass. Unchanged: receiver/verifier, 7.3B six, other 7.3C-1 nine, 7.3C-2 nine, ledgers, money `58 | af0fae6e…`. Browser: local runs were dominated by host load (≈6–33) and timed out inconsistently (record §5.3); two test defects fixed. Browser acceptance rests on exact-head CI.
+- **Corrected:** readiness criterion 5 (durable state, not status) and purge duty (while anything is stored); "about 32 h" → 28 h. Plan §8.3, §8.4, §12 item 1 amended (§18.5).
+- **For Codex:** D-1..D-12, especially D-2 (partial = rule 9), D-4 (UI controls) and D-5 (route handler, not Server Action).
+- **Not done:** hosted push, merge, deploy, secrets, registration, arming, probe enablement, email. EO-1..EO-8 open; O-1..O-9 and carried items open. Not Phase 7 acceptance.
+- **Next:** Codex implementation review; then, with owner authorization, dry run and push of `20261128001000` before merge.
+
 # Phase 7.3C release evidence and 7.3D readiness (TRACE-155) — 2026-11-20 ET
 
 - **Base:** `main` `d44342b` (#181 merged 15:44:35 UTC, head `2eaacc0`; Codex review 5995373396 read). Branch `claude/phase7-3d-readiness-release-evidence`. Documentation only. Record: [7.3D readiness](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md).

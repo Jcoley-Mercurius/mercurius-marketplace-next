@@ -124,7 +124,13 @@ select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pr
     -- excluded by exact signature here and tested in SQL 124.
     and p.oid <> all(array['private.email_evidence_ledger_claimed_at(text,uuid,integer)','private.email_evidence_ledger_receipts(text,uuid)',
       'private.email_evidence_ledger_row(text,uuid)','private.email_evidence_ledger_counts(text)',
-      'private.email_evidence_global_counts()']::regprocedure[]::oid[])),0,
+      'private.email_evidence_global_counts()']::regprocedure[]::oid[])
+    -- TRACE-155 (7.3D-1, 20261128001000): its arming, coverage and probe functions share the
+    -- prefix too. Excluded by exact signature here and tested in SQL 125.
+    and p.oid <> all(array['private.email_evidence_arming_events_guard()','private.email_evidence_transition(text,text)',
+      'public.email_evidence_arm(text)','public.email_evidence_disarm(text)','private.email_evidence_retry_horizon()',
+      'private.email_evidence_coverage(timestamptz)','public.email_evidence_arming_readback()',
+      'public.email_evidence_probe_authorize()','public.email_evidence_probe_readback(text)']::regprocedure[]::oid[])),0,
  'this slice adds exactly the ten listed functions beside the 13 original owner-email functions (and the 7.3C-2 helpers, SQL 124)');
 select is((select string_agg(distinct p.provolatile::text, ',') from pg_proc p where p.oid in (select sig::oid from new_functions where sig::text <> 'private.email_evidence_fact(text,text)')),
  's','every read function is STABLE (none can write)');
@@ -352,9 +358,9 @@ begin
 end $$;
 select is((select count(*)::int from perm_results), 48, 'S-44 all 24 permutations of each of two fact sets were read');
 select is((select string_agg(distinct summary::text, ' / ') from perm_results where set_no = 1),
- '{"rule": 1, "reported": [], "needs_review": true, "delivered_fact": true, "non_delivery_proven": false}','S-44 set 1: one summary for every order');
+ '{"rule": 1, "coverage": "unknown", "reported": [], "needs_review": true, "delivered_fact": true, "non_delivery_proven": false}','S-44 set 1: one summary for every order');
 select is((select string_agg(distinct summary::text, ' / ') from perm_results where set_no = 2),
- '{"rule": 2, "reported": ["bounced_permanent", "provider_suppressed"], "needs_review": true, "delivered_fact": true, "non_delivery_proven": false}',
+ '{"rule": 2, "coverage": "unknown", "reported": ["bounced_permanent", "provider_suppressed"], "needs_review": true, "delivered_fact": true, "non_delivery_proven": false}',
  'S-44 set 2: one summary for every order');
 
 -- S-48: an unmatched receipt is never rematched on read.
@@ -364,24 +370,39 @@ select is(pg_temp.class('msg-48')||'|'||pg_temp.st('msg-48')||'|'||pg_temp.rule(
  'unmatched|unlinked|10|0','S-48 the row later recording that ID shows nothing: an untagged early callback stays unmatched');
 
 -- S-49: arming record, rule 9 versus 10, and no override of trusted facts.
+-- TRACE-155 (7.3D-1, 20261128001000): rule 9 now reads the audited arming intervals, not
+-- armed_at alone, so each case arms through the history (one arm event at the given time, and the
+-- matching armed_at). Expected rules are unchanged; interval coverage is tested in SQL 125.
+create function pg_temp.arming(p_at timestamptz) returns void language plpgsql as $$
+begin
+  alter table private.email_evidence_arming_events disable trigger email_evidence_arming_events_guard;
+  delete from private.email_evidence_arming_events;
+  alter table private.email_evidence_arming_events enable trigger email_evidence_arming_events_guard;
+  delete from private.email_evidence_config;
+  if p_at is not null then
+    insert into private.email_evidence_arming_events(seq, action, occurred_at, actor, reason)
+      values (1, 'arm', p_at, 'e1220000-0000-4000-8000-000000000001', 'Synthetic arming');
+    insert into private.email_evidence_config(singleton, armed_at) values (true, p_at);
+  end if;
+end $$;
 select pg_temp.at_state(42,'unknown',1);
 update private.owner_email_notifications set claimed_at = now() - interval '5 minutes' where id = pg_temp.oe(42);
-insert into private.email_evidence_config(singleton, armed_at) values (true, now() - interval '4 minutes');
+select pg_temp.arming(now() - interval '4 minutes');
 select is(pg_temp.rule(42),10,'S-49 armed after the claim: rule 10');
-update private.email_evidence_config set armed_at = now() - interval '6 minutes';
+select pg_temp.arming(now() - interval '6 minutes');
 select is(pg_temp.rule(42),9,'S-49 armed before the claim: rule 9 ("No provider report yet")');
 select is(pg_temp.rule(43),10,'S-49 a row without any attempt: rule 10');
-update private.email_evidence_config set armed_at = now() + interval '1 hour';
+select pg_temp.arming(now() + interval '1 hour');
 select is(pg_temp.rule(31),4,'Codex item 4: rules 9/10 never override trusted facts (armed after the claim, rule 4 stands)');
 select isnt(pg_temp.claim(44), null, 'S-49 a real claim of row 44');
 select is((select (c.armed_at <= (select min(v.created_at) from private.owner_email_notification_events v
             where v.notification_id=pg_temp.oe(44) and v.state='sending'))::text from private.email_evidence_config c)
   ||'|'||pg_temp.rule(44),'false|10','S-49 the claim time comes from the attempt''s sending event');
-update private.email_evidence_config set armed_at = now() - interval '1 hour';
+select pg_temp.arming(now() - interval '1 hour');
 select is(pg_temp.rule(44),9,'S-49 and an earlier arming time gives rule 9 for it');
 select pg_temp.put('msg-49-facts',44,1,'email.delivered','em-49f',p_class=>'tag_only');
 select is(pg_temp.rule(44),4,'Codex item 4: armed before the claim, a trusted report still gives its own rule (4), not rule 9');
-delete from private.email_evidence_config;
+select pg_temp.arming(null);
 
 -- 6. Additive counts (§9.1) and unchanged attention counts ---------------------------------------
 delete from private.email_provider_events;
@@ -450,9 +471,9 @@ select is((select string_agg(i->>'kind'||':'||(i->'summary'->>'rule'), ',' order
 select is((select array_agg(distinct k order by k) from page, jsonb_array_elements(v->'items') i, jsonb_object_keys(i) k),
  array['attempt','attempts','conflict_reasons','has_conflict','kind','source_id','summary'],'item keys');
 select is((select array_agg(distinct k order by k) from page, jsonb_array_elements(v->'items') i, jsonb_object_keys(i->'summary') k),
- array['delivered_fact','needs_review','non_delivery_proven','reported','rule'],'summary keys');
+ array['coverage','delivered_fact','needs_review','non_delivery_proven','reported','rule'],'summary keys');
 select is((select array_agg(distinct k order by k) from page, jsonb_array_elements(v->'items') i, jsonb_array_elements(i->'attempts') a, jsonb_object_keys(a) k),
- array['attempt','delivered_fact','has_conflict','needs_review','non_delivery_proven','reported','reports','rule'],'history attempt keys');
+ array['attempt','coverage','delivered_fact','has_conflict','needs_review','non_delivery_proven','reported','reports','rule'],'history attempt keys');
 select is((select array_agg(distinct k order by k) from page, jsonb_array_elements(v->'items') i, jsonb_array_elements(i->'attempts') a,
   jsonb_array_elements(a->'reports') r, jsonb_object_keys(r) k),
  array['bounce_subtype','bounce_type','excluded','fact','provider_created_at'],'history report keys');
