@@ -57,7 +57,9 @@ outcomes; these headers never authorize a product action or establish an account
 Server analytics runs after the business response, with bounded timeouts, no
 retries and contained errors. It cannot change a submitted request or email result.
 
-The event/property projection drops unknown event families and fields, nested
+Product events use an allowlist projection. Masked replay envelopes are retained
+only while the consent/public-route replay gate holds. The projection drops unknown
+event families and fields, nested
 person properties, DOM data, raw errors, names, emails, phone numbers, messages,
 addresses, uploaded files and payment data. All raw queries/fragments are removed.
 Only five constrained `utm_*` values are accepted; ad-click IDs and search text are
@@ -67,7 +69,8 @@ or proof of ad-platform spend, impressions or performance.
 ## Replay boundary
 
 Project settings: all inputs/text masked, images blocked, 25% sampling, minimum
-10 seconds, 30-day retention. Console and network capture are off. Client config
+10 seconds, 30-day retention. Console and network capture are off. The client masks element attributes as well
+as text and inputs. Client config
 also blocks embedded content, canvases, private elements and JSON-LD capture.
 Only public allowlisted routes qualify; request/contact/early-access forms,
 auth, portals, payments, documents and unknown routes do not. Any query string or

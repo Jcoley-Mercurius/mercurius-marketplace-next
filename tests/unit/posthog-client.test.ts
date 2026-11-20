@@ -44,8 +44,11 @@ describe("TRACE-157 consent and identity runtime", () => {
     const client = await import("@/lib/analytics/client"); client.installAnalytics();
     const config = sdk.init.mock.calls[0][1];
     expect(config.before_send({ event: "$autocapture", properties: { text: "PRIVATE" } })).toBeNull();
+    const snapshot = { event: "$snapshot", properties: { $snapshot_data: [{ type: 3, data: { text: "***" } }] } };
+    expect(config.before_send(snapshot)).toBe(snapshot);
     expect(config.before_send({ event: "$pageview", properties: { $current_url: `${site}/faq?code=SECRET`, email: "PRIVATE" } }).properties).toEqual({ $current_url: site + "/faq" });
     locationStub.pathname = "/dashboard";
+    expect(config.before_send(snapshot)).toBeNull();
     expect(config.before_send({ event: "$pageview", properties: {} })).toBeNull();
     locationStub.pathname = "/faq"; documentStub.cookie = `${CONSENT_COOKIE}=v1-denied`;
     expect(config.before_send({ event: "$pageview", properties: {} })).toBeNull();

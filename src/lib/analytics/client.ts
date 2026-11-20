@@ -104,6 +104,8 @@ function reconcileConsent() {
       ip: false,
       cross_subdomain_cookie: false,
       advanced_disable_feature_flags: true,
+      // Avoid retaining an event batch that could drain after consent is withdrawn.
+      request_batching: false,
       disable_compression: process.env.NODE_ENV !== "production",
       tracing_headers: ["www.mercuriusmarketplace.com", "mercuriusmarketplace.com", "localhost", "127.0.0.1"],
       session_recording: {
@@ -114,7 +116,11 @@ function reconcileConsent() {
         maskCapturedNetworkRequestFn: () => null,
       },
       before_send: event => {
-        if (!event || !analyticsPermitted() || !analyticsPath(location.pathname) || !(ANALYTICS_EVENTS as readonly string[]).includes(event.event)) return null;
+        if (!event || !analyticsPermitted() || !analyticsPath(location.pathname)) return null;
+        // Replay has its own masked rrweb envelope; product-event projection would
+        // strip the snapshot payload. Keep it only while the public replay gate holds.
+        if (event.event === "$snapshot") return process.env.NEXT_PUBLIC_POSTHOG_REPLAY_ENABLED === "1" && replayAllowed(location.href) ? event : null;
+        if (!(ANALYTICS_EVENTS as readonly string[]).includes(event.event)) return null;
         return { ...event, properties: sanitizeProperties(event.properties) };
       },
     });
