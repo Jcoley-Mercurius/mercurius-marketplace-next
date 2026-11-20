@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { captureAnalytics } from "@/lib/analytics/client";
 import { IntakeTrapField, useIntakeGuard } from "@/components/marketing/IntakeGuard";
 import {
   PlanningPlanSummary,
@@ -721,6 +722,8 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
       setErrors({ otherServiceDetails: "Describe the work you need for Something Else." });
       return;
     }
+    captureAnalytics("request_started", { service_count: selectedServices.length });
+    captureAnalytics("request_step_completed", { step: "services", service_count: selectedServices.length });
     changeStep("details");
   }
 
@@ -769,6 +772,7 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
         return;
       }
     }
+    captureAnalytics("request_step_completed", { step: "details", service_count: selectedServices.length });
     changeStep("contact");
   }
 
@@ -975,6 +979,8 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
       savedAt: new Date().toISOString(),
     };
     update({ inFlight: null, saved: record });
+    // Replayed/idempotent saves must not inflate successful-request conversion.
+    if (!result.reused) captureAnalytics("request_submitted", { service_count: result.requests.length });
     setErrors({});
     await continueAfterSave(record, photos, true);
   }

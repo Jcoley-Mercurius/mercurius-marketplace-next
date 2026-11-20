@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { captureAnalytics, syncAnalyticsIdentity } from "@/lib/analytics/client";
 
 type AuthResult = Promise<{ error: Error | null }>;
 
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      syncAnalyticsIdentity(nextSession?.user.id ?? null);
       setLoading(false);
     });
 
@@ -59,10 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (email: string, password: string) => {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+      if (!error && data.user) syncAnalyticsIdentity(data.user.id);
+      captureAnalytics(error ? "login_failed" : "login_succeeded");
       return { error };
     },
     [supabase],
@@ -78,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data: { full_name: fullName },
         },
       });
+      if (!error) captureAnalytics("signup_submitted");
       return { error };
     },
     [supabase],
@@ -85,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    syncAnalyticsIdentity(null);
   }, [supabase]);
 
   const resetPassword = useCallback(

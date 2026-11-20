@@ -30,6 +30,8 @@ import {
 } from "@/lib/providerProfile/model";
 import { fetchPublicProviderProfile, type PublicProfile } from "@/lib/providerProfile/publicProfile";
 import { createClient } from "@/lib/supabase/client";
+import { captureAnalytics } from "@/lib/analytics/client";
+import { CONSENT_EVENT } from "@/lib/analytics/policy";
 import type { PricingFrequency } from "@/lib/vendorPricing";
 
 type RouteState =
@@ -103,6 +105,13 @@ function ProviderProfileRoute({ providerId }: { providerId: string }) {
 
   const ready = state.mode === "ready";
   useEffect(() => {
+    if (!ready) return;
+    const viewed = () => captureAnalytics("provider_profile_viewed", { provider_id: providerId });
+    viewed();
+    window.addEventListener(CONSENT_EVENT, viewed);
+    return () => window.removeEventListener(CONSENT_EVENT, viewed);
+  }, [ready, providerId]);
+  useEffect(() => {
     if (!ready || !validProviderId(providerId)) return;
     const supabase = createClient();
     const refresh = () => { void load(true); };
@@ -143,7 +152,7 @@ function ProviderProfileRoute({ providerId }: { providerId: string }) {
       <ProviderProfileView
         data={data}
         requestedServiceId={service}
-        onServiceChange={setService}
+        onServiceChange={(next) => { captureAnalytics("service_viewed", { provider_id: providerId, service_id: next ?? undefined }); setService(next); }}
         viewer={viewer}
         directoryHref={directoryHref}
         onNextStep={nextStep}

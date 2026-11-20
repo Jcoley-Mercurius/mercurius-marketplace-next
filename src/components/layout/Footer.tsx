@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Mail, MapPin } from "lucide-react";
+import { AnalyticsPreferencesButton } from "@/components/analytics/AnalyticsConsent";
 
 const footerLinks = {
   services: [
@@ -75,7 +76,8 @@ export function Footer() {
             <p className="text-sm text-muted-foreground">
               © {currentYear} Mercurius. All rights reserved.
             </p>
-            <div className="flex space-x-6">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <AnalyticsPreferencesButton />
               <Link
                 href="/privacy"
                 className="text-sm text-muted-foreground transition-colors hover:text-sage-dark"

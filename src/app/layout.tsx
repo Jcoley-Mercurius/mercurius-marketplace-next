@@ -8,6 +8,7 @@ import { MotionProvider } from "@/components/providers/MotionProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { LIGHT_ONLY_LAUNCH } from "@/components/theme/themeMode";
 import { SiteAnalytics } from "@/components/providers/SiteAnalytics";
+import { AnalyticsConsent } from "@/components/analytics/AnalyticsConsent";
 
 export const metadata: Metadata = {
   title: "Mercurius Marketplace",
@@ -33,6 +34,7 @@ export default function RootLayout({
             <AuthProvider>
               {children}
               <Toaster />
+              <AnalyticsConsent />
             </AuthProvider>
           </ThemeProvider>
         </MotionProvider>

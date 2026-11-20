@@ -4,7 +4,7 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 
-const LAST_UPDATED = "August 5, 2026";
+const LAST_UPDATED = "November 19, 2026";
 
 const sections = [
   ["scope", "1. Scope of This Policy"],
@@ -121,6 +121,12 @@ export default function PrivacyPolicyPage() {
                 <p>
                   We and the providers that help operate the Platform may use cookies, local storage, and similar technologies for authentication, security, preferences, performance, and basic usage measurement. Browser controls may allow you to block or delete these technologies, but disabling essential storage may prevent account or Platform features from working correctly.
                 </p>
+                <div id="usage-analytics" className="scroll-mt-24">
+                  <h3>Optional usage analytics</h3>
+                  <p>With your permission, we use PostHog to understand visits, navigation, selected button clicks, signup and service-request outcomes, and the marketing campaigns that bring visitors to Mercurius. Signed-in activity may be linked using an internal account identifier. We do not send names, email addresses, phone numbers, service addresses, messages, passwords, payment details, or uploaded documents to this analytics integration.</p>
+                  <p>Optional session replay samples interactions on public pages. We mask inputs and text, block images and embedded content, and exclude private account, payment, document and form pages. Recordings are kept for 30 days. Console logs and network request bodies are not recorded.</p>
+                  <p>You can allow or decline optional usage analytics, and change your choice through “Analytics preferences” in the footer. Until you allow it, PostHog does not initialize or collect activity. Declining stops future collection and clears PostHog identifiers on this browser; it does not delete previously collected data. We honor Global Privacy Control and Do Not Track signals. Essential authentication and security storage continues to work independently. Our existing basic Vercel pageview measurement remains separate.</p>
+                </div>
               </PolicySection>
 
               <PolicySection id="choices" title="7. Your Choices & Privacy Requests">
