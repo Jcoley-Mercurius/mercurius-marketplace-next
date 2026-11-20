@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getBrowserEnvironment } from "@/lib/env/browser";
 import { outcomeState } from "@/lib/applicationNotifications";
+import { buildCorrelationTags } from "@/lib/emailEvidence/correlationTags";
 import { sendNotificationEmail, type NotificationResult } from "@/lib/ownerNotifications";
 
 // DEC-2026-041 item 6: when no vendor account is bound to a provider, a price sent for
@@ -13,8 +14,10 @@ import { sendNotificationEmail, type NotificationResult } from "@/lib/ownerNotif
 
 export type DraftEmailMode = "initial" | "resend";
 
+// pricing_claim_draft_email also returns the claimed notice's ID (migration 20261018004000);
+// TRACE-155 (7.3C-2) tags the attempt with exactly that notice.
 type Claim =
-  | { claimed: true; claim_id: string; attempt: number; recipient: string; vendor_name: string }
+  | { claimed: true; claim_id: string; attempt: number; notice_id: string; recipient: string; vendor_name: string }
   | { claimed: false; state: string };
 
 export type DraftEmailOutcome =
@@ -61,8 +64,17 @@ export async function deliverDraftEmail(
 
   let siteUrl = DEFAULT_SITE_URL;
   try { siteUrl = getBrowserEnvironment().siteUrl ?? DEFAULT_SITE_URL; } catch { /* keep the default */ }
+  // TRACE-155 (7.3C-2): the tag names the notice this claim locked, as the claim returned it:
+  // never the draft ID, and never a later lookup of the draft's current revision, which may have
+  // moved on while this email was in flight. An invalid claimed value sends untagged, as before.
+  const tags = buildCorrelationTags("package_draft", claim.notice_id, claim.attempt);
+  if (!tags) console.warn("Price approval email sent without correlation tags", { draftId, attempt: claim.attempt });
   const result: NotificationResult = await send(
-    { ...draftEmailMessage(claim.vendor_name, siteUrl), idempotencyKey: draftEmailKey(draftId, claim.attempt) },
+    {
+      ...draftEmailMessage(claim.vendor_name, siteUrl),
+      idempotencyKey: draftEmailKey(draftId, claim.attempt),
+      ...(tags ? { tags } : {}),
+    },
     claim.recipient,
   );
   const state = outcomeState(result);

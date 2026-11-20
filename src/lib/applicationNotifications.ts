@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { buildCorrelationTags } from "@/lib/emailEvidence/correlationTags";
 import { sendOwnerNotification, type NotificationResult } from "@/lib/ownerNotifications";
 import {
   createCorrelationId,
@@ -118,10 +119,24 @@ export async function deliverApplicationNotification(
   const attempt = claim.attempt;
   logOperationalEvent({ ...context, attempt, event: "application_notification.claimed", outcome: "claimed" });
 
+  // TRACE-155 (7.3C-2): tag this attempt with its ledger row. The application ledger's key is
+  // the application_id, so no lookup is needed; the attempt is the successful claim's. Invalid
+  // inputs send untagged, exactly as before, and never block the send.
+  const tags = buildCorrelationTags("application", applicationId, attempt);
+  if (!tags) {
+    logOperationalEvent({
+      ...context,
+      attempt,
+      event: "application_notification.correlation_unavailable",
+      errorCode: "correlation_ref_unavailable",
+    });
+  }
+
   const sendStarted = Date.now();
   const result = await send({
     ...applicationNotificationMessage(claim.application),
     idempotencyKey: applicationNotificationKey(applicationId, attempt),
+    ...(tags ? { tags } : {}),
   });
   const state = outcomeState(result);
   logOperationalEvent({

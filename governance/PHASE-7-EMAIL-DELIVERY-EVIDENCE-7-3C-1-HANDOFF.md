@@ -5,6 +5,8 @@
 > - The "decisions needed" are settled. Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770) cleared this handoff for local, dormant implementation and accepted C3C-1..C3C-6 with five integration requirements (§6 item 2, §7).
 >
 > The §3.3 amendment is now in the governing plan (§7.3, §7.5, §13.3, S-57 and §18.3). Implementation: [7.3C-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1.md), under the same TRACE-155. Push provenance, the preflight record, the 503 probe, EO-1..EO-8 and every carried item remain open.
+>
+> **Correction (2026-11-19 ET, later):** the "nothing here is implemented" status is superseded. 7.3C-1 was implemented in #180, which merged as `main` `9e7fd39` (PR CI 44628358534 and main CI 44638058722 succeeded), and Codex reviewed it retrospectively in [5985392153](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/180#pullrequestreview-5985392153) with no blocking finding. The deferred application and price-draft work is the [7.3C-2 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-2.md).
 
 **Status: PROPOSED SLICE, documentation only.** Nothing here is implemented. It defines the smallest first 7.3C slice for Codex review. It is not a plan revision, an implementation authorization, a hosted action or an owner decision.
 **Base:** `main` `e25e7f849a4c18f44e9a71e5bd5fb94ffaed631b` (#169 merged). Branch `claude/phase7-3c1-evidence-readback-handoff`.

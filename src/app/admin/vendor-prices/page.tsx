@@ -106,7 +106,7 @@ function VendorPricesContent() {
       actions={<div className="flex flex-wrap gap-2"><PackageDraftEditor vendors={vendors} services={services} onSaved={() => load(false)} /><PackageContentEditor vendors={vendors} services={services} onSaved={() => load(false)} /><PackageTemplateStart vendors={vendors} onCreated={() => load(false)} /><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button></div>} />
 
     <Card><CardHeader><CardTitle>Draft prices</CardTitle><CardDescription>Prices Mercurius is preparing for a vendor. Not visible to customers until published with a reason. Sending one to the vendor for approval first is optional.</CardDescription></CardHeader>
-      <CardContent><PackageDraftList drafts={scopedDrafts} services={services} showVendor={!vendorFilter} onChanged={() => load(false)} /></CardContent></Card>
+      <CardContent><PackageDraftList drafts={scopedDrafts} services={services} showVendor={!vendorFilter} showEvidenceCounts={!vendorFilter} onChanged={() => load(false)} /></CardContent></Card>
 
     <div className="flex flex-col gap-3 sm:flex-row">
       <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search vendor prices" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search vendor, service or package..." className="bg-card pl-9" /></div>

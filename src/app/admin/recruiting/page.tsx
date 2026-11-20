@@ -1,15 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, Mail, RefreshCw, Store, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { AdminError, AdminLoading } from "@/components/admin/AdminPageState";
+import { DeliveryEvidence, DeliveryEvidenceCounts } from "@/components/admin/DeliveryEvidence";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmAction } from "@/components/ui/confirm-action";
 import { createClient } from "@/lib/supabase/client";
+import {
+  evidenceBatches,
+  type ApplicationEmailEvidence,
+  type ApplicationEmailEvidenceItem,
+  type ScopedEvidenceCounts,
+} from "@/lib/emailEvidence/readback";
 import {
   invitationReasonLabel,
   listingBlockers,
@@ -72,15 +79,40 @@ const notificationTone: Record<string, string> = {
 
 // TRACE-104 (R0.4): the operator's daily recruiting check. Every read and command is
 // admin-only in the database; this page only presents it.
+//
+// TRACE-155 (Phase 7.3C-2): the provider delivery evidence for exactly the visible application
+// emails is read from application_email_evidence (in reads of at most 100), and the additive
+// counts from application_email_evidence_counts. The database decides every rule, flag and
+// exclusion; the page only labels them. Evidence never gates a resend or acknowledgement, and a
+// failed evidence read leaves the list and its actions unchanged. A response for an earlier load
+// is discarded.
 export default function AdminRecruitingPage() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const [showAllListings, setShowAllListings] = useState(false);
+  const [evidence, setEvidence] = useState<Record<string, ApplicationEmailEvidenceItem>>({});
+  const [evidenceFailed, setEvidenceFailed] = useState(false);
+  const [evidenceCounts, setEvidenceCounts] = useState<ScopedEvidenceCounts | null>(null);
+  const [countsFailed, setCountsFailed] = useState(false);
+  const generation = useRef(0);
+  const requested = useRef(new Set<string>());
 
   const load = useCallback(async () => {
+    const ticket = ++generation.current;
+    requested.current = new Set();
+    setEvidence({});
+    setEvidenceFailed(false);
+    setCountsFailed(false);
     setError("");
     const supabase = createClient();
+    void Promise.resolve(supabase.rpc("application_email_evidence_counts")).then(
+      ({ data: counts, error: countsError }) => {
+        if (ticket !== generation.current) return;
+        if (countsError) { setEvidenceCounts(null); setCountsFailed(true); } else setEvidenceCounts(counts as ScopedEvidenceCounts);
+      },
+      () => { if (ticket === generation.current) { setEvidenceCounts(null); setCountsFailed(true); } },
+    );
     try {
       const [notifications, invitations, listings, access] = await Promise.all([
         supabase.rpc("r0_application_notification_overview"),
@@ -109,7 +141,30 @@ export default function AdminRecruitingPage() {
   }, [load]);
 
   const attention = useMemo(() => data?.notifications.filter((item) => item.needs_attention) ?? [], [data]);
-  const visibleNotifications = showAllNotifications ? data?.notifications ?? [] : attention;
+  const visibleNotifications = useMemo(
+    () => (showAllNotifications ? data?.notifications ?? [] : attention),
+    [showAllNotifications, data, attention],
+  );
+
+  // Evidence for the rows on screen that have not been read in this load.
+  useEffect(() => {
+    const ticket = generation.current;
+    const ids = visibleNotifications.map((item) => item.application_id).filter((id) => !requested.current.has(id));
+    if (ids.length === 0) return;
+    for (const id of ids) requested.current.add(id);
+    const supabase = createClient();
+    for (const batch of evidenceBatches(ids)) {
+      void Promise.resolve(supabase.rpc("application_email_evidence", { p_applications: batch })).then(
+        ({ data: result, error: evidenceError }) => {
+          if (ticket !== generation.current) return;
+          if (evidenceError) { setEvidenceFailed(true); return; }
+          const items = (result as ApplicationEmailEvidence).items;
+          setEvidence((current) => ({ ...current, ...Object.fromEntries(items.map((item) => [item.application_id, item])) }));
+        },
+        () => { if (ticket === generation.current) setEvidenceFailed(true); },
+      );
+    }
+  }, [visibleNotifications]);
   const listed = useMemo(() => data?.listings.filter((item) => item.listable) ?? [], [data]);
   const review = useMemo(
     () => data?.listings.filter((item) => item.test_signal && !item.excluded) ?? [],
@@ -184,6 +239,8 @@ export default function AdminRecruitingPage() {
         <Summary label="Providers listed publicly" value={listed.length} note={review.length ? `${review.length} to review` : undefined} alert={review.length > 0} />
       </div>
 
+      <DeliveryEvidenceCounts counts={evidenceCounts} failed={countsFailed} scope="Application emails" rowNoun="Applications" />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg"><Mail className="h-5 w-5 text-accent" />Application emails</CardTitle>
@@ -193,12 +250,17 @@ export default function AdminRecruitingPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <Toggle shown={showAllNotifications} onChange={setShowAllNotifications} all={data.notifications.length} label="applications" />
+          {evidenceFailed && (
+            <p role="alert" className="text-sm text-status-warning">
+              Delivery evidence could not be loaded. The email states and actions below are unaffected. Refresh to try again.
+            </p>
+          )}
           {visibleNotifications.length === 0 ? (
             <p role="status" className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
               {showAllNotifications ? "No vendor applications yet." : "No application emails need attention."}
             </p>
           ) : (
-            <ul className="divide-y divide-border rounded-xl border border-border">
+            <ul className="divide-y divide-border rounded-xl border border-border" aria-label="Application emails">
               {visibleNotifications.map((item) => (
                 <li key={item.application_id} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
                   <div className="min-w-0 flex-1">
@@ -216,6 +278,7 @@ export default function AdminRecruitingPage() {
                     </p>
                     {item.last_error && <p className="mt-1 break-words text-xs text-destructive">{item.last_error}</p>}
                     {item.acknowledged_reason && <p className="mt-1 break-words text-xs text-muted-foreground">Reason: {item.acknowledged_reason}</p>}
+                    {evidence[item.application_id] && <DeliveryEvidence evidence={evidence[item.application_id]} />}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link href={`/admin/applications?application=${item.application_id}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border px-3 text-sm hover:bg-muted">

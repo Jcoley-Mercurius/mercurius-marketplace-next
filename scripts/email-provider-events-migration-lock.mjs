@@ -14,6 +14,10 @@
 //    receipt table's row type, so they are dropped before step 1 and that unchanged file is
 //    re-applied after step 4, proving it still applies on top. Its function list is read from
 //    the file's own revoke block.
+// 6. TRACE-155 (7.3C-2): the ledger-evidence migration's functions call the 7.3C-1 functions and
+//    read the receipt table. They take no receipt row type, so nothing in the catalog forces the
+//    drop, but they are dropped first and that unchanged file is re-applied after 7.3C-1, proving
+//    the whole chain still applies on top of the restored 7.3B objects, with its grants.
 // Run against a disposable isolated database only; CI runs a clean reset afterwards.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -25,6 +29,10 @@ const readback = readFileSync('supabase/migrations/20261125002000_phase7_email_e
 const readbackFunctions = readback.match(/revoke all on function\n([\s\S]*?)\nfrom public/)[1]
   .split(',\n').map(signature => signature.trim());
 assert.equal(readbackFunctions.length, 10, 'the 7.3C-1 migration revokes its ten functions in one block');
+const ledgers2 = readFileSync('supabase/migrations/20261127001000_phase7_email_evidence_ledgers.sql', 'utf8');
+const ledgerFunctions = ledgers2.match(/revoke all on function\n([\s\S]*?)\nfrom public/)[1]
+  .split(',\n').map(signature => signature.trim());
+assert.equal(ledgerFunctions.length, 9, 'the 7.3C-2 migration revokes its nine functions in one block');
 function psql(source, { stopOnError = true } = {}) {
   return new Promise((resolve, reject) => {
     const args = ['exec', '-i', container, 'psql', '-X', '-q', '-At', '-v', `ON_ERROR_STOP=${stopOnError ? 1 : 0}`, '-U', 'postgres', '-d', 'postgres'];
@@ -57,6 +65,9 @@ const objects = `select num_nonnulls(
 assert.equal(await sql('select count(*) from private.email_provider_events'), '0', 'Run on an empty receipt table (before other fixtures).');
 const readbackPresent = `select num_nonnulls(${readbackFunctions.map(signature => `to_regprocedure('${signature}')`).join(', ')})`;
 assert.equal(await sql(readbackPresent), '10', 'the 7.3C-1 readback functions are present before the test');
+const ledgerPresent = `select num_nonnulls(${ledgerFunctions.map(signature => `to_regprocedure('${signature}')`).join(', ')})`;
+assert.equal(await sql(ledgerPresent), '9', 'the 7.3C-2 ledger-evidence functions are present before the test');
+await sql(`drop function ${ledgerFunctions.join(', ')};`);
 await sql(`drop function ${readbackFunctions.join(', ')};`);
 await sql(`begin;
 drop table private.email_provider_events, private.email_provider_event_purges, private.email_evidence_config;
@@ -102,4 +113,12 @@ assert.equal(await sql(readbackPresent), '10', 'the unchanged 7.3C-1 migration r
 assert.equal(await sql(`select has_function_privilege('authenticated','public.owner_email_evidence(text,uuid[])','EXECUTE')
   and has_function_privilege('service_role','public.owner_email_correlation_ref(text,uuid)','EXECUTE')
   and not has_function_privilege('anon','public.owner_email_evidence_counts()','EXECUTE')`), 't', 'with its grants');
+await sql(`begin;\n${ledgers2}\ncommit;`);
+assert.equal(await sql(ledgerPresent), '9', 'the unchanged 7.3C-2 migration re-applies on top of 7.3C-1');
+assert.equal(await sql(`select has_function_privilege('authenticated','public.application_email_evidence(uuid[])','EXECUTE')
+  and has_function_privilege('authenticated','public.package_draft_email_evidence_counts()','EXECUTE')
+  and not has_function_privilege('anon','public.application_email_evidence_counts()','EXECUTE')
+  and not has_function_privilege('service_role','public.package_draft_email_evidence(uuid[])','EXECUTE')
+  and not has_function_privilege('authenticated','private.email_evidence_ledger_row(text,uuid)','EXECUTE')`), 't', 'with its grants');
+assert.equal(await sql(`select (private.email_evidence_global_counts()->>'receiver_armed')::boolean`), 'f', 'and its functions run against the restored objects');
 console.log('email provider events migration lock PASS');
