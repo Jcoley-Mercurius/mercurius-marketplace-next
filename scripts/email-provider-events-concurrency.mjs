@@ -5,7 +5,8 @@
 // and in free races (S-58), and that concurrent purges never wait on each other (S-61). Run
 // only against a disposable isolated database after a clean reset (CI runs it on the Phase 5
 // synthetic stack). Synthetic data only; nothing is sent. Leaves fixtures; a clean reset
-// follows in CI.
+// follows in CI. TRACE-155 (7.3C-2) adds the S-37 race on application rows and price-draft
+// notices, the latter through a concurrent revision change.
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 
@@ -244,4 +245,71 @@ for (let round = 0; round < 24; round++) {
   }
 }
 console.log(`S-37 race PASS: 24 rounds (12 agreeing, 12 differing); agreeing receipts linked ${JSON.stringify(racing)}, all trusted; differing ones always current_conflict; never linked to another row`);
+
+// S-37 race on the 7.3C-2 ledgers. Application rows are tagged with their application_id;
+// price-draft notices with the claimed notice_id. Each round races the tagged callback against
+// the outcome record (same or different provider ID). On price drafts the operator also moves
+// the draft to a new revision in the same instant, so the claimed notice is no longer current:
+// the receipt must still link to the claimed notice, never to the new revision's notice.
+const appId = n => `7e552000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const draftId = n => `7e553000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const contractor = '7e553000-0000-4000-8000-000000000000';
+await sql(`alter table public.vendor_applications disable trigger vendor_version_intake;
+insert into public.vendor_applications(id,business_name,first_name,last_name,email,phone)
+  select ('7e552000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'Synthetic Racer '||n,'Ann','Racer','evidence-racer@example.test','synthetic'
+    from generate_series(1,24) n;
+alter table public.vendor_applications enable trigger vendor_version_intake;
+insert into public.contractors(id,name,email) values ('${contractor}','Synthetic Race Draft Co','evidence-race-draft@example.test');
+insert into private.operator_package_drafts(id,contractor_id,service_id,name,prices,created_by,updated_by,content,content_hash,approval_state,sent_hash,sent_at)
+  select ('7e553000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${contractor}',(select id from public.services_catalog order by id limit 1),
+    'Synthetic race draft '||n,'[{"price":100}]','${operator}','${operator}','{}','h1','sent','h1',now() from generate_series(1,24) n;
+insert into private.package_draft_email_notices(draft_id,revision)
+  select ('7e553000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'h1' from generate_series(1,24) n;`);
+const ledgerRacing = { application: { tag_only: 0, tag_and_id: 0 }, package_draft: { tag_only: 0, tag_and_id: 0 } };
+for (let round = 1; round <= 24; round++) {
+  const agree = round % 2 === 0;
+  // Application.
+  const appClaim = JSON.parse(await sql(as('service_role', null, `select public.r0_claim_application_notification('${appId(round)}','initial')`)));
+  assert.equal(appClaim.attempt, 1);
+  const appEmail = `em-s37-app-${round}`;
+  const [appReceived, appRecorded] = await Promise.all([
+    settle(receive({ id: `msg-s37-app-${round}`, email: appEmail, tags: 'valid', ledger: 'application', ref: appId(round), attempt: appClaim.attempt })),
+    settle(sql(as('service_role', null, `select public.r0_record_application_notification('${appId(round)}','${appClaim.claim_id}','sent','${agree ? appEmail : `${appEmail}-other`}',null)`))),
+  ]);
+  assert.ok(appReceived.ok && appRecorded.ok, `application round ${round}: both commit (${appReceived.error ?? appRecorded.error ?? ''})`);
+  const [appClass, appLinked] = (await sql(`select identity_class||'|'||coalesce(application_notification::text,'none')
+    from private.email_provider_events where svix_id='msg-s37-app-${round}'`)).split('|');
+  assert.ok(appClass === 'tag_only' || appClass === 'tag_and_id', `application round ${round}: linked by its tag (${appClass})`);
+  assert.equal(appLinked, appId(round), `application round ${round}: linked to its own row, never another`);
+  if (agree) ledgerRacing.application[appClass] += 1; else assert.equal(appClass, 'tag_only', `application round ${round}: a different ID can only be tag_only`);
+  const appItem = JSON.parse(await sql(as('authenticated', operator, `select public.application_email_evidence(array['${appId(round)}']::uuid[])`))).items[0];
+  assert.equal(appItem.summary.rule, agree ? 4 : 10, `application round ${round}: trusted only when the IDs agree`);
+  assert.deepEqual(appItem.conflict_reasons, agree ? [] : ['current_conflict'], `application round ${round}: a disagreement is a current conflict`);
+
+  // Price draft, with a concurrent revision change.
+  const draftClaim = JSON.parse(await sql(as('service_role', null, `select public.pricing_claim_draft_email('${draftId(round)}','initial')`)));
+  const claimedNotice = draftClaim.notice_id;
+  assert.equal(claimedNotice, await sql(`select id from private.package_draft_email_notices where draft_id='${draftId(round)}' and revision='h1'`));
+  const draftEmail = `em-s37-draft-${round}`;
+  const [draftReceived, draftRecorded, revised] = await Promise.all([
+    settle(receive({ id: `msg-s37-draft-${round}`, email: draftEmail, tags: 'valid', ledger: 'package_draft', ref: claimedNotice, attempt: draftClaim.attempt })),
+    settle(sql(as('service_role', null, `select public.pricing_record_draft_email('${draftId(round)}','${draftClaim.claim_id}','sent','${agree ? draftEmail : `${draftEmail}-other`}',null)`))),
+    settle(sql(`begin; update private.operator_package_drafts set content_hash='h2', sent_hash='h2', sent_at=now() where id='${draftId(round)}';
+      insert into private.package_draft_email_notices(draft_id,revision) values ('${draftId(round)}','h2'); commit;`)),
+  ]);
+  assert.ok(draftReceived.ok && draftRecorded.ok && revised.ok, `price draft round ${round}: all commit (${draftReceived.error ?? draftRecorded.error ?? revised.error ?? ''})`);
+  const [draftClass, draftLinked] = (await sql(`select identity_class||'|'||coalesce(package_draft_notice::text,'none')
+    from private.email_provider_events where svix_id='msg-s37-draft-${round}'`)).split('|');
+  assert.ok(draftClass === 'tag_only' || draftClass === 'tag_and_id', `price draft round ${round}: linked by its tag (${draftClass})`);
+  assert.equal(draftLinked, claimedNotice, `price draft round ${round}: linked to the claimed revision's notice, not the new one`);
+  if (agree) ledgerRacing.package_draft[draftClass] += 1; else assert.equal(draftClass, 'tag_only', `price draft round ${round}: a different ID can only be tag_only`);
+  const notices = JSON.parse(await sql(as('authenticated', operator, `select public.package_draft_email_evidence(array['${draftId(round)}']::uuid[])`))).items[0].notices;
+  const current = notices.find(notice => notice.current);
+  const earlier = notices.find(notice => !notice.current);
+  assert.equal(current.attempt, 0, `price draft round ${round}: the new revision's notice was never claimed`);
+  assert.equal(current.summary.rule, 10, `price draft round ${round}: and holds no evidence`);
+  assert.equal(earlier.summary.rule, agree ? 4 : 10, `price draft round ${round}: the claimed notice is trusted only when the IDs agree`);
+  assert.deepEqual(earlier.conflict_reasons, agree ? [] : ['current_conflict'], `price draft round ${round}: a disagreement is a current conflict`);
+}
+console.log(`S-37 race on the 7.3C-2 ledgers PASS: 24 rounds each; agreeing receipts linked ${JSON.stringify(ledgerRacing)}, all trusted; differing ones always current_conflict; price-draft receipts always on the claimed notice through a concurrent revision change`);
 console.log('email provider events concurrency PASS');

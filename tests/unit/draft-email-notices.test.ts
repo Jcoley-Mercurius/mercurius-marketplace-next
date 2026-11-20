@@ -17,7 +17,8 @@ function fakeClient(responses: Record<string, { data?: unknown; error?: { code?:
   return { client: client as unknown as SupabaseClient, calls };
 }
 
-const claimed = { claimed: true, claim_id: "claim-1", attempt: 1, recipient: "contact@example.test", vendor_name: "Synthetic  Cans" };
+const noticeId = "33333333-3333-4333-8333-333333333333";
+const claimed = { claimed: true, claim_id: "claim-1", attempt: 1, notice_id: noticeId, recipient: "contact@example.test", vendor_name: "Synthetic  Cans" };
 
 describe("draft email notice", () => {
   it("names no price, says email is not approval and points to the linked account", () => {
@@ -42,7 +43,8 @@ describe("draft email notice", () => {
     const { client, calls } = fakeClient({ pricing_claim_draft_email: { data: claimed } });
     const send = vi.fn(async () => ({ ok: true as const, id: "msg_1" }));
     expect(await deliverDraftEmail(client, draftId, "initial", send)).toEqual({ state: "sent", attempt: 1 });
-    expect(send).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: draftEmailKey(draftId, 1) }), "contact@example.test");
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: draftEmailKey(noticeId, 1) }), "contact@example.test");
+    expect(draftEmailKey(noticeId, 1)).toBe(`package-draft-email:v2:${noticeId}:1`);
     expect(calls[1]).toEqual({ name: "pricing_record_draft_email",
       args: { p_draft: draftId, p_claim: "claim-1", p_outcome: "sent", p_provider_id: "msg_1", p_error: null } });
   });

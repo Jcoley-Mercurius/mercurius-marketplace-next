@@ -79,6 +79,20 @@ const server = createServer(async (request, response) => {
       status: "accepted", dispatch_state: "provider_accepted", expires_at: new Date(now.getTime() + 86400000).toISOString(),
       accepted: true, attention: "awaiting_binding" },
   ] });
+  // TRACE-155 (7.3C-2): delivery evidence as production reads until 7.3D arms the receiver: every
+  // tracked row reads rule 10 and every count is zero. Specs override per case.
+  if (/\/rpc\/(application|package_draft)_email_evidence(_counts)?$/.test(url.pathname) && user.testRole !== "admin") {
+    return send({ message: "Onboarding operator required", code: "42501" }, 403);
+  }
+  if (url.pathname === "/rest/v1/rpc/application_email_evidence") return send({ checked_at: now.toISOString(),
+    items: (body?.p_applications ?? []).filter(id => /^00000000-0000-4000-8000-00000000005[0-2]$/.test(id)).map(id => ({
+      application_id: id, attempt: 1, has_conflict: false, conflict_reasons: [], attempts: [],
+      summary: { rule: 10, delivered_fact: false, non_delivery_proven: false, needs_review: false, reported: [] } })) });
+  if (url.pathname === "/rest/v1/rpc/package_draft_email_evidence") return send({ checked_at: now.toISOString(), items: [] });
+  if (/\/rpc\/(application|package_draft)_email_evidence_counts$/.test(url.pathname)) return send({ checked_at: now.toISOString(),
+    ledger: { not_delivered: 0, to_review: 0, conflicting_rows: 0 },
+    all_emails: { receiver_armed: false, conflicting_reports: { conflict_disagree: 0, conflict_id_ambiguous: 0, conflict_tag_invalid: 0, content_conflict: 0 },
+      unmatched_reports: { total: 0, by_type: {} }, retention_backlog: { expired: 0, expired_over_cap: false, oldest_expires_at: null } } });
   if (url.pathname === "/rest/v1/rpc/r0_application_notification_overview") return send({ checked_at: now.toISOString(), stale_after_minutes: 10, items: [
     { application_id: "00000000-0000-4000-8000-000000000050", business_name: "Synthetic Applicant Services", application_status: "pending",
       submitted_at: now.toISOString(), state: "failed", attempts: 1, last_error: "Resend returned 422: invalid from address.", sent_at: null,

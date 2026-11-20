@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { History, Plus, Send } from "lucide-react";
 import { toast } from "sonner";
+import { DeliveryEvidence, DeliveryEvidenceCounts, formatEvidenceTime } from "@/components/admin/DeliveryEvidence";
 import { PackageContentEditor } from "@/components/admin/PackageContentEditor";
 import { PackageContentSummary } from "@/components/pricing/PackageContentSummary";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,12 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  evidenceBatches,
+  type PackageDraftEmailEvidence,
+  type PackageDraftEmailEvidenceItem,
+  type ScopedEvidenceCounts,
+} from "@/lib/emailEvidence/readback";
 import { formatCorrectionTime, frequencyLabel } from "@/lib/packagePriceCorrections";
 import {
   approvalStateLabel,
@@ -368,15 +375,70 @@ export function PackageTemplateStart({ contractorId, vendors, onCreated }: { con
   </Dialog>;
 }
 
+/**
+ * TRACE-155 (Phase 7.3C-2): provider delivery evidence for the listed drafts' email notices,
+ * from package_draft_email_evidence (in reads of at most 100), and optionally the additive
+ * counts. The database decides every rule, flag and exclusion. Evidence never gates a send,
+ * resend or publish; a failed read leaves the drafts and their actions unchanged. It re-reads when
+ * the listed drafts, their revision or their email state change (so after a send or resend), and a
+ * response for an earlier list is discarded. The key is a string, so a filtered list rebuilt on
+ * each render does not re-read.
+ */
+function useDraftEmailEvidence(drafts: PackageDraft[], withCounts: boolean) {
+  const [evidence, setEvidence] = useState<Record<string, PackageDraftEmailEvidenceItem>>({});
+  const [evidenceFailed, setEvidenceFailed] = useState(false);
+  const [counts, setCounts] = useState<ScopedEvidenceCounts | null>(null);
+  const [countsFailed, setCountsFailed] = useState(false);
+  const generation = useRef(0);
+  const key = drafts.map((draft) => [draft.id, draft.updatedAt, draft.revision, draft.approvalState, draft.delivery.email].join("|")).join(",");
+  useEffect(() => {
+    const ticket = ++generation.current;
+    const ids = key ? key.split(",").map((entry) => entry.split("|")[0]) : [];
+    const supabase = createClient();
+    const results: Record<string, PackageDraftEmailEvidenceItem> = {};
+    let failed = false;
+    void Promise.all(evidenceBatches(ids).map((batch) =>
+      Promise.resolve(supabase.rpc("package_draft_email_evidence", { p_drafts: batch })).then(
+        ({ data, error }) => {
+          if (error) { failed = true; return; }
+          for (const item of (data as PackageDraftEmailEvidence).items) results[item.draft_id] = item;
+        },
+        () => { failed = true; },
+      ))).then(() => {
+      if (ticket !== generation.current) return;
+      setEvidence(results);
+      setEvidenceFailed(failed);
+    });
+    if (withCounts) {
+      void Promise.resolve(supabase.rpc("package_draft_email_evidence_counts")).then(
+        ({ data, error }) => {
+          if (ticket !== generation.current) return;
+          setCounts(error ? null : data as ScopedEvidenceCounts);
+          setCountsFailed(Boolean(error));
+        },
+        () => { if (ticket === generation.current) { setCounts(null); setCountsFailed(true); } },
+      );
+    }
+  }, [key, withCounts]);
+  return { evidence, evidenceFailed, counts, countsFailed };
+}
+
 /** Open drafts with edit, send, publish, history and discard. */
-export function PackageDraftList({ drafts, services, showVendor, onChanged }: {
+export function PackageDraftList({ drafts, services, showVendor, onChanged, showEvidenceCounts = false }: {
   drafts: PackageDraft[];
   services: DraftService[];
   showVendor: boolean;
   onChanged: () => Promise<void> | void;
+  /** Shows the ledger-wide price-notice evidence counts (the all-vendors view). */
+  showEvidenceCounts?: boolean;
 }) {
+  const { evidence, evidenceFailed, counts, countsFailed } = useDraftEmailEvidence(drafts, showEvidenceCounts);
   if (!drafts.length) return <p className="text-sm text-muted-foreground">No draft prices.</p>;
-  return <ul className="space-y-3">{drafts.map((draft) => <li key={draft.id} className="space-y-3 rounded-lg border border-dashed p-4">
+  return <div className="space-y-3">
+  {showEvidenceCounts && <DeliveryEvidenceCounts counts={counts} failed={countsFailed} scope="Price-approval email notices" rowNoun="Notices" />}
+  {evidenceFailed && <p role="alert" className="text-sm text-status-warning">
+    Email notice delivery evidence could not be loaded. The drafts and their actions below are unaffected. Refresh to try again.</p>}
+  <ul className="space-y-3" aria-label="Draft prices">{drafts.map((draft) => <li key={draft.id} className="space-y-3 rounded-lg border border-dashed p-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 space-y-1">
         <p className="font-medium break-words">{showVendor ? `${draft.contractorName} · ` : ""}{draft.name}</p>
@@ -413,7 +475,25 @@ export function PackageDraftList({ drafts, services, showVendor, onChanged }: {
         : `${draft.vendorLink.blocker}${draft.vendorLink.linked ? "" : " and no contact email is on file"}. Nothing can be sent for approval; you can still publish. To ask for approval, bind their account from the vendor page first.`}</p>}
     {draft.approvalState === "sent" && draft.delivery.status === "emailed" && draft.delivery.emailError && emailNeedsAttention(draft.delivery.email) &&
       <p role="alert" className="text-sm text-status-warning">Email error: {draft.delivery.emailError}</p>}
+    <DraftNoticeEvidence item={evidence[draft.id]} />
     {draft.changeRequest && draft.approvalState === "changes_requested" && <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm"><p className="font-medium">The vendor asked for changes</p><p className="whitespace-pre-line">{draft.changeRequest}</p></div>}
     <PackageContentSummary content={draft.content} internalNotes={draft.internalNotes} />
-  </li>)}</ul>;
+  </li>)}</ul>
+  </div>;
+}
+
+/**
+ * The email notice evidence of one draft: the notice of its sent revision, and any earlier
+ * revision's notice that has a provider report or conflict. Each notice keeps its own attempts.
+ */
+function DraftNoticeEvidence({ item }: { item: PackageDraftEmailEvidenceItem | undefined }) {
+  if (!item) return null;
+  const current = item.notices.find((notice) => notice.current);
+  const earlier = item.notices.filter((notice) => !notice.current && (notice.attempts.length > 0 || notice.has_conflict));
+  if (!current && earlier.length === 0) return null;
+  return <div>
+    {current && <DeliveryEvidence evidence={current} label="Email notice delivery evidence" />}
+    {earlier.map((notice, index) => <DeliveryEvidence key={`${notice.queued_at}-${index}`} evidence={notice}
+      label={`Earlier revision's email notice (queued ${formatEvidenceTime(notice.queued_at)})`} />)}
+  </div>;
 }

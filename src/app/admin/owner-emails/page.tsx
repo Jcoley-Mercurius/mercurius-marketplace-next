@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Eye, EyeOff, History, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AdminError, AdminLoading } from "@/components/admin/AdminPageState";
+import { DeliveryEvidence, DeliveryEvidenceCounts } from "@/components/admin/DeliveryEvidence";
 import { ContactSubmissionDetail } from "@/components/admin/ContactSubmissionDetail";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -30,14 +31,7 @@ import {
   type OwnerEmailItem,
   type OwnerEmailOverview,
 } from "@/lib/ownerEmails";
-import {
-  bounceSubtypeLabel,
-  conflictSignalLabels,
-  evidenceFactLabel,
-  evidenceIsInconclusive,
-  evidenceSummaryLabel,
-  exclusionLabel,
-} from "@/lib/emailEvidence/labels";
+import { scopeOwnerEvidenceCounts } from "@/lib/emailEvidence/readback";
 import { cn } from "@/lib/utils";
 
 // TRACE-154 (Phase 7.2C): owner emails for saved contact submissions (7.2C-1) and provider
@@ -280,7 +274,7 @@ export default function AdminOwnerEmailsPage() {
         </CardContent>
       </Card>
 
-      <EvidenceCountsCard counts={evidenceCounts} failed={countsFailed} />
+      <DeliveryEvidenceCounts counts={evidenceCounts && scopeOwnerEvidenceCounts(evidenceCounts)} failed={countsFailed} scope="Owner emails" />
 
       <Card>
         <CardHeader>
@@ -382,7 +376,7 @@ function Row({ item, evidence, onResend, onAcknowledge }: {
           </p>
         )}
         {item.acknowledged_reason && <p className="mt-1 break-words text-xs text-muted-foreground">Reason: {item.acknowledged_reason}</p>}
-        {evidence && <Evidence evidence={evidence} />}
+        {evidence && <DeliveryEvidence evidence={evidence} />}
       </div>
       <div className="flex flex-wrap gap-2">
         {item.kind === "contact_submission" ? (
@@ -433,116 +427,6 @@ function Row({ item, evidence, onResend, onAcknowledge }: {
         )}
       </div>
     </li>
-  );
-}
-
-function summaryTone(summary: OwnerEmailEvidenceItem["summary"]) {
-  if (summary.non_delivery_proven) return "text-destructive";
-  if (evidenceIsInconclusive(summary)) return "text-status-warning";
-  return "text-muted-foreground";
-}
-
-/** The current attempt's evidence summary, the conflict signal and the per-attempt history. */
-function Evidence({ evidence }: { evidence: OwnerEmailEvidenceItem }) {
-  const attemptNote = evidence.attempt > 1 ? ` (attempt ${evidence.attempt})` : "";
-  return (
-    <div className="mt-2 space-y-1 text-xs" data-testid="delivery-evidence">
-      <p className="break-words">
-        <span className="font-medium">Delivery evidence{attemptNote}:</span>{" "}
-        <span className={summaryTone(evidence.summary)}>{evidenceSummaryLabel(evidence.summary)}</span>
-      </p>
-      {conflictSignalLabels(evidence.conflict_reasons).map((label) => (
-        <p key={label} className="flex items-start gap-1 break-words text-status-warning">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />{label}
-        </p>
-      ))}
-      {evidence.attempts.length > 0 && (
-        <details className="rounded-md border border-border px-3">
-          <summary className="flex min-h-11 cursor-pointer items-center font-medium">Provider report history</summary>
-          <div className="space-y-3 pb-3">
-            {evidence.attempts.map((attempt) => (
-              <div key={attempt.attempt}>
-                <p className="break-words font-medium">Attempt {attempt.attempt}: {evidenceSummaryLabel(attempt)}</p>
-                {attempt.reports.map((report, index) => (
-                  <p key={index} className="mt-1 break-words text-muted-foreground">
-                    {evidenceFactLabel[report.fact]}
-                    {report.bounce_subtype ? ` (${bounceSubtypeLabel[report.bounce_subtype]})` : ""}
-                    {" · "}Provider time {report.provider_created_at ? formatDateTime(report.provider_created_at) : "not given"}
-                    {report.excluded ? <> · <span className="font-medium text-status-warning">{exclusionLabel[report.excluded]}</span></> : null}
-                  </p>
-                ))}
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-    </div>
-  );
-}
-
-/** The additive §9.1 counts. The attention counts above are unchanged and separate. */
-function EvidenceCountsCard({ counts, failed }: { counts: OwnerEmailEvidenceCounts | null; failed: boolean }) {
-  const conflicting = counts
-    ? counts.conflicting_reports.conflict_disagree + counts.conflicting_reports.conflict_id_ambiguous
-      + counts.conflicting_reports.conflict_tag_invalid + counts.conflicting_reports.content_conflict
-    : 0;
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Delivery evidence from Resend</CardTitle>
-        <CardDescription>
-          What Resend reported after accepting an email. A hand-off to the recipient&apos;s mail server is not proof it reached the inbox or was read. These counts never change an email&apos;s state or what you can do with it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {failed ? (
-          <p role="alert" className="text-sm text-status-warning">Delivery evidence counts could not be loaded. Refresh to try again.</p>
-        ) : !counts ? (
-          <p className="text-sm text-muted-foreground">Loading delivery evidence…</p>
-        ) : (
-          <>
-            {!counts.receiver_armed && (
-              <p className="text-sm text-muted-foreground">
-                Resend delivery reports are not being collected yet, so emails show “Delivery evidence not available”.
-              </p>
-            )}
-            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <dt className="text-xs text-muted-foreground">Not delivered (Resend reported)</dt>
-                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.not_delivered}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Provider reports to review</dt>
-                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.to_review}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Emails with conflicting provider reports</dt>
-                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.conflicting_rows}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Conflicting provider reports (all emails)</dt>
-                <dd className="font-heading text-lg font-semibold tabular-nums">{conflicting}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Unmatched provider reports</dt>
-                <dd className="font-heading text-lg font-semibold tabular-nums">{counts.unmatched_reports.total}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Expired reports awaiting deletion</dt>
-                <dd className="font-heading text-lg font-semibold tabular-nums">
-                  {counts.retention_backlog.expired_over_cap ? "Over 10,000" : counts.retention_backlog.expired}
-                </dd>
-              </div>
-            </dl>
-            {counts.retention_backlog.oldest_expires_at && (
-              <p className="text-xs text-muted-foreground">
-                Oldest expired report: {formatDateTime(counts.retention_backlog.oldest_expires_at)}. Expired reports are never shown or counted above.
-              </p>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 

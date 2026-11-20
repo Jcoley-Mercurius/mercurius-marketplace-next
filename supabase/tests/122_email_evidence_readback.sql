@@ -119,8 +119,13 @@ select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pr
       'private.owner_email_refuse_untracked(text,uuid)','private.owner_email_contact_create()','public.owner_email_claim(text,uuid,text)',
       'public.owner_email_record(text,uuid,uuid,text,text,text)','public.owner_email_request_resend(text,uuid,boolean)',
       'public.owner_email_acknowledge(text,uuid,text,boolean)','public.owner_email_overview(text,boolean,timestamptz,uuid,integer)',
-      'public.owner_email_contact_submission(uuid)','private.owner_email_renewal_create()']::regprocedure[]::oid[])),0,
- 'this slice adds exactly the ten listed functions beside the 13 original owner-email functions');
+      'public.owner_email_contact_submission(uuid)','private.owner_email_renewal_create()']::regprocedure[]::oid[])
+    -- TRACE-155 (7.3C-2, 20261127001000): its five private helpers share this prefix. They are
+    -- excluded by exact signature here and tested in SQL 124.
+    and p.oid <> all(array['private.email_evidence_ledger_claimed_at(text,uuid,integer)','private.email_evidence_ledger_receipts(text,uuid)',
+      'private.email_evidence_ledger_row(text,uuid)','private.email_evidence_ledger_counts(text)',
+      'private.email_evidence_global_counts()']::regprocedure[]::oid[])),0,
+ 'this slice adds exactly the ten listed functions beside the 13 original owner-email functions (and the 7.3C-2 helpers, SQL 124)');
 select is((select string_agg(distinct p.provolatile::text, ',') from pg_proc p where p.oid in (select sig::oid from new_functions where sig::text <> 'private.email_evidence_fact(text,text)')),
  's','every read function is STABLE (none can write)');
 select is((select provolatile::text from pg_proc where oid='private.email_evidence_fact(text,text)'::regprocedure),'i','the fact mapping is IMMUTABLE');
