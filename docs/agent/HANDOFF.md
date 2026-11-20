@@ -13,8 +13,9 @@
   - unchanged: ledger, 7.2C-1, 7.3B and 7.3C-1 hashes, money fingerprint `58 | af0fae6e…`;
   - lint, types, secrets, audit and build pass.
 - **For Codex:** D-1..D-11, especially **D-3**: the price-draft key is per draft, so a re-sent revision within 24 h reuses attempt 1's key. Tagged bodies differ, so that send now returns 409 → `unknown`. Before, Resend replayed the first response and the notice was falsely recorded `sent`. Key unchanged as instructed; decision needed.
-- **Not done:** hosted dry run or push, merge, deploy, secrets, webhook, arming, email. 7.3C-1 deployment checks, 7.3B operational items, EO-1..EO-8, CFG-011 and every carried check remain open.
-- **Next:** Codex implementation review and green exact-head CI; then owner-authorized dry run and push before merge.
+- **Hosted (2026-11-19, owner instruction):** dry run listed only `20261127001000`; pushed 03:47:58–03:48:02 UTC; read-only readback matches the branch (nine functions, grants, unchanged hashes, fingerprint `58 | af0fae6e…`, 0 receipts). Record §5.1.
+- **Not done:** merge, deploy, secrets, webhook, arming, email. 7.3C-1 deployment checks, 7.3B operational items, EO-1..EO-8, CFG-011 and every carried check remain open.
+- **Next:** Codex implementation review and green exact-head CI; then merge = deploy, followed by the operator-session counts readbacks.
 
 # Phase 7.3C-1 Owner Emails correlation tags and evidence readback (TRACE-155) — 2026-11-19 ET
 

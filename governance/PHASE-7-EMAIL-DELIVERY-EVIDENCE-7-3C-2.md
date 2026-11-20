@@ -1,6 +1,6 @@
 # Phase 7.3C-2 — Application and price-draft correlation tags and delivery-evidence readbacks: implementation (TRACE-155)
 
-**Status: IMPLEMENTED on a draft PR; DORMANT.** Codex implementation review pending. Migration `20261127001000` is **not** pushed to hosted, and nothing is merged or deployed. No secret, webhook registration, receiver arming, `armed_at` write or email.
+**Status: IMPLEMENTED on draft PR #181; DORMANT.** Codex implementation review pending. **Migration `20261127001000` pushed to hosted on 2026-11-19 on the owner's instruction (§5.1)**; nothing is merged or deployed. No secret, webhook registration, receiver arming, `armed_at` write or email.
 **Authority:** the owner's 7.3C-2 implementation instruction (2026-11-19), Codex review [5985392153](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/180#pullrequestreview-5985392153) on #180 (it clears the shared 7.3C-1 source for local, dormant 7.3C-2 work), the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §7.1–§7.5, §8.3–§8.5, §9.1, §11.4 and §13.3, and the [7.3C-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1.md).
 **Branch:** `claude/phase7-3c2-application-price-draft-tags`, in its own worktree, based on `main` `9e7fd39`.
 
@@ -129,9 +129,22 @@ Everything is `STABLE` and nothing writes: no purge, flag, quarantine or arming 
 
 ## 5. Rollout and rollback
 
-Each step needs separate owner authorization:
+### 5.1 Hosted push (2026-11-19 ET, on the owner's instruction "Please go ahead and apply the migration please")
+
+| Step | Result |
+|---|---|
+| State when authorized | Draft PR #181 at `b29ac8e`; Codex implementation review **not** yet done; exact-head CI (44669132443 / 44669184392) still running |
+| Pre-check (read-only) | `supabase migration list --linked` from this worktree, which is linked to the production project: local and hosted match through `20261126001000`. Nothing is remote-only; the only local-only version is `20261127001000`. `main` was still `9e7fd39` and the worktree clean, so the push folder is this branch's own `supabase/` tree (no scratch copy needed, unlike 7.3C-1) |
+| Dry run | Listed only `20261127001000_phase7_email_evidence_ledgers.sql`; no seeds or roles |
+| Push | Applied 03:47:58–03:48:02 UTC (22:47 ET), with no lock timeout |
+| Readback (read-only) | Migration head `20261127001000` (`phase7_email_evidence_ledgers`, 13 statements). All nine functions are present, and each `md5(prosrc)` equals the isolated build of this branch. All `STABLE`. The four public functions are security definer and executable by `authenticated` only (not `anon` or `service_role`); the five private helpers run as their caller with no grants. Every function has an empty `search_path`. Unchanged: application ledger `10 \| 5f14532a…`, price draft `4 \| fddc8bb9…`, 7.3B six `6 \| 57277a24…`, 7.3C-1 ten `10 \| 8177b42a…`, money fingerprint `58 \| af0fae6e…`. 0 receipts and an empty arming record |
+| Effect | None until merge: nothing calls the functions before the new application code deploys |
+
+### 5.2 Remaining steps
+
+Each needs separate owner authorization:
 1. Codex implementation review and **green exact-head CI**.
-2. Before merge: `supabase db push --linked --dry-run`, which should list only `20261127001000`, then the push and a read-only readback: nine functions with `md5(prosrc)` matching this branch, volatility, definer settings, empty `search_path`, grants, and unchanged hashes and fingerprint. The migration adds functions only, under a 2 s lock timeout.
+2. ~~Before merge: `supabase db push --linked --dry-run`, which should list only `20261127001000`, then the push and a read-only readback: nine functions with `md5(prosrc)` matching this branch, volatility, definer settings, empty `search_path`, grants, and unchanged hashes and fingerprint. The migration adds functions only, under a 2 s lock timeout.~~ **Done 2026-11-19 (§5.1).**
 3. Merge = production deploy. Effects:
    - application owner emails and price-draft notices gain three opaque tags whenever the inputs are valid; recipient, content, claims and keys are unchanged, except the D-3 outcome change on a re-sent revision within 24 hours;
    - Recruiting and the price-draft panel show "Delivery evidence not available" and say reports are not being collected.
