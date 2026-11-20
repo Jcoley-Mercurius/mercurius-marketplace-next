@@ -104,7 +104,9 @@ Everything is `STABLE` and nothing writes: no purge, flag, quarantine or arming 
 |---|---|
 | New spec, first run (load average up to ≈18 from other sessions) | 15/18 at that point. Two dark-theme axe runs timed out at 30 s and passed alone. One real test bug: a case-insensitive substring lookup matched the visible conflict signal; fixed with exact matching |
 | New spec with every existing spec on the changed pages (`owner-emails`, `vendor-readiness`, `vendor-prices`, `pricing-approval`, `light-only`), load ≈5 | **131/131 pass** in 7.4 min |
-| BROWSER_FINAL | |
+| After the price-draft panel's re-read fix, rebuilt (load average up to ≈18) | 120/131. Eleven failed, including tests on pages this slice does not change (`light-only`, the non-operator check), and the run took 19.3 min against 6–7 min normally. The machine restarted before the error detail could be read, so these are not diagnosed one by one |
+| Same build after the restart, new spec alone (load ≈4–5) | **18/18 in 1.1 min** |
+| **Final: same code and build, all six specs (load ≈3–4)** | **131/131 pass in 6.1 min** |
 | Full `test:a11y` suite | Not run locally; CI's application job runs it |
 
 ## 4. Implementation decisions for Codex review
