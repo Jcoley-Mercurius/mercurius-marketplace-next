@@ -19,9 +19,11 @@ export function browserPrivacySignal() {
 }
 
 export function analyticsPermitted() {
-  if (typeof window === "undefined" || !analyticsConfigured() || browserPrivacySignal()) return false;
-  const local = process.env.NODE_ENV !== "production" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
-  return (MARKETPLACE_ORIGINS.includes(window.location.origin) || local) && readAnalyticsConsent(document.cookie) === "granted";
+  try {
+    if (typeof window === "undefined" || !analyticsConfigured() || browserPrivacySignal()) return false;
+    const local = process.env.NODE_ENV !== "production" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    return (MARKETPLACE_ORIGINS.includes(window.location.origin) || local) && readAnalyticsConsent(document.cookie) === "granted";
+  } catch { return false; }
 }
 
 export function setAnalyticsConsent(value: Exclude<AnalyticsConsent, "unset">) {
@@ -32,13 +34,15 @@ export function setAnalyticsConsent(value: Exclude<AnalyticsConsent, "unset">) {
 }
 
 export function stopAnalyticsReplay() {
-  if (initialized) posthog.stopSessionRecording();
+  try { if (initialized) posthog.stopSessionRecording(); } catch { /* Navigation must still complete. */ }
 }
 
 function updateReplay() {
   if (!initialized) return;
-  if (analyticsPermitted() && process.env.NEXT_PUBLIC_POSTHOG_REPLAY_ENABLED === "1" && replayAllowed(location.href)) posthog.startSessionRecording();
-  else posthog.stopSessionRecording();
+  try {
+    if (analyticsPermitted() && process.env.NEXT_PUBLIC_POSTHOG_REPLAY_ENABLED === "1" && replayAllowed(location.href)) posthog.startSessionRecording();
+    else posthog.stopSessionRecording();
+  } catch { /* An unavailable recorder cannot interrupt a page or account transition. */ }
 }
 
 export function captureAnalytics(event: AnalyticsEvent, properties: AnalyticsProperties = {}) {

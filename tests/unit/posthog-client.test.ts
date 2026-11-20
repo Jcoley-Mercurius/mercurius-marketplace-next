@@ -75,4 +75,18 @@ describe("TRACE-157 consent and identity runtime", () => {
     client = await import("@/lib/analytics/client"); client.installAnalytics(); expect(sdk.init).not.toHaveBeenCalled();
     vi.stubEnv("NEXT_PUBLIC_POSTHOG_ENABLED", "0"); expect(client.analyticsConfigured()).toBe(false);
   });
+
+  it("keeps page and router transitions working when recorder calls or cookie access fail", async () => {
+    documentStub.cookie = `${CONSENT_COOKIE}=v1-granted`;
+    const client = await import("@/lib/analytics/client"); client.installAnalytics();
+    sdk.startSessionRecording.mockImplementationOnce(() => { throw new Error("Blocked recorder"); });
+    expect(() => client.trackAnalyticsPage()).not.toThrow();
+    sdk.stopSessionRecording.mockImplementationOnce(() => { throw new Error("Blocked recorder"); });
+    expect(() => client.stopAnalyticsReplay()).not.toThrow();
+    Object.defineProperty(documentStub, "cookie", { get: () => { throw new Error("Blocked cookies"); } });
+    expect(client.analyticsPermitted()).toBe(false);
+    expect(() => client.captureAnalytics("request_started")).not.toThrow();
+    expect(() => client.syncAnalyticsIdentity(user)).not.toThrow();
+    expect(() => client.trackAnalyticsPage()).not.toThrow();
+  });
 });

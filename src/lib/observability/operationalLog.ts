@@ -31,6 +31,9 @@ const EVENTS = [
   "application_notification.recorded",
   "application_notification.record_failed",
   "application_notification.background_failed",
+  // TRACE-155 (Phase 7.3C-2): the attempt is sent untagged because its correlation inputs were
+  // invalid. Carries no tag, ref or provider value; v1 keys are unchanged.
+  "application_notification.correlation_unavailable",
   "application_notification_resend.requested",
   "application_notification_resend.refused",
   "application_notification_resend.completed",

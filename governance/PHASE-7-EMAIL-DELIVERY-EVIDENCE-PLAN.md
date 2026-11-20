@@ -1,6 +1,8 @@
 # Phase 7.3A — Email delivery evidence and safe recovery: characterization and plan (TRACE-155)
 
 > **Amended 2026-11-19 (7.3C-1, under Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770), C3C-2 and C3C-3):** §7.3, §7.5, §13.3 and S-57 now state current-snapshot exclusion for derived conflicts and the untagged fallback. The superseded wording is kept in §18.3. The rest of this plan is unchanged.
+>
+> **Amended 2026-11-19 (7.3C-2, D-3, owner instruction):** §13.3's assumption that ledger keys are per attempt did not hold for price-draft notices: their key was per draft (`package-draft-email:<draft>:<attempt>`), so two revisions' notices shared keys. The key is now `package-draft-email:v2:<notice_id>:<attempt>`, from the notice the claim returns. A claim without a valid notice ID or attempt sends nothing. The superseded wording is in §18.4.
 
 **Status:** PLAN, REVISED AFTER CODEX REVIEW [#5891386779](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891386779) (at `7c2d0e5`) AND RE-REVIEW [#5891897514](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891897514) (at `5d577f0`; corrections C1–C3, §18.2), for final Codex plan clearance. Documentation only. Approves nothing, activates nothing. **No 7.3B implementation clearance has been given.**
 **Branch:** `claude/phase7-3a-email-evidence-plan`. First written on `main` `24dd455` (§1.1). Rebased onto `main` **`8a9603b94ea908e83742cbc2548d40f63ba4263b`** for this revision (§1.2).
@@ -701,7 +703,7 @@ The plan's recommendation is **P-2 with an evidenced weekly operator purge** (D 
 
 | Slice | Content | Gate |
 |---|---|---|
-| **7.3C** | Opt-in validated tags on the shared sender for the three ledger helpers (an additive parameter; keys stay per attempt, so no 409 from a reused key); read-time agreement and summary function; arming record use; readback columns, counts and history (owner emails first); browser tests (MDS, axe, 320 px) | Codex review |
+| **7.3C** | Opt-in validated tags on the shared sender for the three ledger helpers (an additive parameter; each key names exactly one ledger row and attempt, so a key is never reused with a different body and tags cause no 409. *(Amended 2026-11-19, 7.3C-2 D-3: price-draft keys were per draft, not per notice; they are now `package-draft-email:v2:<notice_id>:<attempt>`, and a claim without a valid notice ID or attempt sends nothing; see §18.4)*); read-time agreement and summary function; arming record use; readback columns, counts and history (owner emails first); browser tests (MDS, axe, 320 px) | Codex review |
 | **7.3D** | Hosted push, secrets, registration, domain readback, controlled acceptance (§12), rotation, expiry readback, dated evidence. **The receiver is armed only after both 7.3C slices are deployed**, so every ledger send is tagged whenever its correlation reference is available. *(Amended 2026-11-19, C3C-2: a send whose lookup failed goes out untagged, so coverage is not universal; see §7.5)* | EO-1, EO-2, EO-3, EO-6, EO-7 |
 | **7.3E** | Suppression, only as approved | EO-4, EO-5 |
 | **7.3F** | Resend after proven non-delivery | EC-10, deferred |
@@ -894,6 +896,16 @@ Codex accepted C3C-1..C3C-6 and asked for the governing wording to be synchroniz
 | §14, S-57 | "never restored to trusted" | Excluded while the other row holds the ID; trusted again if that row disappears. Stored conflicts are never restored |
 
 No other plan text changed. EO-1..EO-8 remain open, and no 7.3D gate is relaxed.
+
+### 18.4 Amendment with 7.3C-2 D-3 (2026-11-19, owner instruction; Codex technical direction)
+
+The owner's instruction for D-3 supersedes the earlier instruction to keep the price-draft key, for D-3 only. Superseded wording, kept as written:
+
+| Where | Before | After |
+|---|---|---|
+| §13.3, 7.3C | "keys stay per attempt, so no 409 from a reused key" | Each key names exactly one ledger row and attempt. Application (`vendor-application-notification:<application>:<attempt>`) and owner-email (`<kind prefix>:<source>:<attempt>`) keys were already per row and are unchanged. Price-draft keys were `package-draft-email:<draft>:<attempt>`, shared by every revision's notice. They are now `package-draft-email:v2:<notice_id>:<attempt>`, with `notice_id` exactly as `pricing_claim_draft_email` returned it (never the draft ID or a later revision lookup), validated as the tags are. A claim without a valid notice ID or attempt sends nothing and is recorded `failed` against its claim (7.3C-2 record §4 D-3) |
+
+Not changed: claims, attempt numbering, stale-worker refusal, recipients, wording, tags, outcome classification and recording, resend permissions, unknown-outcome confirmation, every database function, and money. No notice is resent, reset, backfilled or reclassified. EO-1..EO-8 remain open, and no 7.3D gate is relaxed.
 
 ## 19. Revision validation
 

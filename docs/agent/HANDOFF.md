@@ -1,3 +1,28 @@
+# Phase 7.3C-2 application and price-draft tags and evidence readbacks (TRACE-155) — 2026-11-19 ET
+
+- **Base:** `main` `9e7fd39` (#180 merged; PR and main CI green; Codex review 5985392153 read). Branch `claude/phase7-3c2-application-price-draft-tags` in its own worktree, draft PR. Record: [7.3C-2](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-2.md).
+- **Built (dormant):**
+  - application sends tagged with `application_id` and the claimed attempt; price-draft notices with the claimed `notice_id`. No lookup; invalid inputs send untagged, byte for byte;
+  - migration `20261127001000` (hosted head `20261126001000`; no branch, worktree or PR claims a later version), functions only: application and price-draft evidence and counts on 7.3C-1's trust, expiry and summary functions; ledger and global counts kept apart;
+  - Recruiting and price-draft panel readbacks through a component shared with Owner Emails.
+- **Evidence:**
+  - SQL 124 244/244 (12 mutations: 11 caught, 1 equivalent); full SQL 116 files / 8,340;
+  - unit 75 / 1,150 (8 mutations: 7 caught, 1 equivalent);
+  - concurrency: new S-37 races on both ledgers (one through a concurrent revision change) and every existing case PASS in CI order at low load; S-58's forced order failed twice at load ≈10–18 and passed when quiet;
+  - migration lock PASS; browser 131/131 on the final code (an earlier run under load ≈18 failed 11; the restart lost its detail);
+  - unchanged: ledger, 7.2C-1, 7.3B and 7.3C-1 hashes, money fingerprint `58 | af0fae6e…`;
+  - lint, types, secrets, audit and build pass.
+- **For Codex:** D-1..D-11, especially **D-3**: the price-draft key is per draft, so a re-sent revision within 24 h reuses attempt 1's key. Tagged bodies differ, so that send now returns 409 → `unknown`. Before, Resend replayed the first response and the notice was falsely recorded `sent`. Key unchanged as instructed; decision needed.
+- **D-3 repaired (2026-11-19, separate commit, owner instruction):**
+  - the price-draft key is `package-draft-email:v2:<notice_id>:<attempt>`, from the claim, never the draft ID;
+  - an invalid claim sends nothing and is recorded `failed` (or left `sending` → `unknown` if the record is refused too);
+  - the application and owner-email keys, the database and historical notices are unchanged;
+  - unit 75 / 1,164, 8/8 mutations caught; lint, types, secrets and build pass;
+  - plan §13.3 amended (§18.4); record §3.5 and §4 D-3. Codex review of that commit is pending.
+- **Hosted (2026-11-19, owner instruction):** dry run listed only `20261127001000`; pushed 03:47:58–03:48:02 UTC; read-only readback matches the branch (nine functions, grants, unchanged hashes, fingerprint `58 | af0fae6e…`, 0 receipts). Record §5.1.
+- **Not done:** merge, deploy, secrets, webhook, arming, email. 7.3C-1 deployment checks, 7.3B operational items, EO-1..EO-8, CFG-011 and every carried check remain open.
+- **Next:** Codex implementation review and green exact-head CI; then merge = deploy, followed by the operator-session counts readbacks.
+
 # Phase 7.3C-1 Owner Emails correlation tags and evidence readback (TRACE-155) — 2026-11-19 ET
 
 - **Base:** `main` `1327a58` (the named start `ba7db9c` was verified, then fast-forwarded over the #175–#177 profile merges). Branch `claude/phase7-3c1-correlation-readback` in its own worktree, draft PR. Record: [7.3C-1](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1.md).
@@ -16,6 +41,7 @@
 - **After #179 merged (2026-11-19):** rebased (TRACEABILITY rows only). Found that #179's `20261126001000` had deployed without reaching production; pushed it on the owner's authorization and read it back. Deleted only the stale PR 180 Supabase preview branch (record §5.1a).
 - **Not done:** merge, deploy, secrets, webhook, arming, email. 7.3C-2, the 7.3B push-provenance, preflight and 503-probe items, EO-1..EO-8 and every carried check remain open.
 - **Next:** Codex implementation review and green exact-head CI (`request.spec.ts:837` failed on the first run); then merge = deploy.
+- **Correction (2026-11-19 ET, later):** #180 merged as `main` `9e7fd39` (PR CI 44628358534, main CI 44638058722 green). Codex reviewed it retrospectively (5985392153): no blocking finding, D-4 whole-row check kept. Still open: exact-commit READY readback and the operator-session counts readback after deploy.
 
 # Phase 7.3C-1 Owner Emails evidence handoff (TRACE-155) — 2026-11-16 ET
 

@@ -8,6 +8,8 @@ type Event = { event: string; properties: Record<string, unknown> };
 const host = "http://127.0.0.1:3104";
 
 async function isolate(page: Page, options: { outage?: boolean } = {}) {
+  // This synthetic lane exercises visitor collection, not the SDK's automation filter.
+  await page.addInitScript(() => Object.defineProperty(navigator, "webdriver", { get: () => false }));
   const events: Event[] = [];
   const replays: string[] = [];
   const requests: string[] = [];

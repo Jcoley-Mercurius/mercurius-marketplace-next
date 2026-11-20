@@ -1,5 +1,12 @@
 # Phase 7.3C-1 — Owner Emails correlation tags and delivery-evidence readback: implementation (TRACE-155)
 
+> **Correction (2026-11-19 ET; the record below is kept as written before merge):** the status line and §5.2 item 1 are stale.
+> - #180 **merged** on 2026-11-19 at 23:29 UTC as `main` `9e7fd39` (PR head `ff34e78`). PR CI 44628358534 on `ff34e78` and main CI 44638058722 on `9e7fd39` both succeeded (verified 2026-11-19 with `gh run view`).
+> - **Codex reviewed it** retrospectively: [5985392153](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/180#pullrequestreview-5985392153) at `ff34e78`, no blocking finding. D-1..D-3, D-5, D-6, D-7 and D-9 accepted. D-4: keep the conservative whole-row identity check; do not narrow it implicitly in 7.3C-2. D-8 is an arming-record read, not proof of provider registration. D-10 must be extended deliberately when 7.3C-2 adds dependencies.
+> - Codex did not re-verify the hosted push or readback, and did not certify deployment. Still open: exact-commit production READY readback and the operator-session `owner_email_evidence_counts()` readback after deploy (§5.2 item 3). Every item in §6 stays open.
+>
+> Application and price-draft tagging and readbacks: [7.3C-2 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-2.md).
+
 **Status: IMPLEMENTED on a draft PR; DORMANT.** Codex implementation review pending. **Migration `20261125002000` pushed to hosted on 2026-11-19 on the owner's instruction (§5.1)**; not merged or deployed. No secret, webhook registration, receiver arming, `armed_at` write or email. Application and price-draft tagging is 7.3C-2.
 **Authority:** Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770) on the [handoff](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1-HANDOFF.md) (C3C-1..C3C-6 accepted, five integration requirements) and the owner's 7.3C-1 implementation instruction (2026-11-18), under the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §7.1–§7.5, §8.3–§8.4, §9.1, §11.4 and §13.3. Clearance covers this local, dormant slice only.
 **Branch:** `claude/phase7-3c1-correlation-readback`, in its own worktree, based on `main` `1327a58` (§1).
