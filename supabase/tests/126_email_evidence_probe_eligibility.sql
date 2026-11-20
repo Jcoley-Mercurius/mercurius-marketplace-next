@@ -8,6 +8,7 @@
 -- purge; read purity; nothing else restated.
 -- Synthetic identities and content only. Nothing is sent. Every change rolls back.
 begin;
+create extension if not exists pgtap with schema extensions;
 select no_plan();
 
 -- 1 operator, 2 homeowner, 3 vendor.

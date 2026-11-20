@@ -126,7 +126,9 @@ Local run on the isolated copy (ports 3176/56861; host load ≈5–8, much lower
 
 ### 4.3 CI
 
-Recorded in the PR body and the handoff at the exact head.
+- Run [44837789482](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/actions/runs/44837789482) on `33c49cb` **failed**. Backend succeeded. Lifecycle failed at SQL 126 with `function no_plan() does not exist`: the lifecycle job runs each file through plain `psql` (`scripts/test-phase4-db.sh`), and SQL 126 lacked the `create extension if not exists pgtap with schema extensions;` line every other file has. Locally `supabase test db` installs pgTAP itself, which hid the omission. Every earlier file, including SQL 125 153/153, passed in that job. Application was skipped (it depends on lifecycle). Not a flaky failure; no rerun was requested.
+- Fix: the setup line added. Reproduced through the CI runner's own loop and TAP validation against the isolated container, with pgTAP dropped first: the committed file fails identically; the fixed SQL 122/124/125/126 pass (624 ok, exit 0).
+- The final head's CI is recorded in the PR body and the handoff.
 
 ## 5. Stale statements reconciled (dated notes; originals kept)
 
