@@ -1,5 +1,14 @@
 # Phase 7.3C-2 — Application and price-draft correlation tags and delivery-evidence readbacks: implementation (TRACE-155)
 
+> **Correction (2026-11-20; the record below is kept as written before merge):** the status line, §5.2 items 1, 3 and 4, and §6's "Codex" item are stale.
+> - #181 **merged** 2026-11-20 15:44:35 UTC as `main` `d44342b` (head `2eaacc0`). Exact-head CI 44671950207 succeeded. Main CI 44766326691 on `d44342b` succeeded (completed 16:23:20 UTC).
+> - **Codex reviewed it** retrospectively: [5995373396](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/181#pullrequestreview-5995373396) at `2eaacc0`. Source review, no blocking finding; D-1..D-11 accepted, including the D-3 repair. It is not a test rerun, nor hosted or operator acceptance.
+> - **Production READY, exact commit:** `dpl_3cQ15yBJoXtQVYea1QVRgreGV3Br`, Vercel commit `d44342b`, ready 15:45:32 UTC. Read back by Claude, read-only, at 15:48–15:49 UTC.
+> - **Timing:** the §5.1 push (03:47:58 UTC) came about 54 minutes **before the first green CI** (04:42:04 UTC) and before any Codex review. No other preflight was run then, and none is reconstructed.
+> - **Still open:** the §5.2 item 4 operator-session counts readback, and every §6 item except the Codex review.
+>
+> Details: [7.3D readiness](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) §1–§2.
+
 **Status: IMPLEMENTED on draft PR #181; DORMANT.** Codex implementation review pending. **D-3 repaired 2026-11-19 in a separate commit (§4 D-3, §3.5)**; that commit needs its own review. **Migration `20261127001000` pushed to hosted on 2026-11-19 on the owner's instruction (§5.1)**; nothing is merged or deployed. No secret, webhook registration, receiver arming, `armed_at` write or email.
 **Authority:** the owner's 7.3C-2 implementation instruction (2026-11-19), Codex review [5985392153](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/180#pullrequestreview-5985392153) on #180 (it clears the shared 7.3C-1 source for local, dormant 7.3C-2 work), the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §7.1–§7.5, §8.3–§8.5, §9.1, §11.4 and §13.3, and the [7.3C-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1.md).
 **Branch:** `claude/phase7-3c2-application-price-draft-tags`, in its own worktree, based on `main` `9e7fd39`.

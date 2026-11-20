@@ -3,6 +3,15 @@
 > **Amended 2026-11-19 (7.3C-1, under Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770), C3C-2 and C3C-3):** §7.3, §7.5, §13.3 and S-57 now state current-snapshot exclusion for derived conflicts and the untagged fallback. The superseded wording is kept in §18.3. The rest of this plan is unchanged.
 >
 > **Amended 2026-11-19 (7.3C-2, D-3, owner instruction):** §13.3's assumption that ledger keys are per attempt did not hold for price-draft notices: their key was per draft (`package-draft-email:<draft>:<attempt>`), so two revisions' notices shared keys. The key is now `package-draft-email:v2:<notice_id>:<attempt>`, from the notice the claim returns. A claim without a valid notice ID or attempt sends nothing. The superseded wording is in §18.4.
+>
+> **Note 2026-11-20 (Codex review [5995373396](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/181#pullrequestreview-5995373396); documentation only, no text below is changed):** the [7.3D readiness checklist](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) §3 tightens §6.3, §8.4, §11.4 and §12. It governs where those sections read more permissively, until they are amended under review:
+> - a 2xx is not proof without a recorded, expected, trusted receipt read back after a defined arming cutoff;
+> - rejecting an old signed request is not proof that Resend re-signs delayed deliveries, and the freshness check stays fixed;
+> - expiry is logical, and purge duty continues after rollback;
+> - arming and disarming are audited, with defined coverage labels;
+> - each event's fixture must be verified.
+>
+> EO-1..EO-8 remain proposals.
 
 **Status:** PLAN, REVISED AFTER CODEX REVIEW [#5891386779](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891386779) (at `7c2d0e5`) AND RE-REVIEW [#5891897514](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891897514) (at `5d577f0`; corrections C1–C3, §18.2), for final Codex plan clearance. Documentation only. Approves nothing, activates nothing. **No 7.3B implementation clearance has been given.**
 **Branch:** `claude/phase7-3a-email-evidence-plan`. First written on `main` `24dd455` (§1.1). Rebased onto `main` **`8a9603b94ea908e83742cbc2548d40f63ba4263b`** for this revision (§1.2).

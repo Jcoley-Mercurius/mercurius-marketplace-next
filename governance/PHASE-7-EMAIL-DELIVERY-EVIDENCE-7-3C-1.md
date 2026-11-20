@@ -6,6 +6,12 @@
 > - Codex did not re-verify the hosted push or readback, and did not certify deployment. Still open: exact-commit production READY readback and the operator-session `owner_email_evidence_counts()` readback after deploy (§5.2 item 3). Every item in §6 stays open.
 >
 > Application and price-draft tagging and readbacks: [7.3C-2 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-2.md).
+>
+> **Status (2026-11-20, read-only; the correction above is kept as written):**
+> - **Exact-commit production READY readback: done.** `dpl_4pSMR5HxeVZ3G6fxSyhCambJAQxB`, Vercel commit field `9e7fd39`, ready 2026-11-19 23:29:53 UTC; GitHub deployment 7928715364 `success`. Read back by Claude on 2026-11-20 at 15:48–15:49 UTC. At 15:49 UTC, `www` resolved to the #181 deployment (`d44342b`).
+> - **Still open:** the operator-session `owner_email_evidence_counts()` readback, and every §6 item.
+>
+> Details: [7.3D readiness](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) §1.3 and §2.
 
 **Status: IMPLEMENTED on a draft PR; DORMANT.** Codex implementation review pending. **Migration `20261125002000` pushed to hosted on 2026-11-19 on the owner's instruction (§5.1)**; not merged or deployed. No secret, webhook registration, receiver arming, `armed_at` write or email. Application and price-draft tagging is 7.3C-2.
 **Authority:** Codex review [5926523770](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/170#pullrequestreview-5926523770) on the [handoff](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-1-HANDOFF.md) (C3C-1..C3C-6 accepted, five integration requirements) and the owner's 7.3C-1 implementation instruction (2026-11-18), under the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §7.1–§7.5, §8.3–§8.4, §9.1, §11.4 and §13.3. Clearance covers this local, dormant slice only.

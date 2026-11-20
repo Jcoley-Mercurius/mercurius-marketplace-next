@@ -1,3 +1,23 @@
+# Phase 7.3C release evidence and 7.3D readiness (TRACE-155) — 2026-11-20 ET
+
+- **Base:** `main` `d44342b` (#181 merged 15:44:35 UTC, head `2eaacc0`; Codex review 5995373396 read). Branch `claude/phase7-3d-readiness-release-evidence`. Documentation only. Record: [7.3D readiness](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md).
+- **Verified (read-only, by Claude):**
+  - exact-head CI 44671950207 succeeded; main CI 44766326691 succeeded (16:23 UTC);
+  - production READY: #180 `dpl_4pSMR5…` and #181 `dpl_3cQ15y…`, each matching its merge SHA in Vercel's commit field; `www` on `d44342b`;
+  - hosted migrations match local through `20261127001000`.
+- **Recorded:** `20261127001000` was pushed about 54 minutes before the first green CI and before review. No preflight reconstructed.
+- **Corrections added (originals kept):** the 7.3C-2 and 7.3C-1 records, the plan header and TRACE-155.
+- **Checklist:**
+  - a bare 2xx is not proof: an expected, trusted, read-back receipt after a defined cutoff is;
+  - an old-signature rejection is not proof of re-signing, and freshness stays fixed;
+  - expiry is logical, and purge continues after rollback;
+  - arming and disarming are audited, with coverage labels;
+  - fixtures are verified per event;
+  - EO-1..EO-8 stay proposals.
+- **Open:** operator-session counts (O-1..O-3), the 7.3B 503 probe and push provenance, post-deploy hash readback, EO-1..EO-8 and carried checks.
+- **Next:** 7.3D-1, restricted arm/disarm audit and a controlled test harness, local and synthetic. Codex first decides R3D-1..R3D-4.
+- **Not done:** merge, deploy, secrets, registration, arming, email or hosted writes. Not Phase 7 acceptance.
+
 # Phase 7.3C-2 application and price-draft tags and evidence readbacks (TRACE-155) — 2026-11-19 ET
 
 - **Base:** `main` `9e7fd39` (#180 merged; PR and main CI green; Codex review 5985392153 read). Branch `claude/phase7-3c2-application-price-draft-tags` in its own worktree, draft PR. Record: [7.3C-2](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3C-2.md).
