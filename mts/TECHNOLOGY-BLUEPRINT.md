@@ -191,6 +191,7 @@ Extend `stripe_webhook_events` with:
 | Supabase Edge Functions | Payments/refunds/webhook | JWT for user functions; Stripe signature for webhook | Versioned deploy, secrets, logs, replay | Configure function secrets and JWT settings |
 | Stripe | Checkout, subscriptions, refunds, disputes | Secret key; signed webhooks | Idempotency, durable event processing, reconciliation | Configure test/live products, webhook, alert contacts |
 | Resend | Owner notifications | Server API key | Timeout, failure logging, delivery monitoring | Verify sending domain, SPF, DKIM, DMARC |
+| PostHog (owner approved 2026-11-19) | Optional usage analytics and masked public replay; dedicated project 753506 | Public project token from environment; no personal API key in app | Explicit opt-in, property projection, privacy signals, $0 product caps, bounded server capture; [contract](../governance/POSTHOG-ANALYTICS.md) | Production configuration and verified release |
 | Vercel | Web hosting and preview promotion | Project/service account | Required checks, protected production, rollback | Configure project, domains, environments |
 | Turnstile or equivalent | Public-form abuse control | Site key + server secret | Fail-safe policy and monitoring | Create site and approve privacy copy |
 | Error/uptime provider | Application and Edge Function health | Server/client DSN or API | PII scrubbing, alert routing, release correlation | Select provider and recipients |

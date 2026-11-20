@@ -5,6 +5,7 @@ import type {
   RequestCoverageResult,
 } from "@/lib/requestCoverage";
 import { getServiceSupabaseEnvironment } from "@/lib/env/server";
+import { captureServerAnalytics } from "@/server/analytics";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
         ? { status: "waitlist", area, checkedZip: zipCode }
         : { status: "uncovered", area: null, checkedZip: zipCode };
 
+    captureServerAnalytics(request, "coverage_checked", { coverage: payload.status });
     return NextResponse.json(payload);
   } catch (error) {
     console.error("Request coverage lookup failed", error);
