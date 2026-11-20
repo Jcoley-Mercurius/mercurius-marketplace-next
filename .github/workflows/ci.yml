@@ -100,7 +100,7 @@ jobs:
         run: node scripts/email-provider-events-migration-lock.mjs
       - name: Concurrent provider-event receipts, conflicts, source deletion and purges (TRACE-155)
         run: node scripts/email-provider-events-concurrency.mjs
-      - name: Phase 7.3D-1 concurrent arm and disarm commands
+      - name: Phase 7.3D-1 concurrent arm and disarm commands, and probe readbacks racing a content conflict
         run: node scripts/email-evidence-arming-concurrency.mjs
       - name: Concurrent promotion redemptions, price approvals and publication
         run: node scripts/pricing-concurrency.mjs

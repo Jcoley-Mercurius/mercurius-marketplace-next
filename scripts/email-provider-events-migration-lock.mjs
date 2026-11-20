@@ -22,6 +22,9 @@
 //    too, and that unchanged file is re-applied last. Re-applying 7.3C-1 restores the original
 //    summary, so this proves the 7.3D-1 file restates it again (its definition hash), recreates
 //    the history and its guard, and keeps its grants.
+// 8. TRACE-155 (7.3D-1 review fixes): re-applying the 7.3D-1 file restores its original probe
+//    readback, so the unchanged forward repair 20261129001000 is re-applied last, proving it
+//    restates that one function again (its definition hash) and keeps its grants.
 // Run against a disposable isolated database only; CI runs a clean reset afterwards.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -42,6 +45,9 @@ const armingFunctions = arming.match(/revoke all on function\n([\s\S]*?)\nfrom p
   .split(',\n').map(signature => signature.trim());
 assert.equal(armingFunctions.length, 9, 'the 7.3D-1 migration revokes its nine functions in one block');
 const RESTATED_SUMMARY = '8eadddd6f47401258d747248a38ce507';
+const probeRepair = readFileSync('supabase/migrations/20261129001000_phase7_email_evidence_probe_eligibility.sql', 'utf8');
+const PROBE_READBACK_BEFORE = '2d02c820f1d7a7a5356636e1e5e6e19f';
+const PROBE_READBACK_AFTER = 'bd5da284bbd54764df0986ac1153e529';
 function psql(source, { stopOnError = true } = {}) {
   return new Promise((resolve, reject) => {
     const args = ['exec', '-i', container, 'psql', '-X', '-q', '-At', '-v', `ON_ERROR_STOP=${stopOnError ? 1 : 0}`, '-U', 'postgres', '-d', 'postgres'];
@@ -145,4 +151,11 @@ assert.equal(await sql(`select has_function_privilege('authenticated','public.em
   and not has_function_privilege('service_role','public.email_evidence_disarm(text)','EXECUTE')
   and not has_function_privilege('anon','public.email_evidence_arming_readback()','EXECUTE')
   and not has_function_privilege('authenticated','private.email_evidence_transition(text,text)','EXECUTE')`), 't', 'with its grants');
+const probeHash = `select md5(pg_get_functiondef('public.email_evidence_probe_readback(text)'::regprocedure))`;
+assert.equal(await sql(probeHash), PROBE_READBACK_BEFORE, 're-applying 7.3D-1 restored its original probe readback');
+await sql(`begin;\n${probeRepair}\ncommit;`);
+assert.equal(await sql(probeHash), PROBE_READBACK_AFTER, 'the unchanged forward repair restates the probe readback again');
+assert.equal(await sql(`select has_function_privilege('authenticated','public.email_evidence_probe_readback(text)','EXECUTE')
+  and not has_function_privilege('anon','public.email_evidence_probe_readback(text)','EXECUTE')
+  and not has_function_privilege('service_role','public.email_evidence_probe_readback(text)','EXECUTE')`), 't', 'with its grants');
 console.log('email provider events migration lock PASS');

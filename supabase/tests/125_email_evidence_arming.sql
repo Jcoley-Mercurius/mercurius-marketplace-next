@@ -426,8 +426,10 @@ select ok(pg_temp.probe('em-probe-1')::text not like '%em-probe-1%' and pg_temp.
  'the readback never returns the provider ID or svix-id');
 select is(pg_temp.recv('msg-p2-b','email.bounced','em-probe-2',p_bounce=>'permanent'),'recorded','probe: bounced');
 select is(pg_temp.recv('msg-p2-b','email.delivered','em-probe-2'),'conflict','probe: a changed payload under the same svix-id');
-select is((select string_agg(r->>'event_type'||':'||(r->>'bounce_type')||':'||(r->>'state'), ',') from jsonb_array_elements(pg_temp.probe('em-probe-2')->'receipts') r),
- 'email.bounced:permanent:content_conflict', 'a content-conflicted probe receipt is shown as excluded, never as transport evidence');
+-- TRACE-155 (7.3D-1 review fixes, 20261129001000): deliberately changed. 20261128001000 returned
+-- the content-conflicted receipt marked excluded with not_probe false; D-11 excludes the whole ID.
+select is(pg_temp.probe('em-probe-2'), jsonb_build_object('checked_at', now(), 'not_probe', true, 'receipts', '[]'::jsonb),
+ 'a content-conflicted probe receipt excludes its whole ID: nothing is returned (SQL 126 covers the mixed cases)');
 insert into private.email_provider_events(svix_id,received_at,expires_at,secret_slot,processing,event_type,provider_type,
   provider_created_at,provider_email_id,identity_class)
  values ('msg-p3-old', now()-interval '40 days', now()-interval '1 second', 'current','recorded','email.delivered','email.delivered',

@@ -1,6 +1,9 @@
 // TRACE-155 (Phase 7.3D-1): coverage labels, acceptance judgements and the restricted probe route.
 // Synthetic data only. Every network request is stubbed: the fetch stub answers only Resend's send
 // endpoint and fails the test on any other URL, so nothing leaves the process.
+// 7.3D-1 review fixes: the route needs VERCEL_ENV=production, so these tests mock a Production
+// configuration (process.env only) and still stub every send; coverage wording says "recorded
+// coverage window", never "collected"; a mixed probe readback is never a success (D-11).
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,7 +39,7 @@ import {
   qualifyLedgerAttempt,
   type ProbeReadback,
 } from "../../src/lib/emailEvidence/acceptance";
-import { actorLabel, armingReason, purgeDutyLabel, type RetentionReadback } from "../../src/lib/emailEvidence/arming";
+import { actorLabel, armAttestation, armingActionLabel, armingReason, purgeDutyLabel, type RetentionReadback } from "../../src/lib/emailEvidence/arming";
 import { coverageLabel, evidenceSummaryLabel, type EvidenceCoverage, type EvidenceRule } from "../../src/lib/emailEvidence/labels";
 import type { RowEvidence } from "../../src/lib/emailEvidence/readback";
 import { PROBE_SUBJECT, PROBE_TEXT, probeGate, probeIdempotencyKey, probeRecipient } from "../../src/lib/emailEvidence/probe";
@@ -61,18 +64,18 @@ describe("coverage labels (R3D-2)", () => {
     }
   });
 
-  it("rule 9 says how reports were collected and never claims more", () => {
+  it("rule 9 says which coverage window was recorded and never claims more", () => {
     expect(evidenceSummaryLabel({ rule: 9, reported: [], coverage: "collecting" })).toBe("No provider report yet");
     expect(evidenceSummaryLabel({ rule: 9, reported: [] })).toBe("No provider report yet");
     expect(evidenceSummaryLabel({ rule: 9, reported: [], coverage: "complete" }))
-      .toBe("No provider report received in the 28 hours reports were collected after sending");
+      .toBe("No provider report received; a coverage window was recorded for 28 hours after sending");
     expect(evidenceSummaryLabel({ rule: 9, reported: [], coverage: "partial" }))
-      .toBe("No provider report received; collection stopped within 28 hours of sending, so a report may have been missed");
+      .toBe("No provider report received; the recorded coverage window ended within 28 hours of sending, so a report may have been missed");
   });
 
-  it("rule 10 marks a disarmed gap, and is otherwise unchanged", () => {
+  it("rule 10 marks a gap between recorded windows, and is otherwise unchanged", () => {
     expect(evidenceSummaryLabel({ rule: 10, reported: [], coverage: "gap" }))
-      .toBe("Delivery evidence not available: reports were not being collected when this was sent");
+      .toBe("Delivery evidence not available: no coverage window was recorded when this was sent");
     for (const coverage of ["unknown", "before_first_arm", undefined] as const) {
       expect(evidenceSummaryLabel({ rule: 10, reported: [], coverage })).toBe("Delivery evidence not available");
     }
@@ -87,6 +90,24 @@ describe("coverage labels (R3D-2)", () => {
     }
     expect(Object.keys(coverageLabel).sort()).toEqual([...COVERAGES].sort());
   });
+
+  it("coverage wording (review fixes): a recorded window, never a claim that reports were collected or that the receiver was on", () => {
+    expect(coverageLabel).toEqual({
+      unknown: "Send time unknown, so its coverage window cannot be shown",
+      before_first_arm: "Sent before any coverage window was recorded",
+      gap: "Sent while no coverage window was recorded",
+      partial: "Sent inside a recorded coverage window that ended within 28 hours, so a report may have been missed",
+      collecting: "Sent inside the open coverage window, less than 28 hours ago",
+      complete: "Sent inside a recorded coverage window that stayed open for 28 hours after",
+    });
+    const texts = [...Object.values(coverageLabel), ...Object.values(armingActionLabel), ...COVERAGES.flatMap((coverage) =>
+      [9, 10].map((rule) => evidenceSummaryLabel({ rule: rule as EvidenceRule, reported: [], coverage })))];
+    for (const text of texts) {
+      expect(text).not.toMatch(/\bcollect(ed|ing|ion)\b/i);
+      expect(text).not.toMatch(/\b(receiver|webhook) (is|was) (on|available|enabled|running)\b/i);
+      expect(text).not.toMatch(/\b(enabled?|disabled?|turned on|turned off)\b/i);
+    }
+  });
 });
 
 // Probe verdicts ------------------------------------------------------------------------------------
@@ -99,10 +120,26 @@ describe("probe verdicts (R3D-3: transport evidence only)", () => {
   it("only the expected event, as an unlinked receipt, is observed", () => {
     expect(probeVerdict(readback([receipt("email.sent"), receipt("email.delivered")]), "delivered")).toBe("expected_event_observed");
     expect(probeVerdict(readback([receipt("email.sent")]), "delivered")).toBe("expected_event_not_observed");
-    expect(probeVerdict(readback([receipt("email.bounced", "content_conflict")]), "bounced")).toBe("expected_event_not_observed");
     expect(probeVerdict(readback([]), "complained")).toBe("no_receipt_yet");
-    expect(probeVerdict(readback([], true), "delivered")).toBe("not_a_probe");
+    expect(probeVerdict(readback([], true), "delivered")).toBe("not_probe_evidence");
     expect(probeVerdict(readback([receipt("email.delivered")]), "suppressed")).toBe("expected_event_not_observed");
+  });
+
+  it("D-11: any linked or conflicted receipt excludes the whole ID, even beside a valid expected-event receipt", () => {
+    for (const state of ["content_conflict", "stored_conflict", "current_conflict", "trusted"] as const) {
+      // An otherwise valid expected report plus one disqualified report for the same provider ID.
+      expect(probeVerdict(readback([receipt("email.bounced"), receipt("email.bounced", state)]), "bounced")).toBe("not_probe_evidence");
+      expect(probeVerdict(readback([receipt("email.bounced", state), receipt("email.delivered")]), "delivered")).toBe("not_probe_evidence");
+      expect(probeVerdict(readback([receipt("email.bounced", state)]), "bounced")).toBe("not_probe_evidence");
+    }
+    // The database flag alone excludes, whatever receipts accompany it.
+    expect(probeVerdict(readback([receipt("email.bounced")], true), "bounced")).toBe("not_probe_evidence");
+  });
+
+  it("the excluded label says why, and does not claim the send was not a probe", () => {
+    expect(probeVerdictLabel.not_probe_evidence).toBe(
+      "Not usable as test evidence: a current report for this send is matched to an email record, carries Mercurius tags or is in conflict, so none of its reports are shown");
+    expect(probeVerdictLabel.not_probe_evidence).not.toMatch(/not a (test )?probe/i);
   });
 
   it("the observed label disclaims email-record evidence", () => {
@@ -172,6 +209,12 @@ describe("arming wording", () => {
     expect(purgeDutyLabel(retention({ retained: 4, purge_duty: true }))).toMatch(/^No report has expired yet, but reports are still stored\. Keep running the operator purge/);
     expect(purgeDutyLabel(retention({ retained: 4, expired: 2, purge_duty: true }))).toMatch(/^Expired reports are waiting for the operator purge/);
   });
+  it("history entries and the attestation record a coverage window; they never say collection started or stopped", () => {
+    expect(armingActionLabel).toEqual({ arm: "Coverage window start recorded", disarm: "Coverage window end recorded" });
+    expect(armAttestation).toMatch(/^The owner has authorized arming/);
+    expect(purgeDutyLabel(retention({ retained: 4, purge_duty: true }))).toContain("even when no coverage window is open");
+    expect(purgeDutyLabel(retention({ retained: 4, expired: 1, purge_duty: true }))).not.toMatch(/collection/i);
+  });
   it("reasons are sent as one trimmed line; actors are shortened", () => {
     expect(armingReason("  Owner\nauthorized\t EO-1  ")).toBe("Owner authorized EO-1");
     expect(actorLabel("e1250000-0000-4000-8000-000000000001")).toBe("Operator account …000001");
@@ -191,7 +234,8 @@ beforeEach(() => {
   process.env.OWNER_NOTIFICATION_EMAIL = "owner@example.test";
   process.env.RESEND_WEBHOOK_SECRET = SENTINEL.webhookSecret;
   process.env.EMAIL_EVIDENCE_PROBES_ENABLED = "true";
-  delete process.env.VERCEL_ENV;
+  // A mocked Production configuration (D-8). Every send below is still stubbed.
+  process.env.VERCEL_ENV = "production";
   fetchCalls = [];
   providerAnswer = async () => new Response(JSON.stringify({ id: SENTINEL.emailId }), { status: 200 });
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
@@ -227,20 +271,24 @@ describe("probe module", () => {
     expect(probeIdempotencyKey("bounced", next)).toBe("email-evidence-probe:v1:bounced:2026-11-21");
     expect(probeIdempotencyKey("delivered", morning)).not.toBe(probeIdempotencyKey("bounced", morning));
   });
-  it("the gate is closed unless exactly 'true', and in any Vercel environment but Production", () => {
+  it("the gate is closed unless the flag is exactly 'true'", () => {
     for (const value of [undefined, "", "1", "TRUE", "yes", "true "]) {
       if (value === undefined) delete process.env.EMAIL_EVIDENCE_PROBES_ENABLED; else process.env.EMAIL_EVIDENCE_PROBES_ENABLED = value;
       expect(probeGate()).toEqual({ open: false, reason: "disabled" });
     }
-    process.env.EMAIL_EVIDENCE_PROBES_ENABLED = "true";
-    for (const value of ["preview", "development", "staging"]) {
+  });
+  it("D-8: open only with VERCEL_ENV exactly 'production'; absent (local, CI), Preview and every other value fail closed", () => {
+    delete process.env.VERCEL_ENV;
+    expect(probeGate()).toEqual({ open: false, reason: "environment" });
+    for (const value of ["", "preview", "development", "staging", "Production", "PRODUCTION", " production", "production "]) {
       process.env.VERCEL_ENV = value;
       expect(probeGate()).toEqual({ open: false, reason: "environment" });
     }
     process.env.VERCEL_ENV = "production";
     expect(probeGate()).toEqual({ open: true });
-    delete process.env.VERCEL_ENV;
-    expect(probeGate()).toEqual({ open: true });
+    // The flag is still required in Production.
+    delete process.env.EMAIL_EVIDENCE_PROBES_ENABLED;
+    expect(probeGate()).toEqual({ open: false, reason: "disabled" });
   });
 });
 
@@ -272,16 +320,23 @@ describe("probe route (R3D-4)", () => {
     expect(logged()).toMatchObject([{ event: "email_probe.refused", route: "email_evidence_probe", outcome: "refused", error_code: "probe_disabled" }]);
   });
 
-  it("refused in Preview (and any non-Production Vercel environment), even when enabled", async () => {
-    for (const value of ["preview", "development"]) {
-      process.env.VERCEL_ENV = value;
+  it("refused with VERCEL_ENV absent, in Preview and in any non-Production environment, even when enabled", async () => {
+    for (const value of [undefined, "preview", "development", "Production"]) {
+      if (value === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = value;
       const { response, bodyRead } = await post({ choice: "delivered" });
       expect(response.status).toBe(404);
       expect(bodyRead).toBe(false);
     }
     expect(session.created).toBe(0);
     expect(fetchCalls).toHaveLength(0);
-    expect(logged().map((line) => line.error_code)).toEqual(["probe_environment_refused", "probe_environment_refused"]);
+    expect(logged().map((line) => line.error_code)).toEqual(Array(4).fill("probe_environment_refused"));
+  });
+
+  it("open in a mocked Production configuration with the flag: one stubbed send, nothing else on the network", async () => {
+    expect(process.env.VERCEL_ENV).toBe("production");
+    const { response } = await post({ choice: "delivered" });
+    expect(response.status).toBe(200);
+    expect(fetchCalls.map((call) => call.url)).toEqual(["https://api.resend.com/emails"]);
   });
 
   it("authenticates and authorizes every invocation", async () => {
@@ -342,6 +397,16 @@ describe("probe route (R3D-4)", () => {
     expect(JSON.stringify(json)).not.toContain(SENTINEL.emailId);
     expect(JSON.stringify(json)).not.toContain("resend.dev");
     expect(logged()).toMatchObject([{ event: "email_probe.sent", outcome: "sent", source_kind: null, source_id: null }]);
+  });
+
+  it("D-11: a mixed readback is reported as not usable, with no receipts shown", async () => {
+    session.readback = { checked_at: "2026-11-20T18:00:00Z", not_probe: false,
+      receipts: [receipt("email.bounced", "content_conflict"), receipt("email.bounced")] };
+    const { json } = await post({ choice: "bounced" });
+    expect(json).toEqual({ state: "sent", choice: "bounced", verdict: "not_probe_evidence",
+      readback: { checked_at: "2026-11-20T18:00:00Z", not_probe: false, receipts: [] } });
+    session.readback = { checked_at: "2026-11-20T18:00:00Z", not_probe: true, receipts: [] };
+    expect((await post({ choice: "bounced" })).json).toMatchObject({ verdict: "not_probe_evidence", readback: { receipts: [] } });
   });
 
   it("repeated invocation: one provider request each, the identical key and body, so Resend replays instead of sending again", async () => {

@@ -40,14 +40,17 @@ export type ProbeGate =
   | { open: true }
   | { open: false; reason: "disabled" | "environment" };
 
-/** Whether this deployment may run probes at all. Checked before anything else is read. */
+/**
+ * Whether this deployment may run probes at all. Checked before anything else is read. Open only
+ * when the enable flag is exactly "true" AND VERCEL_ENV is exactly "production" (7.3D-1 review
+ * fixes, D-8). A missing VERCEL_ENV (a local or CI process), Preview, Development or any other
+ * value fails closed. There is no other bypass: tests mock a Production configuration and stub
+ * every send.
+ */
 export function probeGate(): ProbeGate {
   const environment = getEmailEvidenceProbeEnvironment();
   if (!environment.enabled) return { open: false, reason: "disabled" };
-  // Only Production on Vercel, or a non-Vercel process (local and CI, where sends are stubbed).
-  if (environment.vercelEnvironment !== undefined && environment.vercelEnvironment !== "production") {
-    return { open: false, reason: "environment" };
-  }
+  if (!environment.production) return { open: false, reason: "environment" };
   return { open: true };
 }
 

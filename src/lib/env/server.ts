@@ -82,13 +82,14 @@ export function getResendWebhookEnvironment() {
 
 /**
  * TRACE-155 (Phase 7.3D-1): the delivery-evidence probe harness. Off unless
- * EMAIL_EVIDENCE_PROBES_ENABLED is exactly "true"; refused in any Vercel environment other than
- * Production (so never in Preview). Never throws.
+ * EMAIL_EVIDENCE_PROBES_ENABLED is exactly "true" and VERCEL_ENV is exactly "production"
+ * (7.3D-1 review fixes, D-8). Both are compared raw, untrimmed; a missing VERCEL_ENV fails
+ * closed. Never throws.
  */
 export function getEmailEvidenceProbeEnvironment() {
   const source = serverSource();
   return {
     enabled: source.EMAIL_EVIDENCE_PROBES_ENABLED === "true",
-    vercelEnvironment: optionalString(source, "VERCEL_ENV"),
+    production: source.VERCEL_ENV === "production",
   } as const;
 }

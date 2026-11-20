@@ -7,6 +7,13 @@
 // TRACE-155 (Phase 7.3D-1, R3D-2): every summary also carries `coverage`, from the audited arming
 // intervals (migration 20261128001000). Only the no-report rules 9 and 10 read it: a label never
 // claims more collection than the arming history shows.
+//
+// 7.3D-1 review fixes (2026-11-20): an interval is a *recorded coverage window*, an operator's
+// declaration of when reports were meant to be collected. Recording it does not turn webhook
+// receipt on or off, and it is not proof that the receiver was available throughout. So the
+// labels say a window was "recorded", never that reports "were collected". The 28-hour period
+// follows Resend's documented retry schedule: it is how long a window must stay open, not proof of
+// uninterrupted collection (D-3).
 
 export type EvidenceFact =
   | "accepted" | "delayed" | "delivered" | "bounced_permanent" | "bounced_transient"
@@ -32,14 +39,14 @@ export type EvidenceSummary = {
 /** The retry horizon the database uses for coverage (private.email_evidence_retry_horizon). */
 export const RETRY_HORIZON_HOURS = 28;
 
-/** What the arming history shows about collection for an attempt, by its claim time. */
+/** What the recorded coverage windows show for an attempt, by its claim time. */
 export const coverageLabel: Record<EvidenceCoverage, string> = {
-  unknown: "Send time unknown, so collection cannot be shown",
-  before_first_arm: "Sent before provider reports were ever collected",
-  gap: "Sent while provider reports were not being collected",
-  partial: `Sent while reports were collected, but collection stopped within ${RETRY_HORIZON_HOURS} hours, so a report may have been missed`,
-  collecting: `Sent while reports are being collected; still within ${RETRY_HORIZON_HOURS} hours`,
-  complete: `Sent while reports were collected, and collection continued for ${RETRY_HORIZON_HOURS} hours after`,
+  unknown: "Send time unknown, so its coverage window cannot be shown",
+  before_first_arm: "Sent before any coverage window was recorded",
+  gap: "Sent while no coverage window was recorded",
+  partial: `Sent inside a recorded coverage window that ended within ${RETRY_HORIZON_HOURS} hours, so a report may have been missed`,
+  collecting: `Sent inside the open coverage window, less than ${RETRY_HORIZON_HOURS} hours ago`,
+  complete: `Sent inside a recorded coverage window that stayed open for ${RETRY_HORIZON_HOURS} hours after`,
 };
 
 export const NOT_INBOX_PROOF = "Not proof it reached the inbox or was read";
@@ -73,11 +80,11 @@ export function evidenceSummaryLabel(summary: Pick<EvidenceSummary, "rule" | "re
     case 7: return "Delivery delayed; not yet established";
     case 8: return "Accepted by Resend for delivery";
     case 9:
-      if (summary.coverage === "complete") return `No provider report received in the ${RETRY_HORIZON_HOURS} hours reports were collected after sending`;
-      if (summary.coverage === "partial") return `No provider report received; collection stopped within ${RETRY_HORIZON_HOURS} hours of sending, so a report may have been missed`;
+      if (summary.coverage === "complete") return `No provider report received; a coverage window was recorded for ${RETRY_HORIZON_HOURS} hours after sending`;
+      if (summary.coverage === "partial") return `No provider report received; the recorded coverage window ended within ${RETRY_HORIZON_HOURS} hours of sending, so a report may have been missed`;
       return "No provider report yet";
     default:
-      if (summary.coverage === "gap") return "Delivery evidence not available: reports were not being collected when this was sent";
+      if (summary.coverage === "gap") return "Delivery evidence not available: no coverage window was recorded when this was sent";
       return "Delivery evidence not available";
   }
 }

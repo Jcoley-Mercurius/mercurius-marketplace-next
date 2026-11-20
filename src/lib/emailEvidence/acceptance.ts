@@ -5,7 +5,7 @@
 //   provider transport and event behaviour only. A probe never qualifies a ledger rule (1, 4 or 5
 //   or any other), never links to a ledger row and is never rematched.
 // - A controlled send through a real ledger path qualifies only from durable, operator-read state:
-//   the expected attempt, claimed while reports were collected (the arming cutoff), with a trusted
+//   the expected attempt, claimed inside a recorded coverage window (the arming cutoff), with a trusted
 //   report of the expected fact that is not excluded. An HTTP status alone, including a duplicate
 //   response, is never evidence; an expected trusted receipt already stored still is.
 //
@@ -49,18 +49,26 @@ export type ProbeReadback = { checked_at: string; not_probe: boolean; receipts: 
 export type ProbeVerdict =
   /** The expected event arrived as an unlinked receipt: transport evidence only. */
   | "expected_event_observed"
-  /** Receipts arrived, but not (yet) the expected event, or only excluded ones. */
+  /** Unlinked receipts arrived, but not (yet) the expected event. */
   | "expected_event_not_observed"
   /** Nothing has arrived for this send yet. */
   | "no_receipt_yet"
-  /** The provider ID belongs to a ledger send or a tagged report; not a probe. */
-  | "not_a_probe";
+  /**
+   * The provider ID cannot serve as probe evidence: a current (unexpired) receipt for it is linked
+   * to an email record, carries Mercurius tags or is in conflict. The whole ID is excluded (D-11).
+   */
+  | "not_probe_evidence";
 
+/**
+ * The probe verdict. The database already excludes a disqualified ID (`not_probe`, migration
+ * 20261129001000); this also refuses any receipt that is not `unlinked`, so a mixed readback (for
+ * example from a database still on 20261128001000) can never yield a successful verdict.
+ */
 export function probeVerdict(readback: ProbeReadback, choice: ProbeChoice): ProbeVerdict {
-  if (readback.not_probe) return "not_a_probe";
+  if (readback.not_probe || readback.receipts.some((receipt) => receipt.state !== "unlinked")) return "not_probe_evidence";
   if (readback.receipts.length === 0) return "no_receipt_yet";
   const expected = probeExpectation[choice].event;
-  return readback.receipts.some((receipt) => receipt.event_type === expected && receipt.state === "unlinked")
+  return readback.receipts.some((receipt) => receipt.event_type === expected)
     ? "expected_event_observed"
     : "expected_event_not_observed";
 }
@@ -69,12 +77,13 @@ export const probeVerdictLabel: Record<ProbeVerdict, string> = {
   expected_event_observed: "Expected provider report received (unlinked test report: transport evidence only, not email-record evidence)",
   expected_event_not_observed: "Provider reports received, but not the expected one",
   no_receipt_yet: "No provider report received yet",
-  not_a_probe: "This send is not a test probe; its reports are not shown here",
+  not_probe_evidence:
+    "Not usable as test evidence: a current report for this send is matched to an email record, carries Mercurius tags or is in conflict, so none of its reports are shown",
 };
 
 // Ledger sends -----------------------------------------------------------------------------------
 
-/** Coverage values for an attempt claimed inside an audited armed interval (at or after the cutoff). */
+/** Coverage values for an attempt claimed inside a recorded coverage window (at or after the cutoff). */
 const CLAIMED_WHILE_COLLECTING: readonly EvidenceCoverage[] = ["collecting", "complete", "partial"];
 
 export type QualificationReason =
@@ -88,7 +97,7 @@ export type QualificationReason =
 /**
  * Whether one ledger attempt's readback qualifies as controlled-acceptance evidence for the
  * expected fact. Reads only the operator readback (durable state): the attempt must be in the
- * history, claimed while reports were collected, free of conflicting reports, and hold a trusted
+ * history, claimed inside a recorded coverage window, free of conflicting reports, and hold a trusted
  * (not excluded) report of exactly the expected fact.
  */
 export function qualifyLedgerAttempt(evidence: RowEvidence, attempt: number, expected: EvidenceFact): QualificationReason {
