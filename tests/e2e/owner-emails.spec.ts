@@ -720,7 +720,7 @@ test("7.3C-1: the additive counts sit beside the unchanged attention counts", as
   await expect(count(page, "Unmatched provider reports")).toHaveText("7");
   await expect(count(page, "Expired reports awaiting deletion")).toHaveText("3");
   await expect(page.getByText(/Oldest expired report: Nov 10, 2026/)).toBeVisible();
-  await expect(page.getByText("Resend delivery reports are not being collected yet", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("No coverage window is recorded for Resend delivery reports", { exact: false })).toHaveCount(0);
   // The existing attention summary is unchanged.
   await expect(summary(page, "Total")).toHaveText("2");
   await expect(summary(page, "Contact form")).toHaveText("2");
@@ -728,12 +728,12 @@ test("7.3C-1: the additive counts sit beside the unchanged attention counts", as
   expect(store.countsCalls).toBe(1);
 });
 
-test("7.3C-1: unarmed, every row reads rule 10 and the counts say reports are not collected", async ({ page }) => {
+test("7.3C-1: unarmed, every row reads rule 10 and the counts say no coverage window is recorded", async ({ page }) => {
   const store = new Store([row(1, "failed"), row(2, "unknown"), renewalRow(3, "missed")]);
   await open(page, store);
   await expect(rows(page)).toHaveCount(3);
   for (const n of [1, 2, 3]) await expect(rowFor(page, n)).toContainText("Delivery evidence: Delivery evidence not available");
-  await expect(page.getByText("Resend delivery reports are not being collected yet, so emails show “Delivery evidence not available”.")).toBeVisible();
+  await expect(page.getByText("No coverage window is recorded for Resend delivery reports, so emails without a report show “Delivery evidence not available”.")).toBeVisible();
   await expect(count(page, "Not delivered (Resend reported)")).toHaveText("0");
   await expect(page.getByText("Provider report history")).toHaveCount(0);
   await expect(page.getByText(/Oldest expired report/)).toHaveCount(0);
