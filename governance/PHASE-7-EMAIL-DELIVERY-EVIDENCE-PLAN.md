@@ -12,6 +12,8 @@
 > - each event's fixture must be verified.
 >
 > EO-1..EO-8 remain proposals.
+>
+> **Amended 2026-11-20 (7.3D-1, Codex review [5997315152](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/183#pullrequestreview-5997315152), R3D-1..R3D-4):** §8.3 rule 9, §8.4 and §12 item 1 now state audited arming intervals with coverage labels, and that `resend.dev` probes are unlinked transport evidence only; ledger linking is proven by controlled-mailbox sends through the real paths. §4.1's retry schedule was re-verified (27 h 35 min 5 s of waits; 28 h horizon). Superseded wording is kept in §18.5. Record: [7.3D-1](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md). EO-1..EO-8 remain proposals; nothing is armed.
 
 **Status:** PLAN, REVISED AFTER CODEX REVIEW [#5891386779](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891386779) (at `7c2d0e5`) AND RE-REVIEW [#5891897514](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/168#pullrequestreview-5891897514) (at `5d577f0`; corrections C1–C3, §18.2), for final Codex plan clearance. Documentation only. Approves nothing, activates nothing. **No 7.3B implementation clearance has been given.**
 **Branch:** `claude/phase7-3a-email-evidence-plan`. First written on `main` `24dd455` (§1.1). Rebased onto `main` **`8a9603b94ea908e83742cbc2548d40f63ba4263b`** for this revision (§1.2).
@@ -513,8 +515,8 @@ Only **trusted** receipts are used: `identity_class` ∈ {`id_only`, `tag_only`,
 | 6 | `bounced_transient` or `bounced_undetermined` ∈ F | "Bounce reported (temporary or undetermined); delivery not established" | no | no | yes |
 | 7 | `delayed` ∈ F | "Delivery delayed; not yet established" | no | no | no |
 | 8 | `accepted` ∈ F | "Accepted by Resend for delivery" | no | no | no |
-| 9 | F empty; receiver armed at send time (§8.4) | "No provider report yet" | no | no | no |
-| 10 | Otherwise | "Delivery evidence not available" | no | no | no |
+| 9 | F empty; the attempt was claimed inside an audited armed interval (§8.4: coverage `collecting`, `complete` or `partial`) *(amended 2026-11-20, 7.3D-1)* | By coverage: "No provider report yet" (collecting); "No provider report received in the 28 hours reports were collected after sending" (complete); "No provider report received; collection stopped within 28 hours of sending, so a report may have been missed" (partial) | no | no | no |
+| 10 | Otherwise (coverage `before_first_arm`, `gap` or `unknown`) | "Delivery evidence not available"; for `gap`: "Delivery evidence not available: reports were not being collected when this was sent" *(amended 2026-11-20, 7.3D-1)* | no | no | no |
 
 - **Full history is always shown** under the summary: type, provider time and bounce category, including excluded receipts, which are marked "Excluded: conflicting report".
 - A conflict signal (§7.4) is a **separate** flag, `has_conflict`, shown as "Conflicting provider reports: excluded from this summary". It is independent of the rules.
@@ -524,6 +526,8 @@ Only **trusted** receipts are used: `identity_class` ∈ {`id_only`, `tag_only`,
 ### 8.4 Arming record
 
 `private.email_evidence_config` holds a single row with `armed_at`, set in 7.3D. An attempt whose `claimed_at` is earlier than `armed_at` gets rule 10, not rule 9.
+
+*(Amended 2026-11-20, 7.3D-1; R3D-1, R3D-2.)* `armed_at` is now the current state only. The append-only `private.email_evidence_arming_events` history is the record of when reports were collected; operator-guarded `email_evidence_arm` and `email_evidence_disarm` (session actor, reason required, serialized, duplicates refused) append to it and set or clear `armed_at` together. An attempt's coverage comes from the intervals `[arm, next disarm)` and the retry horizon (28 h): `before_first_arm`, `collecting`, `complete`, `partial`, `gap` or `unknown` (7.3D-1 record §3). Rules 1–8 are unchanged and apply whatever the coverage. Disarm and re-arm never erase history or stored receipts.
 
 ### 8.5 Invariants (unchanged)
 
@@ -654,7 +658,7 @@ The plan's recommendation is **P-2 with an evidenced weekly operator purge** (D 
 | Real sends | App to `resend.dev` test addresses and the controlled mailbox | Owner-authorized, 7.3D (EO-6) |
 
 **Controlled acceptance (7.3D, proposal):**
-1. **`resend.dev` test addresses** through a synthetic operator-only path defined in 7.3D. Expected summaries:
+1. **`resend.dev` test addresses** through a synthetic operator-only path defined in 7.3D. *(Amended 2026-11-20, 7.3D-1, R3D-3: probes are untagged, so their receipts are unlinked and prove provider transport and event behaviour only. The rule expectations below no longer apply to them; they are kept in §18.5. A probe passes when its expected event arrives as an unlinked receipt, read back by `email_evidence_probe_readback`. `suppressed@`'s event is undocumented, and no address is known for `failed` or `delivery_delayed`. Ledger rules 1, 4 and 5 are proven only by item 2's controlled sends through the real ledger paths.)* Original expected summaries:
    - `delivered@` → rule 4;
    - `bounced@` → rule 5 (and confirm the bounce `type` strings);
    - `complained@` → rule 1, never in the not-delivered count;
@@ -915,6 +919,20 @@ The owner's instruction for D-3 supersedes the earlier instruction to keep the p
 | §13.3, 7.3C | "keys stay per attempt, so no 409 from a reused key" | Each key names exactly one ledger row and attempt. Application (`vendor-application-notification:<application>:<attempt>`) and owner-email (`<kind prefix>:<source>:<attempt>`) keys were already per row and are unchanged. Price-draft keys were `package-draft-email:<draft>:<attempt>`, shared by every revision's notice. They are now `package-draft-email:v2:<notice_id>:<attempt>`, with `notice_id` exactly as `pricing_claim_draft_email` returned it (never the draft ID or a later revision lookup), validated as the tags are. A claim without a valid notice ID or attempt sends nothing and is recorded `failed` against its claim (7.3C-2 record §4 D-3) |
 
 Not changed: claims, attempt numbering, stale-worker refusal, recipients, wording, tags, outcome classification and recording, resend permissions, unknown-outcome confirmation, every database function, and money. No notice is resent, reset, backfilled or reclassified. EO-1..EO-8 remain open, and no 7.3D gate is relaxed.
+
+### 18.5 Amendments with 7.3D-1 (2026-11-20, Codex review [5997315152](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/183#pullrequestreview-5997315152))
+
+Superseded wording, kept as written:
+
+| Where | Before | After |
+|---|---|---|
+| §8.3, rule 9 | "F empty; receiver armed at send time (§8.4)" → "No provider report yet" | F empty and the attempt claimed inside an audited armed interval; worded by coverage (collecting, complete, partial) |
+| §8.3, rule 10 | "Otherwise" → "Delivery evidence not available" | Unchanged label, plus a gap label |
+| §8.4 | A single `armed_at`; claim before it → rule 10 | Audited arm/disarm history with intervals and coverage; `armed_at` is current state |
+| §12 item 1 | `delivered@` → rule 4; `bounced@` → rule 5; `complained@` → rule 1; `suppressed@` → rule 5 | Probes are unlinked transport evidence, never credited with a ledger rule; rules are proven by controlled-mailbox sends through the ledger paths (item 2) |
+| Readiness §3.5 | Retry horizon "about 32 h" | 27 h 35 min 5 s documented (fetched 2026-11-20); 28 h used |
+
+One function is deliberately restated, `private.email_evidence_summary` (`e3436221…` → `8eadddd6…`); the receiver, verifier freshness, ledgers, claims, resend rules and money functions are unchanged (7.3D-1 record §4). EO-1..EO-8 remain open, and no 7.3D activation gate is relaxed.
 
 ## 19. Revision validation
 

@@ -5,6 +5,8 @@
 **Branch:** `claude/phase7-3d-readiness-release-evidence`, from `main` `d44342b`.
 **Earlier records are kept as written.** Each gets a dated correction that points here.
 
+> **Corrected 2026-11-20 (7.3D-1, Codex review [5997315152](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/183#pullrequestreview-5997315152)):** Codex settled R3D-1..R3D-4 and corrected two checklist items. The original wording below is kept; the corrections are in §6, and 7.3D-1 is implemented locally and dormant in the [7.3D-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md). Nothing here authorizes arming, registration, real email or hosted changes.
+
 ## 1. Release evidence (read-only, observed 2026-11-20)
 
 ### 1.1 Repository and review
@@ -111,7 +113,7 @@ This replaces nothing in the plan. It adds the corrections from Codex review 599
 
 - [ ] **Expiry is logical exclusion, not deletion.** A receipt past `expires_at` is hidden from every readback and count, but stays in storage until a purge deletes it.
 - [ ] Physical deletion needs purge execution: purge-on-receipt (at most 100 per receive call) and the operator purge `email_provider_events_purge(p_limit)`. With no traffic and no operator purge, nothing is deleted.
-- [ ] **Purge duty survives rollback and disarm.** Promoting an older deployment, removing the secret, deregistering the webhook or disarming stops new receipts and stops purge-on-receipt. It does not delete stored receipts. The accountable operator purge continues on the EO-2 cadence until the backlog readback shows zero retained rows, and each run leaves a dated record.
+- [ ] **Purge duty survives rollback and disarm.** *(Corrected 2026-11-20, §6 item 2: the duty lasts while any receipt is retained, expired or not.)* Promoting an older deployment, removing the secret, deregistering the webhook or disarming stops new receipts and stops purge-on-receipt. It does not delete stored receipts. The accountable operator purge continues on the EO-2 cadence until the backlog readback shows zero retained rows, and each run leaves a dated record.
 - [ ] The expiry readback (expired count, oldest `expires_at`) is part of acceptance and of every rollback record.
 
 ### 3.5 Arm and disarm audit (plan §8.4)
@@ -120,7 +122,7 @@ This replaces nothing in the plan. It adds the corrections from Codex review 599
 - [ ] **Clearing `armed_at` does not erase activation history.** Today `email_evidence_config` is a single row. Rule 9 ("no report while armed") applies to an attempt claimed at or after `armed_at` (migration `20261125002000`). Clearing it would silently turn those attempts into rule 10, and re-arming later could not represent the gap. The audit trail is the record of when reports were collected.
 - [ ] **Define historical coverage labels before the first arming**, for at least:
   - sent before reports were ever collected;
-  - sent while collected, with the receiver still armed through the retry horizon (about 32 h);
+  - sent while collected, with the receiver still armed through the retry horizon (about 32 h; *corrected 2026-11-20, §6 item 3: 27 h 35 min 5 s documented, 28 h used*);
   - sent while collected, but disarmed before the retry horizon ended (partial coverage);
   - sent during a disarmed gap.
   The wording follows MDS and Codex review. No label may claim more coverage than the audit trail proves.
@@ -180,7 +182,7 @@ Local stack only, with a locally generated webhook secret, synthetic signed payl
 2. **Audited:** each arm and disarm appends exactly one event in the same transaction as the `armed_at` change. Update and delete of events are refused. Concurrent arm calls give one success and one refusal.
 3. **History survives disarm:** after arm → disarm → arm, every event is still readable, and each test attempt gets the coverage label §3.5 defines for its claim time (before, inside, partial and gap cases).
 4. **Cutoff:** a synthetic attempt claimed before `armed_at` is reported non-qualifying, even with a matching trusted receipt.
-5. **2xx is not a pass:** for each 200 path in plan §6.5 (`invalid_payload`, `other`, duplicate, content conflict), and for an unlinked or conflicted receipt, the harness reports *not qualifying*. Only an expected, trusted, linked receipt read back through the operator functions passes.
+5. *(Corrected 2026-11-20, §6 item 1.)* **2xx is not a pass:** for each 200 path in plan §6.5 (`invalid_payload`, `other`, duplicate, content conflict), and for an unlinked or conflicted receipt, the harness reports *not qualifying*. Only an expected, trusted, linked receipt read back through the operator functions passes.
 6. **Recipients:** a recipient outside the allowlist is impossible to express (type-level) and refused at run time. No input reaches the provider's `to` field.
 7. **No retry:** a stubbed provider failure (error, 409, timeout) gives one request and a reported failure. Nothing is queued or retried.
 8. **Freshness unchanged:** the verifier's 300 s constant and handling are byte-identical. The §3.3 (a) script gets 400 and is labeled (a) only.
@@ -203,3 +205,15 @@ Local stack only, with a locally generated webhook secret, synthetic signed payl
 - Read-only commands only: `git fetch` and `log`; `gh pr view`, `gh api` (reviews, deployments, statuses) and `gh run view`/`list`; `vercel inspect`; the Vercel connector's `get_deployment`; `supabase migration list --linked`.
 - No hosted write, deploy, secret, registration, arming, email or test rerun.
 - Documentation checks: see the PR body.
+
+## 6. Corrections (2026-11-20, 7.3D-1)
+
+Codex review 5997315152 at `89e01fe` cleared §4 for local, dormant implementation and chose: R3D-1 operator-guarded SQL commands with the session actor; R3D-2 audited intervals; R3D-3 option (b), no fourth receipt-link ledger; R3D-4 option (a), a restricted server-side action, off by default. The [7.3D-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md) §3 shows how each is implemented. Corrections to the text above, which is kept as written:
+
+1. **§4.3 criterion 5.** A duplicate HTTP response is not new proof, but an expected, trusted receipt **already stored** is still valid readback evidence. A check judges the expected run or attempt and its receipt identity from durable, operator-read state, never a response status alone. So: for each 200 path, nothing new qualifies; an earlier expected trusted receipt keeps qualifying (7.3D-1 SQL 125 §8, `qualifyLedgerAttempt`).
+2. **§3.4 purge duty.** After disarm or rollback, purge duty continues while **any** receipt is retained, including unexpired ones. Zero expired backlog today does not mean every retained row has been deleted. Each rollback or disarm record states the total retained and expired counts, without content (`email_evidence_arming_readback().retention`).
+3. **§3.5 retry horizon.** "About 32 h" was not verified. The official page (fetched 2026-11-20) gives waits of 5 s, 5 min, 30 min, 2 h, 5 h, 10 h and 10 h after an immediate attempt: 27 h 35 min 5 s. 7.3D-1 uses 28 h. It covers retries of an event raised at send time, not an event Resend raises later.
+4. **§3.6 and plan §12 item 1.** `resend.dev` probes are untagged, so their receipts are unlinked transport evidence. They are never credited with rules 1, 4 or 5 or any ledger rule. Ledger linking and readback are proven separately by controlled-mailbox sends through the real ledger paths (plan §18.5).
+5. **§3.5 coverage labels** are defined: `before_first_arm`, `collecting`, `complete`, `partial`, `gap` and `unknown` (7.3D-1 record §3).
+
+EO-1..EO-8 remain proposals. Phase 7 and booking readiness remain unaccepted.
