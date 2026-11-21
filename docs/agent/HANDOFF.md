@@ -1,3 +1,11 @@
+# Phase 7.3D controlled activation checklist (TRACE-155) — 2026-11-21 ET
+
+- **Base:** #185 head `6823599` (stacked; not merged), `main` `8a40fa4`. Branch `claude/phase7-3d-activation-checklist`. Documentation only; no code. Record: [activation checklist](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-ACTIVATION-CHECKLIST.md).
+- **Read-only (13:16:54 UTC):** local = remote through `20261129001000`; probe readback `bd5da284…`; 0 arming events, 0 armed rows, 0 receipts; execute `authenticated` only.
+- **Contents:** EO-2, EO-3, EO-7, EO-1 (hosted actions H-1..H-9) and EO-6 (sends T-1..T-7) presented together; EO-4, EO-5 and EO-8 unresolved; ordered sequence A–I with evidence and stop conditions. Transport probes are kept apart from ledger-linked evidence, provider delivery from the human inbox check, and operator-session evidence from privileged reads. Freshness (a)/(b), the both-slot rotation rehearsal and the retention readbacks are kept. Shutdown follows review fixes §2.5.
+- **Not done:** no secret, registration, coverage-window start, probe enablement or email. Nothing approved.
+- **Next:** owner decisions; Codex review of this checklist; retarget to `main` after #185 merges.
+
 # Phase 7.3D-1 review fixes: shutdown wording before merge (TRACE-155) — 2026-11-21 ET
 
 - **Checkpoint (read-only):** `main` `8a40fa4`; #185 head was `c99b7ae` (CI on `4afce33` passed; `c99b7ae` adds the hosted-push record). Hosted `20261129001000` applied 2026-11-21 (probe readback `bd5da284…`; 0 arming events, 0 armed records, 0 receipts). Codex accepts F-1..F-6, with no blocking code finding. That is source-review clearance, not activation or Phase 7 acceptance.
