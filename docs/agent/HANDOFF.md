@@ -1,3 +1,10 @@
+# Phase 7.3D-1 review fixes: shutdown wording before merge (TRACE-155) — 2026-11-21 ET
+
+- **Checkpoint (read-only):** `main` `8a40fa4`; #185 head was `c99b7ae` (CI on `4afce33` passed; `c99b7ae` adds the hosted-push record). Hosted `20261129001000` applied 2026-11-21 (probe readback `bd5da284…`; 0 arming events, 0 armed records, 0 receipts). Codex accepts F-1..F-6, with no blocking code finding. That is source-review clearance, not activation or Phase 7 acceptance.
+- **Corrected (documentation only):** promoting an earlier deployment is an application rollback, not a shutdown step. Disabling receipt takes two hosted actions, each separately authorized: (a) disable or delete the Resend endpoint; (b) remove **both** `RESEND_WEBHOOK_SECRET` and `RESEND_WEBHOOK_SECRET_PREVIOUS`, then create a new Production deployment. Recording a window end stops nothing. Purge duty continues while any receipt remains. Canonical text: [review fixes](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md) §2.5; superseded wording in §8; readiness §7 item 1 and plan §8.4 and §18.6 point to it.
+- **Not done:** no new migration and no re-push; no merge without the owner's release approval; no secret, registration, coverage-window start, probe enablement or email. EO-1..EO-8 remain open.
+- **Next:** green exact-head CI; owner release approval; merge (= deploy); READY readback and read-only post-deploy checks; 7.3D activation checklist and the owner decisions.
+
 # Phase 7.3D-1 review fixes: whole-ID probe exclusion, logical expiry, coverage-window wording, Production-only probes (TRACE-155) — 2026-11-20 ET
 
 - **Base:** `main` `8a40fa4` (#184 merged 22:07:38 UTC; main CI 44826293688 success; GitHub Production deployment for `8a40fa4` success; hosted migrations match through `20261128001000`, read back 23:04 UTC: 0 arming events, no `armed_at`, 0 receipts). Branch `claude/phase7-3d1-review-fixes` in the 7.3D-1 worktree (stack 5606x, browser 3176/56861). Record: [7.3D-1 review fixes](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md).

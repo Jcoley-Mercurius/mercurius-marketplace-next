@@ -66,7 +66,24 @@ The manual controls stay. Every operator-facing statement now says what the mark
 
 Rule 9 for `collecting` ("No provider report yet") and every rule 1–8 label are unchanged. The rule numbers, coverage values and SQL are unchanged: this is wording only. **D-3 is preserved**: the 28 h horizon is a retry-window convention, and a `complete` label says a window *was recorded* for that period, not that collection was uninterrupted.
 
-**Shutdown procedure (unchanged, separately authorized).** Stopping receipt means removing `RESEND_WEBHOOK_SECRET` from Production, disabling or removing the Resend webhook endpoint, or promoting an earlier deployment. Each is a hosted action that needs the owner's authorization. Recording a window end is not one of them and does not replace them. Purge duty continues after any of them while anything is stored.
+### 2.5 Shutdown procedure (corrected 2026-11-21, before merge; the 2026-11-20 wording is kept in §8)
+
+Recording a window end, rolling back the application and disabling receipt are three different acts. Only the third stops ingestion.
+
+1. **Recording a coverage-window end** (the disarm command) stops nothing. It labels emails sent afterwards. Resend keeps sending, and the receiver keeps storing, while a secret is deployed and the endpoint is registered. Record the end at or before step 3(a), so that no email is labeled as sent inside a window while receipt is being shut down.
+2. **Application rollback** (`vercel promote <earlier dpl_id>`) restores earlier code after a code defect. It is a release action, **not** a shutdown step. It does not change the Resend endpoint registration or the Production variables, and every deployment since 7.3B contains the receiver. Whether the promoted deployment verifies and stores reports depends on its receiver code and the secret configuration it runs with, not on the promotion. Even a deployment without the receiver leaves Resend sending to, and retrying, the registered endpoint. A promotion is never recorded as stopping receipt.
+3. **Disabling receipt** takes two hosted actions. Each needs the owner's separate authorization (EO-1):
+   - **(a) Provider endpoint.** Disable or delete the Resend webhook endpoint, so that Resend stops sending reports.
+   - **(b) Receiver secrets, both slots.** Remove **both** `RESEND_WEBHOOK_SECRET` and `RESEND_WEBHOOK_SECRET_PREVIOUS` from Vercel Production. Then create a new Production deployment, because a variable change applies only to deployments created after it. That redeployment is itself an owner-instructed production release (AGENTS.md). If only the current secret is removed, the route answers 503, but the old secret stays in the previous slot and verifies again as soon as any current secret is set. Removing only the previous slot, as at the end of a rotation (plan §6.4), stops nothing.
+   - **Order: (a), then (b).** With only (b), Resend keeps retrying an endpoint that answers 503 for its retry schedule (27 h 35 min 5 s of waits). With only (a), the deployed secrets still verify a re-enabled endpoint or a dashboard replay, and the receiver stores it.
+   - **Evidence for each step, dated:**
+     - the owner's authorization;
+     - a read-only view showing the Resend endpoint disabled or deleted;
+     - the Production variable names, with no values, showing both slots absent;
+     - the new deployment's ID and READY state;
+     - a post-deploy `POST /api/webhooks/resend` answering 503. This is an outward request, so it needs the owner's word, as O-4 does;
+     - the retention readback: total retained, expired count and oldest `expires_at`, no content.
+4. **Purge duty continues.** None of these steps deletes a stored receipt. Once receipt stops, purge-on-receipt stops too, so the accountable operator purge (EO-2) carries the whole duty. It runs on the EO-2 cadence until the readback shows **zero retained rows, expired or not**, and each run leaves a dated record.
 
 ### 2.4 D-8: Production only, failing closed
 
@@ -90,7 +107,7 @@ Rule 9 for `collecting` ("No provider report yet") and every rule 1–8 label ar
 
 ### 3.2 Rollback and forward repair
 
-- **Application rollback:** `vercel promote <previous dpl_id>` restores #184's code. It reads the same keys; the repaired function stays and is stricter. No data changes either way.
+- **Application rollback:** `vercel promote <previous dpl_id>` restores #184's code. It reads the same keys; the repaired function stays and is stricter. No data changes either way. It is not a shutdown step: it changes neither the webhook registration nor the receiver secrets (§2.5). Today neither exists.
 - **Database:** no down-migration. The function holds no state, so reverting means a **new** forward migration restating the previous definition, which is the body in `20261128001000` §5. That would reintroduce the D-11 defect, so it needs Codex review and owner authorization. Prefer a forward fix.
 - **A failed push** (lock timeout) leaves the hosted function unchanged at `2d02c820…`; the deployed code's guard still refuses mixed readbacks.
 - Nothing here touches receipts, the arming history, purge or retention. Purge duty is unaffected.
@@ -161,5 +178,20 @@ Local run on the isolated copy (ports 3176/56861; host load ≈5–8, much lower
 
 ## 7. Open and not done
 
-- **Open:** Codex review of this PR (the migration was pushed first, §3.3); who pushed `20261128001000` and when (§1); the Vercel deployment ID for `8a40fa4` (GitHub records the deployment as successful; not read through Vercel here); operator-session readbacks O-1..O-9; the 7.3B 503 probe and push provenance; post-deploy hash readbacks; EO-1..EO-8; every carried verification item.
+- **Open:** *(2026-11-21: Codex's source review accepts F-1..F-6 with no blocking code finding, §8; that is not activation or acceptance.)* Owner release approval of this PR; who pushed `20261128001000` and when (§1); the Vercel deployment ID for `8a40fa4` (GitHub records the deployment as successful; not read through Vercel here); operator-session readbacks O-1..O-9; the 7.3B 503 probe and push provenance; post-deploy hash readbacks; EO-1..EO-8; every carried verification item.
 - **Not done:** no merge, deployment, secret or environment change, webhook registration, coverage-window recording (arming), probe enablement or email (the hosted push of `20261129001000` is done, §3.3). No suppression, retry, Cron, booking or payment change. Phase 7 is not accepted.
+
+## 8. Corrections before merge (2026-11-21, after Codex's source review of #185)
+
+Codex reviewed the repair and accepts F-1..F-6, with no blocking code finding. That is source-review clearance only. It is not activation and not Phase 7 acceptance. Codex asked for the shutdown wording to be corrected. Documentation only: no code, SQL, migration or hosted change.
+
+| Where | 2026-11-20 wording (superseded) | Now |
+|---|---|---|
+| This record §2.3, "Shutdown procedure" | "Stopping receipt means removing `RESEND_WEBHOOK_SECRET` from Production, disabling or removing the Resend webhook endpoint, or promoting an earlier deployment. Each is a hosted action that needs the owner's authorization. Recording a window end is not one of them and does not replace them. Purge duty continues after any of them while anything is stored." | §2.5. A promotion is an application rollback, not a shutdown step. Disabling receipt is (a) provider endpoint disablement and (b) removal of **both** secret slots plus a new Production deployment, each separately authorized. A window end stops nothing. Purge duty continues while any receipt remains |
+| This record §3.2, application rollback | (no shutdown statement) | Says a promotion does not stop receipt |
+| [Readiness](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) §7 item 1 | "Removing the secret, deregistering or disabling the webhook, or promoting an older deployment stops receipt (and purge-on-receipt)." | Points to §2.5 |
+| [Plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §8.4, 7.3D-1 review-fix amendment | "stopping receipt is a separately authorized hosted action (remove the secret, disable or remove the endpoint, or promote an earlier deployment)" | Points to §2.5 |
+
+The readiness record's §3.4 purge-duty item (merged text, kept as written) also lists "promoting an older deployment" among the acts that stop receipt. Its §7 item 1 correction governs.
+
+**Carried, unchanged:** signature freshness stays fixed (±300 s), and rejecting an old signed request never counts as proof that Resend re-signs (readiness §3.3). Retention and expiry readbacks belong to acceptance and to every rollback and shutdown record (readiness §3.4). The rotation rehearsal with both slots is still required (plan §12 item 4). O-1..O-9 and every carried item stay open.
