@@ -2,7 +2,8 @@
 
 **Status: DOCUMENTATION ONLY. NOT AN AUTHORIZATION. NOT PHASE 7 ACCEPTANCE.** This record orders the controlled 7.3D activation and lists what must be decided first. It authorizes no hosted action: no secret, webhook registration, endpoint enablement or disablement, coverage-window start, probe enablement, email, synthetic record, replay, purge, suppression, retry, Cron, booking or payment. It is not a feature slice and adds no code.
 **Authority:** the owner's 2026-11-21 instructions; the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §6.4, §8.4, §11.4, §12 and §15.1; the [readiness record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) §2–§3 with its corrections in §6–§7; the [7.3D-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md); the [7.3D-1 review fixes](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md), whose §2.5 is the shutdown procedure; Codex's review of #186 (findings R-1..R-5, resolved in §6).
-**Base:** `main` `96c8149dfe4ba80484ad3e65efffb2ab39011fee` (the #185 merge). Branch `claude/phase7-3d-activation-checklist`; PR #186 retargeted to `main` on 2026-11-21. Where this record and the plan differ, the readiness corrections and this record govern until the plan is amended under review. One conflict with the plan is recorded, not resolved (§6, PG-3).
+**Base:** `main` `96c8149dfe4ba80484ad3e65efffb2ab39011fee` (the #185 merge). Branch `claude/phase7-3d-activation-checklist`; PR #186 retargeted to `main` on 2026-11-21. Where this record and the plan differ, the readiness corrections and this record govern until the plan is amended under review. The PG-3 conflict with plan §6.4 is resolved by amending the plan (§6).
+**Second revision (2026-11-21, owner instruction):** PG-2 is assigned to the 7.3D-2 operator purge control (#187), usable only after review and deployment; PG-3 is resolved as privileged counts-only slot readbacks; H-11 is an invalid-request smoke check, not proof of timestamp enforcement; T-6 stays blocked unless its existing preconditions hold; H-10 and H-8c specify recovery on every failure path, and H-10 must establish a delayed automatic attempt; every Production redeployment identifies its reviewed source commit and intended configuration (§6.1).
 
 ## 1. State at revision (read-only, 2026-11-21)
 
@@ -28,12 +29,12 @@ None is approved by this record, by Codex's reviews or by any merge. Arming need
   - Deletion policy **P-2** with a maximum deletion lag of **D = 14 days**: no receipt may remain more than 14 days past its `expires_at`.
   - A **weekly manual operator purge** (H-9). No `pg_cron` job; a scheduler would be a separate approval.
   - **Accountable: Josh (owner), Monday mornings ET** (complete by 12:00 ET). The first run is the first Monday after H-4.
-  - **Run procedure:** in the operator session, call `email_provider_events_purge(1000)` until a call deletes fewer than 1,000 rows, at most 10 calls (10,000 rows) per run. Then read `/admin/email-evidence`.
+  - **Run procedure:** on `/admin/email-evidence`, confirm **Purge expired reports** (the 7.3D-2 control: one confirmation makes one call of 1,000) until a run deletes fewer than 1,000 rows, at most 10 confirmations (10,000 rows) per weekly run. The page shows each run's deleted count and remaining backlog and then re-reads the retention counts.
   - **Run record** (no content): date and time ET; calls made; rows deleted; expired remaining, or "over 10,000"; oldest `expires_at` among the expired rows that remain; total retained.
   - **Capacity, documented:** 10,000 rows per weekly run, plus purge-on-receipt. Expected inflow is unknown before H-4. After the first full week, record that week's receipt count (privileged count only) and the margin, 10,000 minus the weekly receipt count. If the weekly receipt count exceeds 5,000, that is a finding for Codex (capacity or scheduler change).
   - **Missed-run escalation:** weekly runs leave 7 days of slack under D = 14. A run not completed by Monday 23:59 ET is a missed run. Record it and complete it by Wednesday 12:00 ET. A second consecutive miss, or any expired row older than `expires_at` + 14 days at any readback, is a finding. The owner records it the same day and chooses catch-up runs or the shutdown procedure (§3 step 31). There is no backup operator under DEC-2026-025, so an absence longer than 7 days must be decided in advance: shutdown, or a named backup by separate decision.
 - The duty lasts **while any receipt remains, expired or not**, including after a coverage-window end, an application rollback or a shutdown (review fixes §2.5).
-- **Provisioning gap PG-2: no app control runs the purge.** `/admin/email-evidence` shows purge duty and the last run but has no purge action. A privileged `supabase db query` cannot run it either, because the operator guard refuses a caller with no session, and it must not be used to bypass that guard. The EO-2 approval must name the method: (i) a reviewed operator purge control (a separate code slice), or (ii) a documented way to call the function from the operator's signed-in session. Until one is approved, H-9 and step 30 cannot run. The first expiry falls 30 days after the first receipt.
+- **Provisioning gap PG-2: method (i), the 7.3D-2 operator purge control (#187).** It calls the existing `email_provider_events_purge(1000)` from the operator's signed-in session, once per confirmation; it adds no migration, scheduler, service-role path or guard bypass, and a privileged `supabase db query` is still never used to purge. **It can be used only after** Codex review, merge and a READY Production deployment on the merge commit, read back as in step 1. Until then H-9 and step 30 cannot run. The EO-2 approval names this control as the method. The first expiry falls 30 days after the first receipt.
 
 ### EO-3: subscribed events (PROPOSAL)
 
@@ -50,6 +51,12 @@ None is approved by this record, by Codex's reviews or by any merge. Arming need
 
 - **Form of approval.** Each action must be named by its number in a dated, written owner approval. One written response may approve several actions if it names each one, for example "approve H-1, H-2 and H-3". An action not named is not approved. An approval covers one execution as described here; a repeat needs a new approval.
 - **Deployments.** The deployments listed are production releases outside the merge flow. Under AGENTS.md they need the owner's instruction, and naming the action gives it for those deployments only.
+- **Deployment provenance (every listed and every recovery deployment).**
+  - Each is a **redeploy of the reviewed commit then live in Production**, never `vercel deploy --prod` from a working tree.
+  - **Before:** record the source deployment ID, its `meta.githubCommitSha`, which must equal the reviewed `main` merge commit read back at step 1, and the **intended configuration** as variable names set and unset (never values).
+  - **After:** record the new deployment ID, READY, target `production`, the same `githubCommitSha`, the deployment `www.mercuriusmarketplace.com` resolves to, and the variable names.
+  - A different commit, or a configuration other than the intended one, is a **stop**: restore the last deployment known to carry the intended configuration on that commit before anything else.
+  - A recovery may `vercel promote` that deployment. A deployment keeps the variables it was built with, so promotion restores configuration; it is an application rollback, never a shutdown (step 31). After any promote, set the variables back to that deployment's configuration so the next deployment matches, and read back which deployment `www` resolves to before the next merge.
 - **Secret values** are never printed, logged, committed or pasted into chat. Readbacks list variable names only.
 
 | # | Hosted action | Where | New Production deployments | Reverse action |
@@ -64,9 +71,9 @@ None is approved by this record, by Codex's reviews or by any merge. Arming need
 | H-6 | Set `EMAIL_EVIDENCE_PROBES_ENABLED=true` in Production and deploy; later remove it and deploy | Vercel | 2 | Remove and deploy |
 | H-7 | One Resend dashboard **replay** of one event of an approved probe (T-1..T-4), created more than 5 minutes earlier: fact (b) | Resend | 0 | n/a |
 | H-8 | Secret **rotation rehearsal**, sub-steps H-8a..H-8e (§3 G), each named separately: H-8a rotate; H-8b both slots; H-8c previous-slot drill; H-8d remove the previous slot; H-8e one replay after removal. H-8a, H-8b, H-8c and H-8e each include one approved-probe replay | Resend, Vercel | H-8b 1, H-8c 2, H-8d 1 | Plan §6.4; shutdown procedure |
-| H-9 | Weekly operator purge runs under EO-2 (needs PG-2 resolved) | Production, operator session | 0 | n/a |
-| H-10 | **Automatic-retry re-signing test:** remove the secret and deploy; send T-1 once; restore the same secret and deploy, within 15 minutes (§3 step 11) | Vercel; probe route | 2 | Restore the secret (part of the action) |
-| H-11 | One **stale unsigned request**: `POST` with a `svix-timestamp` 10 minutes old, a well-formed arbitrary signature and a placeholder body, expecting 400 and nothing stored: fact (a-2) | Production | 0 | n/a |
+| H-9 | Weekly operator purge runs under EO-2, through the 7.3D-2 control once it is reviewed and deployed (PG-2) | Production, operator session | 0 | n/a |
+| H-10 | **Automatic-retry re-signing test:** remove the secret and redeploy; send T-1 once; hold receipt off until Resend's 5-minute automatic retry is answered 503; restore the same secret and redeploy before the 30-minute retry (§3 step 11) | Vercel; probe route | 2, plus any recovery deployment | Restore the secret (part of the action); recovery table in step 11 |
+| H-11 | One **invalid-request smoke check**: `POST` with a `svix-timestamp` 10 minutes old, a well-formed arbitrary signature and a placeholder body, expecting 400 and nothing stored. Not proof of timestamp enforcement (§3 step 18) | Production | 0 | n/a |
 
 ### EO-6: exact test sends and the controlled mailbox (PROPOSAL: T-1..T-6; T-7 deferred)
 
@@ -102,6 +109,7 @@ None is approved by this record, by Codex's reviews or by any merge. Arming need
   3. It is on the public-listing exclusion list.
   4. It has no open `insurance` renewal document at the open limit.
 - **Expected blocker:** the R0 record last showed this contractor "inactive and not onboarded", and `suspended` is reachable only from `active`. If precondition 2 fails, **T-6 is blocked**: it is recorded as not run and ledger-linked renewal evidence stays unproven. Making a synthetic provider active, even briefly, could make it eligible under the launch configuration. That is not proposed here and would need its own owner decision and Codex review.
+- **Decided (owner instruction, 2026-11-21):** T-6 stays **blocked** unless all four preconditions already hold at approval time. No 7.3D step changes the synthetic provider's status, onboarding, eligibility, listing exclusion, account or documents to make them hold.
 - **Cleanup, proposed:** record **no** review decision. A decision would change the synthetic contractor's evidence, and whether it sends email is unverified. The document stays in Compliance Expiry, identified as synthetic, until a separately authorized cleanup. It cannot simply be deleted: the owner-email ledger references it without cascade, and the renewal retention rules govern its file. The cleanup method goes to Codex.
 
 `email.failed` and `email.delivery_delayed` have **no known fixture**. They stay "not proven" (§3 step 13).
@@ -160,18 +168,33 @@ Evidence markers (§4): **[P]** privileged read; **[O]** operator session; **[L]
 ### D. Transport probes and the automatic-retry test (unlinked; never ledger evidence)
 
 10. **H-6:** enable probes (deployment 1 of 2).
-11. **H-10, fact (c), automatic-retry re-signing** (if approved; otherwise send T-1 normally and see step 21):
-    1. Remove `RESEND_WEBHOOK_SECRET` from Production (the previous slot is unset) and deploy, keeping the probe flag. H-2 must answer 503.
-    2. Send **T-1** once. **[R]** Its events' first attempts are answered 503.
-    3. Restore the same secret value and deploy. Step 1's deployment READY to step 3's deployment READY must take **at most 15 minutes**. If it takes longer: stop, but still complete step 3, because restoring receipt is the reverse action.
-    4. Wait for Resend's automatic retries (5 s, 5 min, 30 min, 2 h, …).
-    - **Pass** needs one T-1 event with all three:
-      - **[R]** at least one attempt answered 503, followed by an **automatic** attempt (not a manual replay) answered 200 at least 5 minutes after the event's creation;
-      - **[P]** that receipt's `received_at − provider_created_at` > 300 s, with `secret_slot = 'current'`;
+11. **H-10, fact (c), automatic-retry re-signing** (if approved; otherwise send T-1 normally and see step 21). The schedule relied on is the one Resend documents (immediately, 5 s, 5 min, 30 min, 2 h, …, each after the previous attempt), unverified for this account. The qualifying attempt must be an **automatic retry reaching the restored receiver more than 10 minutes after the event was created**. A quick successful retry can never qualify.
+    1. **Remove.** Record the pre-H-10 deployment P (ID, commit, configuration: current secret and probe flag set). Remove `RESEND_WEBHOOK_SECRET` from Production (the previous slot is unset) and redeploy P's commit, keeping the probe flag: deployment R. Read back R READY on the same commit; an unsigned `POST` (H-2) must answer **503**.
+    2. **Send T-1 once.** **[R]** its events' first attempts are answered 503.
+    3. **Hold.** Keep R live until **[R]** shows, for at least one T-1 event, the first attempt, the 5-second retry and the **5-minute retry** all answered 503.
+    4. **Restore.** Set the same secret value (read from the Resend endpoint, never from chat, logs or the repository) and redeploy P's commit with P's configuration: deployment S. Read back S READY on the same commit and H-2 answering 400 (a secret is present). S must be READY **before that event's 30-minute retry** (about 35 minutes after the send), and R READY to S READY must take **at most 30 minutes**.
+    5. Wait for the automatic retries after S, up to 3 hours after the send.
+    - **Pass** needs one T-1 event with all of:
+      - **[R]** every attempt before S READY answered 503, including the 5-minute retry; then an **automatic** attempt (not a manual replay) answered 200, made more than 10 minutes after the event's creation;
+      - **[P]** that receipt's `received_at − provider_created_at` > 600 s, with `secret_slot = 'current'`;
       - the probe readback shows it unlinked and not excluded.
-    - **Stop:** the automatic retry is refused with 400 `webhook_signature_invalid`. Automatic retries are then not re-signed, and the design returns to Codex (plan §12 item 3). The ±300 s check is never relaxed.
-    - **Stop:** no automatic attempt reaches the receiver within 3 hours of the send. Fact (c) cannot be shown.
-    - **Record the side effect:** ordinary production mail events raised in the window are answered 503 and fall to Resend's retry schedule. **[R]** the count of 503 attempts in the window; **[P]** how many were later stored.
+    - **Does not qualify** (fact (c) unproven; not a pass, not repeated without a new approval): any attempt for the event answered 200 within 10 minutes of its creation; a first attempt answered other than 503; the 5-minute retry not observed as 503 before S; a manual replay.
+    - **Stop:** an automatic retry after S refused with 400 `webhook_signature_invalid`. Automatic retries are then not re-signed, and the design returns to Codex (plan §12 item 3). The ±300 s check is never relaxed.
+    - **Stop:** no automatic attempt reaches S within 3 hours of the send.
+    - **Recovery, on every failure path.** It is part of H-10's approval, and the end state is always P's configuration live and read back (`www` → a deployment on P's commit with the secret and probe flag; H-2 answers 400):
+
+      | Failure | Recovery | Outcome |
+      |---|---|---|
+      | R fails, or is not READY within 15 minutes | Do not send T-1. Restore the variable. If `www` no longer resolves to P, promote P. Read back | H-10 not run; fact (c) blocked |
+      | R READY but H-2 does not answer 503 | Do not send T-1. Restore the variable; redeploy P's configuration (S) or promote P. Read back | H-10 not run |
+      | T-1 refused, failed or unknown | Never resend (the probe does not retry). Restore at once (step 4) | Fact (c) unproven |
+      | T-1's first attempt not answered 503 | Restore at once | Does not qualify |
+      | The 5-minute retry not seen as 503 within 15 minutes of the send | Restore at once | Does not qualify |
+      | S fails, is not READY, or H-2 does not answer 400 | Promote P (its build carries the secret and probe flag); keep the variable restored. Read back | Stop |
+      | R READY to restore longer than 30 minutes | Complete the restore first | Stop |
+      | Any stop in this step | The restored configuration stays; record it | The owner holds or shuts down (step 31) |
+
+    - **Record the side effect:** ordinary production mail events raised while R was live are answered 503 and fall to Resend's retry schedule. **[R]** the count of 503 attempts in that window; **[P]** how many were later stored.
 12. Send **T-2, T-3 and T-4**, once each.
 13. **Read back each probe** through `email_evidence_probe_readback` at +10 and +60 minutes.
     - **T-1..T-3:** a probe **passes** only when its expected event arrives as an **unlinked** receipt and the ID is not excluded. A missing or unexpected event at +60 minutes is a **finding**, never a pass. A probe is never credited with rules 1, 4, 5 or any ledger rule.
@@ -202,8 +225,8 @@ Each fact proves something different, and none stands in for another. The ±300 
 
 18. **(a) Stale-request rejection.**
     - **(a-1) automated:** unit tests S-15 and S-15a (`tests/unit/resend-webhook.test.ts`) run the real verifier. A validly signed request 400 s old is refused, and a timestamp failure is final, so the previous secret is never tried.
-    - **(a-2) production, H-11:** one stale request with an arbitrary signature. Expect 400 `invalid_signature`, **[L]** `email_webhook.refused` with `webhook_signature_invalid`, and an unchanged **[P]** receipt count.
-    - (a-2) shows only that the deployed receiver refuses a stale request and stores nothing. The HTTP answer cannot show the cause; that the timestamp is checked first comes from (a-1).
+    - **(a-2) production smoke check, H-11:** one request with a 10-minute-old `svix-timestamp` and an arbitrary signature. Expect 400 `invalid_signature`, **[L]** `email_webhook.refused` with `webhook_signature_invalid`, and an unchanged **[P]** receipt count.
+    - (a-2) is an **invalid-request smoke check** only: the deployed receiver refuses an unauthenticated request and stores nothing. An unsigned or arbitrarily signed request fails verification whatever its timestamp, so it is **not proof of timestamp enforcement**. Fact (a) rests on (a-1) alone.
     - A validly signed stale production request is **not proposed**: producing one would take the signing secret outside Vercel.
 19. **(b) Provider dashboard replay, H-7.** Replay one event of an approved probe created more than 5 minutes earlier.
     - **Pass:** **[R]** the replay answered 200, and **[L]** `email_webhook.duplicate`. The svix-id is unchanged, so the first receipt is kept unchanged and nothing new is stored. If the replay instead carries a new svix-id and is stored, record that from **[P]**.
@@ -219,7 +242,7 @@ Each fact proves something different, and none stands in for another. The ±300 
 - **A replay never records a slot.** It reuses the svix-id, so the first receipt and its slot are kept. Slot evidence therefore comes from the deployed configuration plus **[R]** 200 and **[L]** `email_webhook.duplicate`.
 - **[P] Slot counts are a privileged read**, counts only:
   `select secret_slot, count(*) from private.email_provider_events where received_at >= $from and received_at < $to group by 1`.
-  No operator function, page or log line exposes `secret_slot`; plan §6.4 deliberately keeps it off logs. The operator session cannot produce slot counts (PG-3).
+  No operator function, page or log line exposes `secret_slot`; plan §6.4 deliberately keeps it off logs. **PG-3, resolved:** slot evidence is always this privileged, counts-only read, recorded as **[P]** and never as operator evidence. Plan §6.4 is amended to match; no operator slot function is planned.
 - **Resend behaviour assumed but unverified.** The Resend connector states that after a rotation both secrets sign every payload for 24 hours. Steps 23–25 test this.
 
 22. **Before rotation:** **[P]** slot counts for [H-4 READY, now): `previous` = 0. Variable names: `RESEND_WEBHOOK_SECRET` only.
@@ -227,12 +250,22 @@ Each fact proves something different, and none stands in for another. The ±300 
     - **[R]** 200 is expected if both secrets sign.
     - A 400 is a **finding**: dual signing was not observed. Go to step 24 at once; deliveries refused until then fall to Resend's retry schedule (**[R]** count). Step 25 is then not run, and the previous slot is **unproven**.
 24. **H-8b:** set current = B and previous = A in Production; deploy. One approved replay: **[R]** 200, **[L]** duplicate. **[P]** receipts since this deployment: `current` only is expected, because the current slot is tried first and B signs every payload.
-25. **H-8c, previous-slot drill** (within 24 hours of H-8a, while A still signs):
-    1. Set current = X and keep previous = A, where X is a fresh `whsec_` value generated for the drill, never registered with Resend and discarded afterwards. Deploy.
+25. **H-8c, previous-slot drill** (within 24 hours of H-8a, while A still signs). Q is H-8b's deployment (current = B, previous = A).
+    1. Set current = X and keep previous = A, where X is a fresh `whsec_` value generated for the drill, never registered with Resend, never printed and discarded afterwards. Redeploy Q's commit: deployment D. Read back READY on the same commit.
     2. Make one approved replay. **Pass:** **[R]** 200 and **[L]** `email_webhook.duplicate`. With X in the current slot, only A in the previous slot can have verified it.
-    3. Restore H-8b's configuration and deploy.
-    - The drill deployment READY to the restore READY must take **at most 30 minutes**.
-    - **Stop:** any 400 during the drill. Restore at once; the previous-slot proof is a finding.
+    3. Restore B / A and redeploy Q's commit: deployment E. Read back READY on the same commit, the variable names, and one approved replay answered **[R]** 200.
+    - D READY to E READY must take **at most 30 minutes**.
+    - **Stop:** any 400 during the drill.
+    - **Recovery, on every failure path.** The end state is always Q's configuration live and read back:
+
+      | Failure | Recovery | Outcome |
+      |---|---|---|
+      | D fails or is not READY | Set the variables back to B / A at once. If `www` no longer resolves to Q, promote Q. Read back | H-8c not run; previous slot unproven |
+      | The replay is answered 400, or no attempt arrives within 10 minutes | Restore at once (step 3), or promote Q if that is quicker. **[R]** count provider deliveries refused while D was live | Stop (400) or unproven (no attempt) |
+      | E fails, is not READY, or its replay is refused | Promote Q and set the variables to B / A. Read back `www` → Q and one replay answered 200 | Stop |
+      | D READY to E READY longer than 30 minutes | Complete the restore first | Stop |
+      | Every case | Confirm X is in no Production variable; record that it was discarded | |
+
     - **Side effect:** ordinary mail stored during the drill records `secret_slot = 'previous'` (**[P]** count).
     - **If H-8c is not approved,** the previous slot's production behaviour is **unproven**, and unit test S-15 is its only evidence. While Resend signs with both secrets, provider traffic cannot reach the previous slot, because the current slot verifies first.
 26. **Evidence before removing the previous secret:** **[P]** slot counts for each interval: [H-4, H-8b), [H-8b, H-8c), [H-8c, restore), [restore, H-8d). Record each deployment ID and UTC time.
@@ -246,7 +279,7 @@ Each fact proves something different, and none stands in for another. The ±300 
 
 ### H. Retention
 
-30. **H-9:** run one operator purge under EO-2. It needs PG-2 resolved.
+30. **H-9:** run one weekly operator purge under EO-2 with the 7.3D-2 control, only after that control is reviewed and deployed (PG-2).
     - **[O]** readback: rows deleted, expired remaining, oldest `expires_at` and total retained.
     - Under P-2, no row may be more than 14 days past `expires_at`. Record the first dated purge.
     - The expiry readback is part of acceptance and of every rollback or shutdown record.
@@ -264,7 +297,7 @@ Each fact proves something different, and none stands in for another. The ±300 
     The owner then chooses **continue** (the window stays open and the weekly purge runs) or **shut down**. Shutdown follows review fixes §2.5, and each hosted step is separately authorized:
     1. **[O]** Record the coverage-window end with a reason. This labels emails; it stops nothing.
     2. **H-3d:** disable the Resend endpoint, or delete it. Nothing is claimed about events raised while it is disabled; whether they are queued, retried or dropped is unverified. If it is ever re-enabled, read back what arrives.
-    3. Remove **both** `RESEND_WEBHOOK_SECRET` and `RESEND_WEBHOOK_SECRET_PREVIOUS` from Production, and the probe flag if it is set. Deploy.
+    3. Remove **both** `RESEND_WEBHOOK_SECRET` and `RESEND_WEBHOOK_SECRET_PREVIOUS` from Production, and the probe flag if it is set. Redeploy the reviewed commit (deployment provenance, §2 EO-1).
     4. H-2 answers 503, and the probe route answers 404.
     5. **[P]** arming state and retention (total, expired, oldest `expires_at`); **[O]** the page shows purge duty.
     6. Purge duty continues weekly under EO-2 while any receipt remains.
@@ -290,7 +323,7 @@ Each fact proves something different, and none stands in for another. The ±300 
 - O-1..O-9 (readiness §2), including the O-5 push provenance gap for `20261124001000` and the push provenance of `20261128001000`.
 - 7.3B items: the real `svix-id` and email-ID shapes, and the bounce strings.
 - CFG-011; A2; the retrospective 7.2B review; real-email verification for 7.2C-1 and 7.2C-2; final booking-readiness checks; `request.spec.ts:837`.
-- PG-1, PG-2 and PG-3 (§6); the T-6 preconditions; the T-5 and T-6 cleanup method; fact (c) blocked unless H-10 is approved and shown.
+- PG-1 (§6); PG-2 until the 7.3D-2 control is reviewed and deployed; the T-6 preconditions (blocked unless they hold); the T-5 and T-6 cleanup method; fact (c) blocked unless H-10 is approved and shown.
 - Resend behaviour relied on but unverified, each tested where the sequence says so:
   - both secrets sign for 24 hours after rotation;
   - manual replays are re-signed;
@@ -304,17 +337,30 @@ Each fact proves something different, and none stands in for another. The ±300 
 
 | # | Finding | Resolution here |
 |---|---|---|
-| R-1 | Stale rejection, dashboard replay and automatic-retry re-signing were conflated | §3 F: three facts. (a) uses S-15/S-15a and H-11; (b) uses H-7; (c) is closed only by H-10, or is **blocked**. ±300 s unchanged |
+| R-1 | Stale rejection, dashboard replay and automatic-retry re-signing were conflated | §3 F: three facts. (a) rests on S-15/S-15a; H-11 is a smoke check only (second revision); (b) uses H-7; (c) is closed only by H-10, or is **blocked**. ±300 s unchanged |
 | R-2 | Rotation did not exercise both slots | §3 G: approved-probe replays only. The previous slot is shown by construction (H-8c). Evidence before (step 26) and after (step 28) removal. Slot counts are privileged reads, kept apart from operator evidence. No extra email |
 | R-3 | The suppressed probe was treated as a pass/fail test | §3 step 13: T-4 is observational. Exact stop list and exact unproven list. `failed` and `delivery_delayed` stay unproven without a trusted receipt for an approved send |
 | R-4 | Endpoint states were implicit | H-3, H-3d and H-3e are separate authorized actions. Disabled-at-creation is unverified (PG-1), and G-1 is recorded. Nothing is claimed about events raised while disabled |
 | R-5 | T-5/T-6 records were unspecified | §2 EO-6: exact proposed records and cleanup. T-6 is conditional on a `suspended`, excluded synthetic provider, and blocked otherwise. No real vendor is touched. Nothing is created |
 
-**Provisioning gaps** (for Codex; not resolved here):
+**Provisioning gaps:**
 
-- **PG-1:** creating an endpoint disabled is unverified, so gap G-1 is expected.
-- **PG-2:** no operator purge control exists (§2 EO-2).
-- **PG-3:** plan §6.4 step 3 says slot counts come "through the operator readback", but no operator function exposes `secret_slot`. This record uses the privileged count. Codex chooses between amending the plan and a later reviewed operator slot-count function.
+- **PG-1 (open):** creating an endpoint disabled is unverified, so gap G-1 is expected.
+- **PG-2 (assigned):** method (i), the 7.3D-2 operator purge control (#187). Usable only after Codex review, merge and a READY deployment on the merge commit (§2 EO-2).
+- **PG-3 (resolved):** slot counts are privileged, counts-only reads. Plan §6.4 runbook step 3 is amended from "through the operator readback" to that read; no operator slot function is planned.
+
+### 6.1 Second revision (owner instruction, 2026-11-21)
+
+| Point | Resolution here |
+|---|---|
+| PG-2 | §2 EO-2 and steps 30 and H-9 use the 7.3D-2 control after review and deployment; the run procedure is repeated confirmations, at most 10 per weekly run (still a **proposal** under EO-2) |
+| PG-3 | §3 G and plan §6.4: privileged counts-only slot readbacks |
+| H-11 | An invalid-request smoke check, not proof of timestamp enforcement; fact (a) rests on (a-1) (§3 step 18) |
+| T-6 | Blocked unless its existing preconditions hold; provider eligibility is not changed (§2 EO-6) |
+| H-10 | A delayed automatic attempt more than 10 minutes after creation, after the 5-minute retry was answered 503; a quick success never qualifies; recovery for every failure (§3 step 11) |
+| H-8c | Recovery for every failure; X discarded (§3 step 25) |
+| H-10 and H-8c | Remain separately authorized production drills (§2 EO-1, §7) |
+| Redeployments | Each identifies its reviewed source commit and intended configuration, with before and after readbacks (§2 EO-1) |
 
 ## 7. Owner decision card
 
@@ -322,7 +368,7 @@ One written, dated response may approve any of the lines below. Each must be nam
 
 **Decisions (PROPOSALS):**
 
-- **EO-2:** 90 / 30 days; P-2 with D = 14 days; a weekly manual purge with Josh accountable on Monday mornings ET; run procedure, record, capacity (10,000 per run; finding above 5,000 receipts a week) and escalation as in §2. The approval must also name the **PG-2 method**.
+- **EO-2:** 90 / 30 days; P-2 with D = 14 days; a weekly manual purge with Josh accountable on Monday mornings ET; run procedure, record, capacity (10,000 per run; finding above 5,000 receipts a week) and escalation as in §2. The approval names the **7.3D-2 operator purge control** as the PG-2 method, usable once deployed.
 - **EO-3:** the seven types; no opens or clicks.
 - **EO-7:** keep minimal, address-free unmatched receipts for 30 days.
 - **EO-6:** T-1..T-6 as specified (T-6 conditional); T-7 deferred.
@@ -334,9 +380,9 @@ One written, dated response may approve any of the lines below. Each must be nam
 |---|---|
 | H-1, H-2, H-3 (H-3d and H-3e only if chosen), H-4, H-5 | H-4: 1 |
 | H-6 | 2 |
-| H-10 (fact (c); without it 7.3D cannot be accepted) | 2 |
+| H-10 (fact (c); without it 7.3D cannot be accepted; a separately authorized drill) | 2, plus any recovery |
 | H-7, H-11 | 0 |
-| H-8a, H-8b, H-8c, H-8d, H-8e | H-8b 1, H-8c 2, H-8d 1 |
+| H-8a, H-8b, H-8c (a separately authorized drill), H-8d, H-8e | H-8b 1, H-8c 2 plus any recovery, H-8d 1 |
 | H-9 (weekly) | 0 |
 
 Plus the privileged read-only readbacks in steps 2, 8, 11, 22–28, 30 and 31.
@@ -366,6 +412,7 @@ Each is sent once, after H-5. T-5 and T-6 cleanup are separate later approvals.
 - any 400 in the H-8c drill;
 - any 400 after H-8d;
 - H-10 or H-8c bounds exceeded (still restore);
+- a deployment on an unexpected commit or with an unintended configuration (restore first);
 - EO approvals missing at step 5.
 
 On a stop, no further activation step is taken. The owner holds the current state or shuts down.
@@ -374,7 +421,7 @@ On a stop, no further activation step is taken. The owner holds the current stat
 
 1. Record the window end.
 2. H-3d: disable or delete the endpoint.
-3. Remove both secret slots and the probe flag, then deploy.
+3. Remove both secret slots and the probe flag, then redeploy the reviewed commit.
 4. Read back 503 and 404.
 5. Read back retention.
 6. Weekly purges continue while any receipt remains.

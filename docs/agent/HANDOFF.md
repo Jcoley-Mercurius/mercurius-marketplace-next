@@ -14,10 +14,17 @@
 - **Base:** `main` `96c8149` (#185 merged 13:16:28 UTC; main CI 44908032730 success; Production `dpl_EL8f5rwKCkqD69kyGNXZXEUQvU3N` READY on `96c8149`, `www` resolves to it). PR #186 retargeted to `main`; diff is the checklist, this handoff and one TRACEABILITY line. Documentation only; no code. Record: [activation checklist](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-ACTIVATION-CHECKLIST.md).
 - **Last hosted read (13:16:54 UTC, not repeated):** local = remote through `20261129001000`; probe readback `bd5da284…`; 0 arming events, 0 armed rows, 0 receipts; execute `authenticated` only.
 - **Codex review R-1..R-5 resolved (§6):** freshness split into (a) stale rejection (S-15a + H-11), (b) dashboard replay (H-7), (c) automatic-retry re-signing (H-10 only, else **blocked**), ±300 s unchanged; both-slot rotation by approved-probe replays with a previous-slot drill (H-8c) and privileged slot counts before and after removal; T-4 observational with exact stop and unproven lists; endpoint create/disable/enable as H-3/H-3d/H-3e; exact T-5/T-6 records and cleanup (T-6 conditional on a `suspended`, excluded synthetic provider, expected blocked).
-- **Provisioning gaps for Codex:** PG-1 disabled-at-creation unverified (gap G-1); PG-2 no operator purge control; PG-3 plan §6.4 says slot counts via operator readback, but none exposes `secret_slot`.
+- **Provisioning gaps:** PG-1 disabled-at-creation unverified (gap G-1), open.
+- **Second revision (owner instruction 2026-11-21, checklist §6.1; reviewed head was `5ca707b`, CI 44916554729 success):**
+  - PG-2 assigned to the 7.3D-2 operator purge control (#187), usable only after review, merge and a READY deployment; the weekly run is repeated confirmations (EO-2 still a proposal);
+  - PG-3 resolved: slot counts are privileged counts-only reads; plan §6.4 step 3 amended;
+  - H-11 is an invalid-request smoke check, not proof of timestamp enforcement; fact (a) rests on S-15/S-15a;
+  - T-6 blocked unless its preconditions already hold; provider eligibility is not changed;
+  - H-10 needs an automatic retry more than 10 minutes after creation, after the 5-minute retry was answered 503; H-10 and H-8c each have a recovery table for every failure and stay separately authorized;
+  - every Production redeployment records its reviewed source commit and intended configuration, before and after.
 - **Proposals carried (not decisions):** EO-2 90/30, P-2, D = 14, weekly Monday-morning ET purge, Josh accountable; EO-3 seven types; EO-7 30-day unmatched receipts; EO-6 T-1..T-6, T-7 deferred. EO-4/5/8 unresolved. §7 is the owner decision card.
 - **Not done:** no secret, registration, endpoint change, coverage-window start, probe enablement, synthetic record, replay, purge, email, merge or deploy. Nothing approved.
-- **Next:** Codex review of the revision; owner decisions on the §7 card.
+- **Next:** Codex review of the second revision and of the 7.3D-2 PR; owner decisions on the §7 card.
 
 # Phase 7.3D-1 review fixes: shutdown wording before merge (TRACE-155) — 2026-11-21 ET
 
