@@ -1,6 +1,6 @@
 # Phase 7.3D-1 review fixes: whole-ID probe exclusion, logical expiry, coverage-window wording and the Production-only probe gate (TRACE-155)
 
-**Status: IMPLEMENTED LOCALLY. NOT PUSHED, NOT MERGED. NOT PHASE 7 ACCEPTANCE.** The forward migration `20261129001000` is not applied to the hosted database. Nothing is armed, registered, enabled or sent. EO-1..EO-8 remain **proposals**; these technical resolutions approve none of them.
+**Status: IMPLEMENTED; MIGRATION PUSHED TO HOSTED (2026-11-21, owner instruction, §3.3). NOT MERGED. NOT PHASE 7 ACCEPTANCE.** The forward migration `20261129001000` is applied to the hosted database and read back (§3.3); the code is not merged or deployed. Nothing is armed, registered, enabled or sent. EO-1..EO-8 remain **proposals**; these technical resolutions approve none of them.
 **Authority:** the owner's 7.3D-1 review-fix instruction (2026-11-20), which relays Codex's review of #184: resolutions for D-11, logical expiry, coverage-window wording and D-8. Codex accepts D-2 (partial coverage is rule 9), D-5 (an admin API route) and D-4 (page controls), the last subject to the wording repair here. No Codex review is posted on #184 in GitHub; the instruction is the review record. Also the [7.3D-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md), the [readiness record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) and the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §8.3, §8.4 and §18.
 **Base:** `main` `8a40fa46e7752ae5d6625287fb684a941978ced4` (the #184 merge). Branch `claude/phase7-3d1-review-fixes`, in the 7.3D-1 worktree with its isolated synthetic stack (ports 5606x) and browser ports (3176/56861).
 
@@ -95,6 +95,19 @@ Rule 9 for `collecting` ("No provider report yet") and every rule 1–8 label ar
 - **A failed push** (lock timeout) leaves the hosted function unchanged at `2d02c820…`; the deployed code's guard still refuses mixed readbacks.
 - Nothing here touches receipts, the arming history, purge or retention. Purge duty is unaffected.
 
+### 3.3 Hosted push (2026-11-21, owner instruction)
+
+The owner instructed "Please push all migrations" on 2026-11-21. The push came before Codex review of this PR, so §3.1 step 1 was reordered by that instruction; step 2 onward was followed. Run from the PR worktree at `4afce33`, linked to the same project as the main checkout. The only open PR was #185, and its only migration is `20261129001000`.
+
+| Step | Observed (UTC) |
+|---|---|
+| Before (read-only, 13:04:24) | Hosted head `20261128001000`; probe readback `2d02c820f1d7a7a5356636e1e5e6e19f`; other eight `8 \| 8fbc18c05a0ed9f360bc9b266423f509`; summary `8eadddd6f47401258d747248a38ce507`; execute `authenticated` only; 0 arming events, no `armed_at`, 0 receipts; money `58 \| af0fae6e0c5b604e9073e10bc060957e` |
+| `supabase db push --linked --dry-run` | Listed **only** `20261129001000_phase7_email_evidence_probe_eligibility.sql` |
+| `supabase db push --linked` | 13:04:41–13:04:45; applied `20261129001000`; exit 0; no lock timeout |
+| After (read-only, 13:04:56) | Hosted head `20261129001000` (`migration list`: local = remote); probe readback **`bd5da284bbd54764df0986ac1153e529`**; other eight, summary, grants and money unchanged; 0 arming events, no `armed_at`, 0 receipts |
+
+Every value matches §3.1 step 4. The live #184 code reads the same `not_probe` key, so production now has the stricter database rule (D-11 and expiry) while the TypeScript wording waits for merge. No merge, deployment, secret, registration, arming, probe enablement or email.
+
 ## 4. Evidence (local, synthetic; every send stubbed)
 
 | Check | Result |
@@ -148,5 +161,5 @@ Local run on the isolated copy (ports 3176/56861; host load ≈5–8, much lower
 
 ## 7. Open and not done
 
-- **Open:** who pushed `20261128001000` and when (§1); the Vercel deployment ID for `8a40fa4` (GitHub records the deployment as successful; not read through Vercel here); operator-session readbacks O-1..O-9; the 7.3B 503 probe and push provenance; post-deploy hash readbacks; EO-1..EO-8; every carried verification item.
-- **Not done:** no hosted migration push, merge, deployment, secret or environment change, webhook registration, coverage-window recording (arming), probe enablement or email. No suppression, retry, Cron, booking or payment change. Phase 7 is not accepted.
+- **Open:** Codex review of this PR (the migration was pushed first, §3.3); who pushed `20261128001000` and when (§1); the Vercel deployment ID for `8a40fa4` (GitHub records the deployment as successful; not read through Vercel here); operator-session readbacks O-1..O-9; the 7.3B 503 probe and push provenance; post-deploy hash readbacks; EO-1..EO-8; every carried verification item.
+- **Not done:** no merge, deployment, secret or environment change, webhook registration, coverage-window recording (arming), probe enablement or email (the hosted push of `20261129001000` is done, §3.3). No suppression, retry, Cron, booking or payment change. Phase 7 is not accepted.

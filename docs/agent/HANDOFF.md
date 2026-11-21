@@ -9,8 +9,9 @@
 - **Evidence:** SQL 126 fails 9/56 on the unrepaired function, then 58/58; SQL 125 153/153 (one deliberate edit); SQL 122/124 unchanged; full SQL 118 / 8,551; SQL 126 mutations (6 caught behaviourally, 3 equivalent, control passes); migration-lock step 8; concurrency A-1..A-5 and P-1 (96 racing reads, none mixed); unit 79 / 1,214; lint, types, secrets and build pass; browser (isolated) 64/64 across the arming, owner-emails and ledger specs. Exact-head CI: PR body.
 - **Reconciled (dated notes, originals kept):** 7.3D-1 record header, readiness §7 (§3.4's "disarming stops new receipts" corrected), plan header, §8.3, §8.4 and §18.6, TRACE-155.
 - **For Codex:** F-1..F-6 (record §6); the dry run should list only `20261129001000` (record §3.1).
-- **Not done:** hosted push, merge, deploy, secrets, registration, arming, probe enablement, email. Open: `20261128001000` push provenance, O-1..O-9, EO-1..EO-8, carried items. Not Phase 7 acceptance.
-- **Next:** Codex review; then, with owner authorization, the dry run and push of `20261129001000` before merge.
+- **Hosted (2026-11-21, owner instruction):** dry run listed only `20261129001000`; pushed 13:04:41–13:04:45 UTC; read-only readback matches §3.1 (probe readback `bd5da284…`, other eight `8 | 8fbc18c0…`, summary `8eadddd6…`, `authenticated` only, 0 arming events, 0 receipts, money `58 | af0fae6e…`). Pushed before Codex review, on the owner's instruction. Record §3.3.
+- **Not done:** merge, deploy, secrets, registration, arming, probe enablement, email. Open: Codex review, `20261128001000` push provenance, O-1..O-9, EO-1..EO-8, carried items. Not Phase 7 acceptance.
+- **Next:** Codex review; merge (= deploy) once accepted.
 
 # Phase 7.3D-1 audited arming, interval coverage and a disabled probe harness (TRACE-155) — 2026-11-20 ET
 
