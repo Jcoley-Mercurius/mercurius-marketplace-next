@@ -1,3 +1,14 @@
+# Phase 7.3D-2 operator purge control (TRACE-155) — 2026-11-21 ET
+
+- **Base:** `main` `96c8149` (#185). #186 open at reviewed head `5ca707b`; its CI 44916554729 completed **success**. Branch `claude/phase7-3d2-operator-provider-event-purge` in the 7.3D-1 worktree, draft PR. Record: [7.3D-2](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-2.md).
+- **Built:** a "Purge expired reports" control on `/admin/email-evidence` through `ConfirmAction`. One confirmation makes one call of the existing `email_provider_events_purge` with `{ p_limit: 1000 }`; no loop, timer, retry or scheduler. It shows the deleted count and backlog, then re-reads the retention readback. A coded refusal says nothing was deleted; an uncoded failure is unknown; a failed refresh never undoes a reported deletion.
+- **Unchanged:** every migration, the function and grants, retention intervals, receiver, ledgers, money functions, coverage commands, probe route, `vercel.json`.
+- **Evidence:** unit and browser results in the PR body; record §3.
+- **For Codex:** D-1..D-5 (record §4), notably D-1, inline refresh failures for the whole page.
+- **#186 dependency:** PG-2 resolves to this control only after review, merge and a READY deployment on the merge commit. The checklist amendments (PG-2, PG-3, H-11 wording, T-6, H-10 and H-8c recovery, redeploy provenance) are a separate commit on #186.
+- **Not done:** merge, deploy, production purge, secrets, registration, probes, synthetic records, email. EO-2 stays a proposal. Not Phase 7 acceptance.
+- **Next:** Codex reviews this PR and the #186 amendments; merge = deploy; then the owner decides EO-2 naming this control as the PG-2 method.
+
 # Phase 7.3D-1 review fixes: shutdown wording before merge (TRACE-155) — 2026-11-21 ET
 
 - **Checkpoint (read-only):** `main` `8a40fa4`; #185 head was `c99b7ae` (CI on `4afce33` passed; `c99b7ae` adds the hosted-push record). Hosted `20261129001000` applied 2026-11-21 (probe readback `bd5da284…`; 0 arming events, 0 armed records, 0 receipts). Codex accepts F-1..F-6, with no blocking code finding. That is source-review clearance, not activation or Phase 7 acceptance.

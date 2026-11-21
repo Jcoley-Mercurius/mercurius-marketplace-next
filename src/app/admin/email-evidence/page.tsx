@@ -25,6 +25,17 @@ import {
   type ArmingReadback,
 } from "@/lib/emailEvidence/arming";
 import { RETRY_HORIZON_HOURS, coverageLabel, evidenceFactLabel, type EvidenceCoverage } from "@/lib/emailEvidence/labels";
+import {
+  PURGE_BATCH_MAX,
+  PURGE_UNREADABLE,
+  classifyPurgeError,
+  parsePurgeResult,
+  purgeArgs,
+  purgeDeletedLabel,
+  purgeFailureMessage,
+  purgeRemainingLabel,
+  type PurgeResult,
+} from "@/lib/emailEvidence/purge";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -37,11 +48,16 @@ import { cn } from "@/lib/utils";
 // secret and the provider registration; stopping it is the separately authorized shutdown
 // procedure. Test probes are off unless the deployment enables them, and prove only that Resend
 // reports reach the receiver; they are never evidence for an owner, application or price email.
+// Phase 7.3D-2: the operator purge of expired provider reports. One confirmation makes one call of
+// the existing `email_provider_events_purge` with the largest batch it accepts; the page never
+// repeats it, and nothing schedules it. A refusal and an unknown outcome are told apart, and a
+// failed refresh afterwards never changes what the purge reported.
 
 const COVERAGE_ORDER: EvidenceCoverage[] = ["before_first_arm", "collecting", "complete", "partial", "gap", "unknown"];
 
 type ProbeResult = { state: "sent"; choice: ProbeChoice; readback: ProbeReadback | null; verdict: ProbeVerdict | null };
 type ProbeFailure = { state: "failed" | "unknown"; message: string };
+type PurgeOutcome = { result: PurgeResult; refresh: "pending" | "done" | "failed" };
 
 function errorMessage(caught: unknown, fallback: string) {
   if (caught && typeof caught === "object" && "message" in caught && typeof caught.message === "string" && caught.message) return caught.message;
@@ -58,16 +74,20 @@ export default function EmailEvidencePage() {
   const [data, setData] = useState<ArmingReadback | null>(null);
   const [error, setError] = useState("");
   const [probe, setProbe] = useState<ProbeResult | null>(null);
+  const [purge, setPurge] = useState<PurgeOutcome | null>(null);
   const generation = useRef(0);
 
+  /** Reads the readback again. Resolves false only when this read failed. */
   const load = useCallback(async () => {
     const ticket = ++generation.current;
     setError("");
     try {
       const next = await fetchReadback();
       if (ticket === generation.current) setData(next);
+      return true;
     } catch (caught) {
       if (ticket === generation.current) setError(errorMessage(caught, "Coverage window status could not be loaded."));
+      return false;
     }
   }, []);
 
@@ -76,7 +96,8 @@ export default function EmailEvidencePage() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  if (error) return <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 md:p-8"><AdminError title="Email evidence could not be loaded" message={error} retry={() => void load()} /></div>;
+  // Only a first load that fails replaces the page; a later failed refresh keeps the last figures.
+  if (!data && error) return <div className="mx-auto w-full max-w-5xl p-4 sm:p-6 md:p-8"><AdminError title="Email evidence could not be loaded" message={error} retry={() => void load()} /></div>;
   if (!data) return <AdminLoading label="Loading email evidence..." />;
 
   const transition = async (action: "arm" | "disarm", input: string) => {
@@ -107,6 +128,30 @@ export default function EmailEvidencePage() {
     setProbe(body);
   };
 
+  // One confirmed run: exactly one call, never repeated here. ConfirmAction keeps the dialog open
+  // and its buttons disabled until this settles, so a second click cannot start another call.
+  const runPurge = async () => {
+    setPurge(null);
+    let answer: { data: unknown; error: unknown };
+    try {
+      answer = await createClient().rpc("email_provider_events_purge", purgeArgs());
+    } catch (caught) {
+      answer = { data: null, error: { message: errorMessage(caught, "No answer was received") } };
+    }
+    if (answer.error) {
+      await load();
+      throw new Error(purgeFailureMessage(classifyPurgeError(answer.error)));
+    }
+    const result = parsePurgeResult(answer.data);
+    if (!result) {
+      await load();
+      throw new Error(PURGE_UNREADABLE);
+    }
+    setPurge({ result, refresh: "pending" });
+    const refreshed = await load();
+    setPurge({ result, refresh: refreshed ? "done" : "failed" });
+  };
+
   const history = [...data.history].reverse();
 
   return (
@@ -123,6 +168,12 @@ export default function EmailEvidencePage() {
         </div>
         <Button variant="outline" className="min-h-11" onClick={() => void load()}><RefreshCw />Refresh</Button>
       </header>
+
+      {error && (
+        <p role="alert" data-testid="refresh-error" className="rounded-lg border border-destructive/40 p-3 text-sm break-words text-destructive">
+          The page could not be refreshed: {error}. The figures below are from {formatEvidenceTime(data.checked_at)}.
+        </p>
+      )}
 
       <Card className={cn(data.armed && "border-status-success")}>
         <CardHeader>
@@ -211,7 +262,10 @@ export default function EmailEvidencePage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Stored provider reports</CardTitle>
-          <CardDescription>Counts only. Recording a window end, stopping receipt or rolling back a release deletes nothing; only the operator purge does.</CardDescription>
+          <CardDescription>
+            Counts only. Recording a window end, stopping receipt or rolling back a release deletes nothing; only the operator purge does. The purge deletes
+            expired reports only, up to {PURGE_BATCH_MAX.toLocaleString("en-US")} each time it is confirmed. Nothing runs it automatically.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -231,6 +285,27 @@ export default function EmailEvidencePage() {
               ? `Last purge ${formatEvidenceTime(data.retention.last_purge.ran_at)}: ${data.retention.last_purge.deleted} deleted, ${data.retention.last_purge.remaining_over_cap ? "over 10,000" : data.retention.last_purge.remaining_expired} expired left.`
               : "No purge has been run."}
           </p>
+          <ConfirmAction
+            triggerLabel="Purge expired reports"
+            title="Permanently delete expired provider reports?"
+            entity={`Up to ${PURGE_BATCH_MAX.toLocaleString("en-US")} expired Resend delivery reports`}
+            consequence={`Deletes up to ${PURGE_BATCH_MAX.toLocaleString("en-US")} provider reports whose retention has expired, oldest first, in this one run. Deletion is permanent and cannot be undone. Reports that have not expired, email records and the coverage window history are not changed. If expired reports remain, the page says so; run it again to delete more.`}
+            confirmLabel="Delete expired reports"
+            describeError={(caught) => (caught instanceof Error ? caught.message : undefined)}
+            onConfirm={() => runPurge()}
+          />
+          <div role="status" aria-live="polite" data-testid="purge-result" className="text-sm">
+            {purge && (
+              <div className="space-y-1">
+                <p className="font-medium">{purgeDeletedLabel(purge.result)} · {formatEvidenceTime(purge.result.checked_at)}</p>
+                <p className="break-words">{purgeRemainingLabel(purge.result, formatEvidenceTime)}</p>
+                {purge.refresh === "pending" && <p className="text-muted-foreground">Refreshing the counts…</p>}
+                {purge.refresh === "failed" && (
+                  <p className="text-status-warning">The counts above were not refreshed after this purge. The deletion stands; use Refresh to read the current counts.</p>
+                )}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
