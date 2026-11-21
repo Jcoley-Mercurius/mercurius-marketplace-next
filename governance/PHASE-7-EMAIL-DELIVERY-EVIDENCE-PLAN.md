@@ -305,7 +305,7 @@ There is no `after()` work: everything that matters commits inside the request.
 | Names | `RESEND_WEBHOOK_SECRET` (arms the route) and `RESEND_WEBHOOK_SECRET_PREVIOUS` (rotation only). Vercel **Production** server secrets; never in Preview. Names and descriptions go in `.env.example` |
 | Never | Logged, returned, committed, or put in analytics or errors |
 | **Which secret matched** | Stored **only on the receipt** (`secret_slot`). **It is not a log field**: the v2 logger keeps its 16 keys (EC-6) |
-| Rotation runbook (7.3D) | (1) Create a new secret in Resend. (2) Set `…_PREVIOUS` = old and the current secret = new; redeploy. (3) Confirm new receipts record `secret_slot = 'current'` through the operator readback (counts by slot, no values). (4) After the retry horizon (≈32 h), remove `…_PREVIOUS` and redeploy |
+| Rotation runbook (7.3D) | (1) Create a new secret in Resend. (2) Set `…_PREVIOUS` = old and the current secret = new; redeploy. (3) Confirm new receipts record `secret_slot = 'current'` through a **privileged, counts-only read** (`secret_slot` and count, no row content). *(Amended 2026-11-21, PG-3 of the 7.3D activation checklist: no operator function exposes the slot, and none is planned; this was "through the operator readback".)* (4) After the retry horizon (≈32 h), remove `…_PREVIOUS` and redeploy |
 | Compromise | Rotate with no overlap. Stored receipts stay; none caused an action |
 
 ### 6.5 Failure responses
