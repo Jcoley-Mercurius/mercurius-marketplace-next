@@ -1,3 +1,13 @@
+# Phase 7.3D controlled activation checklist (TRACE-155) — 2026-11-21 ET
+
+- **Base:** `main` `96c8149` (#185 merged 13:16:28 UTC; main CI 44908032730 success; Production `dpl_EL8f5rwKCkqD69kyGNXZXEUQvU3N` READY on `96c8149`, `www` resolves to it). PR #186 retargeted to `main`; diff is the checklist, this handoff and one TRACEABILITY line. Documentation only; no code. Record: [activation checklist](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-ACTIVATION-CHECKLIST.md).
+- **Last hosted read (13:16:54 UTC, not repeated):** local = remote through `20261129001000`; probe readback `bd5da284…`; 0 arming events, 0 armed rows, 0 receipts; execute `authenticated` only.
+- **Codex review R-1..R-5 resolved (§6):** freshness split into (a) stale rejection (S-15a + H-11), (b) dashboard replay (H-7), (c) automatic-retry re-signing (H-10 only, else **blocked**), ±300 s unchanged; both-slot rotation by approved-probe replays with a previous-slot drill (H-8c) and privileged slot counts before and after removal; T-4 observational with exact stop and unproven lists; endpoint create/disable/enable as H-3/H-3d/H-3e; exact T-5/T-6 records and cleanup (T-6 conditional on a `suspended`, excluded synthetic provider, expected blocked).
+- **Provisioning gaps for Codex:** PG-1 disabled-at-creation unverified (gap G-1); PG-2 no operator purge control; PG-3 plan §6.4 says slot counts via operator readback, but none exposes `secret_slot`.
+- **Proposals carried (not decisions):** EO-2 90/30, P-2, D = 14, weekly Monday-morning ET purge, Josh accountable; EO-3 seven types; EO-7 30-day unmatched receipts; EO-6 T-1..T-6, T-7 deferred. EO-4/5/8 unresolved. §7 is the owner decision card.
+- **Not done:** no secret, registration, endpoint change, coverage-window start, probe enablement, synthetic record, replay, purge, email, merge or deploy. Nothing approved.
+- **Next:** Codex review of the revision; owner decisions on the §7 card.
+
 # Phase 7.3D-1 review fixes: shutdown wording before merge (TRACE-155) — 2026-11-21 ET
 
 - **Checkpoint (read-only):** `main` `8a40fa4`; #185 head was `c99b7ae` (CI on `4afce33` passed; `c99b7ae` adds the hosted-push record). Hosted `20261129001000` applied 2026-11-21 (probe readback `bd5da284…`; 0 arming events, 0 armed records, 0 receipts). Codex accepts F-1..F-6, with no blocking code finding. That is source-review clearance, not activation or Phase 7 acceptance.
