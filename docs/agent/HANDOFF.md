@@ -1,13 +1,13 @@
 # Phase 7.3D-2 operator purge control (TRACE-155) — 2026-11-21 ET
 
-- **Base:** `main` `96c8149` (#185). #186 open at reviewed head `5ca707b`; its CI 44916554729 completed **success**. Branch `claude/phase7-3d2-operator-provider-event-purge` in the 7.3D-1 worktree, draft PR. Record: [7.3D-2](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-2.md).
-- **Built:** a "Purge expired reports" control on `/admin/email-evidence` through `ConfirmAction`. One confirmation makes one call of the existing `email_provider_events_purge` with `{ p_limit: 1000 }`; no loop, timer, retry or scheduler. It shows the deleted count and backlog, then re-reads the retention readback. A coded refusal says nothing was deleted; an uncoded failure is unknown; a failed refresh never undoes a reported deletion.
+- **Base:** built on `main` `96c8149` (#185); updated by merge to `main` `c74b8d7` (#186 merged at `5ca707b`). Branch `claude/phase7-3d2-operator-provider-event-purge` in the 7.3D-1 worktree, draft PR #187. Record: [7.3D-2](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-2.md).
+- **Built:** a "Purge expired reports" control on `/admin/email-evidence` through `ConfirmAction`. One confirmation makes one call of the existing `email_provider_events_purge` with `{ p_limit: 1000 }`; no loop, timer, retry or scheduler. It shows the deleted count and backlog, then re-reads the retention readback. A failed refresh never undoes a reported deletion.
+- **Codex review:** D-1, D-2, D-4, D-5 accepted. D-3 corrected (record §6.1): "Nothing was deleted" only for the documented pre-execution refusals `42501`, `PGRST202`, `PGRST301`, `PGRST302`; every other answer, coded or not (`08007`, `PGRST000`–`003`, unknown codes, coded gateway or transport answers), is unknown. Unit and browser regressions, with a mutation check against the old rule.
+- **Recovered:** `e85996a` (second checklist revision) was pushed to #186 after it merged and never reached `main`; its run 44932694362 was cancelled. Carried here as `08ac8a5` (record §6.2) for Codex review.
 - **Unchanged:** every migration, the function and grants, retention intervals, receiver, ledgers, money functions, coverage commands, probe route, `vercel.json`.
-- **Evidence:** unit and browser results in the PR body; record §3.
-- **For Codex:** D-1..D-5 (record §4), notably D-1, inline refresh failures for the whole page.
-- **#186 dependency:** PG-2 resolves to this control only after review, merge and a READY deployment on the merge commit. The checklist amendments (PG-2, PG-3, H-11 wording, T-6, H-10 and H-8c recovery, redeploy provenance) are a separate commit on #186.
-- **Not done:** merge, deploy, production purge, secrets, registration, probes, synthetic records, email. EO-2 stays a proposal. Not Phase 7 acceptance.
-- **Next:** Codex reviews this PR and the #186 amendments; merge = deploy; then the owner decides EO-2 naming this control as the PG-2 method.
+- **Evidence:** record §3 and §6.1; final-head CI in the PR body.
+- **Not done:** merge, deploy, production purge, secrets, registration, probes, synthetic records, email. EO-2 and every other owner activation decision stay pending. Not Phase 7 acceptance.
+- **Next:** Codex reviews #187 (D-3 correction and the recovered checklist revision); merge = deploy; then the owner decides EO-2 naming this control as the PG-2 method.
 
 # Phase 7.3D controlled activation checklist (TRACE-155) — 2026-11-21 ET
 

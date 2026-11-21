@@ -186,6 +186,30 @@ test("a lost answer is shown as unknown, never as nothing deleted; it is not ret
   await expect(page.getByTestId("purge-result")).toHaveText("");
 });
 
+// A coded answer is not proof of a rollback: only the documented pre-execution refusals say
+// "Nothing was deleted". Each of these may have followed a committed run.
+for (const [name, status, body] of [
+  ["transaction resolution unknown (08007)", 500, { code: "08007", message: "transaction resolution unknown", details: null, hint: null }],
+  ["PostgREST pool timeout (PGRST003)", 504, { code: "PGRST003", message: "Timed out acquiring connection from connection pool.", details: null, hint: null }],
+  ["a coded gateway answer", 502, { code: "BAD_GATEWAY", message: "Synthetic upstream failure" }],
+  ["an unknown nonempty code", 400, { code: "ZZ999", message: "Synthetic unlisted error" }],
+] as const) {
+  test(`a coded uncertain answer (${name}) is unknown, never nothing deleted; it is not retried`, async ({ page }) => {
+    const served = await open(page, (route) => json(route, body, status), { readback: () => BEFORE });
+    const dialog = await startPurge(page);
+    await dialog.getByRole("button", { name: "Delete expired reports" }).click();
+    const alert = dialog.getByRole("alert");
+    await expect(alert).toHaveText(`The purge's result is unknown: ${body.message.replace(/\.$/, "")} (${body.code}). Reports may have been deleted. Refresh the counts before running it again.`);
+    await expect(alert).toBeFocused();
+    expect(await page.locator("body").innerText()).not.toMatch(/nothing was deleted|rolled back/i);
+    await expect(page.getByTestId("purge-result")).toHaveText("");
+    // The counts are read again once; the purge is not.
+    await expect.poll(() => served.reads).toBe(2);
+    await page.waitForTimeout(1000);
+    expect(served.calls).toEqual([{ p_limit: 1000 }]);
+  });
+}
+
 test("an unreadable answer is unknown, not a success", async ({ page }) => {
   await open(page, (route) => json(route, { deleted: "lots" }));
   const dialog = await startPurge(page);

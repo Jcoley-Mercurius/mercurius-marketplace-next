@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   PURGE_BATCH_MAX,
+  PURGE_DEFINITE_REFUSALS,
   PURGE_REMAINING_CAP,
   PURGE_UNREADABLE,
   classifyPurgeError,
@@ -69,14 +70,24 @@ describe("parsePurgeResult", () => {
 });
 
 describe("failures", () => {
-  it("a coded refusal means the transaction rolled back: nothing was deleted", () => {
+  it("the operator guard's refusal (42501) comes before any delete: nothing was deleted", () => {
     const failure = classifyPurgeError({ code: "42501", message: "Operator access required", details: null, hint: null });
     expect(failure).toEqual({ kind: "refused", message: "Operator access required" });
     expect(purgeFailureMessage(failure)).toBe("The purge was refused: Operator access required. Nothing was deleted.");
   });
 
-  it("an API-level refusal also carries a code", () => {
-    expect(classifyPurgeError({ code: "PGRST202", message: "Could not find the function" }).kind).toBe("refused");
+  it.each([
+    ["the function was not found", "PGRST202", "Could not find the function"],
+    ["the JWT was rejected", "PGRST301", "JWSError JWSInvalidSignature"],
+    ["a request without a JWT was rejected", "PGRST302", "Anonymous access is disabled"],
+  ])("a pre-execution API refusal (%s) means nothing was deleted", (_name, code, message) => {
+    const failure = classifyPurgeError({ code, message, details: null, hint: null });
+    expect(failure).toEqual({ kind: "refused", message });
+    expect(purgeFailureMessage(failure)).toContain("Nothing was deleted.");
+  });
+
+  it("the allowlist is exactly the documented pre-execution refusals", () => {
+    expect([...PURGE_DEFINITE_REFUSALS].sort()).toEqual(["42501", "PGRST202", "PGRST301", "PGRST302"]);
   });
 
   it.each([
@@ -84,12 +95,34 @@ describe("failures", () => {
     ["a gateway answer with no code", { message: "upstream timed out" }],
     ["a thrown value", new Error("socket hang up")],
     ["nothing at all", undefined],
+    // A code proves only that something answered, not that this run rolled back.
+    ["transaction resolution unknown (08007)", { code: "08007", message: "transaction resolution unknown" }],
+    ["a connection failure (08006)", { code: "08006", message: "connection failure" }],
+    ["a server shutdown (57P01)", { code: "57P01", message: "terminating connection due to administrator command" }],
+    ["a statement timeout (57014)", { code: "57014", message: "canceling statement due to statement timeout" }],
+    ["PostgREST could not reach the database (PGRST000)", { code: "PGRST000", message: "Database client error" }],
+    ["PostgREST internal connection error (PGRST001)", { code: "PGRST001", message: "Database client error" }],
+    ["PostgREST pool timeout (PGRST003)", { code: "PGRST003", message: "Timed out acquiring connection from connection pool." }],
+    ["an unlisted JWT code (PGRST303)", { code: "PGRST303", message: "JWT expired" }],
+    ["an unknown database code (XX000)", { code: "XX000", message: "internal error" }],
+    ["an unknown nonempty code", { code: "SOMETHING", message: "Unexpected answer" }],
+    ["a coded gateway answer (string)", { code: "502", message: "Bad gateway" }],
+    ["a coded gateway answer (number)", { code: 504, message: "Gateway timeout" }],
+    ["a coded transport answer", { code: "ECONNRESET", message: "socket hang up" }],
+    ["a code with a listed code's prefix", { code: "42501x", message: "Operator access required" }],
+    ["a lowercase lookalike", { code: "pgrst202", message: "Could not find the function" }],
   ])("%s is unknown: the run may have committed", (_name, error) => {
     const failure = classifyPurgeError(error);
     expect(failure.kind).toBe("unknown");
     const text = purgeFailureMessage(failure);
     expect(text).toMatch(/^The purge's result is unknown: .+\. Reports may have been deleted\. Refresh the counts before running it again\.$/);
-    expect(text).not.toContain("Nothing was deleted");
+    expect(text).not.toMatch(/nothing was deleted|rolled back/i);
+  });
+
+  it("an unknown outcome names the code it was given, without claiming what it means", () => {
+    expect(purgeFailureMessage(classifyPurgeError({ code: "08007", message: "transaction resolution unknown." })))
+      .toBe("The purge's result is unknown: transaction resolution unknown (08007). Reports may have been deleted. Refresh the counts before running it again.");
+    expect(classifyPurgeError({ code: "", message: "TypeError: Failed to fetch" }).message).toBe("TypeError: Failed to fetch");
   });
 
   it("an unreadable answer never claims a rollback", () => {

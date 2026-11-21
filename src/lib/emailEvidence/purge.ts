@@ -56,15 +56,29 @@ export function parsePurgeResult(value: unknown): PurgeResult | null {
 }
 
 /**
- * A database or API refusal carries an error code, and the function runs in one transaction, so
- * nothing was deleted. Without a code (the request failed in transit, or the answer was not the
- * API's) the outcome is unknown: the run may have committed.
+ * The only error codes that prove the purge deleted nothing. Each is answered before the function
+ * deletes a row, so there is nothing to roll back:
+ * - `42501` insufficient_privilege: `vendor_require_operator()` raises it as the function's first
+ *   statement, before the delete; PostgreSQL also raises it when the role lacks EXECUTE, before the
+ *   body runs. The function raises no other code itself.
+ * - `PGRST202` (404): PostgREST found no such function, so nothing was called.
+ * - `PGRST301`, `PGRST302` (401): PostgREST rejected the JWT, or a request without one, before
+ *   sending anything to the database (PostgREST 12 error reference).
+ * Everything else is unknown, including any code not listed here: connection and transaction
+ * states such as `08007` (transaction resolution unknown) and PostgREST's `PGRST000`–`PGRST003`,
+ * timeouts, and any code a gateway or proxy put in its own JSON answer, which postgrest-js passes
+ * through unchanged. A code shows that something answered, not that this run rolled back.
  */
+export const PURGE_DEFINITE_REFUSALS: ReadonlySet<string> = new Set(["42501", "PGRST202", "PGRST301", "PGRST302"]);
+
+/** Refused (nothing was deleted) only for a listed code; otherwise the run may have committed. */
 export function classifyPurgeError(error: unknown): PurgeFailure {
   const record = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
   const message = typeof record.message === "string" && record.message.trim() ? record.message.trim() : "No answer was received";
-  const code = typeof record.code === "string" ? record.code.trim() : "";
-  return { kind: code ? "refused" : "unknown", message };
+  const code = typeof record.code === "string" || typeof record.code === "number" ? String(record.code).trim() : "";
+  if (PURGE_DEFINITE_REFUSALS.has(code)) return { kind: "refused", message };
+  // An unlisted code is named for the operator, with no claim about what it means.
+  return { kind: "unknown", message: code ? `${message.replace(/[.\s]+$/, "")} (${code})` : message };
 }
 
 export const PURGE_UNREADABLE =
