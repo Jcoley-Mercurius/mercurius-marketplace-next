@@ -90,7 +90,7 @@ export function DeliveryEvidenceCounts({ counts, failed, scope, rowNoun = "Email
           <>
             {!counts.all_emails.receiver_armed && (
               <p className="text-sm text-muted-foreground">
-                Resend delivery reports are not being collected yet, so emails show “Delivery evidence not available”.
+                No coverage window is recorded for Resend delivery reports, so emails without a report show “Delivery evidence not available”.
               </p>
             )}
             <div className="space-y-1">

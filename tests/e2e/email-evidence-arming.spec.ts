@@ -1,6 +1,7 @@
-// TRACE-155 (Phase 7.3D-1): synthetic browser evidence for the Email evidence page: collection
-// state, the audited start/stop controls, history, coverage meanings, retention and purge duty,
-// and the test-probe control. The readback and commands are served per test; the probe route is
+// TRACE-155 (Phase 7.3D-1): synthetic browser evidence for the Email evidence page: coverage-window
+// state, the audited start/end controls, history, coverage meanings, retention and purge duty,
+// and the test-probe control. Review fixes: a recorded window never claims that reports are
+// collected or that receipt is on or off; an excluded probe ID shows no receipts (D-11). The readback and commands are served per test; the probe route is
 // the real built route, which is off by default (no EMAIL_EVIDENCE_PROBES_ENABLED), except where a
 // test serves its answer. The database contract is SQL 125.
 import { test, expect, type Page, type Route } from "@playwright/test";
@@ -51,12 +52,12 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["light", 320]] a
   test(`never started (${theme}, ${width} px): state, empty history, coverage meanings and nothing stored; accessible`, async ({ page }) => {
     await open(page, () => NEVER, { theme, width });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Email evidence");
-    await expect(page.getByTestId("collection-state")).toHaveText("Not collecting provider reports. Collection has never been started.");
-    await expect(page.getByRole("button", { name: "Start collecting reports" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Stop collecting reports" })).toHaveCount(0);
-    await expect(page.getByText("Collection has never been started.", { exact: true })).toBeVisible();
-    await expect(page.getByText("Sent while reports were collected, but collection stopped within 28 hours, so a report may have been missed")).toBeVisible();
-    await expect(page.getByText("Sent while provider reports were not being collected")).toBeVisible();
+    await expect(page.getByTestId("collection-state")).toHaveText("No coverage window has ever been recorded.");
+    await expect(page.getByRole("button", { name: "Record coverage window start" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Record coverage window end" })).toHaveCount(0);
+    await expect(page.getByText("No coverage window has been recorded.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Sent inside a recorded coverage window that ended within 28 hours, so a report may have been missed")).toBeVisible();
+    await expect(page.getByText("Sent while no coverage window was recorded")).toBeVisible();
     await expect(page.getByTestId("purge-duty")).toHaveText("No provider reports are stored. There is nothing to purge.");
     await accessible(page);
   });
@@ -64,21 +65,27 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["light", 320]] a
 
 test("armed with history: newest first with reason and operator; purge duty continues with no expired reports", async ({ page }) => {
   await open(page, () => ARMED);
-  await expect(page.getByTestId("collection-state")).toContainText("Collecting provider reports since Nov 20, 2026");
-  const entries = page.getByRole("list", { name: "Collection history" }).getByRole("listitem");
+  await expect(page.getByTestId("collection-state")).toContainText("A coverage window has been recorded as open since Nov 20, 2026");
+  await expect(page.getByTestId("collection-state")).toContainText("This is a record, not a check that reports are arriving.");
+  const entries = page.getByRole("list", { name: "Coverage window history" }).getByRole("listitem");
   await expect(entries).toHaveCount(3);
-  await expect(entries.nth(0)).toContainText("Collection started · Nov 20, 2026");
+  await expect(entries.nth(0)).toContainText("Coverage window start recorded · Nov 20, 2026");
   await expect(entries.nth(0)).toContainText("Synthetic collection after registration");
-  await expect(entries.nth(1)).toContainText("Collection stopped · Nov 19, 2026");
+  await expect(entries.nth(1)).toContainText("Coverage window end recorded · Nov 19, 2026");
   await expect(entries.nth(2)).toContainText("Synthetic rehearsal start");
   await expect(entries.nth(0)).toContainText("Operator account …0a11ce");
   await expect(page.getByTestId("purge-duty")).toHaveText(/^No report has expired yet, but reports are still stored\. Keep running the operator purge/);
   await expect(page.getByText("Last purge Nov 20, 2026")).toContainText("2 deleted, 0 expired left.");
-  await expect(page.getByRole("button", { name: "Stop collecting reports" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Record coverage window end" })).toBeVisible();
+  // Nothing on the page claims that reports are being collected or that receipt was turned on.
+  const text = await page.locator("main").innerText();
+  expect(text).not.toMatch(/collecting provider reports|reports were collected|collection (started|stopped)/i);
+  expect(text).toContain("does not turn report receipt on or off");
+  expect(text).toContain("not that the receiver was available throughout it");
   await accessible(page);
 });
 
-test("start collecting: attestation and reason are required; the command gets one trimmed line; the page reloads", async ({ page }) => {
+test("record a window start: it says receipt is not turned on; attestation and reason are required; one trimmed line; the page reloads", async ({ page }) => {
   let state: unknown = NEVER;
   const sent: unknown[] = [];
   await page.route("**/rpc/email_evidence_arm", async (route) => {
@@ -88,29 +95,33 @@ test("start collecting: attestation and reason are required; the command gets on
     await json(route, { seq: 1, action: "arm", armed: true, occurred_at: "2026-11-20T18:01:00+00:00" });
   });
   await open(page, () => state);
-  await page.getByRole("button", { name: "Start collecting reports" }).click();
+  await page.getByRole("button", { name: "Record coverage window start" }).click();
   const dialog = page.getByRole("alertdialog");
-  await expect(dialog).toContainText("recording a start does neither");
-  const confirm = dialog.getByRole("button", { name: "Start collecting" });
+  await expect(dialog).toContainText("Record the start of a coverage window?");
+  await expect(dialog).toContainText("This only records the start: it does not turn on report receipt, register the webhook or deploy its secret");
+  const confirm = dialog.getByRole("button", { name: "Record start" });
   await expect(confirm).toBeDisabled();
   await dialog.getByLabel(/Reason/).fill("  Synthetic\nstart  ");
   await expect(confirm).toBeDisabled();
   await dialog.getByLabel(/The owner has authorized arming/).check();
   await confirm.click();
-  await expect(page.getByTestId("collection-state")).toContainText("Collecting provider reports since");
+  await expect(page.getByTestId("collection-state")).toContainText("A coverage window has been recorded as open since");
   expect(sent).toEqual([{ p_reason: "Synthetic start" }]);
-  await expect(page.getByRole("list", { name: "Collection history" }).getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByRole("list", { name: "Coverage window history" }).getByRole("listitem")).toHaveCount(1);
 });
 
-test("stop collecting: a database refusal is shown in the dialog and nothing changes", async ({ page }) => {
+test("record a window end: it says receipt does not stop and names the separate shutdown; a database refusal is shown", async ({ page }) => {
   await page.route("**/rpc/email_evidence_disarm", (route) =>
     json(route, { code: "55000", message: "Delivery evidence is not armed", details: null, hint: null }, 400));
   await open(page, () => ARMED);
-  await page.getByRole("button", { name: "Stop collecting reports" }).click();
+  await page.getByRole("button", { name: "Record coverage window end" }).click();
   const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("Record the end of the coverage window?");
+  await expect(dialog).toContainText("it does not stop Resend reports arriving, and it does not remove the webhook or its secret");
+  await expect(dialog).toContainText("Stopping receipt is the separately authorized shutdown procedure.");
   await expect(dialog).toContainText("Stored reports stay until purged");
   await dialog.getByLabel(/Reason/).fill("Synthetic stop");
-  await dialog.getByRole("button", { name: "Stop collecting" }).click();
+  await dialog.getByRole("button", { name: "Record end" }).click();
   await expect(dialog.getByRole("alert")).toHaveText("Delivery evidence is not armed");
   await accessible(page);
 });
@@ -147,6 +158,22 @@ test("test probe, served answer: the verdict is transport evidence only; an undo
   await accessible(page);
 });
 
+test("test probe, served exclusion (D-11): the whole send is not usable as evidence and no report is listed", async ({ page }) => {
+  await page.route("http://127.0.0.1:3103/api/admin/email-evidence-probe", (route) => json(route, {
+    state: "sent", choice: "bounced", verdict: "not_probe_evidence",
+    readback: { checked_at: "2026-11-20T18:00:00+00:00", not_probe: true, receipts: [] },
+  }));
+  await open(page, () => NEVER);
+  await page.getByRole("button", { name: "Send a test email" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await dialog.getByLabel(/Test address/).selectOption("bounced");
+  await dialog.getByRole("button", { name: "Send test" }).click();
+  const result = page.getByTestId("probe-result");
+  await expect(result).toContainText("Bounced test address: Not usable as test evidence: a current report for this send is matched to an email record, carries Mercurius tags or is in conflict");
+  await expect(result).not.toContainText("Provider time");
+  await expect(result).not.toContainText("Expected provider report received");
+});
+
 test("test probe, provider failure: reported once, never retried", async ({ page }) => {
   let calls = 0;
   await page.route("http://127.0.0.1:3103/api/admin/email-evidence-probe", (route) => {
@@ -170,11 +197,11 @@ test("non-operators cannot open the page", async ({ page }) => {
   // The proxy or the admin layout turns the vendor away before the page mounts.
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("heading", { name: "Email evidence" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Start collecting reports" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Record coverage window start" })).toHaveCount(0);
   expect(reads).toBe(0);
 });
 
-test("owner emails: rule 9 and 10 labels say what collection covered", async ({ page }) => {
+test("owner emails: rule 9 and 10 labels say which coverage window was recorded", async ({ page }) => {
   const summary = (rule: number, coverage: string) => ({ rule, coverage, delivered_fact: false, non_delivery_proven: false, needs_review: false, reported: [] });
   // The fixture server's three synthetic applications (failed, unknown, sent).
   const byApplication: Record<string, ReturnType<typeof summary>> = {
@@ -189,7 +216,8 @@ test("owner emails: rule 9 and 10 labels say what collection covered", async ({ 
   await page.goto("/admin/recruiting");
   await page.getByRole("button", { name: /Show all \d+ applications/ }).click();
   const list = page.getByRole("list", { name: "Application emails" });
-  await expect(list).toContainText("No provider report received; collection stopped within 28 hours of sending, so a report may have been missed");
-  await expect(list).toContainText("Delivery evidence not available: reports were not being collected when this was sent");
-  await expect(list).toContainText("No provider report received in the 28 hours reports were collected after sending");
+  await expect(list).toContainText("No provider report received; the recorded coverage window ended within 28 hours of sending, so a report may have been missed");
+  await expect(list).toContainText("Delivery evidence not available: no coverage window was recorded when this was sent");
+  await expect(list).toContainText("No provider report received; a coverage window was recorded for 28 hours after sending");
+  await expect(list).not.toContainText("reports were collected");
 });

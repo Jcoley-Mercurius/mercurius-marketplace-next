@@ -13,8 +13,9 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 // TRACE-155 (Phase 7.3D-1, R3D-4): the restricted delivery-evidence probe. Disabled by default:
-// unless EMAIL_EVIDENCE_PROBES_ENABLED is exactly "true" (and the deployment is Production, or not
-// on Vercel), it answers 404 before reading the request. Every invocation then needs a signed-in
+// unless EMAIL_EVIDENCE_PROBES_ENABLED is exactly "true" and VERCEL_ENV is exactly "production",
+// it answers 404 before reading the request (7.3D-1 review fixes, D-8: a missing VERCEL_ENV,
+// as in a local or CI process, is refused; tests supply a mocked Production configuration). Every invocation then needs a signed-in
 // operator, checked by the database. The body names one enumerated probe and nothing else; the
 // recipient, content, headers and key are fixed on the server. One invocation makes at most one
 // provider request and is never retried. The response carries the probe's own unlinked receipts
@@ -100,5 +101,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ state: "sent", choice, readback: null, verdict: null });
   }
   const readback = data as ProbeReadback;
-  return NextResponse.json({ state: "sent", choice, readback, verdict: probeVerdict(readback, choice) });
+  const verdict = probeVerdict(readback, choice);
+  // An excluded ID shows no receipts at all (D-11), whatever the database returned.
+  return NextResponse.json({
+    state: "sent", choice, verdict,
+    readback: verdict === "not_probe_evidence" ? { ...readback, receipts: [] } : readback,
+  });
 }

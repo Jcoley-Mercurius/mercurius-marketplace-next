@@ -7,6 +7,9 @@
 // (clock time after serialization), so history times follow seq. Run only against a disposable
 // isolated database after a clean reset (CI runs it on the Phase 5 synthetic stack). Synthetic
 // data only; nothing is sent. Leaves fixtures; a clean reset follows in CI.
+// P-1 (7.3D-1 review fixes, D-11): operator probe readbacks racing a content conflict on the same
+// provider ID. Every read sees one consistent snapshot: either the whole ID eligible with every
+// valid receipt, or the whole ID excluded with nothing returned. Never a partial or mixed answer.
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 
@@ -111,3 +114,35 @@ const refused = await duplicate;
 assert.ok(!refused.ok && refused.error.includes('already armed'), 'A-5 the duplicate arm waited, then was refused');
 assert.equal(await sql('select count(*) from private.email_evidence_arming_events'), String(count + 1), 'A-5 one event appended');
 console.log('A-5 PASS: a duplicate arm behind a held arm waits and is refused; one event appended');
+
+// P-1: probe readbacks racing a content conflict on the same provider ID (D-11).
+const receive = (svix, type, email, bounce = null) => sql(`select public.email_receive_provider_event(p_svix_id=>'${svix}',
+  p_secret_slot=>'current',p_processing=>'recorded',p_event_type=>'${type}',p_provider_type=>'${type}',
+  p_provider_created_at=>'2026-11-20T10:00:00Z',p_provider_email_id=>'${email}',p_bounce_type=>${bounce ? `'${bounce}'` : 'null'},
+  p_bounce_subtype=>${bounce ? "'general'" : 'null'},p_tag_status=>'absent',p_tag_ledger=>null,p_tag_ref=>null,p_tag_attempt=>null)->>'result'`);
+const probeRead = email => sql(asOperator(`select public.email_evidence_probe_readback('${email}')::text`)).then(JSON.parse);
+const shapes = { eligible: 0, excluded: 0 };
+for (let round = 1; round <= 8; round++) {
+  const email = `em-race-${round}`;
+  assert.equal(await receive(`msg-race-${round}-sent`, 'email.sent', email), 'recorded');
+  assert.equal(await receive(`msg-race-${round}-bounce`, 'email.bounced', email, 'permanent'), 'recorded');
+  assert.equal(await receive(`msg-race-${round}-x`, 'email.delivered', email), 'recorded');
+  const readers = Array.from({ length: 12 }, (_, i) => sleep(i * 15).then(() => probeRead(email)));
+  const writer = sleep(60).then(() => receive(`msg-race-${round}-x`, 'email.complained', email));
+  const [conflict, ...reads] = await Promise.all([writer, ...readers]);
+  assert.equal(conflict, 'conflict', `P-1.${round} the changed payload flags a content conflict`);
+  for (const read of reads) {
+    const states = read.receipts.map(receipt => receipt.state);
+    if (read.not_probe) {
+      assert.deepEqual(read.receipts, [], `P-1.${round} an excluded read returns nothing`);
+      shapes.excluded += 1;
+    } else {
+      assert.deepEqual(states, ['unlinked', 'unlinked', 'unlinked'], `P-1.${round} an eligible read returns every receipt, all unlinked`);
+      shapes.eligible += 1;
+    }
+  }
+  const after = await probeRead(email);
+  assert.equal(after.not_probe, true, `P-1.${round} after the conflict commits the whole ID is excluded`);
+  assert.deepEqual(after.receipts, [], `P-1.${round} and nothing is returned`);
+}
+console.log(`P-1 PASS: 8 rounds × 12 probe readbacks racing a content conflict → ${shapes.eligible} whole-eligible, ${shapes.excluded} whole-excluded, none mixed; excluded after commit`);

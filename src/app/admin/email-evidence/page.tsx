@@ -28,12 +28,15 @@ import { RETRY_HORIZON_HOURS, coverageLabel, evidenceFactLabel, type EvidenceCov
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-// TRACE-155 (Phase 7.3D-1): delivery-evidence collection for operators. The database decides who
-// may act (operator only), records every start and stop of collection with its time, operator and
-// reason, and keeps the history; this page only shows it and asks. Starting collection here does
-// not register a webhook, set a secret or send email: those are separate owner-authorized steps.
-// Test probes are off unless the deployment enables them, and prove only that Resend reports
-// reach the receiver; they are never evidence for an owner, application or price email.
+// TRACE-155 (Phase 7.3D-1): delivery-evidence coverage windows for operators. The database decides
+// who may act (operator only), records every coverage-window start and end with its time, operator
+// and reason, and keeps the history; this page only shows it and asks. A recorded window is a
+// declaration used for labels (7.3D-1 review fixes): recording a start or end does not turn
+// webhook receipt on or off, register or remove the webhook, set or remove a secret, or send
+// email, and it does not show that reports actually arrive. Receipt depends only on the deployed
+// secret and the provider registration; stopping it is the separately authorized shutdown
+// procedure. Test probes are off unless the deployment enables them, and prove only that Resend
+// reports reach the receiver; they are never evidence for an owner, application or price email.
 
 const COVERAGE_ORDER: EvidenceCoverage[] = ["before_first_arm", "collecting", "complete", "partial", "gap", "unknown"];
 
@@ -64,7 +67,7 @@ export default function EmailEvidencePage() {
       const next = await fetchReadback();
       if (ticket === generation.current) setData(next);
     } catch (caught) {
-      if (ticket === generation.current) setError(errorMessage(caught, "Collection status could not be loaded."));
+      if (ticket === generation.current) setError(errorMessage(caught, "Coverage window status could not be loaded."));
     }
   }, []);
 
@@ -113,7 +116,8 @@ export default function EmailEvidencePage() {
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Support</p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight">Email evidence</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            When Mercurius collects Resend&apos;s delivery reports, and what is stored. Recording a start or stop here does not register the webhook, set a secret or send email.
+            The coverage windows recorded for Resend&apos;s delivery reports, and what is stored. A window is a dated record used to label emails: recording its start or
+            end does not turn report receipt on or off, register or remove the webhook, set or remove a secret, or send email, and does not show that reports are arriving.
             Checked {formatEvidenceTime(data.checked_at)}.
           </p>
         </div>
@@ -122,27 +126,27 @@ export default function EmailEvidencePage() {
 
       <Card className={cn(data.armed && "border-status-success")}>
         <CardHeader>
-          <CardTitle className="text-lg">Report collection</CardTitle>
+          <CardTitle className="text-lg">Coverage window</CardTitle>
           <CardDescription>
-            Each start and stop is recorded with its time, the operator and the reason, and is never removed. An email&apos;s
-            summary says whether reports were collected for it; stopping never removes a report already received.
+            Each recorded start and end keeps its time, the operator and the reason, and is never removed. An email&apos;s
+            summary says whether it was sent inside a recorded window; recording an end never removes a report already received.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm font-medium" data-testid="collection-state">
             {data.armed && data.armed_at
-              ? `Collecting provider reports since ${formatEvidenceTime(data.armed_at)}.`
+              ? `A coverage window has been recorded as open since ${formatEvidenceTime(data.armed_at)}. This is a record, not a check that reports are arriving.`
               : data.history.length > 0
-                ? "Not collecting provider reports. Collection has been stopped."
-                : "Not collecting provider reports. Collection has never been started."}
+                ? "No coverage window is open. The last recorded window has ended."
+                : "No coverage window has ever been recorded."}
           </p>
           {data.armed ? (
             <ConfirmAction
-              triggerLabel="Stop collecting reports"
-              title="Stop collecting provider reports?"
+              triggerLabel="Record coverage window end"
+              title="Record the end of the coverage window?"
               entity="Resend delivery reports"
-              consequence={`Emails sent from now on will say reports were not being collected. Emails sent in the last ${RETRY_HORIZON_HOURS} hours will say collection was interrupted. Stored reports stay until purged. This does not remove the webhook or its secret.`}
-              confirmLabel="Stop collecting"
+              consequence={`Emails sent from now on will be labeled as sent with no coverage window recorded, and emails sent in the last ${RETRY_HORIZON_HOURS} hours as sent in a window that ended early. This only records the end: it does not stop Resend reports arriving, and it does not remove the webhook or its secret. Stopping receipt is the separately authorized shutdown procedure. Stored reports stay until purged.`}
+              confirmLabel="Record end"
               requireReason
               reasonHelp={`One line, up to ${ARMING_REASON_MAX} characters. It is kept in the history.`}
               describeError={(caught) => (caught instanceof Error ? caught.message : undefined)}
@@ -150,11 +154,11 @@ export default function EmailEvidencePage() {
             />
           ) : (
             <ConfirmAction
-              triggerLabel="Start collecting reports"
-              title="Start collecting provider reports?"
+              triggerLabel="Record coverage window start"
+              title="Record the start of a coverage window?"
               entity="Resend delivery reports"
-              consequence="Emails sent from now on will say reports are being collected for them. Start only after the webhook is registered and its secret is deployed; recording a start does neither."
-              confirmLabel="Start collecting"
+              consequence="Emails sent from now on will be labeled as sent inside a recorded coverage window. This only records the start: it does not turn on report receipt, register the webhook or deploy its secret, which are separate owner-authorized steps. Record it only after they are done."
+              confirmLabel="Record start"
               confirmationTone="commitment"
               attestation={armAttestation}
               requireReason
@@ -168,14 +172,14 @@ export default function EmailEvidencePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Collection history</CardTitle>
+          <CardTitle className="text-lg">Coverage window history</CardTitle>
           <CardDescription>Newest first. Every entry is kept.</CardDescription>
         </CardHeader>
         <CardContent>
           {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Collection has never been started.</p>
+            <p className="text-sm text-muted-foreground">No coverage window has been recorded.</p>
           ) : (
-            <ol aria-label="Collection history" className="divide-y divide-border">
+            <ol aria-label="Coverage window history" className="divide-y divide-border">
               {history.map((event) => (
                 <li key={event.seq} className="py-3 text-sm">
                   <p className="font-medium">{armingActionLabel[event.action]} · {formatEvidenceTime(event.occurred_at)}</p>
@@ -190,9 +194,11 @@ export default function EmailEvidencePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">What an email&apos;s collection status means</CardTitle>
+          <CardTitle className="text-lg">What an email&apos;s coverage label means</CardTitle>
           <CardDescription>
-            Read from this history and the time each email was sent. Reports Resend raises more than {RETRY_HORIZON_HOURS} hours after sending, such as a late bounce, are outside it.
+            Read from the recorded windows and the time each email was sent. A window shows what was recorded, not that the receiver was available throughout it.
+            The {RETRY_HORIZON_HOURS} hours follow Resend&apos;s documented retry schedule: they are how long a window must stay open, not proof that every report
+            was collected. Reports Resend raises later, such as a late bounce, are outside them.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -205,7 +211,7 @@ export default function EmailEvidencePage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Stored provider reports</CardTitle>
-          <CardDescription>Counts only. Stopping collection or rolling back a release deletes nothing; only the operator purge does.</CardDescription>
+          <CardDescription>Counts only. Recording a window end, stopping receipt or rolling back a release deletes nothing; only the operator purge does.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -258,10 +264,9 @@ export default function EmailEvidencePage() {
                 {!probeExpectation[probe.choice].documented && (
                   <p className="text-muted-foreground">Which report this address produces is not documented; record what arrives.</p>
                 )}
-                {probe.readback?.receipts.map((receipt, index) => (
+                {probe.verdict !== "not_probe_evidence" && probe.readback?.receipts.filter((receipt) => receipt.state === "unlinked").map((receipt, index) => (
                   <p key={index} className="text-muted-foreground">
                     {receipt.fact ? evidenceFactLabel[receipt.fact] : "Unrecognized report"}
-                    {receipt.state === "unlinked" ? "" : " · Excluded: conflicting report"}
                     {" · "}Provider time {receipt.provider_created_at ? formatEvidenceTime(receipt.provider_created_at) : "not given"}
                   </p>
                 ))}

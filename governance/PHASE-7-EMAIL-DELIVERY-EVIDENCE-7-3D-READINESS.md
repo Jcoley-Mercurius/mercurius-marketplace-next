@@ -5,6 +5,8 @@
 **Branch:** `claude/phase7-3d-readiness-release-evidence`, from `main` `d44342b`.
 **Earlier records are kept as written.** Each gets a dated correction that points here.
 
+> **Corrected 2026-11-20, later (7.3D-1 review fixes):** §3.4 and §3.5 overstate what arming does. The correction is in §7, with the original text kept.
+>
 > **Corrected 2026-11-20 (7.3D-1, Codex review [5997315152](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/183#pullrequestreview-5997315152)):** Codex settled R3D-1..R3D-4 and corrected two checklist items. The original wording below is kept; the corrections are in §6, and 7.3D-1 is implemented locally and dormant in the [7.3D-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md). Nothing here authorizes arming, registration, real email or hosted changes.
 
 ## 1. Release evidence (read-only, observed 2026-11-20)
@@ -217,3 +219,17 @@ Codex review 5997315152 at `89e01fe` cleared §4 for local, dormant implementati
 5. **§3.5 coverage labels** are defined: `before_first_arm`, `collecting`, `complete`, `partial`, `gap` and `unknown` (7.3D-1 record §3).
 
 EO-1..EO-8 remain proposals. Phase 7 and booking readiness remain unaccepted.
+
+## 7. Corrections (2026-11-20, 7.3D-1 review fixes)
+
+Under the owner's review-fix instruction (Codex's review of #184), recorded in the [review-fix record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md). The text above is kept as written:
+
+1. **§3.4, "Promoting an older deployment, removing the secret, deregistering the webhook or disarming stops new receipts."** *(Corrected again 2026-11-21, before merge; the 2026-11-20 wording of this item is kept in the [review-fix record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md) §8.)* The sentence is wrong in two places, disarming and promotion. The receiver stores a verified report whenever a secret is deployed and the endpoint is registered; it never reads the arming record.
+   - **A disarm** records the end of a coverage window and stops nothing.
+   - **Promoting an earlier deployment** is an application rollback. It does not inherently stop ingestion: it changes neither the Resend registration nor the Production variables, and every deployment since 7.3B contains the receiver.
+   - **Disabling receipt** is the shutdown procedure in review fixes §2.5. It takes two hosted actions, each separately authorized: (a) disable or delete the Resend endpoint; then (b) remove **both** `RESEND_WEBHOOK_SECRET` and `RESEND_WEBHOOK_SECRET_PREVIOUS` from Production and create a new Production deployment. Then read back a 503 and the retention counts.
+   - **Purge duty** continues while any receipt remains, expired or not. Once receipt stops, purge-on-receipt stops too, so the operator purge carries the whole duty.
+2. **§3.5, "The audit trail is the record of when reports were collected."** The audit trail records the **coverage windows** operators declared. A window labels emails; it does not show the receiver was available. Coverage labels say a window was recorded, never that reports were collected (review fixes §2.3). The 28 h horizon is how long a window must stay open under Resend's retry schedule, not proof of uninterrupted collection.
+3. **§3.2 / plan §12 item 1, probes.** A provider ID with any current linked, tagged or conflicted receipt is excluded as a whole from probe evidence; expired receipts are ignored (review fixes §2.1–§2.2).
+
+EO-1..EO-8 remain proposals. Nothing here authorizes arming, registration, probe enablement or email.

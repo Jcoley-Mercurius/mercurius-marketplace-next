@@ -71,7 +71,7 @@ test("Recruiting: unarmed, each visible application email reads rule 10, with sc
   for (const name of ["Synthetic Applicant Services", "Synthetic Uncertain Services"]) {
     await expect(appRow(page, name)).toContainText("Delivery evidence: Delivery evidence not available");
   }
-  await expect(page.getByText("Resend delivery reports are not being collected yet, so emails show “Delivery evidence not available”.")).toBeVisible();
+  await expect(page.getByText("No coverage window is recorded for Resend delivery reports, so emails without a report show “Delivery evidence not available”.")).toBeVisible();
   await expect(page.getByText("Application emails", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("All Mercurius emails", { exact: true })).toBeVisible();
   await expect(count(page, "Applications with conflicting provider reports")).toHaveText("0");
@@ -120,11 +120,11 @@ test("Recruiting: summaries, both conflict wordings and the per-attempt history;
   await expect(uncertain.getByText("Excluded while current email records disagree with it", { exact: true })).toBeVisible();
   await appRow(page, "Synthetic Applicant Services").getByText("Provider report history").click();
   await expect(appRow(page, "Synthetic Applicant Services")).toContainText("Permanent bounce reported (no such mailbox)");
-  // Evidence adds and removes no action; armed, so no "not collected" notice.
+  // Evidence adds and removes no action; armed, so no "no coverage window" notice.
   await expect(uncertain.getByRole("button", { name: "Resend email" })).toBeVisible();
   await expect(uncertain.getByRole("button", { name: "Acknowledge" })).toBeVisible();
   await expect(appRow(page, "Synthetic Delivered Services").getByRole("button", { name: "Resend email" })).toHaveCount(0);
-  await expect(page.getByText("Resend delivery reports are not being collected yet", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("No coverage window is recorded for Resend delivery reports", { exact: false })).toHaveCount(0);
   await expect(count(page, "Applications with conflicting provider reports")).toHaveText("1");
   await expect(count(page, "Conflicting provider reports (all emails)")).toHaveText("4");
   await expect(count(page, "Unmatched provider reports")).toHaveText("5");
