@@ -46,7 +46,7 @@ capture; previously received data requires the existing privacy-request process.
 | `service_viewed` | Explicit service focus on a public provider profile; service/provider IDs |
 | `login_succeeded`, `login_failed` | Explicit password-login outcome; no credentials or error messages |
 | `signup_submitted` | Auth provider accepted signup; does not claim email verification |
-| `request_started`, `request_step_completed` | Valid forward steps; service count and step only |
+| `request_started`, `request_step_completed` | Valid forward steps; service count and step only. `request_started` once per draft (D-2, 2026-11-22; TRACE-158 7.4C): only after an SDK handoff with consent, never retroactively; `request_step_completed` on every valid pass |
 | `request_submitted` | Successful request RPC result; reused/idempotent saves excluded; count only |
 | `coverage_checked` | Server-confirmed covered/waitlist/uncovered outcome; no ZIP or address |
 | `early_access_submitted` | Server confirmed saved outcome, early-access/expansion kind only |
@@ -106,7 +106,9 @@ permission to capture a private screen.
     internal-only navigation, label-free button positions, private and external targets
     dropped, and one scroll milestone per page.
   - Trigger semantics the tests pin as current behavior: **F-1** `request_started`
-    fires again after Back → Continue (owner decision D-2 open); **F-2** each accepted
+    fires again after Back → Continue (owner decision D-2 open; *2026-11-22: D-2 approved,
+    once per draft; 7.4C replaces the F-1 test with once-per-draft, reload, reset, explicit-entry,
+    key-rotation, consent and legacy-draft tests*); **F-2** each accepted
     early-access submission counts, repeats included, with no new-or-repeat property;
     **F-3** each coverage lookup counts; **F-4** `request_submitted` is sent from the
     browser after the save, so `service_request_submissions` stays the count of record.

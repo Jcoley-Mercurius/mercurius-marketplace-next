@@ -152,7 +152,7 @@ describe("D-2 start marker (TRACE-158 7.4C)", () => {
     expect(draft.startCounted).toBe(false);
     expect(dropped).not.toContain("startCounted");
   });
-  it.each(["true", 1, 0, null, {}, []])("falls back to false for the malformed value %j", (value) => {
+  it.each([["true"], [1], [0], [null], [{}], [[]]] as unknown[][])("falls back to false for the malformed value %j", (value) => {
     const { draft, dropped } = parseDraft(JSON.stringify({ startCounted: value }), key, today);
     expect(draft.startCounted).toBe(false);
     expect(dropped).toContain("startCounted");
