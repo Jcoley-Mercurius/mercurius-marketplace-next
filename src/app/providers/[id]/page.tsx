@@ -152,7 +152,7 @@ function ProviderProfileRoute({ providerId }: { providerId: string }) {
       <ProviderProfileView
         data={data}
         requestedServiceId={service}
-        onServiceChange={(next) => { captureAnalytics("service_viewed", { provider_id: providerId, service_id: next ?? undefined }); setService(next); }}
+        onServiceChange={(next) => { setService(next); }}
         viewer={viewer}
         directoryHref={directoryHref}
         onNextStep={nextStep}
