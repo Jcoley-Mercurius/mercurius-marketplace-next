@@ -35,7 +35,24 @@ Privileged reads by Claude only. No operator session was used or impersonated, a
 
 ### 1.2 Operator-session evidence (step 3)
 
-**Pending.** The owner's step-3 report is recorded here as operator evidence, apart from §1.1. After that report, one privileged read confirms the purge-run count is still 0 (§3 step 3); that read is recorded as [P], not as operator evidence.
+**Partially verified — 2026-11-21 ET.** At the owner's request, Codex performed look-only checks in the owner's authenticated operator browser session. These are direct browser observations [O], not an inferred owner checklist response. No purge, coverage-window or probe action was confirmed.
+
+| Operator-session check [O] | Observed |
+|---|---|
+| Admin access | `/admin` displayed “Operations overview” and “Mercurius Admin” |
+| Email Evidence coverage | “No coverage window has ever been recorded.” |
+| Stored provider reports | Stored reports **0**; matched to an email **0**; not matched **0**; expired, awaiting purge **0** |
+| Purge status | “No provider reports are stored. There is nothing to purge.” and “No purge has been run.” |
+| Purge confirmation, look only | Opened using **Purge expired reports**. Title “Permanently delete expired provider reports?”; permanent, expired-only and up-to-1,000 wording observed. Initial focus was on **Cancel**. Closed by clicking **Cancel**; no deletion confirmation |
+| Owner Emails | Delivery-evidence card and no-coverage-window notice present; all six delivery-evidence counters **0**. Email-row label check **NOT OBSERVABLE** because no tracked owner-email rows were listed |
+| Recruiting | Delivery-evidence card present and all six delivery-evidence counters **0**. No-coverage-window notice and existing email-row labels **PENDING**: browser control failed before observations were returned |
+| Price-draft panel | **PENDING — NOT CHECKED** before the browser session stopped accepting commands |
+
+**Separate privileged read [P], after the browser checks:** 2026-11-22 **02:59:12 UTC** (2026-11-21 **21:59:12 ET**), counts only: `private.email_provider_event_purges` **0**, `private.email_provider_events` **0**, `private.email_evidence_arming_events` **0**. This confirms no purge run was committed; it does not substitute for the pending UI observations or demonstrate that no refused request occurred.
+
+**Separate public endpoint smoke checks (same session, before sign-in):** an empty unsigned POST to `/api/webhooks/resend` returned **503**; an unauthenticated empty-JSON POST to `/api/admin/email-evidence-probe` returned **404**. No valid probe choice, cookie or signature was sent. These show dormant endpoint behavior only; they are not delivery, inbox, freshness or activation evidence.
+
+The remaining Recruiting observations and price-draft-panel check stay open. T-6 and every unapproved activation decision remain unchanged. This entry accepts neither 7.3D nor Phase 7.
 
 ## 2. Owner decisions, presented together
 
