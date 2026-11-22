@@ -337,7 +337,8 @@ test.describe("7.4B request intake (A-13 to A-15)", () => {
     return { captured, submissions };
   }
   const submitButton = (page: Page) => page.getByRole("button", { name: "Request service", exact: true });
-  const savedHeading = (page: Page) => page.getByRole("heading", { name: "Your request is saved" });
+  // Two services save two requests: "Your 2 requests are saved".
+  const savedHeading = (page: Page) => page.getByRole("heading", { level: 1, name: "Your 2 requests are saved" });
 
   test("forward steps capture started and completed; Back then Continue fires request_started again (F-1, D-2); a fresh save captures request_submitted once", async ({ page }) => {
     const { captured, submissions } = await intake(page, "services", selections => saved(selections, false));
@@ -441,7 +442,8 @@ test.describe("7.4B installed listeners (A-02 to A-04)", () => {
     const captured = await isolate(page);
     await page.setViewportSize({ width: 1024, height: 600 });
     await page.goto("/faq");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // The consent panel renders only on the client, so the page has hydrated before it is changed.
+    await expect(page.getByRole("region", { name: "Usage analytics preferences" })).toBeVisible();
     // Make the page reliably tall: the scroll listener's milestones are relative to its height.
     await page.evaluate(() => { const spacer = document.createElement("div"); spacer.style.height = "4000px"; document.querySelector("main")!.appendChild(spacer); });
     const scrollTo = (fraction: number) => page.evaluate(value => window.scrollTo(0, (document.documentElement.scrollHeight - innerHeight) * value), fraction);
