@@ -79,6 +79,28 @@ describe("TRACE-157 consent and identity runtime", () => {
     vi.stubEnv("NEXT_PUBLIC_POSTHOG_ENABLED", "0"); expect(client.analyticsConfigured()).toBe(false);
   });
 
+  it("reports an SDK handoff only: true when capture returned, false for every guard refusal or SDK error (7.4C)", async () => {
+    let client = await import("@/lib/analytics/client");
+    expect(client.captureAnalytics("request_started")).toBe(false); // not initialized, no consent
+    documentStub.cookie = `${CONSENT_COOKIE}=v1-granted`;
+    expect(client.captureAnalytics("request_started")).toBe(false); // consent, but never installed
+    vi.resetModules(); client = await import("@/lib/analytics/client"); client.installAnalytics();
+    sdk.capture.mockClear(); // installation sends the initial $pageview
+    locationStub.pathname = "/request";
+    expect(client.captureAnalytics("request_started", { service_count: 2 })).toBe(true);
+    expect(sdk.capture).toHaveBeenCalledExactlyOnceWith("request_started", { page: "/request", service_count: 2 });
+    locationStub.pathname = "/dashboard";
+    expect(client.captureAnalytics("request_started")).toBe(false); // private path
+    locationStub.pathname = "/request";
+    sdk.capture.mockImplementationOnce(() => { throw new Error("SDK failure"); });
+    expect(client.captureAnalytics("request_started")).toBe(false);
+    documentStub.cookie = `${CONSENT_COOKIE}=v1-denied`;
+    expect(client.captureAnalytics("request_started")).toBe(false); // consent withdrawn
+    documentStub.cookie = `${CONSENT_COOKIE}=v1-granted`; vi.stubGlobal("navigator", { doNotTrack: "0", globalPrivacyControl: true });
+    expect(client.captureAnalytics("request_started")).toBe(false); // GPC
+    expect(sdk.capture).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps page and router transitions working when recorder calls or cookie access fail", async () => {
     documentStub.cookie = `${CONSENT_COOKIE}=v1-granted`;
     const client = await import("@/lib/analytics/client"); client.installAnalytics();

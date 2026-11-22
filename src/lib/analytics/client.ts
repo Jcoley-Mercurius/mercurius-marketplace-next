@@ -45,9 +45,20 @@ function updateReplay() {
   } catch { /* An unavailable recorder cannot interrupt a page or account transition. */ }
 }
 
-export function captureAnalytics(event: AnalyticsEvent, properties: AnalyticsProperties = {}) {
-  if (!initialized || !analyticsPermitted() || !analyticsPath(location.pathname)) return;
-  try { posthog.capture(event, sanitizeProperties({ page: analyticsPath(location.pathname), ...properties })); } catch { /* Analytics never interrupts a customer action. */ }
+/**
+ * Returns true only when the event was handed to the SDK (`posthog.capture` returned without
+ * throwing). That is not confirmation of transmission or ingestion: the SDK may still drop,
+ * queue or fail to send it. False means a guard refused it or the SDK threw.
+ */
+export function captureAnalytics(event: AnalyticsEvent, properties: AnalyticsProperties = {}): boolean {
+  if (!initialized || !analyticsPermitted() || !analyticsPath(location.pathname)) return false;
+  try {
+    posthog.capture(event, sanitizeProperties({ page: analyticsPath(location.pathname), ...properties }));
+    return true;
+  } catch {
+    // Analytics never interrupts a customer action.
+    return false;
+  }
 }
 
 export function syncAnalyticsIdentity(userId: string | null) {

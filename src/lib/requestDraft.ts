@@ -75,6 +75,12 @@ export type RequestDraft = {
   /** The exact payload last sent without a confirmed answer; a retry resends it unchanged. */
   inFlight: SubmissionPayload | null;
   saved: SavedSubmission | null;
+  /**
+   * D-2 (TRACE-158 7.4C): true once this draft's `request_started` was handed to the analytics
+   * SDK. Holds no identifier. A new draft starts false; the same draft keeps it across Back,
+   * reload, sign-in and a new submission key.
+   */
+  startCounted: boolean;
 };
 
 export type AddonQuantities = { packageId: string; quantities: Record<string, number> };
@@ -93,7 +99,7 @@ export function emptyDraft(submissionKey: string): RequestDraft {
     timeOfDay: "anytime", description: "", otherServiceDetails: "", accessMethod: "someone-home", petStatus: "none",
     entryInstructions: "", parkingNotes: "", firstName: "", lastName: "", email: "", phone: "", smsUpdates: false,
     serviceOverrides: {}, preferredProviders: {}, preferredProviderNames: {}, packageSelections: {}, questionAnswers: {},
-    addonQuantities: {}, submissionKey, inFlight: null, saved: null,
+    addonQuantities: {}, submissionKey, inFlight: null, saved: null, startCounted: false,
   };
 }
 
@@ -258,6 +264,8 @@ export function parseDraft(raw: string | null, fallbackKey: string, today: strin
   keep("submissionKey", isSubmissionKey(value.submissionKey) ? value.submissionKey : undefined);
   keep("inFlight", isRecord(value.inFlight) && Array.isArray(value.inFlight.selections) ? value.inFlight as SubmissionPayload : value.inFlight === null ? null : undefined);
   keep("saved", value.saved === null ? null : parseSaved(value.saved) ?? undefined);
+  // Only a stored boolean is restored; a draft from before D-2 or a malformed value stays false.
+  keep("startCounted", typeof value.startCounted === "boolean" ? value.startCounted : undefined);
 
   // A saved submission keeps its own key; a draft never reuses it for different details.
   if (draft.saved) draft.submissionKey = draft.saved.submissionKey;
