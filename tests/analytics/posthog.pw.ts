@@ -402,7 +402,7 @@ test.describe("7.4B installed listeners (A-02 to A-04)", () => {
       section.innerHTML = `
         <a data-target="internal" href="/privacy">Internal</a>
         <a data-target="provider" href="/providers/${id}?ref=SECRET_QUERY#SECRET_FRAGMENT">Provider</a>
-        <a data-target="external" href="https://example.invalid/PRIVATE_EXTERNAL">External</a>
+        <a data-target="external" href="https://example.invalid/privacy?PRIVATE_EXTERNAL=1">External</a>
         <a data-target="disallowed" href="/admin/PRIVATE_ADMIN">Admin</a>
         <a data-target="dashboard" href="/dashboard">Portal</a>
         <button type="button" data-target="button">BUTTON_LABEL_SENTINEL</button>
