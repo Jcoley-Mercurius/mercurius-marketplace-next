@@ -43,7 +43,7 @@ PR #189 (third revision of the 7.3D activation checklist) stays a separate PR. T
 |---|---|
 | `origin/main` | `458555a0f259b2c7f1b912f167c2523ba8554c1d`, matching Codex's checkpoint |
 | Open PRs | #189 only (head `9fa68e1`, documentation, TRACE-155). Not modified, merged or cherry-picked |
-| PostHog integration | Merged in #182 as `c5e24cf` (2026-11-20). PR record: deployment `dpl_GA94nCyQRuSsx33FEm2wKA2vKgvY` READY; live opt-in, decline and one consented `coverage_checked` observed; live pageviews **not** observed because the hosted automation browser was bot-filtered. History, not re-checked |
+| PostHog integration | Merged in #182 as `c5e24cf` (2026-11-20). PR record: deployment `dpl_GA94nCyQRuSsx33FEm2wKA2vKgvY` READY; live opt-in, decline and one consented `coverage_checked` observed; the automation browser's bot-filtered pageview check was inconclusive, followed by the owner's human-browser opt-in check: [#182](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/182) records live pageviews for `/` and `/providers`, plus navigation and scroll events on 2026-11-20 ET. Reviewed historical evidence, not a fresh PostHog query |
 | Analytics code | [policy.ts](../src/lib/analytics/policy.ts), [client.ts](../src/lib/analytics/client.ts), [server/analytics.ts](../src/server/analytics.ts), [AnalyticsConsent.tsx](../src/components/analytics/AnalyticsConsent.tsx) |
 | Analytics tests | [posthog-policy](../tests/unit/posthog-policy.test.ts) (5), [posthog-client](../tests/unit/posthog-client.test.ts) (6), [posthog-server](../tests/unit/posthog-server.test.ts) (3), [analytics-redaction](../tests/unit/analytics-redaction.test.ts), browser lane [posthog.pw.ts](../tests/analytics/posthog.pw.ts) (4), CI job [analytics.yml](../.github/workflows/analytics.yml) |
 | Migrations | 235 files. No migration is read or changed by this slice |
@@ -224,12 +224,13 @@ No layer-A property is proposed. Adding ZIP, price, role or version properties t
 4. `request_started` / `request_step_completed`: pin current behavior, including F-1 re-firing, with a test that names F-1 and D-2.
 5. `AuthProvider`: `login_succeeded` / `login_failed` by outcome, identity sync only on success, `signup_submitted` only without error, no credential or error text in properties.
 6. `provider_profile_viewed` only after a successful load, never on a failed or not-found load, and again after a consent change while open; `service_viewed` on focus with valid IDs.
-7. Client listeners: `navigation_clicked` only for internal permitted destinations; external and private links dropped; `[data-analytics-private]` skipped; `page_scrolled` once per milestone per page.
+7. Client listeners: `navigation_clicked` only for internal permitted destinations; external and private links dropped; `[data-analytics-private]` skipped; `button_clicked` from actual eligible button clicks with only the approved action and ordinal, never button labels, form values or private elements; `page_scrolled` once per milestone per page.
 8. Documentation: POSTHOG-ANALYTICS "Verification" lists these tests and F-1..F-4; TRACE-157/158 evidence updated.
 
 **Out of scope.** New events (including auth handoff), new properties, consent, replay or projection changes, PostHog project settings, Vercel variables, hosted traffic, layer-B measurement, dashboards and migrations.
 
 **Acceptance criteria.**
+- Tests must execute the real route, component or installed listener that produces the event. A pure-helper test alone does not prove that the producer calls it. If a behavior-preserving helper is extracted, retain an integration assertion that fails when the call-site invocation is removed.
 - Each rule in items 1–7 has a test that **fails** when the rule is mutated. At minimum: drop `!result.reused`; capture early access on any status below 500; capture coverage before the lookup succeeds; capture `login_succeeded` regardless of error. Record the mutations.
 - Existing analytics tests, the full unit regression, typecheck, changed-file lint, secret scan and production build pass. The `Analytics privacy` CI job passes on the exact head.
 - No change to `ANALYTICS_EVENTS`, `sanitizeProperties`, `replayAllowed`, `analyticsPath` or the consent code. Any extracted helper is behavior-preserving, and its diff is shown.
@@ -248,7 +249,7 @@ No layer-A property is proposed. Adding ZIP, price, role or version properties t
 | D-5 | SLA breach recording and alerting (O-2); thresholds beyond CFG-015 | Owner | Defer to the queue/alert slice; MPS says targets follow a pilot baseline |
 | D-6 | A validated operator measurement surface for layer B (MPS "proposed dashboards") | Owner | Later slice; no dashboard redesign here. `/admin/pricing-analytics` stays as is |
 
-**Carried, unchanged:** O-9 (DEC-2026-059 open items: purge of Vercel analytics events collected before redaction; re-issue of invitations opened since 2026-11-02). TRACE-157's open items: live positive pageview evidence (bot-filtered in #182) and replay activation remain owner/production checks. 7.3D items and #189 are untouched.
+**Carried, unchanged:** O-9 (DEC-2026-059 open items: purge of Vercel analytics events collected before redaction; re-issue of invitations opened since 2026-11-02). TRACE-157's later evidence: [#182](https://github.com/Jcoley-Mercurius/mercurius-marketplace-next/pull/182) records successful human-browser production pageviews, navigation and scroll events on 2026-11-20 ET. Do not carry positive pageview proof as missing. This does not establish every event trigger or prove live replay behavior; replay boundaries and any separate acceptance checks remain unchanged. No fresh hosted analytics read was performed for this contract. 7.3D items and #189 are untouched.
 
 ## 10. Validation of this slice
 
