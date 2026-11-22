@@ -1,3 +1,12 @@
+# Phase 7.4B review and release evidence (TRACE-158) — 2026-11-22 ET
+
+- **Base:** `main` `aab602b` (#191 merged 18:21:35 UTC, head `45bb89b`). Branch `claude/phase7-4b-release-evidence`, documentation only. Record: [7.4B](../../governance/PHASE-7-ANALYTICS-TRIGGER-VERIFICATION-7-4B.md) §7.
+- **Review:** Codex reviewed #191 retrospectively at `45bb89b` (relayed by the owner; no GitHub review object). No blocking issue. R-1 accepted only for the isolated synthetic lane; no hosted bot-signal override is authorized. R-2..R-5 accepted.
+- **Release:** Production `dpl_GiQ9e13H4rBES5hpDGaZHqHmpG4e` Ready on `aab602b`, aliased to `www`. Post-merge Analytics privacy 45054623422 success (35/35, 17/17). CI 45054623308 success (backend, lifecycle, application; finished 18:56:23 UTC).
+- **Corrected:** record §3.2 said the Analytics privacy job runs only for pull requests; it also runs on pushes to `main` that touch its paths.
+- **Not done:** D-2 prepared for the owner (acceptance criteria and implementation prompt in chat), not implemented; F-1 remains pinned. D-1..D-6 open. No source, PostHog, Vercel, database or email-gate change; 7.3D stays unactivated.
+- **Next:** owner decision on D-2; on approval, one bounded implementation PR.
+
 # Phase 7.4B analytics call-site trigger tests (TRACE-158) — 2026-11-22 ET
 
 - **Base:** #190 merged as `0f48cff` after exact-head CI 45024066373 passed on `ff81620` (contract unchanged from reviewed `501720b`; the merge only brought in `main`). Branch `claude/phase7-4b-analytics-trigger-tests`, PR #191. Record: [7.4B](../../governance/PHASE-7-ANALYTICS-TRIGGER-VERIFICATION-7-4B.md).
