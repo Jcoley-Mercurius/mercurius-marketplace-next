@@ -1,3 +1,12 @@
+# Phase 7.4A analytics coverage and event contract (TRACE-158) — 2026-11-21 ET
+
+- **Base:** `main` `458555a` (#188), re-fetched before work. Branch `claude/phase7-4a-analytics-coverage-contract`. Documentation only. Record: [analytics coverage contract](../../governance/PHASE-7-ANALYTICS-COVERAGE-CONTRACT.md) (AC-1).
+- **Owner instruction (2026-11-21):** continue independent Phase 7 work. Recorded as scheduling only: no 7.3D operator check, 7.3D acceptance or activation follows from it. #189 stays separate, with its pending evidence unchanged.
+- **Mapped:** two layers. (A) PostHog (TRACE-157): 13 custom events plus `$identify` and `$pageview`, public/intake pages only, consent-gated. (B) Operational records: liquidity, quotes, checkout, fulfillment, money, quality and admin actions all have durable tables. Lifecycle families are proposed for measurement from B, not PostHog (D-1).
+- **Findings:** most A trigger rules are untested at their call sites (the custom events except `login_failed`). F-1 `request_started` re-fires after Back; F-2 early access counts repeat submissions by design; F-3 coverage counts lookups; F-4 `request_submitted` is browser-side, so the database is the count of record. B gaps: pool size (L-1), "sourced" (L-5), SLA breach (O-2), all deferred.
+- **Not done:** no code, tests, migration, PostHog/Vercel/Supabase read or write, analytics traffic, email, payment, gate, suppression, retry or scheduler.
+- **Next:** Codex review of AC-1; owner decisions D-1..D-6 (contract §9); then 7.4B call-site trigger tests (contract §8), which need no owner decision.
+
 # Phase 7.3D-2 operator purge control (TRACE-155) — 2026-11-21 ET
 
 - **Base:** built on `main` `96c8149` (#185); updated by merge to `main` `c74b8d7` (#186 merged at `5ca707b`). Branch `claude/phase7-3d2-operator-provider-event-purge` in the 7.3D-1 worktree, draft PR #187. Record: [7.3D-2](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-2.md).
