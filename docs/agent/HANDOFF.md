@@ -1,3 +1,10 @@
+# Phase 7.3D activation preflight and checklist third revision (TRACE-155) — 2026-11-21 ET
+
+- **Base:** `main` `ffd8bfb` (#187 merge). Main CI 44942221313 success; Production `dpl_D4Kp45pc8axKC6Mo6Gp6T4JuwCRj` READY on `ffd8bfb`, `www` resolves to it. #188 is redundant (its checklist and plan are byte-identical to `main`); not merged.
+- **Preflight (read-only, checklist §1.1):** 235/235 migrations; every pinned hash and the money fingerprint match; 0 arming events, armed rows, receipts and purge runs; `pg_cron` 0 jobs; receiver and probe variables absent. T-6 blocked (no onboarding row; not excluded). H-1/H-2 not run.
+- **Third revision (§6.2, Codex corrections):** purge complete only at a refreshed expired count of 0 (`skip locked`); a backlog after 10 confirmations is a same-day finding; shutdown is never backup purge coverage, and complete runs must be at most 14 days apart; step 3 adds a look-only purge-control check.
+- **Pending:** the owner's step-3 operator checks (§1.2), then one [P] read of the purge-run count, expecting 0. Owner approvals on the §7 card. Nothing approved or activated.
+
 # Phase 7.3D-2 operator purge control (TRACE-155) — 2026-11-21 ET
 
 - **Base:** built on `main` `96c8149` (#185); updated by merge to `main` `c74b8d7` (#186 merged at `5ca707b`). Branch `claude/phase7-3d2-operator-provider-event-purge` in the 7.3D-1 worktree, draft PR #187. Record: [7.3D-2](../../governance/PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-2.md).
