@@ -6,6 +6,12 @@
 - **Findings:** most A trigger rules are untested at their call sites (the custom events except `login_failed`). F-1 `request_started` re-fires after Back; F-2 early access counts repeat submissions by design; F-3 coverage counts lookups; F-4 `request_submitted` is browser-side, so the database is the count of record. B gaps: pool size (L-1), "sourced" (L-5), SLA breach (O-2), all deferred.
 - **Not done:** no code, tests, migration, PostHog/Vercel/Supabase read or write, analytics traffic, email, payment, gate, suppression, retry or scheduler.
 - **Next:** Codex review of AC-1; owner decisions D-1..D-6 (contract §9); then 7.4B call-site trigger tests (contract §8), which need no owner decision.
+# Phase 7.3D activation preflight and checklist third revision (TRACE-155) — 2026-11-21 ET
+
+- **Base:** `main` `ffd8bfb` (#187 merge). Main CI 44942221313 success; Production `dpl_D4Kp45pc8axKC6Mo6Gp6T4JuwCRj` READY on `ffd8bfb`, `www` resolves to it. #188 is redundant (its checklist and plan are byte-identical to `main`); not merged.
+- **Preflight (read-only, checklist §1.1):** 235/235 migrations; every pinned hash and the money fingerprint match; 0 arming events, armed rows, receipts and purge runs; `pg_cron` 0 jobs; receiver and probe variables absent. T-6 blocked (no onboarding row; not excluded). H-1/H-2 not run.
+- **Third revision (§6.2, Codex corrections):** purge complete only at a refreshed expired count of 0 (`skip locked`); a backlog after 10 confirmations is a same-day finding; shutdown is never backup purge coverage, and complete runs must be at most 14 days apart; step 3 adds a look-only purge-control check.
+- **Pending:** the owner's step-3 operator checks (§1.2), then one [P] read of the purge-run count, expecting 0. Owner approvals on the §7 card. Nothing approved or activated.
 
 # Phase 7.3D-2 operator purge control (TRACE-155) — 2026-11-21 ET
 

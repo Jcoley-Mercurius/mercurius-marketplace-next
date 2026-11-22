@@ -76,7 +76,7 @@ The existing `email-evidence-arming.spec.ts` passes unchanged against this build
 ## 5. Dependencies and remaining gates
 
 - **PG-2 (#186):** method (i), this control, after Codex review, merge and the deployment READY on the merge commit. Until then H-9 and checklist step 30 still cannot run. The checklist's second revision says so; it reaches `main` with this PR (§6.2).
-- **EO-2** is still a proposal: 90 / 30 days as implemented, P-2 with D = 14 days, a weekly manual run with Josh accountable. Under the proposed procedure, a weekly run is repeated confirmations of this control, at most 10, until a run deletes fewer than 1,000.
+- **EO-2** is still a proposal: 90 / 30 days as implemented, P-2 with D = 14 days, a weekly manual run with Josh accountable. Under the proposed procedure, a weekly run is repeated confirmations of this control, at most 10, until the refreshed expired count reads 0. *Corrected 2026-11-21 (checklist third revision, §6.2):* the earlier stopping rule, "until a run deletes fewer than 1,000", is withdrawn, because the function skips locked rows and can leave expired rows behind.
 - Not done: merge, deploy, production purge, secrets, webhook registration, probes, synthetic production records, email. Every other activation gate in #186 §5 and §7 stays open.
 
 ## 6. Codex review correction and checklist recovery (2026-11-21)

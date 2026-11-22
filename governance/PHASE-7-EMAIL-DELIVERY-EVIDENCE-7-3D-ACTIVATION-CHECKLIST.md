@@ -4,6 +4,7 @@
 **Authority:** the owner's 2026-11-21 instructions; the [plan](PHASE-7-EMAIL-DELIVERY-EVIDENCE-PLAN.md) §6.4, §8.4, §11.4, §12 and §15.1; the [readiness record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-READINESS.md) §2–§3 with its corrections in §6–§7; the [7.3D-1 record](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1.md); the [7.3D-1 review fixes](PHASE-7-EMAIL-DELIVERY-EVIDENCE-7-3D-1-REVIEW-FIXES.md), whose §2.5 is the shutdown procedure; Codex's review of #186 (findings R-1..R-5, resolved in §6).
 **Base:** `main` `96c8149dfe4ba80484ad3e65efffb2ab39011fee` (the #185 merge). Branch `claude/phase7-3d-activation-checklist`; PR #186 retargeted to `main` on 2026-11-21. Where this record and the plan differ, the readiness corrections and this record govern until the plan is amended under review. The PG-3 conflict with plan §6.4 is resolved by amending the plan (§6).
 **Second revision (2026-11-21, owner instruction):** PG-2 is assigned to the 7.3D-2 operator purge control (#187), usable only after review and deployment; PG-3 is resolved as privileged counts-only slot readbacks; H-11 is an invalid-request smoke check, not proof of timestamp enforcement; T-6 stays blocked unless its existing preconditions hold; H-10 and H-8c specify recovery on every failure path, and H-10 must establish a delayed automatic attempt; every Production redeployment identifies its reviewed source commit and intended configuration (§6.1).
+**Third revision (2026-11-21, Codex operating corrections, §6.2):** a weekly purge is complete only when the refreshed expired backlog reads **0**; deleting fewer than 1,000 is not enough, because the purge skips rows locked by a concurrent purge-on-receipt. A backlog left after the approved run limit is escalated. A shutdown never replaces backup purge coverage while receipts remain. Step 3 now includes a look-only check of the deployed purge control. The preflight readback of `main` `ffd8bfb` is recorded in §1.1.
 
 ## 1. State at revision (read-only, 2026-11-21)
 
@@ -17,6 +18,25 @@
 | Receiver | Dormant by design: no `RESEND_WEBHOOK_SECRET`, no registration (per the records; Production variables were not listed in this session) |
 | Probe harness | Off: no `EMAIL_EVIDENCE_PROBES_ENABLED`; the route opens only in `VERCEL_ENV=production` |
 
+### 1.1 Preflight readback for `main` `ffd8bfb` (steps 1–2, read-only, 2026-11-21 UTC)
+
+Privileged reads by Claude only. No operator session was used or impersonated, and nothing was written. H-1 and H-2 were not run (they need EO-1 approval).
+
+| Item | Observed | Class |
+|---|---|---|
+| Release (step 1) | `main` `ffd8bfb7ae8d2e0699f2439d672e98b6e9884887` (#187 merge). Main CI 44942221313: **success** (backend 19:49, lifecycle 19:53, application 20:20; no rerun). Analytics privacy 44942221377: success. Production `dpl_D4Kp45pc8axKC6Mo6Gp6T4JuwCRj` READY, target production, `meta.githubCommitSha` `ffd8bfb…`, ref `main`; `www.mercuriusmarketplace.com` resolves to it (read 20:21) | Release readback |
+| Migrations | `supabase migration list --linked`: 235 local, 235 remote, 0 mismatches, latest `20261129001000` | [P] |
+| Definitions (19:48:45) | Probe readback `bd5da284…`; other eight 7.3D-1 `8\|8fbc18c0…`; summary `8eadddd6…`; 7.3B six `6\|57277a24…`; 7.3C-1 other nine `9\|eaa066ba…` (the 7.3C-1 "ten" is these nine plus the deliberately restated summary, as SQL 125 §14 pins them); 7.3C-2 nine `9\|dca434bc…`; application ledger `10\|5f14532a…`; price draft `4\|fddc8bb9…`; 7.2C-1 `12\|016c0e68…`; renewal trigger `b1607618…`; `vendor_submit_renewal_document` `8c894236…`; ledger columns `7a0c7808…`; money `58\|af0fae6e…`. All as pinned | [P] |
+| Grants | `email_provider_events_purge`, `email_evidence_probe_readback`, `email_evidence_arm`: execute `authenticated` only (not `anon`; not `service_role` for purge and probe readback) | [P] |
+| State | 0 arming events; 0 rows with `armed_at`; 0 receipts; **0 purge runs** (`private.email_provider_event_purges`); `pg_cron` installed with 0 jobs | [P] |
+| Production variable names (no values) | `RESEND_WEBHOOK_SECRET`, `RESEND_WEBHOOK_SECRET_PREVIOUS` and `EMAIL_EVIDENCE_PROBES_ENABLED` absent | Vercel names |
+| T-6 preconditions (§2 EO-6), synthetic provider only, booleans and status only | (1) the contractor exists (`65cce2d9…`), its account is bound and holds the vendor role: **holds**. (2) no `vendor_onboarding` row, so not `suspended`: **fails**. (3) not on the public-listing exclusion list: **fails**. (4) 0 open `insurance` renewal documents: **holds**. **T-6 is blocked** | [P] |
+| Operator session (step 3) | **Pending:** the owner's checks, recorded separately (§1.2) | [O] |
+
+### 1.2 Operator-session evidence (step 3)
+
+**Pending.** The owner's step-3 report is recorded here as operator evidence, apart from §1.1. After that report, one privileged read confirms the purge-run count is still 0 (§3 step 3); that read is recorded as [P], not as operator evidence.
+
 ## 2. Owner decisions, presented together
 
 None is approved by this record, by Codex's reviews or by any merge. Arming needs **EO-1, EO-2, EO-3, EO-6 and EO-7** (plan §13.3). Codex's recommendations are carried below as **PROPOSALS**. They become decisions only when the owner records them.
@@ -29,11 +49,14 @@ None is approved by this record, by Codex's reviews or by any merge. Arming need
   - Deletion policy **P-2** with a maximum deletion lag of **D = 14 days**: no receipt may remain more than 14 days past its `expires_at`.
   - A **weekly manual operator purge** (H-9). No `pg_cron` job; a scheduler would be a separate approval.
   - **Accountable: Josh (owner), Monday mornings ET** (complete by 12:00 ET). The first run is the first Monday after H-4.
-  - **Run procedure:** on `/admin/email-evidence`, confirm **Purge expired reports** (the 7.3D-2 control: one confirmation makes one call of 1,000) until a run deletes fewer than 1,000 rows, at most 10 confirmations (10,000 rows) per weekly run. The page shows each run's deleted count and remaining backlog and then re-reads the retention counts.
-  - **Run record** (no content): date and time ET; calls made; rows deleted; expired remaining, or "over 10,000"; oldest `expires_at` among the expired rows that remain; total retained.
+  - **Run procedure:** on `/admin/email-evidence`, confirm **Purge expired reports** (the 7.3D-2 control: one confirmation makes one call of 1,000), at most 10 confirmations (10,000 rows) per weekly run. After each confirmation the page shows that call's deleted count and remaining backlog and then re-reads the retention counts.
+  - **Completion:** a weekly run is complete only when the **refreshed** "Expired, awaiting purge" count reads **0** after the last confirmation. A call that deletes fewer than 1,000 is **not** completion: the purge selects with `for update skip locked`, so expired rows locked by a concurrent purge-on-receipt are skipped and left behind. If the refresh fails, use Refresh; the run is not complete until a refreshed count of 0 is seen. While the refreshed count is above 0 and fewer than 10 confirmations have been made, confirm again.
+  - **Backlog after the limit:** if the refreshed count is still above 0 after the 10th confirmation, the run is **incomplete**. Record it with the run record below, the same day, as a **finding** for Codex. No further confirmation is made under H-9 that week; a catch-up run needs the owner's dated, recorded choice (as for a missed run). A backlog that reaches `expires_at` + 14 days is also a P-2 finding.
+  - **Run record** (no content): date and time ET; calls made; rows deleted; the refreshed expired count after the last call (0 for a complete run), or "over 10,000"; oldest `expires_at` among the expired rows that remain; total retained; complete or incomplete.
   - **Capacity, documented:** 10,000 rows per weekly run, plus purge-on-receipt. Expected inflow is unknown before H-4. After the first full week, record that week's receipt count (privileged count only) and the margin, 10,000 minus the weekly receipt count. If the weekly receipt count exceeds 5,000, that is a finding for Codex (capacity or scheduler change).
-  - **Missed-run escalation:** weekly runs leave 7 days of slack under D = 14. A run not completed by Monday 23:59 ET is a missed run. Record it and complete it by Wednesday 12:00 ET. A second consecutive miss, or any expired row older than `expires_at` + 14 days at any readback, is a finding. The owner records it the same day and chooses catch-up runs or the shutdown procedure (§3 step 31). There is no backup operator under DEC-2026-025, so an absence longer than 7 days must be decided in advance: shutdown, or a named backup by separate decision.
-- The duty lasts **while any receipt remains, expired or not**, including after a coverage-window end, an application rollback or a shutdown (review fixes §2.5).
+  - **Missed-run escalation:** weekly runs leave 7 days of slack under D = 14. A run not completed (as defined above) by Monday 23:59 ET is a missed run. Record it and complete it by Wednesday 12:00 ET. A second consecutive miss, or any expired row older than `expires_at` + 14 days at any readback, is a finding. The owner records it the same day and orders catch-up runs. The owner may also choose the shutdown procedure (§3 step 31) to stop new receipts, but a shutdown never replaces the catch-up: rows already stored still have to be purged.
+  - **Extended absence and backup coverage:** a complete run leaves no expired row, so a row that expires just after it must be deleted within 14 days. Complete runs must therefore be **at most 14 days apart** while any receipt remains. There is no backup operator under DEC-2026-025. Any absence that would put more than 14 days between complete runs needs a **backup operator named in advance by a separate owner decision**; giving that person the operator role is a separately authorized production change. **Shutdown is not backup coverage.** It stops new receipts, but stored receipts keep expiring for up to 90 days after the last one arrived, and each must still be purged within 14 days of its expiry. If no backup is approved before such an absence, record the expected P-2 breach as a finding before the absence begins.
+- The duty lasts **while any receipt remains, expired or not**, including after a coverage-window end, an application rollback or a shutdown (review fixes §2.5). The completion, backlog, missed-run and backup-coverage rules above apply throughout.
 - **Provisioning gap PG-2: method (i), the 7.3D-2 operator purge control (#187).** It calls the existing `email_provider_events_purge(1000)` from the operator's signed-in session, once per confirmation; it adds no migration, scheduler, service-role path or guard bypass, and a privileged `supabase db query` is still never used to purge. **It can be used only after** Codex review, merge and a READY Production deployment on the merge commit, read back as in step 1. Until then H-9 and step 30 cannot run. The EO-2 approval names this control as the method. The first expiry falls 30 days after the first receipt.
 
 ### EO-3: subscribed events (PROPOSAL)
@@ -142,9 +165,10 @@ Evidence markers (§4): **[P]** privileged read; **[O]** operator session; **[L]
 3. **[O] Operator-session checks** (owner, signed in, O-1..O-3):
    - the counts functions return zeros with `receiver_armed` false;
    - Owner Emails, Recruiting and price drafts show the delivery-evidence card;
-   - `/admin/email-evidence` shows "No coverage window has ever been recorded".
+   - `/admin/email-evidence` shows "No coverage window has ever been recorded";
+   - **the deployed purge control, look only:** "Stored provider reports" shows 0 in all four counts, "No provider reports are stored. There is nothing to purge." and "No purge has been run."; **Purge expired reports** opens "Permanently delete expired provider reports?" with the permanent, expired-only wording and focus on Cancel; it is closed with **Cancel** or Escape. "Delete expired reports" is **never** pressed in this step: even with nothing to delete, a confirmation writes a run record. No coverage-window or probe button is pressed.
 
-   This is operator evidence, not a privileged read. Record it separately from step 2.
+   This is operator evidence, not a privileged read. Record it separately from step 2. **[P] afterwards:** the purge-run count is still 0, which shows the control made no call.
 4. H-1 (domain status, webhook list showing no Mercurius endpoint, DNS) and H-2 (503).
 5. **EO-1 (naming each action), EO-2 (naming the PG-2 method), EO-3, EO-6 and EO-7 approved and recorded.** If not: stop.
 
@@ -280,7 +304,8 @@ Each fact proves something different, and none stands in for another. The ±300 
 ### H. Retention
 
 30. **H-9:** run one weekly operator purge under EO-2 with the 7.3D-2 control, only after that control is reviewed and deployed (PG-2).
-    - **[O]** readback: rows deleted, expired remaining, oldest `expires_at` and total retained.
+    - **[O]** readback: rows deleted, the refreshed expired count, oldest `expires_at` and total retained.
+    - **Complete** only when the refreshed expired count is 0 (§2 EO-2). A count above 0 after the 10th confirmation is an incomplete run and a finding.
     - Under P-2, no row may be more than 14 days past `expires_at`. Record the first dated purge.
     - The expiry readback is part of acceptance and of every rollback or shutdown record.
 
@@ -300,7 +325,7 @@ Each fact proves something different, and none stands in for another. The ±300 
     3. Remove **both** `RESEND_WEBHOOK_SECRET` and `RESEND_WEBHOOK_SECRET_PREVIOUS` from Production, and the probe flag if it is set. Redeploy the reviewed commit (deployment provenance, §2 EO-1).
     4. H-2 answers 503, and the probe route answers 404.
     5. **[P]** arming state and retention (total, expired, oldest `expires_at`); **[O]** the page shows purge duty.
-    6. Purge duty continues weekly under EO-2 while any receipt remains.
+    6. Purge duty continues weekly under EO-2 while any receipt remains, with the same completion and backup-coverage rules. A shutdown never stands in for backup purge coverage (§2 EO-2).
 
     **Not a shutdown:** `vercel promote` (an application rollback), recording a window end alone, or removing only one secret slot.
 32. Phase 7 acceptance is a separate review. This checklist passing is not acceptance.
@@ -362,13 +387,22 @@ Each fact proves something different, and none stands in for another. The ±300 
 | H-10 and H-8c | Remain separately authorized production drills (§2 EO-1, §7) |
 | Redeployments | Each identifies its reviewed source commit and intended configuration, with before and after readbacks (§2 EO-1) |
 
+### 6.2 Third revision (Codex operating corrections, 2026-11-21)
+
+| Point | Resolution here |
+|---|---|
+| Purge completion | Complete only when the refreshed expired backlog reads 0. "Deleted fewer than 1,000" was the stopping rule and is withdrawn: `email_provider_events_purge` selects with `for update skip locked` (`20261124001000`), so rows locked by a concurrent purge-on-receipt are skipped and left. A backlog after the 10th confirmation is an incomplete run, a same-day finding, and further runs need the owner's recorded catch-up choice (§2 EO-2, step 30) |
+| Backup coverage | A shutdown stops new receipts but never replaces backup purge coverage: complete runs at most 14 days apart while any receipt remains, and an absence beyond that needs a backup operator named in advance by separate decision. The missed-run escalation orders catch-up runs; a shutdown may be added, never substituted (§2 EO-2, step 31 item 6, §7) |
+| Step 3 | A look-only check of the deployed purge control, never confirmed; a [P] purge-run count of 0 afterwards |
+| Preflight | §1.1 records the read-only release and database preflight of `ffd8bfb`; §1.2 holds the operator evidence, kept apart. T-6 is blocked (preconditions 2 and 3 fail); provider eligibility is not changed |
+
 ## 7. Owner decision card
 
 One written, dated response may approve any of the lines below. Each must be named; an unnamed item is not approved.
 
 **Decisions (PROPOSALS):**
 
-- **EO-2:** 90 / 30 days; P-2 with D = 14 days; a weekly manual purge with Josh accountable on Monday mornings ET; run procedure, record, capacity (10,000 per run; finding above 5,000 receipts a week) and escalation as in §2. The approval names the **7.3D-2 operator purge control** as the PG-2 method, usable once deployed.
+- **EO-2:** 90 / 30 days; P-2 with D = 14 days; a weekly manual purge with Josh accountable on Monday mornings ET; a run is complete only at a refreshed expired count of 0, at most 10 confirmations, and a backlog after the 10th is a same-day finding; run record, capacity (10,000 per run; finding above 5,000 receipts a week), missed-run escalation and backup coverage (complete runs at most 14 days apart; a longer absence needs a backup operator named in advance; shutdown is not backup coverage) as in §2. The approval names the **7.3D-2 operator purge control** as the PG-2 method, deployed at `ffd8bfb` (§1.1).
 - **EO-3:** the seven types; no opens or clicks.
 - **EO-7:** keep minimal, address-free unmatched receipts for 30 days.
 - **EO-6:** T-1..T-6 as specified (T-6 conditional); T-7 deferred.
@@ -396,7 +430,7 @@ Plus the privileged read-only readbacks in steps 2, 8, 11, 22–28, 30 and 31.
 | T-3 | `complained@resend.dev` | |
 | T-4 | `suppressed@resend.dev` | Observational |
 | T-5 | Controlled mailbox | Synthetic contact submission |
-| T-6 | Controlled mailbox | Synthetic `R0 Access Test Provider` renewal, only if it is `suspended` and excluded; otherwise blocked |
+| T-6 | Controlled mailbox | Synthetic `R0 Access Test Provider` renewal, only if it is `suspended` and excluded; otherwise blocked. **Blocked at the §1.1 read** (no onboarding row; not excluded); its real-email verification stays outstanding |
 
 Each is sent once, after H-5. T-5 and T-6 cleanup are separate later approvals.
 
@@ -424,6 +458,6 @@ On a stop, no further activation step is taken. The owner holds the current stat
 3. Remove both secret slots and the probe flag, then redeploy the reviewed commit.
 4. Read back 503 and 404.
 5. Read back retention.
-6. Weekly purges continue while any receipt remains.
+6. Weekly purges continue while any receipt remains, under the same completion and backup-coverage rules; a shutdown is never backup coverage.
 
 `vercel promote` is never the shutdown.
