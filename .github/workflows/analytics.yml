@@ -2,10 +2,10 @@ name: Analytics privacy
 
 on:
   pull_request:
-    paths: ['src/**', 'tests/analytics/**', 'tests/unit/posthog*', 'package*.json', 'playwright.analytics.config.ts', '.github/workflows/analytics.yml']
+    paths: ['src/**', 'tests/analytics/**', 'tests/unit/posthog*', 'tests/fixtures/browser-session.ts', 'package*.json', 'playwright.analytics.config.ts', '.github/workflows/analytics.yml']
   push:
     branches: [main]
-    paths: ['src/**', 'tests/analytics/**', 'tests/unit/posthog*', 'package*.json', 'playwright.analytics.config.ts', '.github/workflows/analytics.yml']
+    paths: ['src/**', 'tests/analytics/**', 'tests/unit/posthog*', 'tests/fixtures/browser-session.ts', 'package*.json', 'playwright.analytics.config.ts', '.github/workflows/analytics.yml']
 
 permissions:
   contents: read
@@ -34,7 +34,7 @@ jobs:
           else
             npx playwright install --with-deps chromium
           fi
-      - run: npx vitest run tests/unit/posthog-policy.test.ts tests/unit/posthog-client.test.ts tests/unit/posthog-server.test.ts
+      - run: npx vitest run tests/unit/posthog-policy.test.ts tests/unit/posthog-client.test.ts tests/unit/posthog-server.test.ts tests/unit/posthog-routes.test.ts
       - run: npm run test:analytics
       - uses: actions/upload-artifact@v4
         if: failure()

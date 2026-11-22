@@ -89,6 +89,27 @@ permission to capture a private screen.
   synthetic requests; no hosted data/providers. Checks no pre-consent traffic,
   campaign attribution, SPA pageviews, withdrawal, snapshot masking, private-form
   exclusion, 320px preferences/axe and blocked-provider browsing.
+- Call-site trigger tests (TRACE-158, Phase 7.4B; record
+  [7.4B](PHASE-7-ANALYTICS-TRIGGER-VERIFICATION-7-4B.md)): every event above is asserted
+  from the code that fires it.
+  - `tests/unit/posthog-routes.test.ts` calls the real `/api/request-coverage` and
+    `/api/early-access` handlers and the real server analytics module. Synthetic
+    database client and SDK. `coverage_checked` only after a covered, waitlist or
+    uncovered decision, never on invalid input or a failed lookup. `early_access_submitted`
+    only on 201 `saved`, never on 400, 409, 429 or 500. Properties are exactly
+    `coverage` or `kind`; no ZIP, email or name.
+  - `tests/analytics/posthog.pw.ts` (7.4B sections) drives the real pages, the real SDK
+    and the installed listeners. Sign-in outcome classification and identity order;
+    `signup_submitted` only when the provider accepts; `provider_profile_viewed` only
+    after a successful load, and after an opt-in while open; `service_viewed` on an
+    explicit choice; the three intake events, including reused and refused saves;
+    internal-only navigation, label-free button positions, private and external targets
+    dropped, and one scroll milestone per page.
+  - Trigger semantics the tests pin as current behavior: **F-1** `request_started`
+    fires again after Back → Continue (owner decision D-2 open); **F-2** each accepted
+    early-access submission counts, repeats included, with no new-or-repeat property;
+    **F-3** each coverage lookup counts; **F-4** `request_submitted` is sent from the
+    browser after the save, so `service_request_submissions` stays the count of record.
 - Dedicated `Analytics privacy` CI job runs independently of the database lane.
 - Typecheck, changed-file ESLint, unit regression, secret scan and production build
   remain required. A local browser sandbox/download failure is not a passed test.
