@@ -1,6 +1,8 @@
 # Phase 7.4B — Analytics call-site trigger verification (TRACE-158)
 
-**Status:** IMPLEMENTATION FOR REVIEW (Codex). Tests and the CI job's file list only. Nothing is activated.
+**Status:** MERGED AND RELEASED (#191, `main` `aab602b`); Codex retrospective review found no blocking issue (§7). Tests and the CI job's file list only. Nothing is activated.
+
+> **Note 2026-11-22 ET (after merge).** The text from §1 to §6 is kept as written; §7 records the review and the release. One correction: §3.2 says the `Analytics privacy` job "runs only for pull requests". The workflow also runs on a push to `main` that touches its paths (it ran on `aab602b`, §7.2). What §3.2 meant holds: a branch push without a pull request does not start it, which is why #192 was used.
 **Base:** `main` `0f48cff` (#190 merged 2026-11-22 13:47 UTC, after exact-head CI 45024066373 passed on `ff81620`). Branch `claude/phase7-4b-analytics-trigger-tests`.
 **Authority:** [analytics coverage contract](PHASE-7-ANALYTICS-COVERAGE-CONTRACT.md) §4, §5 and §8 (AC-1); [POSTHOG-ANALYTICS](POSTHOG-ANALYTICS.md) (TRACE-157); the owner's 2026-11-22 instruction accepting the prepared approach (real route handlers and server analytics with synthetic dependencies; real browser call sites in the existing analytics lane; no helper extraction unless necessary).
 
@@ -91,3 +93,36 @@ Uncaught otherwise: none. In run A, existing test 3 (320px preferences) also fai
 - **R-4 Temporary PR #192.** It was used only to run browser mutations through the supported job; it was closed unmerged and its branch deleted. Runs: A 45040209508, B 45040581998, C 45040888759.
 - **R-5 Observation, no change.** `/register` shows the same "check your email" answer for an existing account (TRACE-103), but `signup_submitted` fires only when the provider returns no error. If Supabase ever returns an error for an existing address, PostHog would count new and existing signups differently. That is visible only to the analytics owner, not to the visitor. Pinned as current behavior ("only without error"); no decision requested now.
 - **Unchanged decisions.** D-1..D-6 remain recommendations. The auth-handoff event (A-16) stays out of scope. F-1 is pinned, not changed (D-2).
+
+## 7. Review and release (recorded 2026-11-22 ET)
+
+### 7.1 Codex review
+
+Codex reviewed #191 **retrospectively**, at head `45bb89b`, after the merge in §7.2. The owner relayed the result on 2026-11-22 ET. It is not a GitHub review object: #191 has 0 reviews.
+
+| Item | Outcome |
+|---|---|
+| Blocking findings | None |
+| R-1 `isolate()` and bot signals | **Accepted only for the existing isolated synthetic lane** (the `Analytics privacy` job and its local equivalent, synthetic data, no hosted PostHog project). **No hosted bot-signal override is authorized**: no `navigator.webdriver` or user-agent change, and no `opt_out_useragent_filter` or other SDK setting, outside that lane |
+| R-2 placement | Accepted |
+| R-3 workflow triggers | Accepted |
+| R-4 temporary PR #192 | Accepted |
+| R-5 `signup_submitted` only without a provider error | Accepted as an observation; no change |
+
+This review is not owner acceptance of Phase 7.4, and it decides none of D-1..D-6.
+
+### 7.2 Merge and release
+
+| Check | Result |
+|---|---|
+| Merge | #191 merged 2026-11-22 18:21:35 UTC (13:21 ET) by `Jcoley-Mercurius`, head `45bb89b`, as `main` `aab602b`. Under DEC-2026-037 the merge is the release approval |
+| Production deployment | `dpl_GiQ9e13H4rBES5hpDGaZHqHmpG4e`, built from `aab602b`, **Ready** (created 13:21:38 ET, build 31 s); aliased to `www.mercuriusmarketplace.com` and `mercuriusmarketplace.com`. GitHub deployment 7983003408 (Production): success |
+| `Analytics privacy` on `main` (run 45054623422, push) | **Success**, 18:21:41–18:24:16 UTC. Vitest 35/35 (4 files); browser lane 17/17 |
+| `CI` on `main` (run 45054623308, push) | **Success**, 18:21:41–18:56:23 UTC: `backend`, `lifecycle` and `application` jobs all success |
+| Database, PostHog, Vercel variables | No migration in #191; no PostHog setting, Vercel variable or hosted traffic change |
+
+### 7.3 Still open
+
+- D-1..D-6 (contract §9) remain owner decisions. D-2 is prepared for the owner, not implemented: F-1 is still the pinned behavior.
+- The auth-handoff event (A-16) remains out of scope.
+- No email activation gate changes: 7.3D stays unactivated with its §7 card approvals pending.
