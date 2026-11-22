@@ -1126,7 +1126,7 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
     setKeyConflict(false);
     recovered.current = false;
     const today = easternDateValue(new Date());
-    setDraft({ ...emptyDraft(newSubmissionKey()), ownerId: user?.id ?? null, preferredDate: addDays(today, 1), preferredEndDate: addDays(today, 4) });
+    setDraft({ ...emptyDraft(newSubmissionKey()), startCounted: draft.startCounted, ownerId: user?.id ?? null, preferredDate: addDays(today, 1), preferredEndDate: addDays(today, 4) });
     setErrors({});
   }
 
