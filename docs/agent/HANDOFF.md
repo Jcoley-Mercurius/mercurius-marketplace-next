@@ -1,3 +1,12 @@
+# Phase 7.4B analytics call-site trigger tests (TRACE-158) — 2026-11-22 ET
+
+- **Base:** #190 merged as `0f48cff` after exact-head CI 45024066373 passed on `ff81620` (contract unchanged from reviewed `501720b`; the merge only brought in `main`). Branch `claude/phase7-4b-analytics-trigger-tests`, PR #191. Record: [7.4B](../../governance/PHASE-7-ANALYTICS-TRIGGER-VERIFICATION-7-4B.md).
+- **Built (tests only):** route tests call the real coverage and early-access handlers and server analytics with a synthetic database client, `after` and SDK. 13 browser tests in the existing lane cover sign-in, identity, signup, provider and service views, the intake events (reused and refused saves, F-1 pinned) and the listeners. `isolate()` is unchanged. The job also runs the route test and triggers on `tests/fixtures/browser-session.ts`.
+- **Evidence:** route 21/21; browser 17/17 on GitHub runners; the job took 2 min 6 s of its 12-minute limit. 5 route and 11 browser mutations caught, 1 equivalent (B-M12). Browser mutations ran through temporary draft PR #192, now closed with its branch deleted.
+- **Local:** two other worktrees' Supabase stacks overloaded the 5 GB VM (load 20–45); the new browser tests could not open a page locally, so browser acceptance rests on CI. The stacks were left running. The generated `AGENTS.md` block is uncommitted.
+- **Not done:** no source, event, property, consent, replay, PostHog, Vercel or database change; no hosted traffic. D-1..D-6 open; auth handoff (A-16) out of scope. #191 is not merged.
+- **Next:** Codex reviews #191 (R-1..R-5 in record §6). Merging needs owner release authorization.
+
 # Phase 7.4A analytics coverage and event contract (TRACE-158) — 2026-11-21 ET
 
 - **Base:** `main` `458555a` (#188), re-fetched before work. Branch `claude/phase7-4a-analytics-coverage-contract`. Documentation only. Record: [analytics coverage contract](../../governance/PHASE-7-ANALYTICS-COVERAGE-CONTRACT.md) (AC-1).
