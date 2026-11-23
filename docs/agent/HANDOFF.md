@@ -4,9 +4,10 @@
 - **Mapped:** 14 queue families. Aging is computed on read by design (DEC-2026-045 choice 8), so no breach is ever recorded. The one self-recording escalation (DEC-2026-006 72 h, `run_lifecycle_batch`) runs only from the scheduler, which is not installed. There is no operator alert channel: admin in-app rows are write-only, and no error/uptime provider exists. Only support stores an owner and an assignee. T-1..T-11 is the complete list of approved timing rules; everything else has none.
 - **Defects:** DF-1 overview fulfillment "aged" is always 0; DF-2 the summary omits the offers-at-other-terms queue; DF-3 support "past response target" measures "still open". **AC-1 corrected:** the live matcher computes no pool count (L-1 cited a superseded body); only the superseded Phase 1 matcher produced `sourcing`.
 - **Recommended 7.5B:** function-only restatement of `admin_operations_summary` (fulfillment aged `null`; add offer terms), client mapping and parity tests. No policy decision; the hosted push needs owner authorization.
-- **Open:** OD-1..OD-7, CD-1; AC-1 D-1, D-4, D-5, D-6. Carried unchanged: 7.3D gates (EO-1..EO-8, PG-1/G-1), O-1..O-9, CFG-011 log retention.
+- **Open:** OD-1..OD-7; AC-1 D-1, D-4, D-5, D-6. Carried unchanged: 7.3D gates (EO-1..EO-8, PG-1/G-1), O-1..O-9, CFG-011 log retention.
 - **Not done:** no code, test, migration, hosted query, scheduler, email or activation.
 - **Next:** Codex review of OQ-1; then 7.5B.
+- **Revision 2 (2026-11-22 ET):** `main` `83c8fea` (#194) merged in; source references rechecked (unchanged). Codex's 7.5A review applied as RV-1..RV-5 (contract §12): SF-6b run records (same-run replay inserts none; a new run ID inserts a second without re-escalating); HQ-2 on one `REPEATABLE READ READ ONLY` snapshot; fourteen families, ten with a server reader; breach observations kept separate from the DEC-2026-006 escalation; missing-alert pins are characterization, not gate acceptance; CD-1 recorded as Codex's direction. Original baseline kept as history (§1.2). Next: review/release clearance for #196, then 7.5B from `main`.
 
 # Phase 7.4C `request_started` once per draft (TRACE-158, D-2) — 2026-11-22 ET
 

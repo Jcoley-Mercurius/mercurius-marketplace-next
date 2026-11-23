@@ -1,14 +1,15 @@
 # Phase 7.5A — Operations queues, ownership and SLA contract (TRACE-159)
 
-**Status:** CONTRACT FOR REVIEW (Codex). Documentation and planning only. It approves no policy, sets no threshold, implements nothing and activates nothing.
-**Matrix version:** OQ-1.
-**Checkpoint:** 2026-11-22 (America/New_York), `main` `63c8010` (#193 merge), re-read with `git fetch` before work. Every source reference below is at this commit.
-**Branch:** `claude/phase7-5a-operations-queues-contract`, from `main` `63c8010`.
+**Status:** CONTRACT FOR REVIEW (Codex), revision 2. Documentation and planning only. It approves no policy, sets no threshold, implements nothing and activates nothing.
+**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12).
+**Checkpoint (revision 2):** 2026-11-22 (America/New_York), `main` `83c8fea` (#194 merge), merged into this branch. Every source reference below was rechecked at this commit: #194 changed no migration and no admin source, so all line references still hold.
+**Original baseline (history, 2026-11-22 ET):** `main` `63c8010` (#193 merge), the commit the first revision was written against (§1).
+**Branch:** `claude/phase7-5a-operations-queues-contract`, from `main` `63c8010`, with `main` `83c8fea` merged.
 **Authority:** the owner's Phase 7.5A instruction (2026-11-22). Roadmap Phase 7 ("Create owned operational queues with age, priority, SLA, alert, and next action"; gate: "staged failures and SLA breaches create the correct alert, queue item, audit event, and user communication"). MPS §5, §6.2–§6.6, §9, §10, §11, §12. MTS §10 (webhook step 7), §11 detective controls, §14, §15 item 6. CFG-009, CFG-010, CFG-015. [PHASE-6-ADMIN-OPERATIONS-BRIEF](PHASE-6-ADMIN-OPERATIONS-BRIEF.md) (TRACE-136). [Analytics coverage contract](PHASE-7-ANALYTICS-COVERAGE-CONTRACT.md) (AC-1, TRACE-158). [Notification contract](PHASE-7-NOTIFICATION-CONTRACT.md) (NM-1, TRACE-152).
 
 ## What this slice does not do
 
-- **Independent of PR #194.** #194 (7.4C, `request_started` once per draft) is open and is not merged, rebased onto or cherry-picked here. The D-2 approval recorded on that branch is outside this scope and is not relied on.
+- **Independent of 7.4C.** #194 (7.4C, `request_started` once per draft) was open when revision 1 was written and was not incorporated. It has since merged (`83c8fea`) and is now in this branch's history through a merge of `main`. Nothing here depends on it. The D-2 decision it records is outside this scope.
 - **Read-only.** No hosted query, no Supabase, Vercel, Stripe, Resend or PostHog call. Hosted state is cited only as history from earlier records.
 - **No application, database, CI, email, scheduler, retry, suppression, booking, payment or profile change.**
 - **Carried unchanged:** every 7.3D email activation gate (EO-1..EO-8, PG-1/G-1, H- and T-checks, the §7 owner card); O-1..O-9; CFG-011 90-day log retention (unmet); AC-1 D-1..D-6; NM-1 open items. Nothing here accepts any part of Phase 7.
@@ -17,9 +18,9 @@
 
 ## 0. Summary
 
-1. **Ten queue families exist and most are server-computed.** Quote aging, payment exceptions, recurring-visit payment, fulfillment, cancellation, offers at other terms, support, compliance renewal, finance exceptions and email failures each have a database reader with a role check. Sourcing and applications awaiting review do not (TRACE-136 §12.4 item 4).
-2. **Aging is computed on every read, by design.** DEC-2026-045 implementation choice 8 computes queue items from recorded events "so they cannot be skipped or reset". The cost: no breach, acknowledgement or escalation is ever *recorded*, so no SLA history, breach rate or alert can exist. Recording must add an observation record next to the computed queue, never replace it (§6.1).
-3. **One approved escalation is already built to record itself, but never runs.** `run_lifecycle_batch` records the DEC-2026-006 72-hour completion escalation as a flag, a `job_events` row, an admin in-app row, a homeowner notice and a run record, idempotently. It runs only when invoked by the scheduler, and no scheduler job is installed (DEC-2026-003/004/010).
+1. **Fourteen queue families (Q-01..Q-14); ten have a server reader.** Quote aging, payment exceptions (read through the quote reader), recurring-visit payment, fulfillment, cancellation, offers at other terms, support, compliance renewal, finance exceptions and email failures are computed by `SECURITY DEFINER` database functions with a role check. Disputes (Q-09) are read through the support reader and, on `/admin/disputes`, from the `disputes` table under row-level security. Coverage interest (Q-14) is an aggregate, not a work queue. Sourcing (Q-01) and applications awaiting review (Q-12) have no server queue (TRACE-136 §12.4 item 4).
+2. **Aging is computed on every read, by design.** DEC-2026-045 implementation choice 8 computes queue items from recorded events "so they cannot be skipped or reset". The cost: no general breach observation exists. No queue records when an item crossed its threshold, so no SLA history, breach rate or lag can be reported. Recording must add an observation record next to the computed queue, never replace it (§6.1).
+3. **One approved escalation is already built to record itself, but never runs.** This is the only exception to item 2, and it is a different kind of record. `run_lifecycle_batch` records the DEC-2026-006 72-hour completion escalation as a state change (`needs_admin_review`), a `flagged_for_admin_review` `job_events` row, an admin in-app row, a homeowner notice and a run record. It flags each job once, and a replayed run ID writes nothing (§7.1 SF-6b). It runs only when invoked, and no scheduler job is installed (DEC-2026-003/004/010). It covers T-5 only, and it is a business action, not a breach observation (§6.1).
 4. **There is no operator alert channel.** Admin in-app rows are written but cannot be read (NM-1 §4.1). No error-monitoring or uptime provider is selected (MTS §15 item 6). MTS §10 step 7 and §11 alerts are MISSING.
 5. **Ownership is approved only as "the project owner".** CFG-010 names the project owner as escalation owner until a delegate is recorded. DEC-2026-025 makes Josh the sole admin for R0 (not carried to R1). Only support tickets store an owner and an assignee.
 6. **Three defects in existing behavior** (§5): the overview always shows 0 aged fulfillment items (DF-1); it omits the offers-at-other-terms queue (DF-2); support "past response target" measures "still open", not "not yet answered" (DF-3).
@@ -29,6 +30,18 @@
 ---
 
 ## 1. Baseline
+
+### 1.1 Revision 2 recheck (2026-11-22 ET)
+
+| Item | Observation |
+|---|---|
+| `origin/main` | `83c8fea` (#194 merge). Fetched before the revision; merged into this branch (the merge conflicted only in TRACEABILITY and HANDOFF, both resolved by keeping every entry) |
+| Changes since the original baseline | #194 only: analytics client, request intake, its tests and the AC-1 / 7.4C records. No migration, admin page, `adminOperations.ts` or SQL test changed, so every source reference in this contract still holds |
+| Open PRs | #196 (this PR) only |
+| Migrations | Latest file still `20261129001000`. This slice adds none |
+| Hosted | Not queried |
+
+### 1.2 Original baseline (history, as written for revision 1 on 2026-11-22 ET)
 
 | Item | Observation (2026-11-22) |
 |---|---|
@@ -139,9 +152,16 @@ Every timing rule an approved authority states. Anything not listed has **no app
 
 ### 6.1 SLA breaches: computed on read, not recorded (AC-1 O-2)
 
-**Current.** Breach-like flags exist only at read time: Q-03/Q-05 `aged`, Q-08 `overdue`, Q-06 `confirmation_overdue`, Q-13 `missed`/`unknown`. Two durable records exist: the batch's 72-hour escalation (inactive) and `needs_admin_review` on exhaustion (state, no event). In practice, nothing records a breach.
+**Current.** Breach-like flags exist only at read time: Q-03/Q-05 `aged`, Q-08 `overdue`, Q-06 `confirmation_overdue`, Q-13 `missed`/`unknown`. Two durable records touch timing, and neither is a breach observation:
 
-**Constraint.** Read-time computation is deliberate (DEC-2026-045 choice 8), and CFG-015 makes aging a queue item with no automatic action. A breach record must therefore be an *observation*. It must never change business state, send a message or replace the computed queue.
+| Record | What it is | Why it is not a general breach observation |
+|---|---|---|
+| DEC-2026-006 completion escalation (`run_lifecycle_batch`) | A business action for T-5 only: sets `needs_admin_review`, logs `flagged_for_admin_review` with the 72-hour deadline, writes the admin and homeowner rows and a run record. Inactive (no scheduler) | It changes state and sends messages; it exists only if the batch runs; it covers one rule; it records when the batch acted, not when the threshold was crossed, and a job is flagged once whatever later happens |
+| `needs_admin_review` on exhaustion | State, with no event (AC-1 L-4) | No rule, no deadline, no observation time |
+
+So no general breach observation exists: for T-3, T-4, T-8 and T-10, and for T-5 on the read path, nothing records that an item crossed its threshold.
+
+**Constraint.** Read-time computation is deliberate (DEC-2026-045 choice 8), and CFG-015 makes aging a queue item with no automatic action. A breach record must therefore be an *observation*. It must never change business state, send a message or replace the computed queue. It must also stay separate from the completion escalation: the escalation stays the T-5 business action under DEC-2026-006, and a T-5 observation, if OD-1 includes T-5, records the crossing whether or not the batch has run. Neither record is derived from the other, and neither replaces the other.
 
 **Proposed design (for a later slice, after OD-1 and OD-2):**
 - append-only `private.operations_sla_breaches`: rule ID (T-n only), queue, item kind, subject ID, `due_at` (the breach instant from source rows), `observed_at`, detector run ID; unique on (rule, subject, `due_at`) so repeated detection is idempotent;
@@ -185,6 +205,8 @@ Each check stages one failure and asserts four outcomes: **queue item**, **alert
 
 Expected values are **current behavior**, pinned. Where a gap exists, the check asserts the gap explicitly ("alert: none"), so a later slice must change the expectation on purpose.
 
+**These checks are characterization evidence, not Phase 7 gate acceptance.** A passing check that pins a missing alert (SF-1..SF-11, "alert: none"), a missing communication (SF-7, SF-8) or a known defect (SF-9 for DF-3, SF-12 for DF-1) proves only that current behavior is what this contract says. It does not show that the roadmap gate ("staged failures and SLA breaches create the correct alert, queue item, audit event, and user communication") is met. The gate stays open until the missing producers exist and the checks assert them. Where an authority forbids a message (CFG-015, N-REC-04), "communication: none" is already the correct outcome, but that check still does not accept the gate while its alert outcome is missing.
+
 | ID | Stage | Queue item | Alert | Audit | Communication |
 |---|---|---|---|---|---|
 | SF-1 | Accepted quote-required job, no proposal, clock at 24 h − 1 µs / 24 h | none / `proposal_missing`, aged | none | acceptance row only | none (CFG-015) |
@@ -193,7 +215,7 @@ Expected values are **current behavior**, pinned. Where a gap exists, the check 
 | SF-4 | Attempt in `reconcile` | `payment_unresolved`, never aged | none | attempt row | none |
 | SF-5 | Accepted unpaid recurring visit at appointment − 24 h | `ready_unpaid` or `review_missing` | none | visit payment state | none (N-REC-04) |
 | SF-6a | Completion notice at 72 h − 1 µs / 72 h; read path only | none / `confirmation_overdue` | none | none new | none new |
-| SF-6b | Same, then `run_lifecycle_batch` twice with one run ID, then a new run ID | unchanged | admin row ×1 per admin (write-only) | `flagged_for_admin_review` ×1; one run record; replay | homeowner "under review" ×1 |
+| SF-6b | Same, then `run_lifecycle_batch` twice with one run ID, then once with a new run ID | unchanged (item stays until follow-up) | admin row ×1 per admin (write-only); none added by the replay or the second run | `flagged_for_admin_review` ×1 in total. Run records: the first run inserts one; the same-run replay returns the stored summary with `replayed: true` and inserts none; the new run ID inserts a second run record (`admin_flagged` 0), because the job already has `needs_admin_review` | homeowner "under review" ×1 in total; none from the replay or the second run |
 | SF-7 | Offer past 4 h with no other candidate; read via `expire_stale_matches` | none (no server queue); `needs_admin_review` | none | `match_expired` event; exhaustion has no event | none (N-REQ-04 ABSENT) |
 | SF-8 | Support ticket opened Friday 16:30 ET; same-day appointment ticket at 10:00 | `response_due_at` Monday 16:30 ET / 17:00 the same day, `same_day` | admin row (write-only) | `opened` event | none (no acknowledgement message) |
 | SF-9 | Operator replies before the due time; clock passes it | `overdue = true` (pins DF-3) | none | message row | N-SUP-03 |
@@ -208,7 +230,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | ID | Check | Gate before it can run |
 |---|---|---|
 | HQ-1 | Read-only: `admin_operations_summary` as the owner; every row `ready` or `restricted`; counts recorded | After 7.5B is merged and READY |
-| HQ-2 | Read-only: queue function counts equal the summary at the same `checked_at` | HQ-1 |
+| HQ-2 | Read-only: each queue function's count (and aged count, where a rule exists) equals its summary row, **read from one consistent database snapshot**: the summary and every queue reader are called inside one `REPEATABLE READ READ ONLY` transaction as the same operator, then rolled back. Equal `checked_at` values alone are not enough: in the default `READ COMMITTED` level each statement inside these functions takes a fresh snapshot, so separate calls (or one call per request) can see different rows even at one `checked_at`. Inside one transaction `now()` is also fixed, so read-time aging is evaluated at one instant | HQ-1 |
 | HQ-3 | Scheduler: one `run_lifecycle_batch` with no eligible rows returns an empty summary and one run record | DEC-2026-003 activation sequence; owner approval of cadence |
 | HQ-4 | Staged synthetic completion past 72 h, flagged by the batch; four outcomes read back; cleanup | HQ-3; synthetic-record policy for Production; OD-5 for the alert outcome |
 | HQ-5 | Breach record observed for HQ-4 with lag reported | OD-1, OD-2 and their slice |
@@ -257,7 +279,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | OD-5 | Operator alert channel and recipient (admin in-app readback, owner email, external provider per MTS §15 item 6) | Any alert slice; HQ-6 | Admin in-app readback first (rows already written); external provider as a separate MTS decision |
 | OD-6 | Thresholds for queues with none (§4) | Aging those queues | Keep none until the pilot baseline (MPS §2) |
 | OD-7 | Delegated operations owner for R1 (CFG-010; DEC-2026-025 does not carry) | R1 gate | Record before R1 |
-| CD-1 | (Codex) What counts as a support "response" for DF-3: the first participant-visible operations message only, or also a status change | DF-3 repair | First participant-visible operations message |
+| CD-1 | (Codex) What counts as a support "response" for DF-3 | DF-3 repair | **Recorded as Codex's technical direction (2026-11-22 ET, 7.5A review):** the first participant-visible operations message counts as a response. Internal notes, assignment changes and status changes do not. This is technical direction for 7.5D, not an owner policy decision; it sets no new target (CFG-010 stays the target) |
 
 ## 10. Recommended sequence
 
@@ -265,7 +287,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 |---|---|---|
 | 1 | **7.5B** summary truth repair (§8) | Codex review; owner push authorization |
 | 2 | **7.5C** staged-failure characterization tests (§7.1), tests only | 7.5B merged (SF-12 expects `null`) |
-| 3 | **7.5D** DF-3 support response measure | CD-1 |
+| 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9) |
 | 4 | **7.5E** admin in-app readback, so existing admin rows become the first alert surface | OD-5 |
 | 5 | **7.5F** breach observation records and operator detector | OD-1, OD-2 |
 | 6 | **7.5G** server sourcing and applications queues (no thresholds) | OD-4 for sourcing wording |
@@ -275,5 +297,22 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 ## 11. Validation of this slice
 
 - Documentation only: this file, one TRACEABILITY row (TRACE-159) and the handoff entry.
-- `git diff --check`, relative-link existence and `npm run scan:secrets`: results in the PR body.
+- `git diff --check`, relative-link existence and `npm run scan:secrets`: results in the PR body (revision 1) and the revision 2 PR comment.
 - No code, test, migration, workflow or configuration change. No hosted read or write.
+
+## 12. Revision history
+
+| Revision | Date (ET) | Base | Change |
+|---|---|---|---|
+| 1 | 2026-11-22 | `main` `63c8010` | First contract (OQ-1) |
+| 2 | 2026-11-22 | `main` `83c8fea` merged | Codex's 7.5A review, below. No finding, status or recommendation changed beyond these |
+
+**Codex 7.5A review, applied in revision 2:**
+
+| ID | Finding | Change |
+|---|---|---|
+| RV-1 | SF-6b overstated "one run record" | §7.1 SF-6b: a same-run replay inserts no run record; a new run ID inserts a second run record, with no second escalation, admin row or homeowner notice |
+| RV-2 | HQ-2 relied on equal `checked_at` | §7.2 HQ-2: one `REPEATABLE READ READ ONLY` transaction for the summary and every reader |
+| RV-3 | Queue-family total wrong; breach observation conflated with the completion escalation | §0 items 1–3: fourteen families, ten with a server reader. §6.1: the DEC-2026-006 escalation is a T-5 business action, not a general breach observation, and the two stay separate |
+| RV-4 | Missing-alert pins could be read as gate evidence | §7.1: characterization only, not Phase 7 gate acceptance |
+| RV-5 | CD-1 open | §9: Codex's technical direction recorded (first participant-visible operations message; notes, assignment and status changes do not count) |
