@@ -22,7 +22,7 @@ const row = {
   readback: { state: "mismatch", observed: 11600, expected: 11700, recorded_at: now }, reconciliation_open: true, issues: [],
 };
 const reconciliation = {
-  evaluated_at: now, fee_percent: 15, obligation_count: 1, listed_limit: 200, global_event_holds: 1, accounts: [],
+  evaluated_at: now, fee_percent: 10, standard_commission_bps: 1000, promotional_commission_bps: 500, obligation_count: 1, listed_limit: 200, global_event_holds: 1, accounts: [],
   totals: { captured: 11700, refunded: 0, platform_fee: 1500, tax: 700, provider_payable: 9500, paid_out: 0, processor_costs: 0, chargeback_suspense: 0, provider_owed: 0, with_issues: 0 },
   exceptions: [], obligations: [row],
 };

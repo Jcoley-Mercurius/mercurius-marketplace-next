@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCorrectionTime, frequencyLabel } from "@/lib/packagePriceCorrections";
+import { commissionRateLabel, PROMOTIONAL_COMMISSION_LABEL, STANDARD_COMMISSION_LABEL } from "@/lib/commission";
 import { emptyContent, lineAmountLabel, lineLabel, parseContent, parsePriceResult, priceResultLabel, type PackageContent, type PriceResult } from "@/lib/pricingContent";
 import { formatPromotionDiscount, parseOffers, type PromotionOffer } from "@/lib/promotionOffers";
 import { createClient } from "@/lib/supabase/client";
@@ -87,7 +88,7 @@ export function VendorPriceApprovals() {
     {offers.length > 0 && <section id="offer-approvals" aria-labelledby="vendor-offer-approvals" className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
       <div>
         <h2 id="vendor-offer-approvals" className="font-semibold">Offers you would fund</h2>
-        <p className="mt-1 text-sm text-muted-foreground">With an offer applied, Mercurius&apos;s commission is 7.5% instead of 15%. An offer applies to a booking only when the homeowner chooses it; approving records your agreement to this version.</p>
+        <p className="mt-1 text-sm text-muted-foreground">With an offer applied, Mercurius&apos;s commission is {PROMOTIONAL_COMMISSION_LABEL} instead of {STANDARD_COMMISSION_LABEL}. An offer applies to a booking only when the homeowner chooses it; approving records your agreement to this version.</p>
       </div>
       <ul className="space-y-3">{offers.map((offer) => <OfferItem key={offer.id} offer={offer} onChanged={load} />)}</ul>
     </section>}
@@ -208,7 +209,7 @@ function OfferItem({ offer, onChanged }: { offer: PromotionOffer; onChanged: () 
       <Badge variant="outline">{offer.status === "approved" ? "Approved" : offer.status === "awaiting_vendor" ? "Waiting for your approval" : offer.status === "retired" ? "Ended" : "With Mercurius"}</Badge>
     </div>
     <p>{offer.terms}</p>
-    {example && <p className="text-muted-foreground">On a $100 service: homeowner pays {formatCents(example.homeownerServiceCents)}, Mercurius commission {formatCents(example.commissionCents)} (7.5%), you receive {formatCents(example.vendorProceedsCents)} before other applicable fees.</p>}
+    {example && <p className="text-muted-foreground">On a $100 service: homeowner pays {formatCents(example.homeownerServiceCents)}, Mercurius commission {formatCents(example.commissionCents)} ({commissionRateLabel(example.commissionRateBps)}), you receive {formatCents(example.vendorProceedsCents)} before other applicable fees.</p>}
     {offer.vendorNote && offer.status === "draft" && <p><span className="text-muted-foreground">You said: </span>{offer.vendorNote}</p>}
     {offer.status === "awaiting_vendor" && <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <div className="flex-1"><FormField id={`offer-note-${offer.id}`} label="Note (to decline)">{(c) => <Input {...c} value={note} onChange={(e) => setNote(e.target.value)} />}</FormField></div>

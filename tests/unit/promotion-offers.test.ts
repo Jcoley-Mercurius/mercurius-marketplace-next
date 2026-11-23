@@ -12,30 +12,39 @@ import {
 } from "@/lib/promotionOffers";
 
 // TRACE-114 (DEC-2026-038): the server computes promotional economics; the client words
-// them. Fixture 11: $100 eligible, $10 discount.
+// them. Fixture 11: $100 eligible, $10 discount, at the DEC-2026-067 promotional 5% (SQL 127).
 
-const vendorFunded = parseEconomics({ eligible_cents: 10000, discount_cents: 1000, homeowner_service_cents: 9000, commission_rate_bps: 750,
+const vendorFunded = parseEconomics({ eligible_cents: 10000, discount_cents: 1000, homeowner_service_cents: 9000, commission_rate_bps: 500,
+  commission_base_cents: 9000, commission_cents: 450, vendor_proceeds_cents: 8550, platform_subsidy_cents: 0 })!;
+const platformFunded = parseEconomics({ eligible_cents: 10000, discount_cents: 1000, homeowner_service_cents: 9000, commission_rate_bps: 500,
+  commission_base_cents: 10000, commission_cents: 500, vendor_proceeds_cents: 9500, platform_subsidy_cents: 1000 })!;
+// A redemption recorded before DEC-2026-067 keeps its 7.5% and is worded from its own rate.
+const historical = parseEconomics({ eligible_cents: 10000, discount_cents: 1000, homeowner_service_cents: 9000, commission_rate_bps: 750,
   commission_base_cents: 9000, commission_cents: 675, vendor_proceeds_cents: 8325, platform_subsidy_cents: 0 })!;
-const platformFunded = parseEconomics({ eligible_cents: 10000, discount_cents: 1000, homeowner_service_cents: 9000, commission_rate_bps: 750,
-  commission_base_cents: 10000, commission_cents: 750, vendor_proceeds_cents: 9250, platform_subsidy_cents: 1000 })!;
 
 describe("promotion economics wording", () => {
   it("shows the vendor-funded split", () => {
     expect(economicsRows(vendorFunded, "vendor")).toEqual([
       ["Eligible service", "$100"], ["Discount (vendor-funded)", "−$10"], ["Homeowner pays for the service", "$90"],
-      ["Commission (7.5% of $90)", "$6.75"], ["You receive", "$83.25"],
+      ["Commission (5% of $90)", "$4.50"], ["You receive", "$85.50"],
     ]);
+  });
+
+  it("words a historical redemption from the rate it recorded", () => {
+    expect(economicsRows(historical, "vendor")).toContainEqual(["Commission (7.5% of $90)", "$6.75"]);
   });
 
   it("keeps the Mercurius subsidy apart from commission for operators", () => {
     const rows = economicsRows(platformFunded, "operator");
-    expect(rows).toContainEqual(["Commission (7.5% of $100)", "$7.50"]);
-    expect(rows).toContainEqual(["Vendor proceeds", "$92.50"]);
+    expect(rows).toContainEqual(["Commission (5% of $100)", "$5"]);
+    expect(rows).toContainEqual(["Vendor proceeds", "$95"]);
     expect(rows).toContainEqual(["Mercurius subsidy (not commission)", "$10"]);
   });
 
   it("refuses incomplete economics instead of filling in numbers", () => {
     expect(parseEconomics({ eligible_cents: 10000 })).toBeNull();
+    expect(commissionRateLabel(1000)).toBe("10%");
+    expect(commissionRateLabel(500)).toBe("5%");
     expect(commissionRateLabel(1500)).toBe("15%");
     expect(commissionRateLabel(750)).toBe("7.5%");
   });

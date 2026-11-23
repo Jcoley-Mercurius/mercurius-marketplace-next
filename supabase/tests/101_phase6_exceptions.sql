@@ -4,6 +4,13 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
+-- DEC-2026-067 (20261201001000): this file characterizes bookings published under the historical
+-- 15% standard (7.5% promotional), which keep that rate for life. The policy row below stands for
+-- the time before the migration; SQL 127 covers the 10% pilot standard and 5% promotional rate.
+insert into private.money_commission_policies(standard_bps,promotional_bps,decision) values (1500,750,'Synthetic: historical 15% policy');
+-- Snapshots this fixture writes directly stand for rows that existed before the migration, which
+-- read 1500 through its metadata-only default.
+alter table public.money_snapshots alter column commission_rate_bps set default 1500;
 -- Fixtures ------------------------------------------------------------------------------------------
 -- e1..01 homeowner, 02 provider, 03 admin, 04 second admin, 05 unrelated, 06 second provider.
 insert into auth.users(id, raw_user_meta_data) select ('e1000000-0000-4000-8000-00000000000' || n)::uuid, '{}'

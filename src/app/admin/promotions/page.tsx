@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCorrectionTime } from "@/lib/packagePriceCorrections";
+import { PROMOTIONAL_COMMISSION_LABEL, STANDARD_COMMISSION_LABEL } from "@/lib/commission";
 import {
   dollarsToCents,
   economicsRows,
@@ -36,7 +37,7 @@ import { createClient } from "@/lib/supabase/client";
 // TRACE-114 (DEC-2026-038): operators prepare funded offers. A vendor-funded offer is live
 // only after the bound vendor approves its exact version; a Mercurius-funded offer only
 // after an operator authorizes it with a reason and a budget. With one valid offer applied,
-// commission is 7.5% instead of 15%. TRACE-116: homeowners choose offers only while the
+// commission is half the standard (DEC-2026-038; 5% instead of 10% under DEC-2026-067). TRACE-116: homeowners choose offers only while the
 // promotions gate is open (after the two-person finance review); operators see the gate and
 // the cleanup of unpaid reservations here.
 
@@ -93,7 +94,7 @@ export default function AdminPromotionsPage() {
   const context = { vendors, packages, services };
   return <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 md:p-8">
     <PageHeader eyebrow="Pricing operations" title="Promotions"
-      description="Funded offers and their economics. Ordinary commission is 15%; with one valid offer applied it is 7.5%, on the discounted amount for vendor funding and on the full amount for Mercurius funding."
+      description={`Funded offers and their economics. Standard commission is ${STANDARD_COMMISSION_LABEL}; with one valid offer applied it is ${PROMOTIONAL_COMMISSION_LABEL}, on the discounted amount for vendor funding and on the full amount for Mercurius funding. Bookings published before ${STANDARD_COMMISSION_LABEL} took effect keep their 15% (7.5% with an offer).`}
       actions={<div className="flex flex-wrap gap-2"><OfferEditor context={context} onSaved={() => load(false)} /><Button variant="outline" onClick={() => void load(false)}><RefreshCw />Refresh</Button></div>} />
     {health?.gate_open
       ? <div role="note" className="rounded-lg border border-accent-border bg-accent-subtle/40 p-4 text-sm">

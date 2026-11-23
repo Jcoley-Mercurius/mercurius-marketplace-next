@@ -42,7 +42,7 @@ const paid = {
   payout: { ...base.payout, funds_state: "paid", paid: 9500, payable_ledger: 0, statement: { amount: 9500, period_start: "2026-09-07", attempt_number: 2, bank_status: "settled" } },
 };
 const reconciliation = {
-  evaluated_at: evaluated, fee_percent: 15, obligation_count: 4, listed_limit: 200, global_event_holds: 0,
+  evaluated_at: evaluated, fee_percent: 10, standard_commission_bps: 1000, promotional_commission_bps: 500, obligation_count: 4, listed_limit: 200, global_event_holds: 0,
   accounts: [
     { account: "bank", debit: 0, credit: 9500 },
     { account: "platform_revenue", debit: 0, credit: 6100 },
