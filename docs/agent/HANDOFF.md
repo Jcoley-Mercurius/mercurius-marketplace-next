@@ -1,3 +1,13 @@
+# Phase 7.5B operations overview summary truth repair (TRACE-159, DF-1, DF-2) — 2026-11-23 ET
+
+- **Base:** `main` `ebc7de5` (#196 merged), fetched before work. Branch `claude/phase7-5b-summary-truth-repair`. Record: [7.5B](../../governance/PHASE-7-OPERATIONS-SUMMARY-TRUTH-7-5B.md).
+- **Built:** migration `20261130001000` restates only `admin_operations_summary`: fulfillment aged `null`, and offers at other terms from `admin_offer_terms_queue().items`, appended before finance. Grants, finance handling, error isolation and existing order are unchanged. `SUMMARY_QUEUES`: no fulfillment `agedLabel`; offer terms linked to `/admin/requests#offer-terms-queue`. No page change.
+- **Tests:** SQL 127 (67; nonempty fixtures including `rematch_failed`). SQL 108 unchanged. The browser fixture is SQL 127's asserted output (`checked_at` normalized; `scripts/derive-operations-summary-fixture.mjs --check`). Unit tests cover key coverage in both directions; 4 new browser tests.
+- **Evidence:** money fingerprint `58 | af0fae6e…` and the 843 other function definitions unchanged. Full SQL suite 119 files / 8618 PASS; unit 1307/1307; typecheck, changed-file lint, secrets and build pass; admin-operations 18/18. 12 mutations caught (5 SQL, 5 client, 1 fixture, 1 browser). `main`'s client passes its own spec against the new summary.
+- **Local:** another slice's stack (`phase7-3d1`) keeps running; with it, builds on this 5.6 GB host need this slice's stack stopped (two OOM kills). The generated `AGENTS.md` block stays uncommitted.
+- **Not done (owner authorization needed):** hosted dry run and push before merge, merge, READY readback, HQ-1/HQ-2. Exact steps: record §6. DF-3 and the other 7.5 slices have not started.
+- **Next:** Codex reviews the PR (R-1..R-7 in record §7).
+
 # Phase 7.5A operations queues, ownership and SLA contract (TRACE-159) — 2026-11-22 ET
 
 - **Base:** `main` `63c8010` (#193), fetched before work. Branch `claude/phase7-5a-operations-queues-contract`, documentation only. Independent of open #194 (not merged or incorporated). Record: [operations queues contract](../../governance/PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) (OQ-1).
