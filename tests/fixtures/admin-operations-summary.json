@@ -1,0 +1,31 @@
+{
+  "source": "supabase/tests/127_operations_summary_truth.sql (fixture block), read through public.admin_operations_summary(); checked_at normalized",
+  "admin": {
+    "checked_at": "2026-11-23T14:00:00+00:00",
+    "queues": [
+      {"queue":"quote","state":"ready","count":2,"aged":1},
+      {"queue":"recurring_payment","state":"ready","count":2,"aged":1},
+      {"queue":"fulfillment","state":"ready","count":3,"aged":null},
+      {"queue":"cancellation","state":"ready","count":0,"aged":null},
+      {"queue":"support","state":"ready","count":2,"aged":1},
+      {"queue":"compliance_renewal","state":"ready","count":0,"aged":null},
+      {"queue":"renewal_documents","state":"ready","count":0,"aged":null},
+      {"queue":"offer_terms","state":"ready","count":2,"aged":null},
+      {"queue":"finance_exceptions","state":"restricted","count":null,"aged":null}
+    ]
+  },
+  "finance": {
+    "checked_at": "2026-11-23T14:00:00+00:00",
+    "queues": [
+      {"queue":"quote","state":"ready","count":2,"aged":1},
+      {"queue":"recurring_payment","state":"ready","count":2,"aged":1},
+      {"queue":"fulfillment","state":"ready","count":3,"aged":null},
+      {"queue":"cancellation","state":"ready","count":0,"aged":null},
+      {"queue":"support","state":"ready","count":2,"aged":1},
+      {"queue":"compliance_renewal","state":"ready","count":0,"aged":null},
+      {"queue":"renewal_documents","state":"ready","count":0,"aged":null},
+      {"queue":"offer_terms","state":"ready","count":2,"aged":null},
+      {"queue":"finance_exceptions","state":"ready","count":0,"aged":null}
+    ]
+  }
+}

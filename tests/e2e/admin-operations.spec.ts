@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { syntheticSession } from "../fixtures/browser-session";
 
 // TRACE-136 (DEC-2026-057): grouped admin navigation, the overview on queue counts, deep links and
@@ -41,6 +43,59 @@ for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
     await axe(page);
   });
 }
+
+// Phase 7.5B (TRACE-159): the overview renders the database's own summary. The fixture is SQL 127's
+// asserted output (tests/fixtures/admin-operations-summary.json, checked_at normalized to 09:00
+// Eastern). Expected text is written out here, not computed from SUMMARY_QUEUES.
+const derived = JSON.parse(readFileSync(join(process.cwd(), "tests/fixtures/admin-operations-summary.json"), "utf8"));
+const expectedRows = (finance: string) => [
+  ["Quote exceptions", "2", "1 aged"],
+  ["Recurring visit payments", "2", "1 aged"],
+  ["Fulfillment follow-up", "3", "—"],
+  ["Cancellation follow-up", "0", "—"],
+  ["Support tickets", "2", "1 past response target"],
+  ["Compliance renewals", "0", "—"],
+  ["Renewal documents", "0", "—"],
+  ["Offers at other terms", "2", "—"],
+  ["Finance exceptions", finance, "—"],
+];
+
+async function overviewRows(page: Page, width: number) {
+  if (width >= 1280) {
+    const rows = page.getByRole("table", { name: "Operational queues" }).getByRole("rowgroup").nth(1).getByRole("row");
+    const count = await rows.count();
+    return Promise.all(Array.from({ length: count }, async (_, i) => [
+      (await rows.nth(i).getByRole("rowheader").innerText()).trim(),
+      ...(await rows.nth(i).getByRole("cell").allInnerTexts()).map(text => text.trim()),
+    ]));
+  }
+  const items = page.getByRole("list", { name: "Operational queues" }).getByRole("listitem");
+  const count = await items.count();
+  return Promise.all(Array.from({ length: count }, async (_, i) => (await items.nth(i).getByRole("definition").allInnerTexts()).map(text => text.trim())));
+}
+
+for (const [caller, finance, theme, width] of [
+  ["admin", "Finance authority required", "light", 1440], ["admin", "Finance authority required", "dark", 390], ["finance", "0", "light", 1440],
+] as const) {
+  test(`overview renders the database summary (${caller}, ${theme} ${width}px): fulfillment has no aged count, offers at other terms listed`, async ({ page }) => {
+    await page.route("**/rest/v1/rpc/admin_operations_summary", route => route.fulfill({ json: derived[caller] }));
+    await admin(page, "/admin", theme, width);
+    await expect(page.getByText(/^Open work in each queue, checked 9:00\sAM Eastern\.$/)).toBeVisible();
+    await expect.poll(() => overviewRows(page, width)).toEqual(expectedRows(finance));
+    await axe(page);
+  });
+}
+
+test("the offers-at-other-terms row opens its queue on the requests page", async ({ page }) => {
+  await page.route("**/rest/v1/rpc/admin_operations_summary", route => route.fulfill({ json: derived.admin }));
+  await page.route("**/rest/v1/rpc/admin_offer_terms_queue", route => route.fulfill({ json: { active: false, items: [] } }));
+  await admin(page, "/admin");
+  await page.getByRole("table", { name: "Operational queues" }).getByRole("link", { name: "Offers at other terms" }).click();
+  await expect(page).toHaveURL(/\/admin\/requests#offer-terms-queue$/);
+  const heading = page.getByRole("heading", { level: 2, name: "Offers at other terms" });
+  await expect(heading).toBeInViewport();
+  await expect(page.locator("#offer-terms-queue").getByText("Nothing needs follow-up.")).toBeVisible();
+});
 
 test("the old Smart Picks route goes to Featured Providers", async ({ page }) => {
   await admin(page, "/admin/smart-picks");
