@@ -38,15 +38,21 @@ export type SummaryQueue = {
 
 export type OperationsSummary = { checkedAt: string; queues: SummaryQueue[] };
 
-/** Where each summarized queue is worked. Labels match the queue headings. */
+/**
+ * Where each summarized queue is worked. Labels match the queue headings. `agedLabel` only for a
+ * queue whose summary row reports an aged count (an aging rule); the others report null and show "—"
+ * (Phase 7.5B, TRACE-159: fulfillment has no aging rule beyond entry, DF-1; offers at other terms
+ * added, DF-2). SQL 127 and the derived fixture hold this map equal to the summary's queues.
+ */
 export const SUMMARY_QUEUES: Record<string, { label: string; href: string; agedLabel?: string }> = {
   quote: { label: "Quote exceptions", href: "/admin/requests#quote-exceptions", agedLabel: "aged" },
   recurring_payment: { label: "Recurring visit payments", href: "/admin/requests#recurring-payments", agedLabel: "aged" },
-  fulfillment: { label: "Fulfillment follow-up", href: "/admin/requests#fulfillment-follow-up", agedLabel: "aged" },
+  fulfillment: { label: "Fulfillment follow-up", href: "/admin/requests#fulfillment-follow-up" },
   cancellation: { label: "Cancellation follow-up", href: "/admin/requests#cancellation-follow-up" },
   support: { label: "Support tickets", href: "/admin/tickets", agedLabel: "past response target" },
   compliance_renewal: { label: "Compliance renewals", href: "/admin/compliance/renewals" },
   renewal_documents: { label: "Renewal documents", href: "/admin/compliance/renewals" },
+  offer_terms: { label: "Offers at other terms", href: "/admin/requests#offer-terms-queue" },
   finance_exceptions: { label: "Finance exceptions", href: "/admin/finance" },
 };
 

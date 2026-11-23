@@ -47,6 +47,76 @@ describe("operations summary", () => {
   });
 });
 
+// Phase 7.5B (TRACE-159): the browser fixture is the database's own summary. SQL 127 asserts the
+// actual output of admin_operations_summary() on its synthetic fixtures equals two exact literals;
+// these tests hold the committed fixture equal to those literals, and SUMMARY_QUEUES equal to the
+// queues in them, in both directions.
+describe("operations summary against the database (7.5B)", () => {
+  const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+  type Row = { queue: string; state: string; count: number | null; aged: number | null };
+  const fixture = JSON.parse(read("tests/fixtures/admin-operations-summary.json")) as Record<"admin" | "finance", { checked_at: string; queues: Row[] }>;
+  const sql = read("supabase/tests/127_operations_summary_truth.sql");
+  const literal = (tag: string) => {
+    const match = sql.match(new RegExp(`\\$${tag}\\$([\\s\\S]*?)\\$${tag}\\$`));
+    if (!match) throw new Error(`SQL 127 has no $${tag}$ literal`);
+    return JSON.parse(match[1]) as { queues: Row[] };
+  };
+
+  it("the browser fixture equals SQL 127's asserted output, with checked_at normalized", () => {
+    expect(fixture.admin.queues).toEqual(literal("admin_summary").queues);
+    expect(fixture.finance.queues).toEqual(literal("finance_summary").queues);
+    for (const caller of ["admin", "finance"] as const) expect(fixture[caller].checked_at).toBe("2026-11-23T14:00:00+00:00");
+    expect(sql).toMatch(/^-- BEGIN 7\.5B FIXTURES/m);
+    expect(sql).toMatch(/^-- END 7\.5B FIXTURES$/m);
+  });
+
+  it("every queue the database summarizes has a client entry", () => {
+    for (const caller of ["admin", "finance"] as const) {
+      const missing = fixture[caller].queues.map((row) => row.queue).filter((queue) => !(queue in SUMMARY_QUEUES));
+      expect(missing, `queues without a SUMMARY_QUEUES entry (${caller})`).toEqual([]);
+    }
+  });
+
+  it("every client entry is a queue the database summarizes", () => {
+    for (const caller of ["admin", "finance"] as const) {
+      const queues = new Set(fixture[caller].queues.map((row) => row.queue));
+      expect(Object.keys(SUMMARY_QUEUES).filter((queue) => !queues.has(queue)), `SUMMARY_QUEUES keys the database does not return (${caller})`).toEqual([]);
+    }
+    expect(fixture.admin.queues.map((row) => row.queue)).toEqual(fixture.finance.queues.map((row) => row.queue));
+  });
+
+  it("an aged label exactly where the database reports an aged count", () => {
+    // The finance holder's read has every row ready, so a null aged there means no aging rule.
+    for (const row of fixture.finance.queues) {
+      expect(row.state, row.queue).toBe("ready");
+      expect(Boolean(SUMMARY_QUEUES[row.queue].agedLabel), `${row.queue} agedLabel`).toBe(typeof row.aged === "number");
+    }
+    expect(SUMMARY_QUEUES.fulfillment.agedLabel).toBeUndefined();
+    expect(SUMMARY_QUEUES.offer_terms).toEqual({ label: "Offers at other terms", href: "/admin/requests#offer-terms-queue" });
+  });
+
+  it("parses the database's rows without changing them", () => {
+    for (const caller of ["admin", "finance"] as const) {
+      expect(parseOperationsSummary(fixture[caller])).toEqual({ checkedAt: fixture[caller].checked_at, queues: fixture[caller].queues });
+    }
+  });
+
+  it("every queue link with an anchor points at an element id that exists", () => {
+    const sources: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (name.endsWith(".tsx")) sources.push(readFileSync(path, "utf8"));
+      }
+    };
+    walk(join(process.cwd(), "src"));
+    const anchors = Object.values(SUMMARY_QUEUES).map((entry) => entry.href.split("#")[1]).filter(Boolean);
+    expect(anchors).toContain("offer-terms-queue");
+    expect(anchors.filter((anchor) => !sources.some((source) => source.includes(`id="${anchor}"`)))).toEqual([]);
+  });
+});
+
 describe("mixed-version deployment (brief §12.5)", () => {
   const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
   it("the admin requests select never names notes, and SQL 108 runs this exact select", () => {
