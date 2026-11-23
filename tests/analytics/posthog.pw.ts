@@ -307,8 +307,8 @@ test.describe("7.4B request intake (A-13 to A-15)", () => {
   const refused = { status: "refused", coverage: "covered", reused: false, requests: [], outcomes: [{ selection_index: 0, service_id: "lawn-mowing", outcome: "price_changed", pricing_mode: "fixed", total: 130 }] };
 
   /** A signed-in, invited homeowner with a seeded draft; the submission answers are scripted. */
-  async function intake(page: Page, step: string, submit: (selections: Selection[], count: number) => unknown) {
-    await consent(page);
+  async function intake(page: Page, step: string, submit: (selections: Selection[], count: number) => unknown, options: { consented?: boolean; seed?: Record<string, unknown> } = {}) {
+    if (options.consented !== false) await consent(page);
     await syntheticSession(page.context(), "homeowner");
     await page.setViewportSize({ width: 1440, height: 900 });
     const captured = await isolate(page);
@@ -332,25 +332,32 @@ test.describe("7.4B request intake (A-13 to A-15)", () => {
     await page.route(synthetic("/rest/v1/service_requests?*"), route => route.fulfill(json([])));
     await page.addInitScript(seed => {
       if (!sessionStorage.getItem("synthetic-seeded")) { sessionStorage.setItem("nextRequestFlowState", JSON.stringify(seed)); sessionStorage.setItem("synthetic-seeded", "1"); }
-    }, draft(step));
+    }, { ...draft(step), ...options.seed });
     await page.goto("/request");
     return { captured, submissions };
   }
   const submitButton = (page: Page) => page.getByRole("button", { name: "Request service", exact: true });
   // Two services save two requests: "Your 2 requests are saved".
   const savedHeading = (page: Page) => page.getByRole("heading", { level: 1, name: "Your 2 requests are saved" });
+  const toDetails = (page: Page) => page.getByRole("button", { name: "Continue to your home" }).filter({ visible: true }).first().click();
+  const onDetails = (page: Page) => expect(page.getByRole("button", { name: "Continue to review" })).toBeVisible({ timeout: 20_000 });
+  /** The stored draft's D-2 marker, read from this tab's session storage. */
+  const startCounted = (page: Page) => page.evaluate(() => (JSON.parse(sessionStorage.getItem("nextRequestFlowState") ?? "null") as { startCounted?: unknown } | null)?.startCounted);
+  const servicePasses = (events: Event[]) => named(events, "request_step_completed").filter(event => event.properties.step === "services").length;
 
-  test("forward steps capture started and completed; Back then Continue fires request_started again (F-1, D-2); a fresh save captures request_submitted once", async ({ page }) => {
+  test("forward steps capture started and completed; Back then Continue does not repeat request_started (D-2); a fresh save captures request_submitted once", async ({ page }) => {
+    // The seed has no startCounted field: a draft stored before D-2 counts its start once.
     const { captured, submissions } = await intake(page, "services", selections => saved(selections, false));
-    const toDetails = () => page.getByRole("button", { name: "Continue to your home" }).filter({ visible: true }).first().click();
-    await toDetails();
+    await toDetails(page);
     await expect.poll(() => named(captured.events, "request_step_completed").length).toBe(1);
     expect(named(captured.events, "request_started").map(custom)).toEqual([{ page: "/request", service_count: 2 }]);
     expect(custom(named(captured.events, "request_step_completed")[0])).toEqual({ page: "/request", step: "services", service_count: 2 });
-    // F-1: current behavior, pinned until owner decision D-2. The services step fires again.
+    expect(captured.events.findIndex(event => event.event === "request_started")).toBeLessThan(captured.events.findIndex(event => event.event === "request_step_completed"));
+    expect(await startCounted(page)).toBe(true);
+    // D-2: the same draft passes the services step again; the step counts again, the start does not.
     await page.getByRole("button", { name: "Back", exact: true }).click();
-    await toDetails();
-    await expect.poll(() => named(captured.events, "request_started").length).toBe(2);
+    await toDetails(page);
+    await expect.poll(() => named(captured.events, "request_step_completed").length).toBe(2);
     expect(named(captured.events, "request_step_completed").map(custom)).toEqual([{ page: "/request", step: "services", service_count: 2 }, { page: "/request", step: "services", service_count: 2 }]);
     await page.getByRole("button", { name: "Continue to review" }).click();
     await expect(page.getByRole("heading", { name: "Review and confirm" })).toBeVisible();
@@ -364,7 +371,7 @@ test.describe("7.4B request intake (A-13 to A-15)", () => {
     expect(custom(named(captured.events, "request_submitted")[0])).toEqual({ page: "/request", service_count: 2 });
     await page.waitForTimeout(1500);
     expect(named(captured.events, "request_submitted")).toHaveLength(1);
-    expect(named(captured.events, "request_started")).toHaveLength(2);
+    expect(named(captured.events, "request_started")).toHaveLength(1);
     expect(JSON.stringify(captured.events)).not.toMatch(/PRIVATE_|Synthetic Test Lane|Cape Coral|33904|homeowner@example|2395550100|lawn-mowing|house-cleaning/);
   });
 
@@ -391,6 +398,144 @@ test.describe("7.4B request intake (A-13 to A-15)", () => {
     expect(submissions).toHaveLength(2);
     await expect.poll(() => named(captured.events, "request_submitted").length).toBe(1);
     expect(custom(named(captured.events, "request_submitted")[0])).toEqual({ page: "/request", service_count: 2 });
+  });
+
+  // -------------------------------------------------------------------------------------------
+  // TRACE-158 (Phase 7.4C, owner decision D-2): request_started once per draft. The draft
+  // boundaries are the existing draft semantics; the marker is set only after an SDK handoff.
+  // -------------------------------------------------------------------------------------------
+
+  test("7.4C: a reload and leaving and returning in the same tab keep the draft, so the start is not repeated", async ({ page }) => {
+    const { captured } = await intake(page, "services", selections => saved(selections, false));
+    await toDetails(page);
+    await expect.poll(() => named(captured.events, "request_started").length).toBe(1);
+    await page.reload();
+    await onDetails(page);
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await toDetails(page);
+    await expect.poll(() => servicePasses(captured.events)).toBe(2);
+    await page.goto("/faq");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.goBack();
+    await onDetails(page);
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await toDetails(page);
+    await expect.poll(() => servicePasses(captured.events)).toBe(3);
+    await page.waitForTimeout(1500);
+    expect(named(captured.events, "request_started")).toHaveLength(1);
+    expect(await startCounted(page)).toBe(true);
+  });
+
+  test("7.4C: a counted draft adopted at sign-in sends no start; the step still counts", async ({ page }) => {
+    const { captured } = await intake(page, "services", selections => saved(selections, false), { seed: { startCounted: true } });
+    await toDetails(page);
+    await expect.poll(() => servicePasses(captured.events)).toBe(1);
+    await page.waitForTimeout(1500);
+    expect(named(captured.events, "request_started")).toEqual([]);
+    expect(await startCounted(page)).toBe(true);
+  });
+
+  test("7.4C: explicit entry while a request is saved starts a new draft; explicit entry into an unsaved draft does not", async ({ page }) => {
+    const { captured } = await intake(page, "contact", selections => saved(selections, false), { seed: { startCounted: true } });
+    await expect(submitButton(page)).toBeEnabled({ timeout: 20_000 });
+    await submitButton(page).click();
+    await expect(savedHeading(page)).toBeVisible();
+    await page.goto("/request?service=lawn-mowing");
+    await expect(page.getByRole("button", { name: "Continue to your home" }).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 });
+    expect(await startCounted(page)).toBe(false);
+    await toDetails(page);
+    await expect.poll(() => named(captured.events, "request_started").length).toBe(1);
+    expect(custom(named(captured.events, "request_started")[0])).toEqual({ page: "/request", service_count: 1 });
+    await page.goto("/request?service=house-cleaning");
+    await onDetails(page);
+    expect(await startCounted(page)).toBe(true);
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await toDetails(page);
+    await expect.poll(() => servicePasses(captured.events)).toBe(2);
+    expect(custom(named(captured.events, "request_step_completed").at(-1)!)).toEqual({ page: "/request", step: "services", service_count: 2 });
+    await page.waitForTimeout(1500);
+    expect(named(captured.events, "request_started")).toHaveLength(1);
+  });
+
+  test("7.4C: “Start a new request” after saving starts a new, uncounted draft", async ({ page }) => {
+    const { captured } = await intake(page, "contact", selections => saved(selections, false), { seed: { startCounted: true } });
+    await expect(submitButton(page)).toBeEnabled({ timeout: 20_000 });
+    await submitButton(page).click();
+    await expect(savedHeading(page)).toBeVisible();
+    await page.getByRole("button", { name: "Start a new request", exact: true }).click();
+    await expect.poll(() => startCounted(page)).toBe(false);
+    await page.goto("/request?service=lawn-mowing");
+    await toDetails(page);
+    await expect.poll(() => named(captured.events, "request_started").length).toBe(1);
+    expect(await startCounted(page)).toBe(true);
+  });
+
+  test("7.4C: a draft from another account is discarded at sign-in, and the replacement draft counts its own start", async ({ page }) => {
+    const { captured } = await intake(page, "services", selections => saved(selections, false), { seed: { startCounted: true, ownerId: "00000000-0000-4000-8000-0000000000c9" } });
+    await expect(page.getByText("A request started by another account was cleared from this browser.")).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => startCounted(page)).toBe(false);
+    await page.goto("/request?service=lawn-mowing");
+    await toDetails(page);
+    await expect.poll(() => named(captured.events, "request_started").length).toBe(1);
+  });
+
+  test("7.4C: an unconfirmed retry and a new submission key never send a start, and the marker survives the new key", async ({ page }) => {
+    const { captured, submissions } = await intake(page, "contact", selections => saved(selections, false), { seed: { startCounted: true } });
+    let calls = 0;
+    await page.route(synthetic("/rest/v1/rpc/submit_service_requests"), route => {
+      calls += 1;
+      if (calls === 1) return route.abort();
+      if (calls === 2) return route.fulfill({ status: 400, json: { code: "22023", message: "Submission key reused with different details", details: null, hint: null }, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*" } });
+      return route.fallback();
+    });
+    const firstKey = await page.evaluate(() => (JSON.parse(sessionStorage.getItem("nextRequestFlowState") ?? "{}") as { submissionKey?: string }).submissionKey);
+    await expect(submitButton(page)).toBeEnabled({ timeout: 20_000 });
+    await submitButton(page).click();
+    await expect(page.getByText("We couldn’t confirm whether your request was saved", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Check and finish submitting", exact: true }).click();
+    await expect(page.getByText("A request from this form was already saved", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Submit as a new request", exact: true }).click();
+    await expect(savedHeading(page)).toBeVisible();
+    expect(calls).toBe(3);
+    expect(submissions).toHaveLength(1);
+    const stored = await page.evaluate(() => JSON.parse(sessionStorage.getItem("nextRequestFlowState") ?? "{}") as { submissionKey?: string; startCounted?: unknown });
+    expect(stored.startCounted).toBe(true);
+    expect(stored.submissionKey).not.toBe(firstKey);
+    await page.waitForTimeout(1500);
+    expect(named(captured.events, "request_started")).toEqual([]);
+  });
+
+  test("7.4C: no start without consent and none retroactively on opt-in; the next pass counts once; withdrawing and re-granting does not count again", async ({ page }) => {
+    const { captured } = await intake(page, "services", selections => saved(selections, false), { consented: false });
+    const panel = page.getByRole("region", { name: "Usage analytics preferences" });
+    await toDetails(page);
+    await onDetails(page);
+    await page.waitForTimeout(1500);
+    expect(captured.requests).toEqual([]);
+    expect(await startCounted(page)).toBe(false);
+    await panel.getByRole("button", { name: "Allow analytics", exact: true }).click();
+    await expect.poll(() => named(captured.events, "$pageview").length).toBeGreaterThan(0);
+    await page.waitForTimeout(1500);
+    expect(named(captured.events, "request_started")).toEqual([]);
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await toDetails(page);
+    await expect.poll(() => named(captured.events, "request_started").length).toBe(1);
+    expect(servicePasses(captured.events)).toBe(1);
+    expect(await startCounted(page)).toBe(true);
+    await page.getByRole("button", { name: "Analytics preferences", exact: true }).click();
+    await panel.getByRole("button", { name: "Decline analytics", exact: true }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await toDetails(page);
+    await onDetails(page);
+    await page.waitForTimeout(1500);
+    expect(servicePasses(captured.events)).toBe(1);
+    await page.getByRole("button", { name: "Analytics preferences", exact: true }).click();
+    await panel.getByRole("button", { name: "Allow analytics", exact: true }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await toDetails(page);
+    await expect.poll(() => servicePasses(captured.events)).toBe(2);
+    await page.waitForTimeout(1500);
+    expect(named(captured.events, "request_started")).toHaveLength(1);
   });
 });
 
