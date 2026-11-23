@@ -722,7 +722,9 @@ function RequestExperience({ invitedScope }: { invitedScope: string }) {
       setErrors({ otherServiceDetails: "Describe the work you need for Something Else." });
       return;
     }
-    captureAnalytics("request_started", { service_count: selectedServices.length });
+    // D-2 (TRACE-158 7.4C): one request_started per draft. The marker is set only after an SDK
+    // handoff, so a pass without consent leaves it false and nothing is captured retroactively.
+    if (!draft.startCounted && captureAnalytics("request_started", { service_count: selectedServices.length })) update({ startCounted: true });
     captureAnalytics("request_step_completed", { step: "services", service_count: selectedServices.length });
     changeStep("details");
   }

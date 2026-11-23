@@ -8,6 +8,16 @@
 - **Not done:** no code, test, migration, hosted query, scheduler, email or activation.
 - **Next:** Codex review of OQ-1; then 7.5B.
 
+# Phase 7.4C `request_started` once per draft (TRACE-158, D-2) — 2026-11-22 ET
+
+- **Base:** `main` `aab602b`; carries #193's evidence commit unchanged (#193 still open). Branch `claude/phase7-4c-request-started-once-per-draft`, PR #194. Record: [7.4C](../../governance/PHASE-7-ANALYTICS-REQUEST-STARTED-ONCE-PER-DRAFT-7-4C.md).
+- **Owner approval (2026-11-22 ET):** D-2, once per draft, for implementation only, not merge or production configuration.
+- **Built:** `RequestDraft.startCounted` (default `false`, booleans only, no version bump); `captureAnalytics` returns `true` on SDK handoff only; `continueFromServices` captures the start only while uncounted. `request_step_completed` unchanged. The F-1 test is replaced; 7 new browser tests and unit tests.
+- **Evidence:** unit 1301/1301 local; typecheck, lint, secret scan, build pass; Analytics privacy 24/24 on `092e5cf`; 10 mutations caught (4 browser runs + 1 rerun on temporary draft PR #195; 3 unit locally). Final-head checks: record §3.2.
+- **Local:** other slices' Supabase stacks (`phase7-3d1`, `phase5-isolated`) restarted after a VM reboot and overloaded the host (load 30–57), so the full local lane could not finish; left running. Local vitest also collects the untracked `.phase5-local/wt`; excluded locally. The generated `AGENTS.md` block stays uncommitted.
+- **Not done:** not merged; D-1, D-3..D-6 open; no new event, property, consent, database, PostHog, Vercel or email-gate change; 7.3D stays unactivated.
+- **Next:** Codex reviews #194 (R-1..R-9 in record §5). Merging needs owner release authorization.
+
 # Phase 7.4B review and release evidence (TRACE-158) — 2026-11-22 ET
 
 - **Base:** `main` `aab602b` (#191 merged 18:21:35 UTC, head `45bb89b`). Branch `claude/phase7-4b-release-evidence`, documentation only. Record: [7.4B](../../governance/PHASE-7-ANALYTICS-TRIGGER-VERIFICATION-7-4B.md) §7.

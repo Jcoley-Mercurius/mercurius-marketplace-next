@@ -138,6 +138,42 @@ describe("draft storage", () => {
   });
 });
 
+describe("D-2 start marker (TRACE-158 7.4C)", () => {
+  it("starts false on a new draft", () => {
+    expect(emptyDraft(key).startCounted).toBe(false);
+    expect(parseDraft(null, key, today).draft.startCounted).toBe(false);
+  });
+  it("restores only a stored boolean", () => {
+    expect(parseDraft(JSON.stringify({ startCounted: true }), key, today).draft.startCounted).toBe(true);
+    expect(parseDraft(JSON.stringify({ startCounted: false }), key, today).draft.startCounted).toBe(false);
+  });
+  it("treats a draft stored before D-2 as uncounted without reporting a dropped field", () => {
+    const { draft, dropped } = parseDraft(JSON.stringify({ step: "details", selectedIds: ["lawn-mowing"] }), key, today);
+    expect(draft.startCounted).toBe(false);
+    expect(dropped).not.toContain("startCounted");
+  });
+  it.each([["true"], [1], [0], [null], [{}], [[]]] as unknown[][])("falls back to false for the malformed value %j", (value) => {
+    const { draft, dropped } = parseDraft(JSON.stringify({ startCounted: value }), key, today);
+    expect(draft.startCounted).toBe(false);
+    expect(dropped).toContain("startCounted");
+  });
+  it("survives storage and a new submission key within the same draft", () => {
+    const store = new Map<string, string>();
+    const storage = { getItem: (name: string) => store.get(name) ?? null, setItem: (name: string, value: string) => void store.set(name, value) };
+    const counted = { ...emptyDraft(key), selectedIds: ["lawn-mowing"], startCounted: true };
+    writeDraftStorage(storage, { ...counted, submissionKey: "synthetic-key-rotated0000" });
+    const restored = parseDraft(readDraftStorage(storage).raw, "synthetic-key-other00000", today).draft;
+    expect(restored.startCounted).toBe(true);
+    expect(restored.submissionKey).toBe("synthetic-key-rotated0000");
+  });
+  it("follows the draft when an account adopts it or keeps it", () => {
+    const counted = { ...emptyDraft(key), startCounted: true };
+    const decision = reconcileDraftActor(counted, owner);
+    expect(decision).toEqual({ action: "adopt", draft: { ...counted, ownerId: owner } });
+    expect(reconcileDraftActor({ ...counted, ownerId: owner }, owner).action).toBe("keep");
+  });
+});
+
 describe("Eastern dates", () => {
   it("uses the Eastern calendar day", () => {
     expect(easternDateValue(new Date("2026-09-28T03:30:00Z"))).toBe("2026-09-27");
