@@ -1,3 +1,13 @@
+# Phase 7.5A operations queues, ownership and SLA contract (TRACE-159) — 2026-11-22 ET
+
+- **Base:** `main` `63c8010` (#193), fetched before work. Branch `claude/phase7-5a-operations-queues-contract`, documentation only. Independent of open #194 (not merged or incorporated). Record: [operations queues contract](../../governance/PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) (OQ-1).
+- **Mapped:** 14 queue families. Aging is computed on read by design (DEC-2026-045 choice 8), so no breach is ever recorded. The one self-recording escalation (DEC-2026-006 72 h, `run_lifecycle_batch`) runs only from the scheduler, which is not installed. There is no operator alert channel: admin in-app rows are write-only, and no error/uptime provider exists. Only support stores an owner and an assignee. T-1..T-11 is the complete list of approved timing rules; everything else has none.
+- **Defects:** DF-1 overview fulfillment "aged" is always 0; DF-2 the summary omits the offers-at-other-terms queue; DF-3 support "past response target" measures "still open". **AC-1 corrected:** the live matcher computes no pool count (L-1 cited a superseded body); only the superseded Phase 1 matcher produced `sourcing`.
+- **Recommended 7.5B:** function-only restatement of `admin_operations_summary` (fulfillment aged `null`; add offer terms), client mapping and parity tests. No policy decision; the hosted push needs owner authorization.
+- **Open:** OD-1..OD-7, CD-1; AC-1 D-1, D-4, D-5, D-6. Carried unchanged: 7.3D gates (EO-1..EO-8, PG-1/G-1), O-1..O-9, CFG-011 log retention.
+- **Not done:** no code, test, migration, hosted query, scheduler, email or activation.
+- **Next:** Codex review of OQ-1; then 7.5B.
+
 # Phase 7.4B review and release evidence (TRACE-158) — 2026-11-22 ET
 
 - **Base:** `main` `aab602b` (#191 merged 18:21:35 UTC, head `45bb89b`). Branch `claude/phase7-4b-release-evidence`, documentation only. Record: [7.4B](../../governance/PHASE-7-ANALYTICS-TRIGGER-VERIFICATION-7-4B.md) §7.
