@@ -15,7 +15,7 @@ A recurring price level can be sold as a prepaid bundle (a total price covering 
 
 ## Rules to implement (DEC-2026-048, 2026-10-25)
 
-1. Fee base: bundle service subtotal (bundle price plus prepaid add-ons, after discounts; excluding tax and tips); commission rule snapshotted once at purchase (15%, or 7.5% with one valid promotion); never reassessed per visit.
+1. Fee base: bundle service subtotal (bundle price plus prepaid add-ons, after discounts; excluding tax and tips); commission rule snapshotted once at purchase (15%, or 7.5% with one valid promotion; under DEC-2026-067 the standard stamped at purchase, now 10%, or 5% with one valid promotion); never reassessed per visit.
 2. Cancellation per scheduled visit share: 72 h+ full, 24 to under 72 h 50%, under 24 h none; CFG-006 waivers apply; unscheduled unused visits refunded in full; plan cancellation evaluates each remaining visit.
 3. Allocation once at purchase, whole cents, stable visit order, remainder cents to the earliest visits; service, add-ons, discounts, commission and subsidy allocated the same way and reconciling exactly; never recalculated from visits remaining.
 4. Renewal: a new term and a new payment obligation; unpaid renewal activates nothing and authorizes no work; no automatic charge; provisional schedule shown as unpaid; current term and unused visits preserved; late payment re-checks availability and terms; duplicate-payment and duplicate-visit protection.

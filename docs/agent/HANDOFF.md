@@ -1,3 +1,13 @@
+# Pilot standard commission 10% (DEC-2026-067, TRACE-160) — 2026-11-23 ET
+
+- **Base:** `main` `ebc7de5` (#196), fetched before work. Branch `claude/pilot-commission-10pct`. Independent of open #197 (its `20261130001000` is not included). Record: [PILOT-COMMISSION-10.md](../../governance/PILOT-COMMISSION-10.md).
+- **Found:** the ordinary 15% was never snapshotted: `private.money_split` recomputed `round(service × 15 / 100)` on every capture, refund, payout and reconciliation, so a constant change would have repriced history. `platformFee.ts` (0.15) is imported by no repository code but is digest-pinned recovered source of the hosted August `stripe-webhook` v13, so it is kept; whether that legacy webhook is still live is F-1 (unverified).
+- **Built:** migration `20261201001000`: append-only `private.money_commission_policies` (1500/750 history; 1000/500 effective at the push); `money_snapshots.commission_rate_bps` (existing rows 1500 via a metadata-only default, then no default); publication stamps the policy rate and refuses one in the terms; `money_split` uses the stamp; promotions at 5%; a 7.5% reservation is `commission_changed`, refused at publication and released by the existing sweep; finance page reports the rates. Copy from `src/lib/commission.ts`.
+- **Evidence:** SQL 127 78/78; legacy money suites pinned to the historical policy pass unchanged; upgrade rehearsal across the real migration passes; 12 mutants (11 caught, 1 equivalent); fingerprint `main` `58 | af0fae6e…` → branch `61 | eb3f9702…`. Unit, lint, types, build and browser: PR body.
+- **Not done:** no hosted read, inventory, dry run or push; no merge, deploy, gate change, vendor notice or real transaction. Hosted reads were refused by the session's permission check; the inventory script is prepared for the owner.
+- **Open:** F-1 hosted legacy `stripe-webhook` v13 at 15%; finance two-person review (DEC-2026-064 condition); Codex review; owner T-1 (accepted-but-uninvoiced bookings at 10%), T-2 (republish unpaid pre-push invoices), T-3 (vendor notice).
+- **Next:** Codex review of the PR; finance review; owner inventory, dry run and push, then merge promptly.
+
 # Phase 7.5A operations queues, ownership and SLA contract (TRACE-159) — 2026-11-22 ET
 
 - **Base:** `main` `63c8010` (#193), fetched before work. Branch `claude/phase7-5a-operations-queues-contract`, documentation only. Independent of open #194 (not merged or incorporated). Record: [operations queues contract](../../governance/PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) (OQ-1).

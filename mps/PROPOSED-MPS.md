@@ -210,7 +210,7 @@ Every transition must define actor, prerequisites, side effects, notification, t
 - One version-controlled checkout service is the authority.
 - Server-side commercial snapshots determine amounts; client-supplied totals are never authoritative.
 - Every payment and refund operation is idempotent and reconciled to Stripe events.
-- The 15% platform fee basis is explicitly defined: included/excluded taxes, discounts, tips, refunds, and processor fees.
+- The platform fee basis (15% approved; 10% prospectively under DEC-2026-067) is explicitly defined: included/excluded taxes, discounts, tips, refunds, and processor fees.
 - Provider payout timing begins only from an approved eligibility event and accounts for holds/disputes.
 - Manual financial changes require a reason, immutable audit record, and restricted role; high-risk changes require second-person approval.
 
@@ -260,7 +260,7 @@ Every transition must define actor, prerequisites, side effects, notification, t
 ## 7. Approved commercial rules
 
 1. **Payment role:** customers pay Mercurius directly; Mercurius retains its fee and remits vendor proceeds. Formal legal, tax, and provider classification must validate this approved customer-facing model.
-2. **Platform fee:** 15% of the final service subtotal after discounts and adjustments, excluding tax and tips. After a refund, calculate the fee against the retained service subtotal. Exception (DEC-2026-038): with one valid applied promotion, 7.5% of the qualifying commissionable amount (after a vendor-funded discount; before a Mercurius-funded one, which is a subsidy, not a fee reduction).
+2. **Platform fee:** 10% of the final service subtotal after discounts and adjustments, excluding tax and tips (DEC-2026-067, prospective from migration `20261201001000`; the approved baseline was 15%, which bookings published earlier keep for life). After a refund, calculate the booking's own rate against the retained service subtotal. Exception (DEC-2026-038): with one valid applied promotion, half the standard, now 5% (7.5% before DEC-2026-067), of the qualifying commissionable amount (after a vendor-funded discount; before a Mercurius-funded one, which is a subsidy, not a fee reduction).
 3. **Vendor subscription:** $0 during soft launch; any future plan requires a separate approved product release.
 4. **Fixed price:** only a versioned eligible offering can generate a fixed commercial snapshot.
 5. **Deposit-plus-quote:** deposits apply toward the final service subtotal and do not create an additional fee base; refundability, expiry, and abandonment follow the approved commercial snapshot and cancellation policy. Initial beta quotes carry a $0 deposit and use the existing invoice and checkout (DEC-2026-045); a job asking for a deposit gets an operator review first.

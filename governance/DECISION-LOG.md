@@ -199,6 +199,8 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 084; unit `promotion-offers`; browser `pricing-approval`; `scripts/pricing-concurrency.mjs`. **Supersedes:** the general 15% statement in CFG-005 and MPS §7.2 for qualifying promotions only.
 
+**Amended:** DEC-2026-067 (2026-11-23): the standard becomes 10% prospectively, so the half-rate is 5% for snapshots published after `20261201001000`; bookings and redemptions recorded at 7.5% keep it. The worked examples above describe the 7.5% period.
+
 ### DEC-2026-039 — Vendors approve the exact revision of an operator-prepared price; price meaning and add-ons are priced end to end
 
 **Status:** APPROVED owner instruction (implementation task 2026-10-18). Items marked "owner to confirm" are implementation choices for review. **Date:** 2026-10-18 (America/New_York).
@@ -268,6 +270,22 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 **MPS impact:** Answers the remaining §7.6 display question (how a promotion is applied). **MDS impact:** "Offers" on the request review (choice list, "Best savings" label, code entry, totals after offers); "Offer" section on the homeowner's request; gate and cleanup state on the operator Promotions page. **MTS impact:** Migration `20261018006000`; `scripts/install-promotion-sweep.sql` (inactive schedule template). **Data/payment/security impact:** restated `money_source`, `promotion_reserve`, `promotion_release_unpaid`, `submit_service_requests`, `find_eligible_packages_core`, `create_service_occurrence`, `admin_send_package_draft`; all money behavior stays behind the closed gate and is part of the finance review.
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
+
+### DEC-2026-067 — Pilot standard commission 10%; promotional half-rate 5%; prospective only
+
+**Status:** APPROVED owner decision (Josh), implementation task of 2026-11-23 ("Implement the approved Mercurius Marketplace pilot commission change from 15% to 10%"). **Date:** 2026-11-23 (America/New_York). Implementation: TRACE-160, record [PILOT-COMMISSION-10.md](PILOT-COMMISSION-10.md).
+
+**Decision:** The next pilot uses a 10% standard commission on completed jobs, applied consistently to future eligible bookings of existing and new vendors (e.g. $100 commissionable service → $10 commission, $90 vendor proceeds before other applicable deductions). Membership stays free; no lead fees and no paid placement. No expiration date, subscription, new fee or changed commission basis is introduced. 7% is a possible future decision, not an automatic fallback. DEC-2026-038's rule is unchanged: one valid applied promotion halves the standard, so the promotional rate becomes 5% (vendor-funded: 5% of the discounted amount; Mercurius-funded: 5% of the amount before the discount, the discount remaining a subsidy).
+
+**Effective time and snapshot (implementation, for review):** the rate is stamped on each booking's money snapshot when the two-person review publishes it (`money_snapshots.commission_rate_bps`). Snapshots published before the hosted push of `20261201001000` keep 15% (7.5% promotional) for life: payment, refunds, chargebacks, payout and reconciliation. The exact effective moment is the push's commit, recorded in `private.money_commission_policies.effective_at`. A promotion reserved at 7.5% and still unpaid is released for the homeowner to apply again, never published at 7.5% and never silently repriced.
+
+**Unchanged:** the commission base (final service subtotal after discounts and adjustments, excluding tax and tips); when commission is earned (capture of the finance-reviewed snapshot); rounding (half away from zero, whole cents; refunds recomputed on the cumulative retained subtotal); processor cost as a Mercurius cost; tips 100% to the provider; refund allocation; weekly ACH 48 hours after homeowner-confirmed completion; disputes held; Credits never offset commission; promotion eligibility, funding, stacking, release and restoration; the closed promotions gate.
+
+**Open (record §8):** T-1 accepted bookings without a snapshot take 10% (implemented; owner to confirm); T-2 whether invoices published but unpaid before the push are republished at 10%; T-3 vendor notice wording; renewed two-person finance review of the changed money definitions (DEC-2026-064 condition) before relying on this in R1.
+
+**MPS impact:** Amends §7.2 prospectively. **MDS impact:** Vendor dashboard and application copy, offer approval and Promotions worked examples, finance page wording. **MTS impact:** Migration `20261201001000`. **Data/payment/security impact:** Server-controlled, append-only rate policy; reviewed terms cannot carry a rate; historical snapshots unchanged.
+
+**Required evidence:** SQL 127; the legacy money suites pinned to the historical policy; upgrade rehearsal (`scripts/commission-upgrade-rehearsal/`); unit `commission`, `money`, `promotion-offers`; browser specs listed in the record. **Supersedes:** the 15% of CFG-005, the 85% of CFG-008, MPS §7.2 and the fixed 7.5% figure of DEC-2026-038, for snapshots published after the push only.
 
 ### DEC-2026-066 — Operators may open a tracked contact submission on demand (7.2C O-1)
 

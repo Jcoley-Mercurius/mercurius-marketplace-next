@@ -82,6 +82,9 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
   test(`finance reconciliation ${theme} ${width}px`, async ({ page }) => {
     await readback(page, {});
     await openPage(page, theme, width);
+    // DEC-2026-067: the rates in force come from the server; earlier bookings keep their stamped rate.
+    await expect(page.getByText("The standard platform fee is 10% of retained service, or 5% on a booking with an applied promotion", { exact: false })).toBeVisible();
+    await expect(page.getByText("earlier bookings stay at 15% (7.5% with a promotion)", { exact: false })).toBeVisible();
     const narrow = width < 1280;
     const exceptions = narrow ? page.getByRole("list", { name: "Finance exceptions" }) : page.getByRole("table", { name: "Finance exceptions" });
     await expect(exceptions.getByText("Ledger mismatch", { exact: true })).toBeVisible();
