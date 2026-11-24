@@ -1,6 +1,10 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- DEC-2026-067 (20261201001000): this file characterizes bookings published under the historical
+-- 15% standard (7.5% promotional), which keep that rate for life. The policy row below stands for
+-- the time before the migration; SQL 127 covers the 10% pilot standard and 5% promotional rate.
+insert into private.money_commission_policies(standard_bps,promotional_bps,decision) values (1500,750,'Synthetic: historical 15% policy');
 -- TRACE-079 synthetic fixtures only. Covers withdrawing a prepared, failed or returned transfer
 -- from its weekly ACH statement through a two-operator review, and the replacement statement the
 -- next weekly batch prepares for it. A payout is on at most one live statement; every "already on

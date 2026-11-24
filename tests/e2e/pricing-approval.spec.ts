@@ -36,10 +36,10 @@ const draft = {
   internal_notes: "Synthetic internal note", created_by_email: "operator@example.invalid", created_at: updatedAt, updated_at: updatedAt,
 };
 const economics = (funding: "vendor" | "platform") => funding === "vendor"
-  ? { eligible_cents: 10000, discount_cents: 1000, funding, homeowner_service_cents: 9000, commission_rate_bps: 750, commission_base_cents: 9000,
-    commission_cents: 675, vendor_proceeds_cents: 8325, platform_subsidy_cents: 0 }
-  : { eligible_cents: 10000, discount_cents: 1000, funding, homeowner_service_cents: 9000, commission_rate_bps: 750, commission_base_cents: 10000,
-    commission_cents: 750, vendor_proceeds_cents: 9250, platform_subsidy_cents: 1000 };
+  ? { eligible_cents: 10000, discount_cents: 1000, funding, homeowner_service_cents: 9000, commission_rate_bps: 500, commission_base_cents: 9000,
+    commission_cents: 450, vendor_proceeds_cents: 8550, platform_subsidy_cents: 0 }
+  : { eligible_cents: 10000, discount_cents: 1000, funding, homeowner_service_cents: 9000, commission_rate_bps: 500, commission_base_cents: 10000,
+    commission_cents: 500, vendor_proceeds_cents: 9500, platform_subsidy_cents: 1000 };
 const offer = (id: string, funding: "vendor" | "platform", status: string) => ({
   id, revision: 1, fingerprint: "c".repeat(64), status, live: status === "approved", funding,
   contractor_id: funding === "vendor" ? vendorA : null, contractor_name: funding === "vendor" ? "Synthetic Clean Co" : null,
@@ -226,13 +226,13 @@ test("the vendor approves the exact version Mercurius sent, or asks for changes"
   await expect.poll(() => approved).toEqual([{ p_draft: draftId, p_revision: revision }]);
 });
 
-test("a vendor sees the 7.5% economics of an offer it would fund before approving", async ({ page }) => {
+test("a vendor sees the 5% economics of an offer it would fund before approving", async ({ page }) => {
   const approved: unknown[] = [];
   await page.route("**/rpc/vendor_approve_promotion_offer", route => { approved.push(route.request().postDataJSON()); return route.fulfill({ json: offer(offerId, "vendor", "approved") }); });
   await vendorPricing(page, [], [offer(offerId, "vendor", "awaiting_vendor")]);
   const panel = page.getByRole("region", { name: "Offers you would fund" });
-  await expect(panel.getByText("commission is 7.5% instead of 15%", { exact: false })).toBeVisible();
-  await expect(panel.getByText("homeowner pays $90.00, Mercurius commission $6.75 (7.5%), you receive $83.25", { exact: false })).toBeVisible();
+  await expect(panel.getByText("commission is 5% instead of 10%", { exact: false })).toBeVisible();
+  await expect(panel.getByText("homeowner pays $90.00, Mercurius commission $4.50 (5%), you receive $85.50", { exact: false })).toBeVisible();
   await expect(panel.getByText("An offer applies to a booking only when the homeowner chooses it", { exact: false })).toBeVisible();
   expect((await new AxeBuilder({ page }).include("#offer-approvals").withTags(tags).analyze()).violations).toEqual([]);
   await panel.getByRole("button", { name: "Approve this offer" }).click();
@@ -252,10 +252,10 @@ for (const width of [320, 1440]) {
     await page.goto("/admin/promotions");
     await expect(page.getByRole("heading", { level: 1, name: "Promotions" })).toBeVisible();
     await expect(page.getByRole("note")).toContainText("Offers are not shown to homeowners yet");
-    const example = page.getByRole("definition").filter({ hasText: "$7.50" });
+    const example = page.getByRole("definition").filter({ hasText: "$4.50" });
     await expect(example.first()).toBeVisible();
     await expect(page.getByLabel("Worked example for Synthetic welcome").getByText("Mercurius subsidy (not commission)")).toBeVisible();
-    await expect(page.getByLabel("Worked example for Synthetic fall offer").getByText("Commission (7.5% of $90)")).toBeVisible();
+    await expect(page.getByLabel("Worked example for Synthetic fall offer").getByText("Commission (5% of $90)")).toBeVisible();
     expect((await new AxeBuilder({ page }).withTags(tags).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 

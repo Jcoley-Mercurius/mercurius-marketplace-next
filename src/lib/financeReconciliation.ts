@@ -182,7 +182,12 @@ export type LedgerAccount =
 
 export type FinanceReconciliation = {
   evaluated_at: string;
+  /** The standard rate in force, as a percentage (DEC-2026-067). Each booking keeps its stamped rate. */
   fee_percent: number;
+  /** Present once 20261201001000 is applied: the rates in force and when they took effect. */
+  standard_commission_bps?: number;
+  promotional_commission_bps?: number;
+  commission_effective_at?: string;
   obligation_count: number;
   listed_limit: number;
   accounts: { account: LedgerAccount; debit: number; credit: number }[];

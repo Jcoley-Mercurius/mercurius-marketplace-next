@@ -9,6 +9,16 @@
 - **Not done:** no migration, application change, hosted query, email, scheduler, booking, payment or policy change; not merged. Not Phase 7 acceptance.
 - **Next:** Codex reviews the PR (R-1..R-6, record §8); owner decides the main CI rerun.
 
+# Pilot standard commission 10% (DEC-2026-067, TRACE-160) — 2026-11-23 ET
+
+- **Base:** `main` `ebc7de5` (#196), fetched before work. Branch `claude/pilot-commission-10pct`. Independent of open #197 (its `20261130001000` is not included). Record: [PILOT-COMMISSION-10.md](../../governance/PILOT-COMMISSION-10.md).
+- **Found:** the ordinary 15% was never snapshotted: `private.money_split` recomputed `round(service × 15 / 100)` on every capture, refund, payout and reconciliation, so a constant change would have repriced history. `platformFee.ts` (0.15) is imported by no repository code but is digest-pinned recovered source of the hosted August `stripe-webhook` v13, so it is kept; whether that legacy webhook is still live is F-1 (unverified).
+- **Built:** migration `20261201001000`: append-only `private.money_commission_policies` (1500/750 history; 1000/500 effective at the push); `money_snapshots.commission_rate_bps` (existing rows 1500 via a metadata-only default, then no default); publication stamps the policy rate and refuses one in the terms; `money_split` uses the stamp; promotions at 5%; a 7.5% reservation is `commission_changed`, refused at publication and released by the existing sweep; finance page reports the rates. Copy from `src/lib/commission.ts`.
+- **Evidence:** SQL 127 78/78; legacy money suites pinned to the historical policy pass unchanged; upgrade rehearsal across the real migration passes; 12 mutants (11 caught, 1 equivalent); fingerprint `main` `58 | af0fae6e…` → branch `61 | eb3f9702…`. Full SQL 119 files / 8,629 PASS; money concurrency scripts PASS; unit 1,311; lint, types, secrets, build pass; affected browser specs 93/93.
+- **Hosted (owner instruction 2026-11-23):** inventory showed 0 money snapshots and 0 reservations (gate closed). Hosted already had #197's `20261130001000`; its file was placed locally, uncommitted, only for the history check (no `migration repair`). Pushed `20261201001000` alone, 00:44:59–00:45:03 UTC 2026-11-24. 10% effective `2026-11-24 00:45:03.001674+00`; fingerprint `61 | eb3f9702…` matches.
+- **Not done:** merge, deploy, gate change, vendor notice, real transaction.
+- **Open:** F-1 hosted legacy `stripe-webhook` v13 at 15%; finance two-person review (DEC-2026-064 condition); Codex review; owner T-1 (accepted-but-uninvoiced bookings at 10%), T-2 (republish unpaid pre-push invoices), T-3 (vendor notice).
+- **Next:** merge #198 promptly (copy still says 15% on Production until then); Codex and finance review.
 # Phase 7.5B operations overview summary truth repair (TRACE-159, DF-1, DF-2) — 2026-11-23 ET
 
 - **Base:** `main` `ebc7de5` (#196 merged), fetched before work. Branch `claude/phase7-5b-summary-truth-repair`. Record: [7.5B](../../governance/PHASE-7-OPERATIONS-SUMMARY-TRUTH-7-5B.md).

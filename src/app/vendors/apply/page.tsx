@@ -27,6 +27,8 @@ import {
   MAX_OTHER_SERVICE_LENGTH,
   otherServiceEntry,
 } from "@/lib/vendorApplicationServices";
+import { STANDARD_COMMISSION_LABEL, standardSplit } from "@/lib/commission";
+import { formatCents as formatUsd } from "@/lib/pricingContent";
 import { LEE_COUNTY_SERVICE_AREAS } from "@/lib/vendorServiceAreas";
 import {
   MAX_VENDOR_DOCUMENT_COUNT,
@@ -35,6 +37,10 @@ import {
   validateVendorDocument,
   type VendorDocumentKind,
 } from "@/lib/vendorApplicationDocuments";
+
+// DEC-2026-067 worked example: $100 → $10 commission, $90 to the vendor before separate deductions.
+const EXAMPLE_SERVICE_CENTS = 10000;
+const EXAMPLE_SPLIT = standardSplit(EXAMPLE_SERVICE_CENTS);
 
 const steps = ["Business", "Contact", "Service Area", "Credentials", "Review"];
 const teamSizes = ["Just me", "2–5", "6–10", "11–25", "25+"];
@@ -408,7 +414,7 @@ export default function VendorApplyPage() {
           <div className="container-narrow">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-accent">Provider Application</p>
             <h1 className="mb-4 text-3xl font-semibold md:text-4xl">Join The Mercurius Network</h1>
-            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">Serving Cape Coral, Fort Myers and the rest of Lee County. Free to join, no setup fee — Mercurius earns a 15% commission on completed jobs.</p>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">Serving Cape Coral, Fort Myers and the rest of Lee County. Free to join, no setup fee — Mercurius earns a {STANDARD_COMMISSION_LABEL} commission on completed jobs.</p>
           </div>
         </section>
 
@@ -746,8 +752,9 @@ function ReviewStep({
       )}
 
       <p className="text-sm text-muted-foreground">
-        Free to join, no setup fee. Mercurius takes a 15% commission on
-        completed jobs—you keep the rest.
+        Free to join, no setup fee. Mercurius takes a {STANDARD_COMMISSION_LABEL} commission on
+        completed jobs: on a {formatUsd(EXAMPLE_SERVICE_CENTS)} job, {formatUsd(EXAMPLE_SPLIT.commissionCents)} commission and{" "}
+        {formatUsd(EXAMPLE_SPLIT.vendorProceedsCents)} to you before any separate deductions. Tips are yours in full.
       </p>
       <Button
         type="button"

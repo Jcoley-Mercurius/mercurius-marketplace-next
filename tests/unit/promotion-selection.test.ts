@@ -68,6 +68,7 @@ describe("wording", () => {
   it("words every server reason for homeowners and never shows a code", () => {
     expect(promotionReason("redemption_limit_reached")).toBe("this offer has been fully claimed");
     expect(promotionReason("first_booking_already_reserved")).toBe("a first-booking offer is already applied to another request");
+    expect(promotionReason("commission_changed")).toBe("this offer needs to be applied again");
     expect(promotionReason("something_new")).toBe("this offer can’t be applied");
     expect(codeMessage({ status: "ineligible", reason: "not_first_booking" })).toBe("That code is valid, but this offer is for a first booking only.");
     expect(codeMessage({ status: "too_many_attempts" })).toBe("Too many codes were tried. Try again in an hour.");

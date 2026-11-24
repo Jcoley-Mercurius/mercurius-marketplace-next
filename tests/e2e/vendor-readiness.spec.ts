@@ -35,6 +35,9 @@ test("vendor dashboard explains closed booking and honest listing readiness", as
   await expect(requirements.getByRole("link", { name: "Update" })).toHaveAttribute("href", "/vendor/profile");
   await expect(requirements.getByText("Mercurius approval and compliance review — complete")).toBeAttached();
   await expect(page.getByText("ZIP codes on file: 33904.")).toBeVisible();
+  // DEC-2026-067: the soft-launch terms show the pilot standard commission.
+  await expect(page.getByText("Mercurius charges 10% commission on completed jobs.")).toBeVisible();
+  await expect(page.getByText("No subscriptions · 10% commission")).toBeVisible();
   // A vendor that is not listed gets no storefront link.
   await expect(page.getByRole("link", { name: /View (storefront|public profile)/ })).toHaveCount(0);
 });

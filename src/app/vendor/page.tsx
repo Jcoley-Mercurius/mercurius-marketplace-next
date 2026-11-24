@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { COMPLETED_JOB_STATUSES, completionRateFromStatuses } from "@/lib/completedJobs";
+import { STANDARD_COMMISSION_LABEL } from "@/lib/commission";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { calculateVendorProfileStrength, VENDOR_PROFILE_STRENGTH_MAX } from "@/lib/vendorProfileStrength";
@@ -375,10 +376,10 @@ export default function VendorOverviewPage() {
           <DollarSign className="mt-0.5 h-5 w-5 shrink-0 text-sage-dark" />
           <div>
             <p className="font-medium text-foreground">Soft-launch vendor terms</p>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">No vendor subscriptions during soft launch. Mercurius charges 15% commission on completed jobs.</p>
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">No vendor subscriptions during soft launch. Mercurius charges {STANDARD_COMMISSION_LABEL} commission on completed jobs.</p>
           </div>
         </div>
-        <Badge variant="outline" className="w-fit border-accent-border bg-background text-sage-dark">No subscriptions · 15% commission</Badge>
+        <Badge variant="outline" className="w-fit border-accent-border bg-background text-sage-dark">No subscriptions · {STANDARD_COMMISSION_LABEL} commission</Badge>
       </div>
 
       <Card className="mb-8 overflow-hidden border-accent-border bg-card shadow-sm">

@@ -164,6 +164,8 @@ const reasons: Record<string, string> = {
   discount_changed: "the saving changed",
   price_changed: "the price changed",
   offers_paused: "offers are paused",
+  // DEC-2026-067: reserved under the superseded commission rate; the homeowner's saving is unchanged.
+  commission_changed: "this offer needs to be applied again",
 };
 
 /** A homeowner-facing reason, e.g. "this offer has ended"; never an internal code. */

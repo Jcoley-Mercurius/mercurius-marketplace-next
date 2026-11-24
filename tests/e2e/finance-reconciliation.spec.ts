@@ -42,7 +42,7 @@ const paid = {
   payout: { ...base.payout, funds_state: "paid", paid: 9500, payable_ledger: 0, statement: { amount: 9500, period_start: "2026-09-07", attempt_number: 2, bank_status: "settled" } },
 };
 const reconciliation = {
-  evaluated_at: evaluated, fee_percent: 15, obligation_count: 4, listed_limit: 200, global_event_holds: 0,
+  evaluated_at: evaluated, fee_percent: 10, standard_commission_bps: 1000, promotional_commission_bps: 500, obligation_count: 4, listed_limit: 200, global_event_holds: 0,
   accounts: [
     { account: "bank", debit: 0, credit: 9500 },
     { account: "platform_revenue", debit: 0, credit: 6100 },
@@ -82,6 +82,9 @@ for (const [theme, width] of [["light", 320], ["dark", 1440]] as const) {
   test(`finance reconciliation ${theme} ${width}px`, async ({ page }) => {
     await readback(page, {});
     await openPage(page, theme, width);
+    // DEC-2026-067: the rates in force come from the server; earlier bookings keep their stamped rate.
+    await expect(page.getByText("The standard platform fee is 10% of retained service, or 5% on a booking with an applied promotion", { exact: false })).toBeVisible();
+    await expect(page.getByText("earlier bookings stay at 15% (7.5% with a promotion)", { exact: false })).toBeVisible();
     const narrow = width < 1280;
     const exceptions = narrow ? page.getByRole("list", { name: "Finance exceptions" }) : page.getByRole("table", { name: "Finance exceptions" });
     await expect(exceptions.getByText("Ledger mismatch", { exact: true })).toBeVisible();

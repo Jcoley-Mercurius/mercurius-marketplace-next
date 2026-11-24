@@ -1,6 +1,10 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- DEC-2026-067 (20261201001000): this file characterizes bookings published under the historical
+-- 15% standard (7.5% promotional), which keep that rate for life. The policy row below stands for
+-- the time before the migration; SQL 127 covers the 10% pilot standard and 5% promotional rate.
+insert into private.money_commission_policies(standard_bps,promotional_bps,decision) values (1500,750,'Synthetic: historical 15% policy');
 -- TRACE-083 synthetic fixtures only. Covers a settled refund Stripe later fails: the reviewed record
 -- that holds what Stripe returned as owed to the customer, the reviewed resend that pays it and the
 -- reviewed release that reverses the refund; and a bank return after a provider's repayment: the
