@@ -72,8 +72,12 @@ function VendorNotifications() {
     const result = await loadOlder();
     if (result === null) return;
     setAnnouncement(result.added > 0 ? `Loaded ${plural(result.added, "older notice")}.` : "No older notices.");
-    // Keyboard users continue from the first newly loaded notice once it renders.
-    focusNext.current = result.firstId;
+    // Keyboard users continue from the first newly loaded notice: now if it has already rendered
+    // (the store re-renders as soon as the rows arrive), otherwise once it does.
+    const id = result.firstId;
+    const node = id ? rowRefs.current.get(id) : undefined;
+    if (node) node.focus();
+    else focusNext.current = id;
   }
 
   const hidden = unreadCount === null ? 0 : Math.max(unreadCount - visibleUnread, 0);
