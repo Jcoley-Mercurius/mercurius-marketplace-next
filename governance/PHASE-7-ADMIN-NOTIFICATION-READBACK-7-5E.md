@@ -130,9 +130,40 @@ A labelled region, "In-app notices only", on every state of the page: records sa
 
 ## 6. Evidence
 
-### 6.1 Results
+### 6.1 Results (local, 2026-11-24 ET, on the implementation commit; final-head CI in the PR)
 
-PENDING — filled after the runs complete.
+| Check | Result |
+|---|---|
+| SQL 130 (single file, isolated stack, plain psql as CI's lifecycle runner does) | **47/47** |
+| Full SQL suite (clean replay of 238 migrations, `supabase test db`) | **123 files / 8,974 PASS** (7.5D baseline 122 / 8,927, plus SQL 130's 47) |
+| Unit (full, `--exclude '.phase5-local/**'`) | **1,366/1,366** in 83 files; new `admin-notification-readback` (45); admin-navigation test extended |
+| Typecheck, lint, secret scan, `git diff --check` | PASS |
+| Production build (CI's synthetic Supabase env, one worker) | PASS; `/admin/notifications` static route present |
+| Browser `admin-notifications.spec.ts` | **11/11.** Full run 10/11; the 11th ("mark visible") rendered nothing within 5 s at load average ≈ 9 and passed on rerun. Two test defects fixed before that run: Tab order (the in-app note's Overview link precedes the first notice) and the non-admin redirect waiting for the public home page's `load` (now `waitUntil: "commit"` and an exact redirect URL); the multi-navigation test is marked slow |
+| Browser regressions: `vendor-notifications` (shared hook), `admin-operations` (navigation), `portals` (portal guards) | **49/49.** Full run 47/49; the two vendor failures were "nothing rendered within 5 s after navigation" (load ≈ 5–6) and both passed on rerun |
+| Migrations, producers, policies, grants | Unchanged: the diff touches no `supabase/migrations` file; SQL 130 pins the five policies |
+
+Not run locally: the full browser suite (`test:a11y`); exact-head CI is the authority.
+
+### 6.2 Mutations
+
+| ID | Mutation | Caught by |
+|---|---|---|
+| S-M1 | Page query without `user_id = auth.uid()` | SQL 130: 7 fail |
+| S-M2 | Unread count without `user_id` | 3 fail |
+| S-M3 | Mark without `read_at is null` | 5 fail |
+| S-M4 | Inclusive id cursor (`<=`) | 3 fail |
+| S-M5 | Timestamp-only cursor | 4 fail |
+| S-M6 | An admin UPDATE policy added | 8 fail (an earlier form of assertion 4 errored instead of failing; it now aggregates every UPDATE policy) |
+| U-M1 | Admin destination keeps any parsed path | unit: 13 fail |
+| U-M2 | No request-id validation | 1 fail |
+| U-M3 | `/admin/notifications` listed as a destination | 2 fail |
+| U-M4 | Non-admin links not mapped to the request record | 29 fail |
+| U-M5 | No length bound | 1 fail |
+| U-M6 | No blank-title fallback | 1 fail |
+| B-M1 | Client page query without the `user_id` filter (rebuilt) | browser: 3/3 selected tests fail (another admin's rows listed: 75 rows instead of 61; empty state lost; request without `user_id`) |
+
+Sources were restored after each mutation and the application rebuilt from the unmutated tree.
 
 ## 7. For Codex review
 
