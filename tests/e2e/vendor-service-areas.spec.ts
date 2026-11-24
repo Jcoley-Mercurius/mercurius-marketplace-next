@@ -81,6 +81,10 @@ test("selected Lee County areas reach review and the submission payload", async 
   await page.getByRole("button", { name: "Continue" }).click();
   await completeCredentials(page);
   await expect(page.getByText("Cape Coral, Pine Island")).toBeVisible();
+  // DEC-2026-067: the pilot standard commission and its worked example.
+  await expect(page.getByText("Mercurius earns a 10% commission on completed jobs.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Mercurius takes a 10% commission on completed jobs: on a $100 job, $10 commission and $90 to you before any separate deductions. Tips are yours in full.", { exact: false })).toBeVisible();
+  await expect(page.getByText(/15% commission/)).toHaveCount(0);
   await page.getByRole("button", { name: /submit/i }).click();
   await expect.poll(() => submitted?.service_areas).toBe("Cape Coral, Pine Island");
 });

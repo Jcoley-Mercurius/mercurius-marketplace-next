@@ -2,21 +2,22 @@ import { describe, expect, it } from "vitest";
 import { bankTransition, canRetryBank, captureJournal, checkout, commercial, earningsJournal, fee, payoutEligibility, processorCostJournal, refundJournal, retained, type CheckoutAttempt, type CommercialTerms } from "../../supabase/functions/_shared/money";
 import { acceptMoneyEvent, normalizeMoneyEvent } from "../../supabase/functions/_shared/moneyWebhook";
 
-const terms: CommercialTerms = { service: 10000, addons: 2000, discount: 2000, adjustment: -1000, tax: 630, tip: 2000, deposit: 3000, currency: "usd", sourceVersion: "synthetic-offering-v1", policyVersion: "CFG-005", taxEvidence: "synthetic-tax-calculation", promotionTerms: "synthetic-approved-terms" };
+const terms: CommercialTerms = { service: 10000, addons: 2000, discount: 2000, adjustment: -1000, tax: 630, tip: 2000, deposit: 3000, currency: "usd", sourceVersion: "synthetic-offering-v1", policyVersion: "CFG-005", taxEvidence: "synthetic-tax-calculation", promotionTerms: "synthetic-approved-terms", commissionRateBps: 1500 };
+// A snapshot stamped before DEC-2026-067 (15%); the pilot standard (10%) is covered below.
 describe("commercial and ledger policy", () => {
   it("charges Mercurius subtotal plus separate tax/tip, with no second fee on a deposit", () => {
     expect(commercial(terms)).toMatchObject({ subtotal: 9000, total: 11630, platformFee: 1350, providerPayable: 9650 });
     expect(captureJournal(3000)).toEqual([{ account: "stripe_clearing", debit: 3000, credit: 0 }, { account: "customer_advance", debit: 0, credit: 3000 }]);
-    expect(earningsJournal({ service: 9000, tax: 630, tip: 2000 }).find(x => x.account === "provider_payable")?.credit).toBe(9650);
+    expect(earningsJournal({ service: 9000, tax: 630, tip: 2000 }, 1500).find(x => x.account === "provider_payable")?.credit).toBe(9650);
   });
   it("uses cumulative retained fee rounding across small partial refunds", () => {
-    expect(fee(10)).toBe(2);
-    const first = refundJournal({ service: 10, tax: 0, tip: 0 }, { service: 1, tax: 0, tip: 0 });
+    expect(fee(10, 1500)).toBe(2);
+    const first = refundJournal({ service: 10, tax: 0, tip: 0 }, { service: 1, tax: 0, tip: 0 }, 1500);
     expect(first.find(x => x.account === "platform_revenue")?.debit).toBe(1);
-    const second = refundJournal({ service: 9, tax: 0, tip: 0 }, { service: 1, tax: 0, tip: 0 });
+    const second = refundJournal({ service: 9, tax: 0, tip: 0 }, { service: 1, tax: 0, tip: 0 }, 1500);
     expect(second.find(x => x.account === "platform_revenue")).toBeUndefined();
-    expect(retained({ service: 9000, tax: 630, tip: 2000 }, { service: 4500, tax: 315, tip: 0 })).toMatchObject({ platformFee: 675, providerPayable: 5825 });
-    expect(retained({ service: 9000, tax: 630, tip: 2000 }, { service: 9000, tax: 630, tip: 2000 }).total).toBe(0);
+    expect(retained({ service: 9000, tax: 630, tip: 2000 }, { service: 4500, tax: 315, tip: 0 }, 1500)).toMatchObject({ platformFee: 675, providerPayable: 5825 });
+    expect(retained({ service: 9000, tax: 630, tip: 2000 }, { service: 9000, tax: 630, tip: 2000 }, 1500).total).toBe(0);
   });
   it("keeps processor costs out of provider payable", () => {
     expect(processorCostJournal(321).map(x => x.account)).toEqual(["processor_expense", "stripe_clearing"]);
@@ -25,7 +26,37 @@ describe("commercial and ledger policy", () => {
     for (const patch of [{ taxEvidence: "" }, { promotionTerms: null }, { service: 0.01 }, { service: Number.MAX_SAFE_INTEGER }, { deposit: 999999 }, { discount: 999999 }]) {
       expect(() => commercial({ ...terms, ...patch })).toThrow();
     }
-    expect(() => retained({ service: 1, tax: 0, tip: 0 }, { service: 2, tax: 0, tip: 0 })).toThrow();
+    expect(() => retained({ service: 1, tax: 0, tip: 0 }, { service: 2, tax: 0, tip: 0 }, 1500)).toThrow();
+  });
+});
+
+describe("pilot standard commission (DEC-2026-067)", () => {
+  const pilot: CommercialTerms = { ...terms, service: 10000, addons: 0, discount: 0, adjustment: 0, tax: 700, tip: 1000, deposit: 0, promotionTerms: null, commissionRateBps: 1000 };
+  it("$100 service: $10 commission and $90 to the vendor before separate deductions; tax and tip excluded", () => {
+    expect(commercial(pilot)).toMatchObject({ subtotal: 10000, total: 11700, platformFee: 1000, providerPayable: 10000 });
+    const lines = earningsJournal({ service: 10000, tax: 700, tip: 1000 }, 1000);
+    expect(lines.find(x => x.account === "platform_revenue")?.credit).toBe(1000);
+    expect(lines.find(x => x.account === "provider_payable")?.credit).toBe(10000);
+  });
+  it("rounds half away from zero on whole cents, like PostgreSQL round()", () => {
+    expect(fee(3333, 1000)).toBe(333);
+    expect(fee(3335, 1000)).toBe(334);
+    expect(fee(5, 1000)).toBe(1);
+    expect(fee(3333, 500)).toBe(167);
+    expect(fee(30, 500)).toBe(2);
+  });
+  it("recomputes a partial refund on the cumulative retained subtotal at the stamped rate", () => {
+    expect(retained({ service: 10000, tax: 0, tip: 0 }, { service: 3333, tax: 0, tip: 0 }, 1000)).toMatchObject({ platformFee: 667, providerPayable: 6000 });
+    const refund = refundJournal({ service: 10000, tax: 0, tip: 0 }, { service: 3333, tax: 0, tip: 0 }, 1000);
+    expect(refund.find(x => x.account === "platform_revenue")?.debit).toBe(333);
+  });
+  it("keeps a historical 15% snapshot at 15% through a later refund", () => {
+    expect(retained({ service: 10000, tax: 0, tip: 0 }, { service: 4000, tax: 0, tip: 0 }, 1500)).toMatchObject({ platformFee: 900, providerPayable: 5100 });
+  });
+  it("refuses a rate outside 0-100%", () => {
+    expect(() => fee(100, -1)).toThrow("INVALID_RATE");
+    expect(() => fee(100, 10001)).toThrow("INVALID_RATE");
+    expect(() => fee(100, 10.5)).toThrow("INVALID_RATE");
   });
 });
 

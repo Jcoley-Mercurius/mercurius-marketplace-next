@@ -2,7 +2,8 @@
 
 **Prepared:** 2026-10-20 (America/New_York) on branch `claude/pricing-revisions` (uncommitted working tree, base `main` `fdfb450`).
 **Purpose:** the two-person finance review that DEC-2026-015 §3, DEC-2026-038, DEC-2026-041 and CFG-005 require before `private.money_feature_gates.promotions_checkout` is opened.
-**Status: NOT REVIEWED.** Nothing here is a finance sign-off. Automated tests, the implementer's own checks (Claude) and code review (Codex) are evidence for the reviewers. None of them is the review.
+**Status: NOT REVIEWED.** Nothing here is a finance sign-off.
+**Rate note (2026-11-23):** §3–§5 describe the 15% standard and 7.5% promotional period. DEC-2026-067 sets 10% and 5% for snapshots published after `20261201001000`, stamped per snapshot; its worked examples, transition rules and sign-off table are in [PILOT-COMMISSION-10.md](PILOT-COMMISSION-10.md) §4–§9. Automated tests, the implementer's own checks (Claude) and code review (Codex) are evidence for the reviewers. None of them is the review.
 
 ## 1. What the review is, and who must do it
 

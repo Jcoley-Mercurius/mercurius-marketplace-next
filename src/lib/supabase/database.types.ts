@@ -4093,6 +4093,7 @@ export type Database = {
           addons: number
           adjustment: number
           approved_by: string
+          commission_rate_bps: number
           created_at: string
           created_by: string
           currency: string
@@ -4118,6 +4119,7 @@ export type Database = {
           addons: number
           adjustment: number
           approved_by: string
+          commission_rate_bps: number
           created_at?: string
           created_by: string
           currency: string
@@ -4143,6 +4145,7 @@ export type Database = {
           addons?: number
           adjustment?: number
           approved_by?: string
+          commission_rate_bps?: number
           created_at?: string
           created_by?: string
           currency?: string

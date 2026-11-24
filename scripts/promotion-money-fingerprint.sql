@@ -46,4 +46,11 @@ where (n.nspname, p.proname) in (
   ('public','homeowner_respond_offer_terms'), ('public','homeowner_respond_replacement'),
   -- Review of #154 (20261118001000, TRACE-150): which candidate's terms may be bound now also needs the
   -- request's required work established (offer_terms_required_work, called by offer_terms_build).
-  ('private','offer_terms_required_work'));
+  ('private','offer_terms_required_work'),
+  -- DEC-2026-067 (TRACE-160, 20261201001000): the commission policy readers. money_split now applies
+  -- the rate stamped on each snapshot; private.money_publish_snapshot stamps the policy rate;
+  -- promotion_economics, promotion_usage, promotion_release_unpaid and promotion_redemption_problem
+  -- read the policy (all already listed). The policy rows are data: check them with
+  -- scripts/commission-transition-inventory.sql.
+  ('private','money_standard_commission_bps'), ('private','money_promotional_commission_bps'),
+  ('private','money_commission_effective_at'));

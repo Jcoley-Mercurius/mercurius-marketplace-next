@@ -1,11 +1,16 @@
 /** money-v1: integer minor units only. No provider I/O or lifecycle transitions. */
 export const MONEY_POLICY = "CFG-005/008:money-v1";
+// DEC-2026-067: the commission is the rate stamped on each snapshot (money_snapshots.commission_rate_bps),
+// never a constant: 1000 for snapshots published under the pilot standard, 1500 for earlier ones.
+// The database (private.money_split) is authoritative; this module models it for unit tests.
 export type Components = Readonly<{ service: number; tax: number; tip: number }>;
 export type CommercialTerms = Readonly<{
   service: number; addons: number; discount: number; adjustment: number;
   tax: number; tip: number; deposit: number; currency: "usd";
   sourceVersion: string; policyVersion: string; taxEvidence: string;
   promotionTerms: string | null;
+  /** The snapshot's stamped standard rate in basis points, set by the server's policy. */
+  commissionRateBps: number;
 }>;
 
 export function cents(value: number, signed = false): number {
@@ -19,9 +24,13 @@ export function reference(value: string): string {
 export function sum(parts: Components): number {
   return cents(cents(parts.service) + cents(parts.tax) + cents(parts.tip));
 }
-export function fee(service: number): number {
-  // BigInt avoids binary floating-point and intermediate multiplication overflow.
-  return Number((BigInt(cents(service)) * 15n + 50n) / 100n);
+export function rate(bps: number): number {
+  if (!Number.isSafeInteger(bps) || bps < 0 || bps > 10000) throw new Error("INVALID_RATE");
+  return bps;
+}
+export function fee(service: number, bps: number): number {
+  // BigInt avoids binary floating-point and intermediate multiplication overflow; half away from zero.
+  return Number((BigInt(cents(service)) * BigInt(rate(bps)) + 5000n) / 10000n);
 }
 export function commercial(terms: CommercialTerms) {
   if (terms.currency !== "usd") throw new Error("UNSUPPORTED_CURRENCY");
@@ -30,16 +39,18 @@ export function commercial(terms: CommercialTerms) {
   const subtotal = cents(cents(terms.service) + cents(terms.addons) - cents(terms.discount) + cents(terms.adjustment, true));
   const total = sum({ service: subtotal, tax: terms.tax, tip: terms.tip });
   if (cents(terms.deposit) > subtotal) throw new Error("DEPOSIT_EXCEEDS_SERVICE");
-  return Object.freeze({ ...terms, subtotal, total, platformFee: fee(subtotal), providerPayable: cents(subtotal - fee(subtotal) + terms.tip) });
+  const platformFee = fee(subtotal, terms.commissionRateBps);
+  return Object.freeze({ ...terms, subtotal, total, platformFee, providerPayable: cents(subtotal - platformFee + terms.tip) });
 }
-export function retained(original: Components, refunded: Components, chargeback: Components = { service: 0, tax: 0, tip: 0 }) {
+export function retained(original: Components, refunded: Components, bps: number, chargeback: Components = { service: 0, tax: 0, tip: 0 }) {
   sum(original); sum(refunded); sum(chargeback);
   const result = Object.freeze({
     service: cents(original.service - refunded.service - chargeback.service),
     tax: cents(original.tax - refunded.tax - chargeback.tax),
     tip: cents(original.tip - refunded.tip - chargeback.tip),
   });
-  return Object.freeze({ ...result, total: sum(result), platformFee: fee(result.service), providerPayable: cents(result.service - fee(result.service) + result.tip) });
+  const platformFee = fee(result.service, bps);
+  return Object.freeze({ ...result, total: sum(result), platformFee, providerPayable: cents(result.service - platformFee + result.tip) });
 }
 
 export type LedgerAccount = "stripe_clearing" | "customer_advance" | "platform_revenue" | "tax_liability" | "provider_payable" | "processor_expense" | "chargeback_suspense" | "bank";
@@ -59,8 +70,8 @@ export function captureJournal(amount: number): readonly Posting[] {
   cents(amount);
   return balanced([{ account: "stripe_clearing", debit: amount, credit: 0 }, { account: "customer_advance", debit: 0, credit: amount }]);
 }
-export function earningsJournal(parts: Components): readonly Posting[] {
-  const amount = sum(parts), platform = fee(parts.service), provider = parts.service - platform + parts.tip;
+export function earningsJournal(parts: Components, bps: number): readonly Posting[] {
+  const amount = sum(parts), platform = fee(parts.service, bps), provider = parts.service - platform + parts.tip;
   return balanced([
     { account: "customer_advance", debit: amount, credit: 0 },
     ...[{ account: "platform_revenue" as const, debit: 0, credit: platform },
@@ -69,8 +80,8 @@ export function earningsJournal(parts: Components): readonly Posting[] {
   ]);
 }
 /** Recompute on the cumulative retained subtotal: never round each refund's fee independently. */
-export function refundJournal(before: Components, allocation: Components): readonly Posting[] {
-  const after = retained(before, allocation), old = retained(before, { service: 0, tax: 0, tip: 0 });
+export function refundJournal(before: Components, allocation: Components, bps: number): readonly Posting[] {
+  const after = retained(before, allocation, bps), old = retained(before, { service: 0, tax: 0, tip: 0 }, bps);
   return balanced([
     ...[{ account: "platform_revenue" as const, debit: old.platformFee - after.platformFee, credit: 0 },
       { account: "provider_payable" as const, debit: old.providerPayable - after.providerPayable, credit: 0 },

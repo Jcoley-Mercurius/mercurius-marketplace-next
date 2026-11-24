@@ -39,7 +39,7 @@ The pre-build owner configuration is approved in `governance/CONFIGURATION-DECIS
 - all Lee County ZIPs; no beta household cap;
 - every catalog service remains visible, with honest unavailable behavior where supply is absent;
 - every approved and otherwise eligible vendor participates;
-- customers pay Mercurius; Mercurius retains 15% of final service subtotal excluding tax/tips;
+- customers pay Mercurius; Mercurius retains 10% of final service subtotal excluding tax/tips (DEC-2026-067, prospective; 15% for bookings published before it);
 - weekly direct ACH provider payout, eligible 48 hours after homeowner-confirmed completion, with disputes held;
 - approved cancellation, rescheduling, provider cancellation, weather/emergency, matching, and support rules;
 - eight-hour RTO, 24-hour RPO, and approved retention periods;

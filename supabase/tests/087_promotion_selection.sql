@@ -6,6 +6,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
+-- DEC-2026-067 (20261201001000): this file characterizes bookings published under the historical
+-- 15% standard (7.5% promotional), which keep that rate for life. The policy row below stands for
+-- the time before the migration; SQL 127 covers the 10% pilot standard and 5% promotional rate.
+insert into private.money_commission_policies(standard_bps,promotional_bps,decision) values (1500,750,'Synthetic: historical 15% policy');
 -- TRACE-134 (6.11A): a price version that is live or in use is not edited in place on any path.
 -- Edits below that the guard refuses are applied under owner maintenance (version guards disabled for
 -- that statement) so this file keeps characterizing what an in-place change would do (TRACE-126/127).

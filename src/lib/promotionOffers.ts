@@ -1,8 +1,13 @@
 // TRACE-114 (DEC-2026-038): funded promotion offers. The server owns validation, approval,
 // limits and every amount (private.promotion_economics); this module parses what it
-// returns and words it. Ordinary commission is 15%; with one valid promotion applied it is
-// 7.5%. A homeowner chooses an offer (TRACE-116, src/lib/promotionSelection.ts) only while the
+// returns and words it. The standard commission is 10% and one valid applied promotion halves
+// it to 5% (DEC-2026-067; src/lib/commission.ts); each amount and label comes from the rate the
+// server returns. A homeowner chooses an offer (TRACE-116, src/lib/promotionSelection.ts) only while the
 // promotions gate is open after the two-person finance review (DEC-2026-015 §3 until then).
+
+import { commissionRateLabel } from "./commission";
+
+export { commissionRateLabel };
 
 export type OfferFunding = "vendor" | "platform";
 export type OfferKind = "percent" | "amount" | "package_price";
@@ -63,9 +68,6 @@ export type PromotionOffer = {
   usage: OfferUsage;
   example: OfferEconomics | null;
 };
-
-export const ORDINARY_COMMISSION_BPS = 1500;
-export const PROMOTIONAL_COMMISSION_BPS = 750;
 
 const num = (value: unknown) => { const n = Number(value); return value === null || value === undefined || value === "" || !Number.isFinite(n) ? null : n; };
 const text = (value: unknown) => (typeof value === "string" ? value : null);
@@ -137,10 +139,6 @@ export const offerStatusLabel: Record<OfferStatus, string> = {
   approved: "Approved",
   retired: "Retired",
 };
-
-export function commissionRateLabel(bps: number) {
-  return `${(bps / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
-}
 
 /** Rows of a worked example, worded for the role reading it. */
 export function economicsRows(economics: OfferEconomics, role: "operator" | "vendor"): [string, string][] {

@@ -46,15 +46,15 @@
 
 - **Status:** APPROVED
 - **Decision date:** 2026-08-29
-- **Platform fee:** Flat 15% of the final service subtotal after discounts and adjustments.
+- **Platform fee:** 10% of the final service subtotal after discounts and adjustments, for bookings whose money snapshot is published after migration `20261201001000` (DEC-2026-067, approved 2026-11-23; TRACE-160). Bookings published before it keep the original flat 15% for life, including later refunds and payouts.
 - **Excluded from fee base:** Tax and tips.
 - **Tips:** 100% belongs to the provider.
 - **Deposits:** A deposit is a payment toward the final service subtotal, not an additional fee base.
 - **Quote deposits (DEC-2026-045, approved 2026-10-22):** the initial beta quote workflow uses a $0 deposit and the existing invoice and checkout under its approved timing; jobs or vendors that ask for a deposit get an operator review before a quote is sent. Existing deposit records and accepted terms are unchanged. Configurable materials deposits, percentages, due dates and refund rules are a separate future policy.
-- **Refund effect:** After a full or partial refund, the 15% fee is calculated against the final retained service subtotal.
+- **Refund effect:** After a full or partial refund, the booking's own rate (stamped on its snapshot: 10%, or 15% for earlier bookings) is calculated against the final retained service subtotal.
 - **Processor cost:** Customer-payment processing cost is a Mercurius operating cost and is not deducted a second time from provider proceeds.
-- **Tax:** Tracked separately from service subtotal and excluded from the 15% fee; calculation and remittance must follow the implemented tax authority.
-- **Promotional exception (DEC-2026-038, approved 2026-10-18):** a booking with one valid applied promotion pays 7.5% on its qualifying commissionable service amount: the discounted amount for a vendor-funded discount; the amount before the discount for a Mercurius-funded discount, whose discount is a platform subsidy kept apart from commission. One promotion per booking, no Credits stacking, Credits never offset commission. Refund allocation, release, restoration and first-booking eligibility are approved in DEC-2026-041; DEC-2026-042 defines how a homeowner applies one (explicit choice or code, never automatic). Checkout still refuses promotions (DEC-2026-015 §3) until that is implemented and passes the two-person finance review.
+- **Tax:** Tracked separately from service subtotal and excluded from the platform fee; calculation and remittance must follow the implemented tax authority.
+- **Promotional exception (DEC-2026-038, approved 2026-10-18; rate amended by DEC-2026-067):** a booking with one valid applied promotion pays half the standard, now 5% (7.5% for bookings and redemptions recorded before `20261201001000`), on its qualifying commissionable service amount: the discounted amount for a vendor-funded discount; the amount before the discount for a Mercurius-funded discount, whose discount is a platform subsidy kept apart from commission. One promotion per booking, no Credits stacking, Credits never offset commission. Refund allocation, release, restoration and first-booking eligibility are approved in DEC-2026-041; DEC-2026-042 defines how a homeowner applies one (explicit choice or code, never automatic). Checkout still refuses promotions (DEC-2026-015 §3) until that is implemented and passes the two-person finance review.
 
 ## CFG-006 — Customer cancellation and rescheduling
 
@@ -81,7 +81,7 @@
 - **Schedule:** Weekly.
 - **Eligibility:** Funds become payout-eligible 48 hours after homeowner-confirmed completion.
 - **Holds:** Disputed work remains held until resolution. No general beta reserve applies beyond approved holds.
-- **Provider proceeds:** 85% of the final service subtotal plus 100% of tips, subject to refunds/adjustments and separate tax handling.
+- **Provider proceeds:** 90% of the final service subtotal (DEC-2026-067; 85% for bookings published before `20261201001000`) plus 100% of tips, subject to refunds/adjustments and separate tax handling; with one valid promotion, the service amount less the half-rate commission, plus any Mercurius subsidy.
 - **Acceptance evidence:** ACH batch, statement, ledger, hold, failure, retry, and reconciliation scenarios must pass before real payout activation.
 
 ## CFG-009 — Matching

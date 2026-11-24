@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PageState } from "@/components/ui/page-state";
 import { ResponsiveDataList, type DataColumn } from "@/components/ui/responsive-data-list";
 import { createClient } from "@/lib/supabase/client";
+import { commissionRateLabel, PROMOTIONAL_COMMISSION_BPS, STANDARD_COMMISSION_BPS } from "@/lib/commission";
 import {
   accountLabel,
   bankMovementLabel,
@@ -94,7 +95,7 @@ export default function FinanceReconciliationPage() {
     <PageHeader
       eyebrow="Finance"
       title="Finance reconciliation"
-      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The platform fee is ${data?.fee_percent ?? 15}% of retained service, or 7.5% on a booking with an applied promotion, excluding tax and tips; a Mercurius-funded discount is a promotion subsidy, not a fee reduction. Commands below are recorded as you; refunds, chargeback allocations, readback resolutions and event exclusions need a second finance operator within 24 hours. Bank outcomes are not recorded here.`}
+      description={`Charges, refunds, earnings and provider payouts checked against the ledger. The standard platform fee is ${commissionRateLabel(data?.standard_commission_bps ?? STANDARD_COMMISSION_BPS)} of retained service, or ${commissionRateLabel(data?.promotional_commission_bps ?? PROMOTIONAL_COMMISSION_BPS)} on a booking with an applied promotion, excluding tax and tips. Each booking keeps the rate stamped when its invoice was published, so earlier bookings stay at 15% (7.5% with a promotion); a Mercurius-funded discount is a promotion subsidy, not a fee reduction. Commands below are recorded as you; refunds, chargeback allocations, readback resolutions and event exclusions need a second finance operator within 24 hours. Bank outcomes are not recorded here.`}
       actions={
         <Button variant="outline" disabled={loading} onClick={() => void load()}>
           <RefreshCw />

@@ -54,7 +54,7 @@ const operations = (overrides: Record<string, unknown> = {}) => ({
   statements, ...overrides,
 });
 const reconciliation = {
-  evaluated_at: now, fee_percent: 15, obligation_count: 0, listed_limit: 200, global_event_holds: 0, accounts: [],
+  evaluated_at: now, fee_percent: 10, standard_commission_bps: 1000, promotional_commission_bps: 500, obligation_count: 0, listed_limit: 200, global_event_holds: 0, accounts: [],
   totals: { captured: 0, refunded: 0, platform_fee: 0, tax: 0, provider_payable: 0, paid_out: 0, processor_costs: 0, chargeback_suspense: 0, provider_owed: 0, with_issues: 0 },
   exceptions: [
     { kind: "bank_line", line_id: september.lines[2].line_id, statement_id: september.statement_id, period_start: "2026-09-01", period_end: "2026-09-15",
