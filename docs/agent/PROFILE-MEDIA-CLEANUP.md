@@ -153,3 +153,10 @@ migration, the fix must be a new forward migration.
 - Owner visual acceptance of the comparison images.
 
 No merge, deployment or Phase 7 change is included.
+
+## Public photo framing follow-up — 2026-11-24 ET
+
+The owner requested a correction after inspecting live profiles: filled work-photo previews
+with access to the complete original image. The [TRACE-156 framing checkpoint](PROFILE-IMAGE-FRAMING.md)
+records the bounded implementation and validation. It supersedes the earlier `object-contain`
+choice for public previews; complete-image editing previews and logos retain their fit rules.

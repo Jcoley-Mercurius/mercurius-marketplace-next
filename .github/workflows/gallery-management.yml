@@ -8,6 +8,7 @@ on:
       - 'src/app/vendor/profile/**'
       - 'src/app/admin/vendors/**'
       - 'tests/e2e/photo-service-assignment.spec.ts'
+      - 'tests/e2e/provider-profile-route.spec.ts'
       - 'tests/e2e/request.spec.ts'
       - '.github/workflows/gallery-management.yml'
   push:
@@ -17,6 +18,7 @@ on:
       - 'src/app/vendor/profile/**'
       - 'src/app/admin/vendors/**'
       - 'tests/e2e/photo-service-assignment.spec.ts'
+      - 'tests/e2e/provider-profile-route.spec.ts'
       - 'tests/e2e/request.spec.ts'
       - '.github/workflows/gallery-management.yml'
 
@@ -47,6 +49,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Both photo managers, bulk editing, ordering, pairs, axe and focus
         run: npx playwright test photo-service-assignment.spec.ts --output test-results/gallery-management
+      - name: Public profile photos, filtering, full-photo viewer and responsive accessibility
+        run: npx playwright test provider-profile-route.spec.ts --output test-results/provider-profiles
       - name: Settled request-confirmation accessibility regression
         run: >-
           npx playwright test request.spec.ts --grep 'confirmation (light|dark): axe' --output test-results/request-confirmation
