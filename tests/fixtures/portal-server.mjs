@@ -1,6 +1,9 @@
 // Isolated HTTP fixture for browser tests, never imported by application code.
 // Binds its own port or fails; no forwarding, database, scheduler or credentials.
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
+
+const operationsSummary = JSON.parse(readFileSync(new URL("./admin-operations-summary.json", import.meta.url), "utf8"));
 
 const homeowner = "00000000-0000-4000-8000-000000000001";
 const contractor = "00000000-0000-4000-8000-000000000002";
@@ -249,12 +252,10 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/public_review_summaries") return send([]);
   // TRACE-136: admin operations readbacks. Synthetic and empty; the commands themselves stay refused below.
   if (url.pathname === "/rest/v1/rpc/get_completed_job_counts") return send([]);
-  if (url.pathname === "/rest/v1/rpc/admin_operations_summary") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), queues: [
-    { queue: "quote", state: "ready", count: 0, aged: 0 }, { queue: "recurring_payment", state: "ready", count: 0, aged: 0 },
-    { queue: "fulfillment", state: "ready", count: 0, aged: 0 }, { queue: "cancellation", state: "ready", count: 1, aged: null },
-    { queue: "support", state: "ready", count: 0, aged: 0 }, { queue: "compliance_renewal", state: "ready", count: 0, aged: null },
-    { queue: "renewal_documents", state: "ready", count: 0, aged: null }, { queue: "finance_exceptions", state: "restricted", count: null, aged: null },
-  ] } : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
+  // Phase 7.5B: the summary is the database's own output on SQL 127's fixtures (admin without finance
+  // authority), derived by scripts/derive-operations-summary-fixture.mjs; only checked_at is live.
+  if (url.pathname === "/rest/v1/rpc/admin_operations_summary") return send(user.testRole === "admin" ? { ...operationsSummary.admin, checked_at: now.toISOString() }
+    : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
   if (/\/rpc\/(admin_request_notes)$/.test(url.pathname)) return send(user.testRole === "admin" ? { legacy_note: null, notes: [] } : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
   if (/\/rpc\/(admin_request_action_history|admin_provider_badge_history)$/.test(url.pathname)) return send(user.testRole === "admin" ? [] : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
   if (url.pathname === "/rest/v1/rpc/public_provider_reviews") return send({ summary: { count: 0, average: null }, reviews: [] });
