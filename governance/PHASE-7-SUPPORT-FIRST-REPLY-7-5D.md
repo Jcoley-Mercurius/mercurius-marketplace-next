@@ -170,8 +170,9 @@ Local, 2026-11-24 ET.
 | SQL mutations (§6.3) | 15/15 caught; unmutated control passes |
 | Unit (`support.test.ts`, `adminOperations.test.ts`) | 28/28 |
 | Typecheck; changed-file lint; secret scan | pass |
-| Build; browser (`support`, `admin-operations`); client mutations | §6.4 |
-| Exact-head CI | on the PR for the final head |
+| Build; browser (`support`, `admin-operations`); client mutations | pass; 25/25; 5/5 unit and 1 browser mutation caught (§6.4) |
+| #199 exact-head CI on `6a753f3` (this branch's base) | run 45428311738 success (backend, lifecycle, application) |
+| Exact-head CI for this branch | on the PR for the final head |
 
 ### 6.3 SQL mutations
 
@@ -198,7 +199,23 @@ Each mutant re-creates the migration's functions with one edit inside SQL 129's 
 
 ### 6.4 Build, browser and client mutations
 
-PENDING
+| Check | Result |
+|---|---|
+| `next build` (CI's synthetic `NEXT_PUBLIC_*` values) on `d3659e2` | pass |
+| Browser `support.spec.ts` + `admin-operations.spec.ts` (Playwright, CI's config) on that build | 25/25 |
+| Client unit mutations | 5/5 caught; restored code 28/28 |
+| Browser mutation | caught: 7 of 25 fail, 18 pass |
+
+| ID | Mutation | Caught by |
+|---|---|---|
+| C1 | a reply is ignored (cell always shows "Due") | 2 unit tests |
+| C2 | a replied row is still marked overdue when the server says so | 1 unit test |
+| C3 | the overdue marker shown whenever there is a target | 1 unit test |
+| C4 | overview wording reverted to "past response target" | 1 unit test |
+| C5 | "Read" instead of "Replied" | 3 unit tests |
+| B1 | the page and overview label as before 7.5D (`6a753f3`), built and served | 7 browser tests: the 5 overview tests (`admin-operations.spec.ts` L28 ×2, L80 ×3) and both operations support tests (`support.spec.ts` L122) |
+
+An earlier build attempt was discarded: the client mutations edited sources while it compiled. The accepted build was made from committed `d3659e2` afterwards; B1 was a separate build from `6a753f3`'s two files, restored from `d3659e2` after the run.
 
 ## 7. Rollout and rollback (each hosted step needs the owner's authorization)
 
