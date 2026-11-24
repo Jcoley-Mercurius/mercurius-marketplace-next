@@ -1,7 +1,7 @@
 # Phase 7.5D — Support "overdue" means awaiting a first reply past target (TRACE-159, DF-3)
 
 **Status:** IMPLEMENTED FOR REVIEW (Codex). Not merged. No hosted action.
-**Base:** `main` `7f66d9a` (#198 merged 2026-11-24 12:43:40 UTC), fetched before work, **plus open #199 (7.5C) at `6a753f3`**. #199 is not merged: this branch is stacked on it so that SQL 128's DF-3 pin can be changed in its own file (R-1). It must merge after #199, and its PR targets #199's branch until then (§9). Branch `claude/phase7-5d-support-first-reply`, in its own worktree.
+**Base:** built on `main` `7f66d9a` (#198 merged 2026-11-24 12:43:40 UTC), fetched before work, plus #199 (7.5C) at its reconciled head `6a753f3`, while #199 was still open (R-1: SQL 128's DF-3 pin is changed in its own file). **#199 merged as `aeb20e4` (2026-11-24 16:50:43 UTC)** with a tree identical to `6a753f3`; this branch was then rebased onto `main` `aeb20e4` with no content change (tree hash unchanged), and the PR targets `main`. Branch `claude/phase7-5d-support-first-reply`, in its own worktree.
 **Authority:** the owner's 7.5D instruction (2026-11-24 ET), applying Codex's 7.5D directions R-1..R-7. [Operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) §5.3 DF-3, §9 CD-1, T-8/T-9 (CFG-010; DEC-2026-054 items 3–4). [7.5C record](PHASE-7-OPERATIONS-STAGED-FAILURES-7-5C.md) SF-9 and M15.
 
 ## What this slice does not do
@@ -28,7 +28,7 @@ No new SLA policy or target: CFG-010 stays the target, and its calendar, routing
 
 | ID | Direction | Implemented as |
 |---|---|---|
-| R-1 | Start after #199; change SQL 128's DF-3 pin deliberately | Stacked on #199's head; SF-9 rewritten in its file with a dated comment (§5.2). #199 had not merged when this work was done |
+| R-1 | Start after #199; change SQL 128's DF-3 pin deliberately | Built on #199's head while it was open, then rebased onto `main` `aeb20e4` once #199 merged (identical tree); SF-9 rewritten in its file with a dated comment (§5.2) |
 | R-2 | Qualifying response = earliest message with `author_role = 'operations'` and `visibility = 'participant'` | [`private.support_first_response_at(uuid)`](../supabase/migrations/20261202001000_phase7_support_first_reply.sql#L21): `min(created_at)` over exactly that predicate. The row decides, not whether a participant can open the ticket (F-1, §4) |
 | — | A recorded reply, not proof of access, delivery or reading | Stated in the migration, the type comment and the cell helper; the client says "Replied", never "read", "seen" or "delivered" (unit test) |
 | R-3 | Derive `first_response_at`; expose in queue rows and operator-only detail | Queue items and the operator branch of `support_ticket_json`; the requester payload has neither key (SQL 129 R0, R14; mutation M11) |
@@ -171,7 +171,7 @@ Local, 2026-11-24 ET.
 | Unit (`support.test.ts`, `adminOperations.test.ts`) | 28/28 |
 | Typecheck; changed-file lint; secret scan | pass |
 | Build; browser (`support`, `admin-operations`); client mutations | pass; 25/25; 5/5 unit and 1 browser mutation caught (§6.4) |
-| #199 exact-head CI on `6a753f3` (this branch's base) | run 45428311738 success (backend, lifecycle, application) |
+| #199 exact-head CI on `6a753f3` (tree = `main` `aeb20e4`, this branch's base) | run 45428311738 success (backend, lifecycle, application) |
 | Exact-head CI for this branch | on the PR for the final head |
 
 ### 6.3 SQL mutations
@@ -201,7 +201,7 @@ Each mutant re-creates the migration's functions with one edit inside SQL 129's 
 
 | Check | Result |
 |---|---|
-| `next build` (CI's synthetic `NEXT_PUBLIC_*` values) on `d3659e2` | pass |
+| `next build` (CI's synthetic `NEXT_PUBLIC_*` values) on `d3659e2` (= `b849b74`) | pass |
 | Browser `support.spec.ts` + `admin-operations.spec.ts` (Playwright, CI's config) on that build | 25/25 |
 | Client unit mutations | 5/5 caught; restored code 28/28 |
 | Browser mutation | caught: 7 of 25 fail, 18 pass |
@@ -215,11 +215,11 @@ Each mutant re-creates the migration's functions with one edit inside SQL 129's 
 | C5 | "Read" instead of "Replied" | 3 unit tests |
 | B1 | the page and overview label as before 7.5D (`6a753f3`), built and served | 7 browser tests: the 5 overview tests (`admin-operations.spec.ts` L28 ×2, L80 ×3) and both operations support tests (`support.spec.ts` L122) |
 
-An earlier build attempt was discarded: the client mutations edited sources while it compiled. The accepted build was made from committed `d3659e2` afterwards; B1 was a separate build from `6a753f3`'s two files, restored from `d3659e2` after the run.
+An earlier build attempt was discarded: the client mutations edited sources while it compiled. The accepted build was made from committed `d3659e2` (now `b849b74`, same tree) afterwards; B1 was a separate build from `6a753f3`'s two files, restored from `d3659e2` after the run.
 
 ## 7. Rollout and rollback (each hosted step needs the owner's authorization)
 
-1. Codex reviews this PR; #199 is reviewed and merged first, then this PR is retargeted to `main` (§9).
+1. Codex reviews this PR (#199 is already merged; §9).
 2. Owner authorizes the hosted step (DEC-2026-037): `supabase db push --linked --dry-run` must list only `20261202001000`; then `supabase db push --linked`; read-only readback of the three definition md5s and ACLs (§6.1), `admin_operations_summary` `3bc2497f…`, and money `61 | eb3f9702…`.
 3. Merge (= Production deploy); READY readback.
 
@@ -233,11 +233,10 @@ Safe in either order against live clients: the function change adds one key and 
 | D-2 | O-2: show the first reply inside the operator dialog, or keep it to the queue column? |
 | D-3 | O-3: is "missing key = no reply" acceptable for the client, given the push-before-merge order? |
 | D-4 | SF-9 overview assertion: parity (`aged` = queue overdue items) instead of a fixed count, because SQL 128 does not require an otherwise empty support queue. Acceptable? |
-| D-5 | Stacking: this branch carries #199's commits; the PR targets #199's branch and is retargeted to `main` after #199 merges. If #199 changes SQL 128 before merging, this branch is rebuilt on the merged `main` and §5.2 rechecked. |
 
-## 9. Merge order and stacking
+## 9. Merge order
 
-#199 (7.5C) was open, with CI re-running on its reconciled head `6a753f3`, when this work was done. This branch starts from `6a753f3` and adds only 7.5D changes on top. Its PR targets `claude/phase7-5c-staged-failure-characterization` so the diff shows only 7.5D. After #199 merges, the PR is retargeted to `main` (GitHub does this automatically if #199's branch is deleted on merge) and final-head CI is rerun on the result. It must not merge before #199.
+Work began while #199 (7.5C) was open, on its reconciled head `6a753f3` (exact-head CI 45428311738 success). #199 merged as `aeb20e4` before this PR was opened; `aeb20e4`'s tree equals `6a753f3`'s, so the rebase onto `main` changed no file and every result above stands. The commits are `b849b74` (implementation; `d3659e2` before the rebase) and the evidence commit. This PR targets `main`; final-head CI is reported on the PR.
 
 **Unresolved and carried unchanged:** F-1, O-1 (deferred), O-2, O-3; OD-1..OD-7; AC-1 D-1, D-4, D-5, D-6; SD-1, SD-2; every 7.3D gate; O-1..O-9 of earlier slices; CFG-011; HQ-1..HQ-6. Not Phase 7 acceptance.
 

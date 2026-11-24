@@ -293,7 +293,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 |---|---|---|
 | 1 | **7.5B** summary truth repair (§8) | Codex review; owner push authorization |
 | 2 | **7.5C** staged-failure characterization tests (§7.1), tests only | 7.5B merged (SF-12 expects `null`) |
-| 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9). Implemented for review 2026-11-24 ET, stacked on 7.5C ([record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md)) |
+| 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9). Implemented for review 2026-11-24 ET, after 7.5C merged ([record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md)) |
 | 4 | **7.5E** admin in-app readback, so existing admin rows become the first alert surface | OD-5 |
 | 5 | **7.5F** breach observation records and operator detector | OD-1, OD-2 |
 | 6 | **7.5G** server sourcing and applications queues (no thresholds) | OD-4 for sourcing wording |
@@ -313,7 +313,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 1 | 2026-11-22 | `main` `63c8010` | First contract (OQ-1) |
 | 2 | 2026-11-22 | `main` `83c8fea` merged | Codex's 7.5A review, below. No finding, status or recommendation changed beyond these |
 | 3 | 2026-11-23 | `main` `126c85f` (7.5B merged) | §7.1 coverage note for 7.5C (SQL 128) with discrepancies SD-1 and SD-2 for Codex. No expectation, status or recommendation changed |
-| 4 | 2026-11-24 | `main` `7f66d9a` + #199 `6a753f3` (7.5C, open) | 7.5D: dated DF-3 repair note (§5.3), SF-9 note (§7.1), sequence status (§10). Original rows kept as history; no other expectation, status or recommendation changed |
+| 4 | 2026-11-24 | `main` `7f66d9a` + #199 `6a753f3`; rebased onto `main` `aeb20e4` (#199 merged, same tree) | 7.5D: dated DF-3 repair note (§5.3), SF-9 note (§7.1), sequence status (§10). Original rows kept as history; no other expectation, status or recommendation changed |
 
 **Codex 7.5A review, applied in revision 2:**
 
