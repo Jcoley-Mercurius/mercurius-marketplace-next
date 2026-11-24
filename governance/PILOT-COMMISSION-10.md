@@ -85,12 +85,20 @@ Promotional relief reported to operators: standard on the same base minus the pr
 ## 7. Release steps prepared (none performed)
 
 1. **Finance review** (§9) and Codex review of the same commit.
-2. **Inventory before the push (read-only):** `npx supabase db query --linked -f scripts/commission-transition-inventory.sql`. Expect 0 reservations at 750 and the gate closed; record the count of published-unpaid invoices for T-2. (Not run by the implementer: hosted reads were not authorized in this session.)
+2. **Inventory before the push (read-only):** `npx supabase db query --linked -f scripts/commission-transition-inventory.sql`. Expect 0 reservations at 750 and the gate closed; record the count of published-unpaid invoices for T-2. (Run 2026-11-24 00:4x UTC; results below.)
 3. **Dry run:** `supabase db push --linked --dry-run`. Expect `20261201001000` only, or with #197's `20261130001000` if that has not been pushed. If `20261201001000` is pushed first, #197's older timestamp later needs `--include-all`; pushing #197's first avoids that.
 4. **Push** with the owner's authorization: `supabase db push --linked`. This is the effective moment.
 5. **Readback (read-only):** the inventory again (policy `1000/500 @ <push time>`; stamps all `1500` until the first new invoice) and the fingerprint (`61 | eb3f9702…` expected).
 6. **Merge** (= Production deploy, DEC-2026-037) promptly after the push, so the copy matches; check `/vendors/apply`, `/vendor`, `/admin/finance`, `/admin/promotions` on Production.
 7. **Not part of this release:** opening the promotions gate, republishing unpaid invoices (T-2), vendor notices (T-3), any real transaction.
+
+**Hosted push performed (owner instruction 2026-11-23, "Please go ahead and push any migrations if any"):**
+
+- *Inventory before (read-only):* 0 money snapshots (so 0 paid, 0 checkout attempts, 0 published-unpaid invoices), 0 recurring-visit snapshots, 0 promotion reservations or redemptions, gate closed, 0 approved offers, 0 ACH items, 1 legacy invoice (stored amounts), migration not applied.
+- *Dry run:* first refused (`LegacyDbPushMissingLocalError`) because hosted already had #197's `20261130001000`, which this branch does not contain. `migration repair` was **not** used. #197's exact file was placed in the local migrations folder, uncommitted, for the history check only; the dry run then listed `20261201001000` alone. The file was removed afterwards.
+- *Push:* `supabase db push --linked` 00:44:59–00:45:03 UTC on 2026-11-24 (19:45 ET on 2026-11-23); applied `20261201001000` only.
+- *Readback (read-only):* migration applied; policy `1500/750 @ -infinity; 1000/500 @ 2026-11-24 00:45:03.001674+00`. **The 10% standard is effective from that moment.** 0 snapshots exist, so none carries a stamp yet. The money fingerprint reads `61 | eb3f9702d45f9f22e61f6a7da17349c4`, equal to the local value in §6.
+- *Consequence for §5/§8:* no booking exists in any transition state, so T-2 has nothing to act on and the 7.5% reservation path is defensive only. Remaining: merge (step 6), Codex and finance review, T-1, T-3, F-1.
 
 **Rollback limitations.** The migration is additive and the deployed app keeps working on it. Promoting the previous Vercel deployment reverts copy only; the rate stays 10% in the database. Returning to 15% (or moving to 7%) is a new reviewed migration that appends a policy row (and widens the snapshot check for 7%); the append-only table refuses edits. Snapshots stamped 10% in between stay 10% for life, by design. Do not drop the column or the table: historical stamps depend on them.
 
