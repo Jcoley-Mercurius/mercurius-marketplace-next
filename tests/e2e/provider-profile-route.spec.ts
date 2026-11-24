@@ -696,33 +696,61 @@ async function showIllustration(page: Page) {
 }
 
 for (const width of [320, 768, 1440]) {
-  test(`gallery cleanup ${width}px: unique slides and whole portrait/panorama images`, async ({ page }) => {
+  test(`gallery cleanup ${width}px: filled previews and uncropped portrait/square/panorama viewer`, async ({ page }) => {
     const svg = (w: number, h: number, label: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect x="4" y="4" width="${w - 8}" height="${h - 8}" fill="#e7eee8" stroke="#263d35" stroke-width="8"/><text x="50%" y="50%" text-anchor="middle" font-size="24">${label}</text></svg>`)}`;
     const portrait = svg(300, 900, "Portrait");
     const panorama = svg(1200, 200, "Panorama");
+    const square = svg(600, 600, "Square");
     const item = palmettoLive();
     item.data = { ...item.data, media: [
       { id: "portrait", image_url: portrait, caption: "Portrait work photo", sort_order: 0 },
       { id: "portrait-copy", image_url: portrait, caption: "Duplicate upload", sort_order: 1 },
       { id: "panorama", image_url: panorama, caption: "Panoramic work photo", sort_order: 2 },
+      { id: "square", image_url: square, caption: "Square work photo", sort_order: 3 },
     ] };
     await serve(page, [item]);
     await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, width);
     const gallery = page.locator('[data-profile-media="photo"]');
     await expect(gallery).toHaveCount(1);
     await expect(gallery.getByText("Business photos", { exact: true })).toBeVisible();
-    await expect(gallery.getByText("1 of 2", { exact: true })).toBeVisible();
-    for (const caption of ["Portrait work photo", "Panoramic work photo"]) {
+    await expect(gallery.getByText("1 of 3", { exact: true })).toBeVisible();
+    for (const caption of ["Portrait work photo", "Panoramic work photo", "Square work photo"]) {
       await expect(gallery.getByText(caption, { exact: true })).toBeVisible();
       await expect.poll(() => gallery.locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
-      expect(await gallery.locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
+      expect(await gallery.locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("cover");
       const box = (await gallery.locator("img").boundingBox())!;
       expect(Math.abs(box.width / box.height - 16 / 9)).toBeLessThan(0.03);
       await expectNoOverflow(page);
-      await gallery.screenshot({ path: `${shots}/cleanup-${width}-${caption.startsWith("Portrait") ? "portrait" : "panorama"}.png` });
+      await gallery.screenshot({ path: `${shots}/cleanup-${width}-${caption.split(" ")[0].toLowerCase()}.png` });
+      const trigger = gallery.getByRole("button", { name: "View full photo" });
+      expect((await trigger.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await trigger.click();
+      const viewer = page.getByRole("dialog", { name: "Full photo", exact: true });
+      await expect(viewer).toBeVisible();
+      expect((await viewer.boundingBox())!.width).toBeLessThanOrEqual(width - 32);
+      const fullImage = viewer.getByRole("img", { name: caption, exact: true });
+      await expect(fullImage).toHaveAttribute("src", await gallery.locator("img").getAttribute("src") as string);
+      await expect.poll(() => fullImage.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+      expect(await fullImage.evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
+      const fullBox = (await fullImage.boundingBox())!;
+      expect(fullBox.width).toBeLessThanOrEqual(width - 32);
+      await expect(viewer.getByText("General business photo · not specific to gutter cleaning", { exact: true })).toBeVisible();
+      await expect(viewer.getByRole("button", { name: "Close full photo" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(viewer.getByRole("button", { name: "Close full photo" })).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(viewer.getByRole("button", { name: "Close full photo" })).toBeFocused();
+      expect((await viewer.getByRole("button", { name: "Close full photo" }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect(await axe(page)).toEqual([]);
+      await expectNoOverflow(page);
+      await viewer.screenshot({ path: `${shots}/full-${width}-${caption.split(" ")[0].toLowerCase()}.png` });
+      if (caption.startsWith("Portrait")) await page.keyboard.press("Escape");
+      else await viewer.getByRole("button", { name: "Close full photo" }).click();
+      await expect(viewer).toBeHidden();
+      await expect(trigger).toBeFocused();
       await gallery.getByRole("button", { name: "Next photo" }).click();
     }
-    await expect(gallery.getByText("1 of 2", { exact: true })).toBeVisible();
+    await expect(gallery.getByText("1 of 3", { exact: true })).toBeVisible();
     await expect(gallery.getByText("Duplicate upload", { exact: true })).toHaveCount(0);
   });
 }
@@ -871,12 +899,12 @@ test("unreadable service links show the photo failure state instead of unlabelle
 });
 
 for (const width of [320, 768, 1440]) {
-  test(`saved service photos at ${width}px: whole images, accessible controls and reflow`, async ({ page }) => {
+  test(`saved service photos at ${width}px: filled images, accessible controls and reflow`, async ({ page }) => {
     await serve(page, [linkedProvider()]);
     await open(page, `/providers/${PALMETTO}?service=gutter-cleaning`, width);
     await expect.poll(() => carousel(page).locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
-    expect(await carousel(page).locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
-    expect((await carousel(page).getByRole("button", { name: "Next photo" }).boundingBox())!.height).toBeGreaterThanOrEqual(36);
+    expect(await carousel(page).locator("img").evaluate((image) => getComputedStyle(image).objectFit)).toBe("cover");
+    expect((await carousel(page).getByRole("button", { name: "Next photo" }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
     expect(await axe(page)).toEqual([]);
     await expectNoOverflow(page);
     await carousel(page).screenshot({ path: `${shots}/saved-links-${width}-gutter.png` });
@@ -1110,6 +1138,12 @@ test("explicit before and after projects follow service filters without borrowin
   await expect(page.locator("[data-project-role]")).toHaveText("Before · Gutter cleanup");
   await page.getByRole("button", { name: "View paired after photo" }).click();
   await expect(page.locator("[data-project-role]")).toHaveText("After · Gutter cleanup");
+  await carousel(page).getByRole("button", { name: "View full photo" }).click();
+  const viewer = page.getByRole("dialog", { name: "Full photo", exact: true });
+  await expect(viewer.getByText("After · Gutter cleanup", { exact: true })).toBeVisible();
+  await expect(viewer.getByText("Palmetto Exterior Care · Gutter cleaning photos", { exact: true })).toBeVisible();
+  await expect(viewer.getByRole("img")).toHaveAttribute("src", second.image_url);
+  await viewer.getByRole("button", { name: "Close full photo" }).click();
   await page.reload();
   await expect(page.getByRole("button", { name: "View paired after photo" })).toBeVisible();
 });

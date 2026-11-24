@@ -83,3 +83,10 @@ pairing: “Can you do that now for me handle 1-3?”
 Scope and acceptance evidence: [TRACE-156 gallery management](../docs/agent/GALLERY-MANAGEMENT.md).
 This is implementation authorization; it does not claim visual acceptance, a hosted migration
 push, merge/deployment, provider-photo tagging or Phase 7 acceptance.
+
+## Profile photo framing correction — 2026-11-24
+
+Josh asked Codex to inspect and fix public profile pictures that did not fit their frames:
+“Can you fix that, or do we need Claude to fix that?” This authorizes the bounded implementation
+in [TRACE-156 photo framing](../docs/agent/PROFILE-IMAGE-FRAMING.md). It does not establish
+owner visual acceptance of the resulting crop/viewer or authorize merge/deployment.
