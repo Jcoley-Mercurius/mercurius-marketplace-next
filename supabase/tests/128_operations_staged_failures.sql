@@ -234,9 +234,9 @@ insert into public.service_requests(id,customer_id,contractor_id,service_type,ad
 insert into public.money_obligations(id,service_request_id,customer_id,contractor_id)
  select ('c75c3000-0000-4000-8000-00000000000'||n)::uuid, pg_temp.r(n), pg_temp.u(3), 'c75c1000-0000-4000-8000-000000000001' from generate_series(4,5) n;
 insert into public.money_snapshots(id,obligation_id,revision,invoice_number,service,addons,discount,adjustment,subtotal,tax,tip,deposit,total,currency,
-  source_version,policy_version,tax_evidence,created_by,approved_by,reason,expires_at)
+  source_version,policy_version,tax_evidence,created_by,approved_by,reason,expires_at,commission_rate_bps)
  select ('c75c3100-0000-4000-8000-00000000000'||n)::uuid, ('c75c3000-0000-4000-8000-00000000000'||n)::uuid, 1, 'P75C-'||n, 20000,0,0,0,20000,0,0,0,20000,'usd',
-   'synthetic','CFG-005','synthetic',pg_temp.u(1),pg_temp.u(2),'Synthetic',now()+interval '1 day'
+   'synthetic','CFG-005','synthetic',pg_temp.u(1),pg_temp.u(2),'Synthetic',now()+interval '1 day',1000
  from generate_series(4,5) n;
 update public.money_obligations set current_snapshot_id = ('c75c3100-0000-4000-8000-00000000000'||right(id::text,1))::uuid where id::text like 'c75c3000-%';
 insert into public.money_checkout_attempts(id,obligation_id,snapshot_id,customer_id,mode,amount,currency,business_key,stripe_idempotency_key,status,expires_at,created_at)

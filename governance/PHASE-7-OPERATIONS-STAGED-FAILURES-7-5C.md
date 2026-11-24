@@ -122,6 +122,20 @@ Each mutation rewrites one live function inside SQL 128's own transaction (appli
 
 #198 (head `f3eb7e2`, open) changes money functions, `scripts/promotion-money-fingerprint.sql` and adds migration `20261201001000` and `supabase/tests/127_pilot_standard_commission.sql`. This slice reads none of its changes: the baseline above is `main`'s. Naming: #198's SQL file shares the `127` prefix with `main`'s `127_operations_summary_truth.sql` (two files with one prefix already exist at `122`; the runner globs every file, so both run). SQL 128 avoids both. If #198 renumbers before merge, it should not take `128`.
 
+### 6.1 Reconciled with `main` after #198 merged (2026-11-24 ET)
+
+#198 merged as `7f66d9a` (2026-11-24 12:43:40 UTC). `main` was merged into this branch as `373861c`; its CI (pull-request run 45407981719) failed in "Database role and money contracts": SQL 128's SF-3 fixture inserts `money_snapshots` directly, and #198's migration `20261201001000` made `commission_rate_bps` NOT NULL with no default.
+
+| Item | Value |
+|---|---|
+| Fix | The SF-3 fixture stamps `commission_rate_bps = 1000` (the pilot standard rate in effect since the push) on its two synthetic snapshots. No assertion, expectation, scenario or count changed; SF-3 reads no commission |
+| Base | `main` `7f66d9a`: 237 migrations, latest `20261201001000` |
+| Money fingerprint (`scripts/promotion-money-fingerprint.sql` as on `main` `7f66d9a`) | `61 \| eb3f9702d45f9f22e61f6a7da17349c4`, equal to #198's recorded hosted readback. This replaces §5.1's `58 \| af0fae6e…` as the current baseline; §5.1 stays as the evidence for the original base |
+| SQL 128 | 147/147 (unchanged count); same-day branch exercised: `same_day` (run inside weekday hours, SD-2) |
+| Full SQL suite (`supabase test db`, CI's step) | 121 files, 8843 tests, PASS (8765 + #198's 78) |
+
+The §5.1 function/table/trigger fingerprints were taken with an unrecorded query; they are not re-derived here. 7.5D records its own baseline with a stated query.
+
 ## 7. 7.5B merged status (reconciled; separate from hosted evidence)
 
 | Item | Status | Source |

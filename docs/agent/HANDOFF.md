@@ -8,6 +8,7 @@
 - **#198:** checked, not incorporated; its `127_pilot_standard_commission.sql` shares the `127` prefix with `main`; 7.5C uses `128`.
 - **Not done:** no migration, application change, hosted query, email, scheduler, booking, payment or policy change; not merged. Not Phase 7 acceptance.
 - **Next:** Codex reviews the PR (R-1..R-6, record §8); owner decides the main CI rerun.
+- **Reconciled (2026-11-24 ET):** `main` `7f66d9a` (#198) merged in as `373861c`; SQL 128's SF-3 fixture now stamps `commission_rate_bps = 1000` (#198 made it NOT NULL). No assertion changed. SQL 128 147/147; full suite 121 files / 8843 PASS; money `61 | eb3f9702…` (record §6.1).
 
 # Pilot standard commission 10% (DEC-2026-067, TRACE-160) — 2026-11-23 ET
 
