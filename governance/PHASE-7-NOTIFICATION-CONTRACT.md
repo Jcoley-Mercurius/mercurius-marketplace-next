@@ -132,6 +132,7 @@ This document is also the 7.2A handoff (§13). It does not edit `docs/agent/HAND
 | Dedupe | **No dedupe key and no unique constraint** on the table. Duplicate prevention relies entirely on each command's guard: per-request advisory lock + `FOR UPDATE`, operation or response keys with replay that returns before notifying, version checks, or duplicate-transition refusal. A replayed command writes no second row where it returns early; this is listed per event |
 | Realtime | Table in `supabase_realtime`, `REPLICA IDENTITY FULL`. The hook subscribes per user and shows "Live notification updates are temporarily unavailable" on channel error ([useNotifications.ts:103](../src/hooks/useNotifications.ts#L103)). The isolated local stack excludes realtime |
 | Readback | **Homeowner:** bell ([Header.tsx:185](../src/components/layout/Header.tsx#L185)), sidebar, `/notifications` ([page.tsx:19](../src/app/%28homeowner%29/notifications/page.tsx#L19)) with loading, empty, error-with-retry, mark read and mark all read. The link is sanitized to a local path; a request-related row opens `/dashboard?job=<id>` ([page.tsx:181](../src/app/%28homeowner%29/notifications/page.tsx#L181)). **Vendor:** none (no nav item in [VendorSidebar.tsx:13](../src/components/vendor/VendorSidebar.tsx#L13); `/notifications` redirects non-homeowners). **Admin:** none. Operators work from queues |
+| Readback update (2026-11-24 ET, 7.5E) | **Admin:** `/admin/notifications` lists the rows addressed to the signed-in admin's own account (owner approval of OD-5, limited: [DEC-2026-068](DECISION-LOG.md); [7.5E record](PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md)). Because "Admins can view all notifications" lets an admin read every row, every query and the realtime subscription name the operator's `user_id`. Stored text is shown as text; links map to existing admin routes. In-app only: it sends nothing and is not evidence that anyone was alerted. The Readback row above ("Admin: none") is kept as history |
 | Retention | No retention or purge job. Recipients can delete their own rows. Whether rows are "platform messages" under CFG-011 (3 years) is not decided |
 | Browser evidence | No browser test of `/notifications` or the bell. `early-access-account.spec.ts:99` checks only that the nav link exists |
 
@@ -385,7 +386,7 @@ The only explicit channel decisions are DEC-2026-063 (in-app, offer terms) and D
 |---|---|
 | G3-01 | MPS §10 channel and fallback per event group (in-app only, email, both), including payment, payout and exhaustion notices |
 | G3-02 | Reminders (offer expiry, quote expiring, confirmation reminder) and quiet hours: none approved; DEC-2026-010 keeps timing inactive |
-| G3-03 | Admin in-app rows: keep writing them, build an admin readback, or stop them. Queues are the approved operator surface |
+| G3-03 | Admin in-app rows: keep writing them, build an admin readback, or stop them. Queues are the approved operator surface. **Partly answered 2026-11-24 ET ([DEC-2026-068](DECISION-LOG.md)):** keep writing them, and an admin readback of the operator's own rows is approved and built (7.5E). Stopping any of them is not decided; queues remain the operator's record of open work |
 | G3-04 | Customer cancellation writes two notices per participant (N-CXL-01). Keep both, or one with an approved text |
 | G3-05 | Free text in recipient notices: operator reasons and notes (appointments, dispute notes, waivers, stop closures) and the **actor's** reason in `record_job_operation` go verbatim to the other party. Approve, restrict, or template. **Also a 7.2B dependency:** vendor readback would show these reasons to vendors for the first time (N-APT-01..03, N-FUL-07, N-CXL-01/02). A date cutoff (G3-07) does not help, because new notices carry the same text |
 | G3-06 | Notification retention class (CFG-011 "platform messages" 3 years?) and whether recipients may delete rows |
@@ -542,7 +543,9 @@ The homeowner page keeps its current behavior unless Codex asks for the same cor
 - Codex confirmed B1, R1 (b), R2 (b) and R3 (b) ("Mark visible as read");
 - the type-and-month hosted aggregate was **not** run and is not authorized.
 
-Implementation and evidence: [PHASE-7-VENDOR-NOTIFICATION-READBACK](PHASE-7-VENDOR-NOTIFICATION-READBACK.md). Two differences from the scope list above:
+Implementation and evidence: [PHASE-7-VENDOR-NOTIFICATION-READBACK](PHASE-7-VENDOR-NOTIFICATION-READBACK.md).
+
+**Update 2026-11-24 (7.5E, TRACE-159).** The proposal's "Admin readback: no authority (G3-03)" no longer holds: the owner approved OD-5 only for an admin page of the operator's own notices ([DEC-2026-068](DECISION-LOG.md)). 7.5E reuses this slice's hook (moved to `useOwnNotifications`, vendor behavior unchanged), keyset and link parser; its record is [PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E](PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md). DEC-2026-065's controlled wording stays vendor-only. Two differences from the scope list above:
 - the vendor page uses its own hook and row component, so homeowner behavior is unchanged;
 - item 5's "shows stored text" is superseded by DEC-2026-065: the vendor page shows controlled wording only.
 ---

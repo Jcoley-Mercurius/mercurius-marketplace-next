@@ -271,6 +271,25 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-068 — OD-5, limited: an admin page showing the in-app notices addressed to the signed-in operator
+
+**Status:** **APPROVED, limited**, by the owner (Josh), 2026-11-24 (America/New_York). **Date:** 2026-11-24.
+
+**Source of approval.** The owner's Phase 7.5E implementation instruction (2026-11-24): "I approve OD-5 only for an admin page displaying existing notifications addressed to the signed-in operator. This does not approve external alert services, email alerts, new notification producers or automation."
+
+**What it settles.**
+- **OD-5 (operator alert channel), first step only.** The [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) §9 recommended "admin in-app readback first (rows already written)". That step is approved: an admin page lists the existing `public.notifications` rows whose recipient is the signed-in operator's own account.
+- **NM-1 G3-03, in part.** Admin in-app rows keep being written by their existing producers, and an admin readback is built. Whether to stop any of them is not decided.
+
+**What it is not.**
+- Not an external alert service, an email or SMS alert, a push notification, an error-monitoring or uptime provider (MTS §15 item 6 stays undecided), or a named alert recipient. HQ-6 ("alert delivered to the named recipient") stays unmet.
+- Not a new notification producer, a changed producer, recipient or copy, a scheduler, retry, reminder, breach detector or new SLA threshold (OD-1, OD-2, OD-6 stay open).
+- Not a view of other accounts' notices. Admins can read every row under RLS ("Admins can view all notifications"); this approval covers only the operator's own.
+- Not evidence that anyone was alerted. A row listed or marked read on the page shows only that an in-app record exists and that the operator opened the page.
+- Not a retention decision (NM-1 G3-06), a production query, data cleanup, hosted push, merge or deployment.
+
+**Implementation:** TRACE-159, Phase 7.5E ([record](PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md)). Technical choices made in implementation (navigation position, stored text shown as text, request-record mapping, shared hook) are listed there for Codex review and are not owner policy. **Reads:** DEC-2026-065 (vendor readback; its controlled-wording rule is vendor-specific and not extended here); DEC-2026-025 (Josh sole admin in R0). **Not changed:** DEC-2026-010; every 7.3D email activation gate.
+
 ### DEC-2026-067 — Pilot standard commission 10%; promotional half-rate 5%; prospective only
 
 **Status:** APPROVED owner decision (Josh), implementation task of 2026-11-23 ("Implement the approved Mercurius Marketplace pilot commission change from 15% to 10%"). **Date:** 2026-11-23 (America/New_York). Implementation: TRACE-160, record [PILOT-COMMISSION-10.md](PILOT-COMMISSION-10.md).

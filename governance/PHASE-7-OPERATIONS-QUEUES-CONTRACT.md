@@ -1,7 +1,7 @@
 # Phase 7.5A — Operations queues, ownership and SLA contract (TRACE-159)
 
 **Status:** CONTRACT FOR REVIEW (Codex), revision 2. Documentation and planning only. It approves no policy, sets no threshold, implements nothing and activates nothing.
-**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12). Revision 3 (2026-11-23 ET) adds only the §7.1 coverage note for 7.5C.
+**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12). Revision 3 (2026-11-23 ET) adds only the §7.1 coverage note for 7.5C. Revision 4 (2026-11-24 ET) adds the 7.5D DF-3 notes. Revision 5 (2026-11-24 ET) adds only the 7.5E notes on X-4, OD-5 and §10 (DEC-2026-068).
 **Checkpoint (revision 2):** 2026-11-22 (America/New_York), `main` `83c8fea` (#194 merge), merged into this branch. Every source reference below was rechecked at this commit: #194 changed no migration and no admin source, so all line references still hold.
 **Original baseline (history, 2026-11-22 ET):** `main` `63c8010` (#193 merge), the commit the first revision was written against (§1).
 **Branch:** `claude/phase7-5a-operations-queues-contract`, from `main` `63c8010`, with `main` `83c8fea` merged.
@@ -70,6 +70,7 @@
 | X-2 | **Read-time aging.** Every queue function computes items at `now()` from source rows. Nothing stores "entered queue", "aged", "breached" or "acknowledged", except the records named per queue in §4 | DEC-2026-045 implementation choice 8 |
 | X-3 | **No scheduler.** Supabase Cron is selected but no job is installed or active. `run_lifecycle_batch` (quote expiry, offer expiry, completion notices, 72-hour escalation) runs only when called. Offer and quote expiry also run when `/admin/requests`, the homeowner dashboard or vendor jobs load (`expire_stale_matches`, F613-17) | [SUPABASE-CRON-SETUP](SUPABASE-CRON-SETUP.md); [run_lifecycle_batch](../supabase/migrations/20260904007000_phase4_confirmation_schedule.sql#L3); [requests/page.tsx:233](../src/app/admin/requests/page.tsx#L233) |
 | X-4 | **No alert channel.** Admin in-app rows are written for applications, quotes, fulfillment, disputes, support and cancellations, but no admin screen lists them (NM-1 §4.1). Owner email covers vendor applications, contact submissions and renewal documents only. No error/uptime provider is in `package.json`, and MTS §15 item 6 is undecided | NM-1 §4.1, §5.0 |
+| X-4 note | **7.5E (2026-11-24 ET, revision 5):** the owner approved OD-5 only for an admin page listing the existing in-app notices addressed to the signed-in operator (DEC-2026-068). [`/admin/notifications`](../src/app/admin/notifications/page.tsx) implements it ([7.5E record](PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md)). Admin rows are now readable by their recipient, in the app only. Still no external alert channel, no email or push, and no error/uptime provider: a listed or read notice is not evidence that anyone was alerted. The X-4 row above is kept as history | [DEC-2026-068](DECISION-LOG.md) |
 | X-5 | **Summary surface.** `admin_operations_summary` (TRACE-136 A8) feeds `/admin`. SQL 108 asserts count parity with each queue. **Aged parity is not asserted** | [summary](../supabase/migrations/20261109001000_phase6_admin_operations_review_fixes.sql#L329); [SQL 108](../supabase/tests/108_admin_operations.sql) |
 | X-6 | **Access.** Every reader is `SECURITY DEFINER`, refuses non-operators with `42501` and is not granted to `anon`. Finance requires money authority (`restricted`, not `error`, on denial; SQL 108 Q3–Q5). Owner email requires `vendor_require_operator` | Per queue, §4 |
 | X-7 | **Reachability.** R1 is not open and R0 admission is default-closed, so the request, quote, payment, fulfillment and payout queues should receive no Production items (AC-1 §6). Not queried | AC-1 §6 |
@@ -282,7 +283,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | OD-2 | Who runs the breach detector: operator control (as the 7.3D-2 purge control does) or the scheduler | Breach-record slice | Operator control first; scheduler under the DEC-2026-003 activation sequence |
 | OD-3 | Eligible-pool record definition (§6.2) | Pool-record slice | Count at each matching run, after excluding earlier attempts, with gate-blocked counted separately |
 | OD-4 | "Sourced" (§6.3) | Any liquidity measure of it | Option (a): none in beta |
-| OD-5 | Operator alert channel and recipient (admin in-app readback, owner email, external provider per MTS §15 item 6) | Any alert slice; HQ-6 | Admin in-app readback first (rows already written); external provider as a separate MTS decision |
+| OD-5 | Operator alert channel and recipient (admin in-app readback, owner email, external provider per MTS §15 item 6) | Any alert slice; HQ-6 | Admin in-app readback first (rows already written); external provider as a separate MTS decision. **Partly decided 2026-11-24 ET (DEC-2026-068):** approved only for the admin page showing existing notices addressed to the signed-in operator (7.5E). External alert services, email alerts, new producers and automation are not approved; the channel and named recipient for HQ-6 stay open |
 | OD-6 | Thresholds for queues with none (§4) | Aging those queues | Keep none until the pilot baseline (MPS §2) |
 | OD-7 | Delegated operations owner for R1 (CFG-010; DEC-2026-025 does not carry) | R1 gate | Record before R1 |
 | CD-1 | (Codex) What counts as a support "response" for DF-3 | DF-3 repair | **Recorded as Codex's technical direction (2026-11-22 ET, 7.5A review):** the first participant-visible operations message counts as a response. Internal notes, assignment changes and status changes do not. This is technical direction for 7.5D, not an owner policy decision; it sets no new target (CFG-010 stays the target) |
@@ -294,7 +295,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 1 | **7.5B** summary truth repair (§8) | Codex review; owner push authorization |
 | 2 | **7.5C** staged-failure characterization tests (§7.1), tests only | 7.5B merged (SF-12 expects `null`) |
 | 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9). Implemented for review 2026-11-24 ET, after 7.5C merged ([record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md)) |
-| 4 | **7.5E** admin in-app readback, so existing admin rows become the first alert surface | OD-5 |
+| 4 | **7.5E** admin in-app readback, so existing admin rows become the first alert surface | OD-5. Implemented for review 2026-11-24 ET under DEC-2026-068 (OD-5 limited), no migration ([record](PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md)) |
 | 5 | **7.5F** breach observation records and operator detector | OD-1, OD-2 |
 | 6 | **7.5G** server sourcing and applications queues (no thresholds) | OD-4 for sourcing wording |
 | 7 | Pool record | OD-3 |
@@ -314,6 +315,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 2 | 2026-11-22 | `main` `83c8fea` merged | Codex's 7.5A review, below. No finding, status or recommendation changed beyond these |
 | 3 | 2026-11-23 | `main` `126c85f` (7.5B merged) | §7.1 coverage note for 7.5C (SQL 128) with discrepancies SD-1 and SD-2 for Codex. No expectation, status or recommendation changed |
 | 4 | 2026-11-24 | `main` `7f66d9a` + #199 `6a753f3`; rebased onto `main` `aeb20e4` (#199 merged, same tree) | 7.5D: dated DF-3 repair note (§5.3), SF-9 note (§7.1), sequence status (§10). Original rows kept as history; no other expectation, status or recommendation changed |
+| 5 | 2026-11-24 | `main` `dcc62e1` (#201, 7.5D, merged) | 7.5E: X-4 note (§3), OD-5 partly decided (§9, DEC-2026-068), sequence status (§10). No expectation, threshold or other decision changed. §7.1 SF-6b and SF-8 call their admin rows "(write-only)": since 7.5E each admin can read their own copy in the app; SQL 128 asserts the rows, not their readability, so no assertion changes. The "alert: none" pins stay, because an in-app row for an admin is not an alert delivered to anyone |
 
 **Codex 7.5A review, applied in revision 2:**
 

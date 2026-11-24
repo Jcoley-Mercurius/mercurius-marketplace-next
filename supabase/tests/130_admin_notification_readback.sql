@@ -107,7 +107,7 @@ select ok((pg_temp.call(1, format('select to_jsonb(count(*)) from public.notific
 select is((select count(*) from pg_policy where polrelid = 'public.notifications'::regclass), 5::bigint, 'notifications still has its five policies');
 select is((select pg_get_expr(polqual, polrelid) from pg_policy where polrelid = 'public.notifications'::regclass and polname = 'Admins can view all notifications'),
   'has_role(auth.uid(), ''admin''::app_role)', 'the admin read policy is unchanged');
-select is((select pg_get_expr(polqual, polrelid) || ' / ' || pg_get_expr(polwithcheck, polrelid) from pg_policy where polrelid = 'public.notifications'::regclass and polcmd = 'w'),
+select is((select string_agg(coalesce(pg_get_expr(polqual, polrelid), 'none') || ' / ' || coalesce(pg_get_expr(polwithcheck, polrelid), 'none'), ' | ') from pg_policy where polrelid = 'public.notifications'::regclass and polcmd in ('w', '*')),
   '(auth.uid() = user_id) / (auth.uid() = user_id)', 'the only UPDATE policy is own-row, for admins too');
 select is((select count(*) from pg_policy where polrelid = 'public.notifications'::regclass and polcmd in ('w', 'd') and pg_get_expr(polqual, polrelid) like '%has_role%'), 0::bigint,
   'no admin UPDATE or DELETE policy exists');

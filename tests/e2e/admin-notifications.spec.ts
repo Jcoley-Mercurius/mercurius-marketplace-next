@@ -297,11 +297,15 @@ test("mark visible as read changes only the operator's loaded, displayed unread 
 });
 
 test("opening a notice marks it read once, by keyboard, and goes to its validated admin destination", async ({ page }) => {
+  test.slow(); // three navigations into admin pages
   const store = seeded();
   await openPage(page, store);
   await expect(rows(page)).toHaveCount(25);
 
+  // Tab order: the header action, the in-app note's Overview link, then the first notice.
   await page.getByRole("button", { name: "Mark visible as read" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(main(page).getByRole("region", { name: "In-app notices only" }).getByRole("link", { name: "Overview" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(rowFor(page, 1)).toBeFocused();
   expect(await rowFor(page, 1).evaluate((n) => getComputedStyle(n).boxShadow)).not.toBe("none");
@@ -456,8 +460,9 @@ test("route access: anonymous, vendor and homeowner sessions cannot open the adm
   for (const role of ["vendor", "homeowner"] as const) {
     await page.context().clearCookies();
     await syntheticSession(page.context(), role);
-    await page.goto("/admin/notifications");
-    await expect(page).not.toHaveURL(/\/admin/);
+    // The proxy redirects before any admin page renders; the public home page's own load is not under test.
+    await page.goto("/admin/notifications", { waitUntil: "commit" });
+    await expect(page).toHaveURL("http://127.0.0.1:3103/");
     await expect(page.getByRole("navigation", { name: "admin navigation" })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "In-app notices only" })).toHaveCount(0);
     if (role === "vendor") expect(reads).toHaveLength(0);
