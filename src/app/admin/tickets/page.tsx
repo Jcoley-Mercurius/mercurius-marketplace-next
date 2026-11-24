@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { formatAppointment } from "@/lib/appointments";
 import {
-  describeSupportError, disputeStatusLabel, newRequestKey, ticketFollowsDecision, ticketKindLabel, ticketStatusLabel,
+  describeSupportError, disputeStatusLabel, firstReplyCell, newRequestKey, ticketFollowsDecision, ticketKindLabel, ticketStatusLabel,
   type QueueItem, type SupportQueue, type SupportTicket, type TicketStatus,
 } from "@/lib/support";
 
@@ -24,6 +24,7 @@ const statuses: TicketStatus[] = ["open", "in-progress", "resolved", "closed"];
 
 // TRACE-133: the operations support queue. Every change goes through a versioned, reasoned command
 // with history; dispute tickets follow the dispute decision; nothing here moves money or a hold.
+// Phase 7.5D (DF-3): "overdue" = open, awaiting a first reply, past the CFG-010 target.
 export default function AdminTicketsPage() {
   const [queue, setQueue] = useState<SupportQueue | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +58,7 @@ export default function AdminTicketsPage() {
       <Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw aria-hidden="true" />Refresh</Button>
     </header>
     {queue && <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {([["Open", queue.counts.open], ["Overdue", queue.counts.overdue], ["Same-day", queue.counts.same_day], ["Unassigned", queue.counts.unassigned]] as const)
+      {([["Open", queue.counts.open], ["Awaiting first reply — overdue", queue.counts.overdue], ["Same-day", queue.counts.same_day], ["Unassigned", queue.counts.unassigned]] as const)
         .map(([label, value]) => <div key={label} className="rounded-xl border bg-card p-4"><dt className="text-sm text-muted-foreground">{label}</dt><dd className="text-2xl font-semibold">{value}</dd></div>)}
     </dl>}
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -79,8 +80,8 @@ export default function AdminTicketsPage() {
             { key: "kind", label: "Type", render: (row) => <>{ticketKindLabel(row.kind)}{row.dispute_status && <span className="block text-xs text-muted-foreground">Dispute: {disputeStatusLabel[row.dispute_status]}</span>}</> },
             { key: "requester", label: "Requester", render: (row) => row.requester ?? "—" },
             { key: "age", label: "Opened", render: (row) => formatAppointment(row.created_at) },
-            { key: "due", label: "Response due", render: (row) => <span className={row.overdue ? "font-semibold text-destructive" : ""}>
-              {row.response_due_at ? formatAppointment(row.response_due_at) : "—"}{row.overdue ? " · overdue" : ""}{row.priority === "same_day" ? " · same-day" : ""}</span> },
+            { key: "due", label: "First reply", render: (row) => { const cell = firstReplyCell(row);
+              return <span className={cell.overdue ? "font-semibold text-destructive" : ""}>{cell.text}</span>; } },
             { key: "owner", label: "Owner", render: (row) => row.assignee ?? "Unassigned (project owner)" },
             { key: "next", label: "Next action", render: (row) => row.next_action },
             { key: "status", label: "Status", render: (row) => ticketStatusLabel[row.status] },

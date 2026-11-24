@@ -17,17 +17,18 @@ export type SupportTicket = {
   response_due_at: string | null; priority: "standard" | "same_day"; version: number;
   job: { id: string; service_type: string; status: string } | null;
   can_reply: boolean; messages: TicketMessage[];
-  // Operations view only.
+  // Operations view only. first_response_at: the earliest operations reply visible to participants
+  // (a recorded reply, not proof it was read); overdue: open, no such reply, past the target (7.5D).
   requester?: { user_id: string; name: string | null; role: "homeowner" | "provider" };
   opened_by?: string | null; next_action?: string; assigned_to?: string | null; assignee?: string | null;
-  overdue?: boolean; history?: TicketHistory[];
+  first_response_at?: string | null; overdue?: boolean; history?: TicketHistory[];
   dispute?: { dispute_id: string; status: DisputeStatus; resolution_version: number } | null;
   review_appeal?: { review_id: string; moderation_state: string; decided: boolean } | null;
 };
 export type QueueItem = {
   ticket_id: string; ticket_number: string; subject: string; kind: TicketKind; status: TicketStatus;
   priority: "standard" | "same_day"; created_at: string; updated_at: string; response_due_at: string | null;
-  overdue: boolean; next_action: string; queue_owner: string; version: number; assigned_to: string | null;
+  first_response_at?: string | null; overdue: boolean; next_action: string; queue_owner: string; version: number; assigned_to: string | null;
   assignee: string | null; requester: string | null; job_id: string | null; dispute_status: DisputeStatus | null;
   decision_recorded: boolean | null; messages: number;
 };
@@ -97,6 +98,17 @@ export function responseDueText(ticket: Pick<SupportTicket, "status" | "response
   if (ticket.status === "resolved" || ticket.status === "closed" || !ticket.response_due_at) return null;
   const when = formatAppointment(ticket.response_due_at);
   return ticket.priority === "same_day" ? `Same-day priority · response by ${when}` : `Response expected by ${when}`;
+}
+
+// Operations queue, "First reply" column (Phase 7.5D, TRACE-159, DF-3). The server decides both facts:
+// first_response_at is the earliest operations reply visible to participants, and overdue means open,
+// no such reply, past the original target. A reply is shown as recorded, never as read or delivered.
+export function firstReplyCell(item: Pick<QueueItem, "first_response_at" | "response_due_at" | "overdue" | "priority">) {
+  const sameDay = item.priority === "same_day" ? " · same-day" : "";
+  const when = (value: string) => formatAppointment(value) ?? value;
+  if (item.first_response_at) return { text: `Replied ${when(item.first_response_at)}${sameDay}`, overdue: false };
+  if (!item.response_due_at) return { text: `—${sameDay}`, overdue: false };
+  return { text: `Due ${when(item.response_due_at)}${item.overdue ? " · overdue" : ""}${sameDay}`, overdue: item.overdue };
 }
 
 // Separate money facts in plain words. A decision is not a refund, an authorization is not money
