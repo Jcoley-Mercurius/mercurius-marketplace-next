@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Archive, BadgePercent, BarChart3, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, Mail, MailCheck, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Archive, BadgePercent, BarChart3, Bell, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, Mail, MailCheck, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -49,7 +49,10 @@ export const navigationGroups: { label: string; items: NavEntry[] }[] = [
   ] },
 ];
 const overview: NavEntry = { label: "Overview", href: "/admin", icon: LayoutDashboard };
-const allEntries: NavEntry[] = [overview, ...navigationGroups.flatMap((group) => group.items)];
+// Phase 7.5E (TRACE-159, OD-5): the operator's own in-app notices span every queue, so the entry sits
+// with Overview, outside the task groups.
+export const primaryEntries: NavEntry[] = [overview, { label: "Notifications", href: "/admin/notifications", icon: Bell }];
+const allEntries: NavEntry[] = [...primaryEntries, ...navigationGroups.flatMap((group) => group.items)];
 
 
 export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -79,7 +82,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <nav aria-label="admin navigation" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
-        <NavLink item={overview} pathname={pathname} onNavigate={onNavigate} />
+        <ul className="space-y-1">{primaryEntries.map((item) => <li key={item.href}><NavLink item={item} pathname={pathname} onNavigate={onNavigate} /></li>)}</ul>
         {navigationGroups.map((group) => {
           const id = `admin-nav-${group.label.toLowerCase().replace(/[^a-z]+/g, "-")}`;
           return <section key={group.label} aria-labelledby={id}>

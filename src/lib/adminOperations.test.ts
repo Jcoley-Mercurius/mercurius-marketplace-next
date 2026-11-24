@@ -5,7 +5,7 @@ import {
   ADMIN_REQUEST_SELECT, SUMMARY_QUEUES, adminActionError, completedJobsText, createKeyStore, isCorrectableRequest, parseOperationsSummary,
   parseRequestsQuery, requestsQueryString, reviewSummaryText, STALE_REQUEST_MESSAGE,
 } from "./adminOperations";
-import { navigationGroups } from "@/components/admin/AdminSidebar";
+import { navigationGroups, primaryEntries } from "@/components/admin/AdminSidebar";
 
 describe("request keys", () => {
   it("reuses a key for the same intent and issues a new one for a different intent", () => {
@@ -192,8 +192,10 @@ describe("admin navigation", () => {
       }
     };
     walk(root);
-    const hrefs = navigationGroups.flatMap((group) => group.items.map((item) => item.href));
+    const hrefs = [...primaryEntries.slice(1), ...navigationGroups.flatMap((group) => group.items)].map((item) => item.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+    // Phase 7.5E: Overview, then the operator's own notices, outside the task groups.
+    expect(primaryEntries.map((item) => [item.label, item.href])).toEqual([["Overview", "/admin"], ["Notifications", "/admin/notifications"]]);
     const listed = routes.filter((route) => route !== "/admin" && !route.includes("[") && route !== "/admin/smart-picks");
     expect([...listed].sort()).toEqual([...hrefs].sort());
     expect(hrefs).not.toContain("/admin/smart-picks");
