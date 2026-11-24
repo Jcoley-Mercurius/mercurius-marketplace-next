@@ -53,7 +53,7 @@ const expectedRows = (finance: string) => [
   ["Recurring visit payments", "2", "1 aged"],
   ["Fulfillment follow-up", "3", "—"],
   ["Cancellation follow-up", "0", "—"],
-  ["Support tickets", "2", "1 past response target"],
+  ["Support tickets", "2", "1 awaiting first reply past target"],
   ["Compliance renewals", "0", "—"],
   ["Renewal documents", "0", "—"],
   ["Offers at other terms", "2", "—"],

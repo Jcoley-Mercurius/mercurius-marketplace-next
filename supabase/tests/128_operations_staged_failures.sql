@@ -6,7 +6,8 @@
 -- queue item, alert, audit record and communication. Expected values are CURRENT behavior, pinned.
 -- Where a producer is missing the test asserts the gap ("alert: none"), so a later slice has to change
 -- the expectation on purpose. Passing here is characterization only: it is NOT Phase 7 gate acceptance
--- (contract §7.1, RV-4). SF-9 pins a KNOWN DEFECT (DF-3); SF-12 pins the 7.5B repair of DF-1.
+-- (contract §7.1, RV-4). SF-9 pinned a KNOWN DEFECT (DF-3) until 7.5D repaired it (2026-11-24: its
+-- expectations were changed on purpose, see SF-9); SF-12 pins the 7.5B repair of DF-1.
 --
 -- Real database functions throughout: the queue readers, run_lifecycle_batch, expire_stale_matches,
 -- the offer and acceptance commands, vendor_propose_quote, admin_send_itemized_quote, the Stripe
@@ -439,10 +440,12 @@ select is(((pg_temp.ticket('t.t3')).priority, (pg_temp.ticket('t.t3')).response_
 select is(pg_temp.delta('sf8', 'communication'), '{}'::jsonb, 'SF-8c communication: still none to the requester');
 
 -- ================================================================================================
--- SF-9  KNOWN DEFECT DF-3 (contract §5.3; repair is 7.5D under CD-1). An operator replies before the
--- due time; the clock passes it. Current behavior: overdue = true, because "past response target"
--- measures "still open", not "not yet answered". Alert none. Audit: the message row. Communication:
--- N-SUP-03 to the requester. These assertions pin the defect; 7.5D must change them on purpose.
+-- SF-9  DF-3 (contract §5.3), repaired by 7.5D under CD-1 (migration 20261202001000). An operator
+-- replies before the due time; the clock passes it. 7.5C pinned the defect here (overdue = true:
+-- "past response target" measured "still open"). 7.5D changed these expectations on purpose: a
+-- ticket is overdue only while open or in progress, with no operations participant reply, past its
+-- original target. Alert none. Audit: the message row. Communication: N-SUP-03 to the requester.
+-- The full first-reply coverage is SQL 129.
 select pg_temp.mark('sf9');
 select pg_temp.call(1, format('select public.post_support_message(%L, %L, %L)', current_setting('t.t1'), pg_temp.k(91), 'Synthetic operations answer'));
 select is((select array_agg(author_role||'/'||visibility) from public.support_ticket_messages where ticket_id = current_setting('t.t1')::uuid), array['operations/participant'],
@@ -456,17 +459,20 @@ select pg_temp.backdate(format($b$update public.support_tickets set created_at =
 select pg_temp.backdate(format($b$update public.support_ticket_messages set created_at = now() - interval '1 hour' where ticket_id = %L$b$, current_setting('t.t1')));
 create function pg_temp.support_item(k text, include_closed boolean default false) returns jsonb language sql as $$
   select i from jsonb_array_elements(pg_temp.call(1, format('select public.admin_support_queue(%L)', include_closed))->'items') i where (i->>'ticket_id')::uuid = current_setting(k)::uuid $$;
-select is(pg_temp.support_item('t.t1')->>'overdue', 'true', 'SF-9 KNOWN DEFECT DF-3: answered before the due time, yet overdue once it passes');
-select is((pg_temp.support_item('t.t1')->>'messages')::int, 1, 'SF-9 KNOWN DEFECT DF-3: the queue itself shows the reply');
-select ok((pg_temp.call(2, $q$select r from jsonb_array_elements(public.admin_operations_summary()->'queues') r where r->>'queue' = 'support'$q$)->>'aged')::int >= 1,
-  'SF-9 KNOWN DEFECT DF-3: the overview counts it "past response target"');
--- The other half of DF-3: a ticket closed without any reply is never overdue.
+select is(pg_temp.support_item('t.t1')->>'overdue', 'false', 'SF-9 (7.5D, DF-3 repaired): answered before the due time, not overdue once it passes');
+select is((pg_temp.support_item('t.t1')->>'first_response_at')::timestamptz, now() - interval '1 hour', 'SF-9 (7.5D): the queue reports the first reply time');
+select is((pg_temp.support_item('t.t1')->>'messages')::int, 1, 'SF-9: the queue itself shows the reply');
+select is((pg_temp.call(2, $q$select r from jsonb_array_elements(public.admin_operations_summary()->'queues') r where r->>'queue' = 'support'$q$)->>'aged')::int,
+  (select count(*)::int from jsonb_array_elements(pg_temp.call(1, 'select public.admin_support_queue(false)')->'items') i where (i->>'overdue')::boolean),
+  'SF-9 (7.5D): the overview counts only tickets awaiting a first reply past target (this answered one is not among them)');
+-- The other half of DF-3: a ticket closed without any reply leaves the queue; it was never answered.
 select pg_temp.mark('sf9_close');
 select pg_temp.call(1, format('select public.admin_update_support_ticket(%L, %L, 0, %L, null, null, %L)', current_setting('t.t3'), pg_temp.k(92), 'closed', 'Synthetic closure without reply'));
 select pg_temp.backdate(format($b$update public.support_tickets set response_due_at = now() - interval '1 hour' where id = %L$b$, current_setting('t.t3')));
-select is(pg_temp.support_item('t.t3'), null, 'SF-9 KNOWN DEFECT DF-3: closed without a reply, it leaves the open queue');
-select is(pg_temp.support_item('t.t3', true)->>'overdue', 'false', 'SF-9 KNOWN DEFECT DF-3: and is never overdue, though never answered');
-select is((select count(*)::int from public.support_ticket_messages where ticket_id = current_setting('t.t3')::uuid), 0, 'SF-9 KNOWN DEFECT DF-3: no reply exists');
+select is(pg_temp.support_item('t.t3'), null, 'SF-9: closed without a reply, it leaves the open queue');
+select is(pg_temp.support_item('t.t3', true)->>'overdue', 'false', 'SF-9 (7.5D): closed, it is not overdue (overdue applies to open or in-progress work only)');
+select is(pg_temp.support_item('t.t3', true)->>'first_response_at', null, 'SF-9 (7.5D): and the queue reports no first reply (never answered)');
+select is((select count(*)::int from public.support_ticket_messages where ticket_id = current_setting('t.t3')::uuid), 0, 'SF-9: no reply exists');
 select is(pg_temp.delta('sf9_close', 'alert'), '{}'::jsonb, 'SF-9 closure alert: none');
 select is(pg_temp.delta('sf9_close', 'communication'), '{}'::jsonb, 'SF-9 closure communication: none (the requester is not told)');
 

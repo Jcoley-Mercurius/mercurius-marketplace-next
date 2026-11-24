@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  describeSupportError, payoutText, refundText, responseDueText, ticketFollowsDecision, ticketKindLabel,
+  describeSupportError, firstReplyCell, payoutText, refundText, responseDueText, ticketFollowsDecision, ticketKindLabel,
 } from "@/lib/support";
+import { formatAppointment } from "@/lib/appointments";
 
 // TRACE-133: support and dispute reads are described, never decided, here.
 
@@ -47,6 +48,36 @@ describe("response expectations", () => {
     expect(responseDueText({ status: "resolved", response_due_at: due, priority: "standard" })).toBeNull();
     expect(responseDueText({ status: "open", response_due_at: null, priority: "standard" })).toBeNull();
     expect(responseDueText({ status: "open", response_due_at: due, priority: "standard" })).not.toMatch(/24/);
+  });
+});
+
+describe("operations first reply (Phase 7.5D, DF-3)", () => {
+  const due = "2026-11-03T21:00:00Z";
+  const replied = "2026-11-03T18:00:00Z";
+  it("shows a recorded reply as replied, never as overdue, whatever else it is told", () => {
+    expect(firstReplyCell({ first_response_at: replied, response_due_at: due, overdue: false, priority: "standard" }))
+      .toEqual({ text: `Replied ${formatAppointment(replied)}`, overdue: false });
+    expect(firstReplyCell({ first_response_at: replied, response_due_at: due, overdue: true, priority: "standard" }))
+      .toEqual({ text: `Replied ${formatAppointment(replied)}`, overdue: false });
+  });
+  it("shows the target while awaiting a first reply, marked overdue only when the server says so", () => {
+    expect(firstReplyCell({ first_response_at: null, response_due_at: due, overdue: true, priority: "standard" }))
+      .toEqual({ text: `Due ${formatAppointment(due)} · overdue`, overdue: true });
+    expect(firstReplyCell({ first_response_at: null, response_due_at: due, overdue: false, priority: "standard" }))
+      .toEqual({ text: `Due ${formatAppointment(due)}`, overdue: false });
+  });
+  it("keeps the same-day marker and handles a missing target or an unparsable time", () => {
+    expect(firstReplyCell({ first_response_at: null, response_due_at: due, overdue: true, priority: "same_day" }).text)
+      .toBe(`Due ${formatAppointment(due)} · overdue · same-day`);
+    expect(firstReplyCell({ first_response_at: replied, response_due_at: due, overdue: false, priority: "same_day" }).text)
+      .toBe(`Replied ${formatAppointment(replied)} · same-day`);
+    expect(firstReplyCell({ first_response_at: null, response_due_at: null, overdue: false, priority: "standard" })).toEqual({ text: "—", overdue: false });
+    expect(firstReplyCell({ first_response_at: "not a time", response_due_at: due, overdue: false, priority: "standard" }).text).toBe("Replied not a time");
+  });
+  it("never says read, delivered or seen", () => {
+    for (const overdue of [true, false]) for (const first of [replied, null]) {
+      expect(firstReplyCell({ first_response_at: first, response_due_at: due, overdue, priority: "standard" }).text).not.toMatch(/read|deliver|seen/i);
+    }
   });
 });
 

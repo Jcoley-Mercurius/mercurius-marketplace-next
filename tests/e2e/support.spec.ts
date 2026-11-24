@@ -111,10 +111,10 @@ const queue = (items: Row[]): Row => ({ checked_at: "2030-11-01T15:00:00Z", coun
   operators: [{ user_id: "00000000-0000-4000-8000-000000000003", name: "Synthetic Operator" }], items });
 const queueItem = (over: Row = {}): Row => ({ ticket_id: "00000000-0000-4000-8000-0000000000a1", ticket_number: "TKT-101", subject: "Gate code", kind: "general",
   status: "open", priority: "standard", created_at: "2030-11-01T15:00:00Z", updated_at: "2030-11-01T15:00:00Z", response_due_at: "2030-11-01T21:00:00Z",
-  overdue: true, next_action: "Review and respond to the customer", queue_owner: "project_owner", version: 0, assigned_to: null, assignee: null,
+  first_response_at: null, overdue: true, next_action: "Review and respond to the customer", queue_owner: "project_owner", version: 0, assigned_to: null, assignee: null,
   requester: "Synthetic Homeowner", job_id: null, dispute_status: null, decision_recorded: null, messages: 1, ...over });
 const detail = (over: Row = {}): Row => ({ ...ticket(), requester: { user_id: "u1", name: "Synthetic Homeowner", role: "homeowner" }, opened_by: "Synthetic Homeowner",
-  next_action: "Review and respond to the customer", assigned_to: null, assignee: null, overdue: true, dispute: null, review_appeal: null,
+  next_action: "Review and respond to the customer", assigned_to: null, assignee: null, first_response_at: null, overdue: true, dispute: null, review_appeal: null,
   messages: [{ id: "n1", role: "operations", visibility: "internal", body: "Repeat caller", at: "2030-11-01T16:00:00Z", mine: true, author: "Synthetic Operator" }],
   history: [{ action: "opened", from: null, to: "open", reason: null, version: 0, at: "2030-11-01T15:00:00Z", by: "Synthetic Homeowner" }], ...over });
 
@@ -122,7 +122,7 @@ for (const [theme, width] of [["light", 1440], ["dark", 320]] as const) {
   test(`operations ${theme} ${width}px: queue shows owner, age, due and next action; triage sends the version read; stale is explained`, async ({ page }) => {
     const commands: Record<string, Row[]> = {};
     await page.route("**/rest/v1/rpc/admin_support_queue", route => route.fulfill({ json: queue([queueItem(), queueItem({ ticket_id: "00000000-0000-4000-8000-0000000000a2",
-      ticket_number: "TKT-102", subject: "Service dispute", kind: "dispute", dispute_status: "open", overdue: false })]) }));
+      ticket_number: "TKT-102", subject: "Service dispute", kind: "dispute", dispute_status: "open", first_response_at: "2030-11-01T18:00:00Z", overdue: false })]) }));
     await page.route("**/rest/v1/rpc/support_ticket_detail", async route => {
       const id = (route.request().postDataJSON() as Row)._ticket_id;
       return route.fulfill({ json: id === "00000000-0000-4000-8000-0000000000a2"
@@ -132,8 +132,16 @@ for (const [theme, width] of [["light", 1440], ["dark", 320]] as const) {
     await capture(page, /rest\/v1\/rpc\/admin_update_support_ticket$/, commands, () => ({ status: 409, body: { code: "40001", message: "This request changed since you opened it" } }));
     await open(page, "admin", "/admin/tickets", theme, width);
     await expect(page.getByRole("heading", { name: "Support queue" })).toBeVisible();
-    await expect(page.getByText("Overdue", { exact: true })).toBeVisible();
-    await expect(page.getByText(/· overdue/).filter({ visible: true }).first()).toBeVisible();
+    // Phase 7.5D (DF-3): overdue = awaiting a first reply past target. TKT-101 is unanswered past its
+    // target; TKT-102 was answered (both are past 2030-11-01 21:00Z in the mocked queue's terms).
+    await expect(page.getByText("Awaiting first reply — overdue", { exact: true })).toBeVisible();
+    await expect(page.getByText("Overdue", { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/^Due .*Nov 1, 2030.* · overdue$/).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByText(/^Replied .*Nov 1, 2030/).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByText(/· overdue/).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByText(/^Replied .*overdue/)).toHaveCount(0);
+    await expect(page.getByText("First reply", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByText("Response due", { exact: true })).toHaveCount(0);
     await axe(page);
     await noHorizontalScroll(page);
     await page.getByRole("button", { name: /TKT-101 Gate code/ }).first().click();

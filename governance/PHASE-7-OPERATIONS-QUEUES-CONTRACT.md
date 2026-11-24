@@ -146,6 +146,8 @@ Every timing rule an approved authority states. Anything not listed has **no app
 | DF-2 | The summary omits `admin_offer_terms_queue` (added 2026-11-17, after the summary) | Summary list ([:338](../supabase/migrations/20261109001000_phase6_admin_operations_review_fixes.sql#L338)); queue on `/admin/requests` ([:406](../src/app/admin/requests/page.tsx#L406)) | The overview, described as the open work in each queue, misses `rematch_failed` items, which can arise while the gate is off (NM-1 N-QTE-11) |
 | DF-3 | Support `overdue` is "open or in progress after `response_due_at`". A replied-to open ticket stays overdue; a ticket closed without a reply never is. The overview labels this "past response target" | [admin_support_queue](../supabase/migrations/20261103001000_phase6_support_disputes.sql#L692); `agedLabel` ([adminOperations.ts:47](../src/lib/adminOperations.ts#L47)) | Misstates CFG-010, a response target. The first operations reply visible to the requester is already derivable (`support_ticket_messages`, `author_role = 'operations'`, `visibility = 'participant'`) |
 
+**DF-3 repair (2026-11-24 ET, revision 4; 7.5D).** Migration `20261202001000` (for review, not pushed or merged): an open or in-progress ticket is overdue only when it has no qualifying reply and its original `response_due_at` has passed. A qualifying reply is the earliest `support_ticket_messages` row with `author_role = 'operations'` and `visibility = 'participant'` (CD-1, Codex R-2): a recorded reply, not proof of access, delivery or reading. `first_response_at` is in queue items and the operator detail only. `admin_operations_summary` is unchanged and follows the queue. Operator wording: "Awaiting first reply — overdue", "awaiting first reply past target", column "First reply". The table row above and Q-08 in §5.1 keep their original wording as history. Finding F-1 (provider- and operator-filed work items: the reply notice links the homeowner to a ticket they cannot open) is recorded in the [7.5D record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md) §4, not repaired.
+
 ---
 
 ## 6. Reconciliations
@@ -225,6 +227,8 @@ Expected values are **current behavior**, pinned. Where a gap exists, the check 
 
 **Coverage note (2026-11-23 ET, revision 3; 7.5C).** SF-1..SF-12 are implemented as local characterization in `supabase/tests/128_operations_staged_failures.sql` (147 assertions, real readers and producers, rolled back); scenario-to-test map in the [7.5C record](PHASE-7-OPERATIONS-STAGED-FAILURES-7-5C.md) §3. The expectations above are unchanged and still read as written. Two differences were found and are reported there, not repaired: **SD-1** (SF-7: while the offer-terms gate is off, a one-time exhaustion is also listed as `blocked_inactive` in offers at other terms, so "queue item: none" does not hold) and **SD-2** (SF-8: the same-day branch reads `now()` inside the routing trigger, so it is exercised only by a run inside weekday hours). SF-6b matches RV-1 exactly. SF-12 is `aged: null` since 7.5B. Still characterization only, not gate acceptance.
 
+**SF-9 note (2026-11-24 ET, revision 4; 7.5D).** DF-3 is repaired by 7.5D, and SQL 128's SF-9 assertions were changed on purpose: an operator reply before the due time leaves the ticket not overdue after it passes, and the overview counts only tickets awaiting a first reply past target. SF-9's row above keeps its 7.5C expectation as history. First-reply coverage is SQL 129 ([7.5D record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md) §5).
+
 ### 7.2 Hosted (future; each needs separate owner authorization)
 
 Preview builds share the production database (DEC-2026-037), so a hosted staged failure writes to Production. None is authorized. Each needs the same treatment as the 7.3D T-checks: named synthetic records, exact cleanup, a stop list, and an owner approval card.
@@ -289,7 +293,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 |---|---|---|
 | 1 | **7.5B** summary truth repair (§8) | Codex review; owner push authorization |
 | 2 | **7.5C** staged-failure characterization tests (§7.1), tests only | 7.5B merged (SF-12 expects `null`) |
-| 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9) |
+| 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9). Implemented for review 2026-11-24 ET, stacked on 7.5C ([record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md)) |
 | 4 | **7.5E** admin in-app readback, so existing admin rows become the first alert surface | OD-5 |
 | 5 | **7.5F** breach observation records and operator detector | OD-1, OD-2 |
 | 6 | **7.5G** server sourcing and applications queues (no thresholds) | OD-4 for sourcing wording |
@@ -309,6 +313,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 1 | 2026-11-22 | `main` `63c8010` | First contract (OQ-1) |
 | 2 | 2026-11-22 | `main` `83c8fea` merged | Codex's 7.5A review, below. No finding, status or recommendation changed beyond these |
 | 3 | 2026-11-23 | `main` `126c85f` (7.5B merged) | §7.1 coverage note for 7.5C (SQL 128) with discrepancies SD-1 and SD-2 for Codex. No expectation, status or recommendation changed |
+| 4 | 2026-11-24 | `main` `7f66d9a` + #199 `6a753f3` (7.5C, open) | 7.5D: dated DF-3 repair note (§5.3), SF-9 note (§7.1), sequence status (§10). Original rows kept as history; no other expectation, status or recommendation changed |
 
 **Codex 7.5A review, applied in revision 2:**
 

@@ -92,6 +92,8 @@ describe("operations summary against the database (7.5B)", () => {
       expect(Boolean(SUMMARY_QUEUES[row.queue].agedLabel), `${row.queue} agedLabel`).toBe(typeof row.aged === "number");
     }
     expect(SUMMARY_QUEUES.fulfillment.agedLabel).toBeUndefined();
+    // Phase 7.5D (DF-3): support's aged count is tickets awaiting a first reply past target.
+    expect(SUMMARY_QUEUES.support.agedLabel).toBe("awaiting first reply past target");
     expect(SUMMARY_QUEUES.offer_terms).toEqual({ label: "Offers at other terms", href: "/admin/requests#offer-terms-queue" });
   });
 
