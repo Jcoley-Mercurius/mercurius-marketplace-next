@@ -1,7 +1,7 @@
 # Phase 7.5A — Operations queues, ownership and SLA contract (TRACE-159)
 
 **Status:** CONTRACT FOR REVIEW (Codex), revision 2. Documentation and planning only. It approves no policy, sets no threshold, implements nothing and activates nothing.
-**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12).
+**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12). Revision 3 (2026-11-23 ET) adds only the §7.1 coverage note for 7.5C.
 **Checkpoint (revision 2):** 2026-11-22 (America/New_York), `main` `83c8fea` (#194 merge), merged into this branch. Every source reference below was rechecked at this commit: #194 changed no migration and no admin source, so all line references still hold.
 **Original baseline (history, 2026-11-22 ET):** `main` `63c8010` (#193 merge), the commit the first revision was written against (§1).
 **Branch:** `claude/phase7-5a-operations-queues-contract`, from `main` `63c8010`, with `main` `83c8fea` merged.
@@ -223,6 +223,8 @@ Expected values are **current behavior**, pinned. Where a gap exists, the check 
 | SF-11 | Stripe webhook row `dead_letter` | `provider_event` finance exception | **none (MISSING, MTS §10)** | webhook row | n/a |
 | SF-12 | Summary after SF-6a | fulfillment count 1, aged 0 (pins DF-1 until 7.5B; then aged `null`) | — | — | — |
 
+**Coverage note (2026-11-23 ET, revision 3; 7.5C).** SF-1..SF-12 are implemented as local characterization in `supabase/tests/128_operations_staged_failures.sql` (147 assertions, real readers and producers, rolled back); scenario-to-test map in the [7.5C record](PHASE-7-OPERATIONS-STAGED-FAILURES-7-5C.md) §3. The expectations above are unchanged and still read as written. Two differences were found and are reported there, not repaired: **SD-1** (SF-7: while the offer-terms gate is off, a one-time exhaustion is also listed as `blocked_inactive` in offers at other terms, so "queue item: none" does not hold) and **SD-2** (SF-8: the same-day branch reads `now()` inside the routing trigger, so it is exercised only by a run inside weekday hours). SF-6b matches RV-1 exactly. SF-12 is `aged: null` since 7.5B. Still characterization only, not gate acceptance.
+
 ### 7.2 Hosted (future; each needs separate owner authorization)
 
 Preview builds share the production database (DEC-2026-037), so a hosted staged failure writes to Production. None is authorized. Each needs the same treatment as the 7.3D T-checks: named synthetic records, exact cleanup, a stop list, and an owner approval card.
@@ -306,6 +308,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 |---|---|---|---|
 | 1 | 2026-11-22 | `main` `63c8010` | First contract (OQ-1) |
 | 2 | 2026-11-22 | `main` `83c8fea` merged | Codex's 7.5A review, below. No finding, status or recommendation changed beyond these |
+| 3 | 2026-11-23 | `main` `126c85f` (7.5B merged) | §7.1 coverage note for 7.5C (SQL 128) with discrepancies SD-1 and SD-2 for Codex. No expectation, status or recommendation changed |
 
 **Codex 7.5A review, applied in revision 2:**
 

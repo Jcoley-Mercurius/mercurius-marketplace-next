@@ -1,3 +1,15 @@
+# Phase 7.5C local staged-failure characterization (TRACE-159, SF-1..SF-12) — 2026-11-23 ET
+
+- **Base:** `main` `126c85f` (#197, 7.5B, merged 18:38:01 UTC), fetched before work; no 7.5C branch or PR existed. Branch `claude/phase7-5c-staged-failure-characterization` in worktree `mercurius-phase7-5c-staged-failures` (reuses the `phase5-isolated` stack through an ignored `.phase5-local/stack.sh`; `node_modules` symlinked). Record: [7.5C](../../governance/PHASE-7-OPERATIONS-STAGED-FAILURES-7-5C.md).
+- **Built (tests and documents only):** `supabase/tests/128_operations_staged_failures.sql`, 147 assertions, rolled back. Real readers and producers (batch, offer expiry, webhook pair, support and owner-email commands); preconditions written directly where no command reaches them cheaply. Each scenario asserts queue, alert, audit and communication across every outbound channel; SF-9 pins DF-3 as a known defect; SF-12 pins fulfillment aged `null`.
+- **Evidence:** money `58 | af0fae6e…` derived on `main` (not #198's value); function, table and trigger fingerprints unchanged after the runs. SQL 128 147/147 through CI's runner; full SQL suite 120 files PASS; 19/19 targeted mutations caught. Final-head CI: PR body.
+- **Discrepancies (not repaired):** SD-1 SF-7 exhaustion appears as `blocked_inactive` in offers at other terms while the gate is off; SD-2 the same-day support branch reads `now()` (exercised only inside weekday hours; local runs exercised `standard`).
+- **7.5B reconciled (dated notes):** merged as `126c85f`; hosted push recorded on #197 (not re-verified); GitHub Production deployment record (not verified READY); main CI 45240469564 failed one browser accessibility test (`mds.spec.ts:108`, unrelated to 7.5B; not rerun); HQ-1/HQ-2 not done.
+- **#198:** checked, not incorporated; its `127_pilot_standard_commission.sql` shares the `127` prefix with `main`; 7.5C uses `128`.
+- **Not done:** no migration, application change, hosted query, email, scheduler, booking, payment or policy change; not merged. Not Phase 7 acceptance.
+- **Next:** Codex reviews the PR (R-1..R-6, record §8); owner decides the main CI rerun.
+- **Reconciled (2026-11-24 ET):** `main` `7f66d9a` (#198) merged in as `373861c`; SQL 128's SF-3 fixture now stamps `commission_rate_bps = 1000` (#198 made it NOT NULL). No assertion changed. SQL 128 147/147; full suite 121 files / 8843 PASS; money `61 | eb3f9702…` (record §6.1).
+
 # Pilot standard commission 10% (DEC-2026-067, TRACE-160) — 2026-11-23 ET
 
 - **Base:** `main` `ebc7de5` (#196), fetched before work. Branch `claude/pilot-commission-10pct`. Independent of open #197 (its `20261130001000` is not included). Record: [PILOT-COMMISSION-10.md](../../governance/PILOT-COMMISSION-10.md).

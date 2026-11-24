@@ -1,6 +1,6 @@
 # Phase 7.5B — Operations overview summary truth repair (TRACE-159, DF-1, DF-2)
 
-**Status:** IMPLEMENTATION FOR REVIEW (Codex). Not merged. The hosted migration dry run and push, the merge (Vercel production deploy) and the hosted readbacks HQ-1/HQ-2 each need the owner's authorization (§6). Nothing is activated.
+**Status:** IMPLEMENTATION FOR REVIEW (Codex). Not merged. *(As written before merge; merged status reconciled in §8, 2026-11-23 ET.)* The hosted migration dry run and push, the merge (Vercel production deploy) and the hosted readbacks HQ-1/HQ-2 each need the owner's authorization (§6). Nothing is activated.
 **Base:** `main` `ebc7de5` (#196 merge), fetched before work. Branch `claude/phase7-5b-summary-truth-repair`.
 **Authority:** the owner's Phase 7.5B instruction (2026-11-23 ET). [Operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) (OQ-1, revision 2) §8 (scope, acceptance, rollout, rollback), §5.3 DF-1 and DF-2, §7.1 SF-12, §7.2 HQ-1/HQ-2 as corrected by Codex RV-2 (§12). TRACE-136 A8 (each summary row equals its queue, with no number of its own). DEC-2026-037 (release and migration order).
 
@@ -178,3 +178,16 @@ All hosted steps are read-only except step 2. No hosted query was run for this s
 | R-7 | **HQ-2 query (§6).** Every reader is called inside one `REPEATABLE READ READ ONLY` transaction (RV-2). The sub is the owner's user id, supplied at run time and not recorded |
 
 **Unresolved:** none found in this slice. Carried unchanged: DF-3 (7.5D, CD-1), OD-1..OD-7, AC-1 D-1, D-4, D-5, D-6, every 7.3D gate, O-1..O-9, CFG-011.
+
+## 8. Merged status (dated note, 2026-11-23 ET, recorded by 7.5C)
+
+The text above is kept as written before merge. Recorded from GitHub only; this note runs no hosted query and verifies no hosted state.
+
+| Item | Status | Source and verification |
+|---|---|---|
+| Review and merge | #197 merged 2026-11-23 18:38:01 UTC as `126c85f` (head `278162b`). No GitHub review object; the release approval is the merge (DEC-2026-037) | GitHub PR record |
+| Exact-head CI | 45222000868 on `278162b`: success | PR comment |
+| §6 steps 1–3 (dry run, push, readback) | Recorded as done, owner-authorized, before merge: only `20261130001000` listed; pushed 17:39:29 UTC; readback md5 `3bc2497f…`, ACL and settings unchanged, money `58 \| af0fae6e…`. The same comment records 11 pre-existing hosted function bodies that differ from local only in carriage returns | #197 PR comment, 2026-11-23 17:41 UTC. Not re-verified |
+| §6 step 4 (deploy) | GitHub records Production deployment `8007693849` (Vercel) for `126c85f`, status `success`. No READY readback recorded | GitHub deployments API. Not verified |
+| Main CI on `126c85f` | Run 45240469564 failed: application job, one browser test, `tests/e2e/mds.spec.ts:108` (axe `color-contrast`, 2.39); backend and lifecycle succeeded. 7.5B changed no MDS component; the PR-head run passed the same test. Not rerun | GitHub run log. Owner to decide |
+| §6 steps 5–6 (HQ-1, HQ-2) | Not done | — |
