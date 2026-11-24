@@ -38,7 +38,11 @@ class Store {
   requests: Array<{ method: string; url: URL; body: unknown }> = [];
   failGets: number[] = [];
   failPatches = 0;
+  // The write commits, then its response fails: the client cannot tell from the response.
+  commitThenFailPatches = 0;
   hold: Promise<void> | null = null;
+  holdPatch: Promise<void> | null = null;
+  patchesAnswered = 0;
   gets = 0;
   constructor(rows: Row[]) { this.rows = rows; }
   sorted(rows: Row[]) {
@@ -82,14 +86,23 @@ class Store {
       return route.fulfill({ status: 200, headers: cors, json: this.filter(url).slice(0, limit) });
     }
     if (method === "PATCH") {
-      if (this.failPatches > 0) {
-        this.failPatches -= 1;
-        return route.fulfill({ status: 500, headers: cors, json: { message: "Synthetic outage" } });
+      if (this.holdPatch) await this.holdPatch;
+      try {
+        if (this.failPatches > 0) {
+          this.failPatches -= 1;
+          return await route.fulfill({ status: 500, headers: cors, json: { message: "Synthetic outage" } });
+        }
+        // Like the own-row UPDATE policy: an admin can change only their own rows.
+        const targets = this.filter(url, this.rows.filter((r) => r.user_id === ADMIN));
+        for (const target of targets) target.read_at = (body as { read_at: string }).read_at;
+        if (this.commitThenFailPatches > 0) {
+          this.commitThenFailPatches -= 1;
+          return await route.fulfill({ status: 500, headers: cors, json: { message: "Synthetic outage after commit" } });
+        }
+        return await route.fulfill({ status: 200, headers: cors, json: targets.map((r) => ({ id: r.id, read_at: r.read_at })) });
+      } finally {
+        this.patchesAnswered += 1;
       }
-      // Like the own-row UPDATE policy: an admin can change only their own rows.
-      const targets = this.filter(url, this.rows.filter((r) => r.user_id === ADMIN));
-      for (const target of targets) target.read_at = (body as { read_at: string }).read_at;
-      return route.fulfill({ status: 200, headers: cors, json: targets.map((r) => ({ id: r.id, read_at: r.read_at })) });
     }
     return route.fulfill({ status: 405, headers: cors, json: {} });
   }
@@ -372,6 +385,96 @@ test("failed updates are reported truthfully and recover", async ({ page }) => {
   await expect(summary(page)).toHaveText("2 unread notices · 0 shown, 2 in older notices");
   await rowFor(page, 2).click();
   await expect(page).toHaveURL(/\/admin\/disputes$/);
+});
+
+// F-2 (PR #202 review): a failed write response does not show the write failed. Here the store commits
+// the write and then fails the response; what the page says comes from the readback that follows.
+test("committed write with a failed response: a readback establishes the state, a failed readback is unknown (single and bulk)", async ({ page }) => {
+  test.slow(); // several round trips and a navigation
+  const store = seeded();
+  await openPage(page, store);
+  await expect(rows(page)).toHaveCount(25);
+
+  // Single, readback fails: unknown. No navigation, no claim the notice wasn't marked or that the
+  // list shows saved state, and the row is not changed by inference.
+  store.commitThenFailPatches = 1;
+  store.failGets = [store.gets + 1];
+  await rowFor(page, 2).click();
+  const unknownOne = page.getByRole("alert").filter({ hasText: "We couldn’t confirm whether this notice was marked as read" });
+  await expect(unknownOne).toBeFocused();
+  await expect(unknownOne).toContainText("may have been saved");
+  await expect(unknownOne).toContainText("this list may be out of date");
+  await expect(unknownOne).not.toContainText(/wasn’t marked|now shows what was saved/);
+  await expect(unknownOne.getByRole("link", { name: "Go to Disputes" })).toHaveAttribute("href", "/admin/disputes");
+  await expect(page).toHaveURL(/\/admin\/notifications$/);
+  await expect(rowFor(page, 2)).toContainText("Unread");
+  expect(store.rows.find((r) => r.id === rowId(2))!.read_at).not.toBeNull(); // it did commit
+  // Refreshing reads the saved state.
+  await unknownOne.getByRole("button", { name: "Refresh notices" }).click();
+  await expect(unknownOne).toHaveCount(0);
+  await expect(rowFor(page, 2)).not.toContainText("Unread");
+  await expect(summary(page)).toHaveText("5 unread notices · 3 shown, 2 in older notices");
+
+  // Single, readback succeeds: it establishes the notice is read, so it opens.
+  store.commitThenFailPatches = 1;
+  await rowFor(page, 3).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/requests\\?request=${REQUEST}$`));
+  expect(store.patches()).toHaveLength(2);
+
+  // Bulk, readback fails: unknown.
+  await page.goto("/admin/notifications");
+  await expect(summary(page)).toHaveText("4 unread notices · 2 shown, 2 in older notices");
+  store.commitThenFailPatches = 1;
+  store.failGets = [store.gets + 1];
+  await page.getByRole("button", { name: "Mark visible as read" }).click();
+  const unknownMany = page.getByRole("alert").filter({ hasText: "We couldn’t confirm which notices were marked as read" });
+  await expect(unknownMany).toBeFocused();
+  await expect(unknownMany).toContainText("this list may be out of date");
+  await expect(unknownMany).toContainText("Notices you haven’t loaded are unchanged.");
+  await expect(unknownMany).not.toContainText(/weren’t all marked|now shows what was saved/);
+  await expect(rowFor(page, 1)).toContainText("Unread");
+  await expect(rowFor(page, 8)).toContainText("Unread");
+  expect(store.rows.filter((r) => [rowId(1), rowId(8)].includes(r.id)).every((r) => r.read_at)).toBe(true);
+  await unknownMany.getByRole("button", { name: "Refresh notices" }).click();
+  await expect(summary(page)).toHaveText("2 unread notices · 0 shown, 2 in older notices");
+  await expect(list(page)).not.toContainText("Unread");
+
+  // Bulk, readback succeeds: the visible notices are established as read.
+  await page.getByRole("button", { name: "Load older" }).click();
+  await expect(rowFor(page, 30)).toContainText("Unread");
+  store.commitThenFailPatches = 1;
+  await page.getByRole("button", { name: "Mark visible as read" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "2 visible notices marked as read." })).toBeFocused();
+  await expect(summary(page)).toHaveText("No unread notices");
+  await expect(list(page)).not.toContainText("Unread");
+});
+
+// F-1 (PR #202 review): a write that completes after the account signed out shows nothing and
+// navigates nowhere. Account-to-account switches are covered in tests/unit/own-notifications-controller.
+test("signing out while a notice is being marked read: the late result shows nothing, reads nothing and navigates nowhere", async ({ page }) => {
+  const store = seeded();
+  await openPage(page, store);
+  await page.route("**/auth/v1/logout**", (route) => route.fulfill({ status: 204, headers: { ...cors, "access-control-allow-methods": "POST, OPTIONS" } }));
+  await expect(rows(page)).toHaveCount(25);
+
+  let release!: () => void;
+  store.holdPatch = new Promise((resolve) => { release = resolve; });
+  await rowFor(page, 2).click();
+  await expect.poll(() => store.patches().length).toBe(1);
+  await page.getByRole("button", { name: "Sign Out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByRole("list", { name: "Notices" })).toHaveCount(0);
+
+  const before = store.requests.length;
+  release();
+  await expect.poll(() => store.patchesAnswered).toBe(1);
+  // The write succeeded; before the repair its late result would navigate to Disputes. Allow it the
+  // time it would need, then check nothing happened.
+  await page.waitForTimeout(1000);
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByRole("alert").filter({ hasText: /marked as read/ })).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(/Service dispute needs review|Support request MS-000123/);
+  expect(store.requests.slice(before).filter((r) => r.method !== "OPTIONS")).toEqual([]);
 });
 
 test("loading, error with retry and older-page failure", async ({ page }) => {

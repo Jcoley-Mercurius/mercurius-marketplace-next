@@ -19,23 +19,28 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PageState } from "@/components/ui/page-state";
 import type { AppNotification } from "@/hooks/useNotifications";
 import { useOwnNotifications } from "@/hooks/useOwnNotifications";
+import { markVisibleFeedback, type NoticeFeedback, openNoticeOutcome } from "@/lib/ownNotificationFeedback";
 import { presentAdminNotification } from "@/lib/adminNotificationPresentation";
 import { adminDestinationLabel, notificationDestination } from "@/lib/notificationDestination";
 
-type Feedback =
-  | { tone: "status"; text: string }
-  | { tone: "error"; title: string; text: string; href?: string; label?: string };
-
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// Page-local state (feedback, announcements, focus) belongs to one account: another account, or a
+// sign-out, gets a fresh page. useOwnNotifications separately discards the previous account's rows,
+// counts and in-flight requests.
 export default function AdminNotificationsPage() {
+  const { user } = useAuth();
+  return <AdminNotifications key={user?.id ?? "signed-out"} />;
+}
+
+function AdminNotifications() {
   const { user } = useAuth();
   const router = useRouter();
   const {
     items, status, hasMore, loadingMore, moreFailed, unreadCount, countFailed, visibleUnread,
     realtimeUnavailable, busyIds, bulkBusy, refresh, loadOlder, markRead, markVisibleRead,
   } = useOwnNotifications(Boolean(user), "admin-notifications");
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [feedback, setFeedback] = useState<NoticeFeedback | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const feedbackRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -54,30 +59,16 @@ export default function AdminNotificationsPage() {
 
   async function open(notification: AppNotification) {
     const destination = notificationDestination(notification, "admin");
-    const result = await markRead(notification.id);
-    if (!result.ok) {
-      setFeedback({
-        tone: "error",
-        title: "This notice wasn’t marked as read",
-        text: "Nothing else changed. Try opening it again, or go straight to the page.",
-        href: destination,
-        label: `Go to ${adminDestinationLabel(destination)}`,
-      });
-      return;
-    }
-    router.push(destination);
+    const next = openNoticeOutcome(await markRead(notification.id), destination, adminDestinationLabel(destination));
+    if (!next) return;
+    if ("navigate" in next) router.push(next.navigate);
+    else setFeedback(next.feedback);
   }
 
   async function markVisible() {
     const shown = visibleUnread;
-    const result = await markVisibleRead();
-    setFeedback(result.ok
-      ? { tone: "status", text: `${plural(shown, "visible notice")} marked as read. Notices you haven’t loaded are unchanged.` }
-      : {
-        tone: "error",
-        title: "Notices weren’t all marked as read",
-        text: "The list now shows what was saved. Notices you haven’t loaded are unchanged. Try again.",
-      });
+    const next = markVisibleFeedback(await markVisibleRead(), shown);
+    if (next) setFeedback(next);
   }
 
   async function older() {
@@ -139,7 +130,16 @@ export default function AdminNotificationsPage() {
             <>
               <p className="font-semibold">{feedback.title}</p>
               <p className="mt-1">{feedback.text}</p>
-              {feedback.href && <Link href={feedback.href} className={buttonVariants({ variant: "outline", size: "sm", className: "mt-3" })}>{feedback.label}</Link>}
+              {(feedback.href || feedback.refresh) && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {feedback.refresh && (
+                    <Button variant="outline" size="sm" onClick={() => { setFeedback(null); void refresh(); }}>
+                      <RefreshCw aria-hidden="true" className="h-4 w-4" />Refresh notices
+                    </Button>
+                  )}
+                  {feedback.href && <Link href={feedback.href} className={buttonVariants({ variant: "outline", size: "sm" })}>{feedback.label}</Link>}
+                </div>
+              )}
             </>
           ) : <p>{feedback.text}</p>}
         </div>
