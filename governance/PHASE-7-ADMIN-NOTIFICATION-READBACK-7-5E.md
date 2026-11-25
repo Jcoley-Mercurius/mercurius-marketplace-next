@@ -206,6 +206,7 @@ Scope as instructed: no migration, hosted mutation, merge, deployment, email act
 - `src/lib/ownNotificationsController.ts` (new) holds all state for one **owner**. `setOwner(next)` starts a new epoch: state is reset at once, the previous realtime channel is removed and a channel for the new owner is subscribed, and every request, write, readback, count and realtime/status callback started under an older epoch is discarded on completion. Writes started under an older epoch return `stale`. Each request uses the owner captured when it started, so its `user_id` filter is never the next account's. A → B → A does not revive the first session's responses (epochs, not owner ids).
 - `src/hooks/useOwnNotifications.ts` binds the controller to `enabled && user.id` (`null` when signed out or disabled; also on unmount) and never returns a snapshot whose owner differs from the current account, so not even one render shows the previous account's rows.
 - Both pages (`/admin/notifications`, `/vendor/notifications`) render their body keyed by the account id, so feedback, announcements and focus targets are discarded on an account change or sign-out. `open()` and "Mark visible as read" act on the outcome: `stale` shows nothing and navigates nowhere (`src/lib/ownNotificationFeedback.ts`).
+- Regression found by the browser run and fixed: the controller notifies React synchronously, so rows loaded by "Load older" rendered before the page set its focus target, and focus stayed on the button (admin and vendor pagination tests). The page now focuses the first new row directly when it has already rendered.
 
 ### 11.2 F-2 — uncertain mark-read outcomes
 
@@ -244,4 +245,21 @@ Browser (`tests/e2e/admin-notifications.spec.ts`, 2 new): committed write with a
 
 ### 11.4 Results (local, 2026-11-24 ET)
 
-RESULTS_PLACEHOLDER
+| Check | Result |
+|---|---|
+| `own-notifications-controller` (new) | **24/24** |
+| Unit (full, `--exclude '.phase5-local/**'`, on `d34b2a2`) | **1,390/1,390** in 84 files (1,366 + 24). `8b75582` changes only the two pages, which the unit suite does not import |
+| Typecheck, lint, secret scan, `git diff --check` | PASS (typecheck and lint repeated after `8b75582` and the final test change) |
+| Production build (CI's synthetic env, one worker) | PASS on `8b75582` |
+| Browser on `d34b2a2` | 60/62: admin and vendor pagination failed, focus not moved to the first older notice. A regression from this repair, fixed in `8b75582` (§11.1) |
+| Browser on `8b75582`: `admin-notifications` (13, incl. 2 new) + `vendor-notifications`, `admin-operations`, `portals` (49) | **62/62** (5.2 min) |
+| `admin-notifications` after tightening the sign-out test | **13/13** (2.3 min). An earlier run of the same spec at load average 21–28 (other sessions) took 25 min and failed 4 tests that do not touch the changed test (both overview tests, pagination, mark visible); their errors were not captured. They passed at normal load and are recorded here, not explained |
+| SQL | Not rerun: no SQL, migration or policy change |
+
+| ID | Mutation | Caught by |
+|---|---|---|
+| U-M7 | Epoch check always true (`current()`) | unit: 9 fail (writes, reconciliation, realtime, sign-out, filter test). Load and count switches are still caught by the refresh generation, which an owner change also bumps |
+| U-M8 | Failed readback reported as `unread` | unit: 4 fail (F-2 single, bulk, chunks, unreturned row) |
+| B-M2 | `stale` outcome navigates (pre-repair page behavior), rebuilt | browser: the sign-out test fails, recording `/login?redirect=%2Fadmin%2Fdisputes`. Its first version **missed** this mutant: the signed-out layout bounces the late push back to `/login`, which a loose URL check accepted. The test now records every navigation after the release |
+
+Sources were restored after each mutation and the application rebuilt from the unmutated tree. Not run locally: the full browser suite (`test:a11y`); exact-head CI is the authority (PR comment).
