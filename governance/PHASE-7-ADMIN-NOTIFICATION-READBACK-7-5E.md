@@ -1,6 +1,7 @@
 # Phase 7.5E — Admin in-app notification readback (TRACE-159, OD-5)
 
 **Status:** IMPLEMENTED FOR REVIEW (Codex). Not merged, not deployed, nothing activated. No hosted action.
+**Review (2026-11-24 ET):** Codex accepted D-1..D-7 subject to repairing its PR #202 findings F-1 (account-bound state) and F-2 (uncertain mark-read outcomes). Repaired for re-review in §11. This is not review acceptance.
 **Status update (2026-11-24 ET, factual; recorded by the review repair):** PR #202 was **merged** to `main` as `afa0be8` (2026-11-25 00:33:39 UTC) from head `8569ece`, **before** the F-1/F-2 repairs below; GitHub shows no review object. `main` therefore carries the unrepaired hook and pages; under DEC-2026-037 that is the production code (deployment not verified). The repairs are in a follow-up PR from `afa0be8` (§11). The status line above is kept as history.
 **Review (2026-11-24 ET):** Codex accepted D-1..D-7 subject to repairing its PR #202 findings F-1 (account-bound state) and F-2 (uncertain mark-read outcomes). Repaired for re-review in §11, in a follow-up PR because #202 had merged. This is not review acceptance.
 **Date:** 2026-11-24 (America/New_York).
@@ -251,6 +252,11 @@ Browser (`tests/e2e/admin-notifications.spec.ts`, 2 new): committed write with a
 | Check | Result |
 |---|---|
 | `own-notifications-controller` (new) | **24/24** |
+| Unit (full, `--exclude '.phase5-local/**'`, on `d34b2a2`) | **1,390/1,390** in 84 files (1,366 + 24). `8b75582` changes only the two pages, which the unit suite does not import |
+| Typecheck, lint, secret scan, `git diff --check` | PASS (typecheck and lint repeated after `8b75582` and the final test change) |
+| Production build (CI's synthetic env, one worker) | PASS on `8b75582` |
+| Browser on `d34b2a2` | 60/62: admin and vendor pagination failed, focus not moved to the first older notice. A regression from this repair, fixed in `8b75582` (§11.1) |
+| Browser on `8b75582`: `admin-notifications` (13, incl. 2 new) + `vendor-notifications`, `admin-operations`, `portals` (49) | **62/62** (5.2 min) |
 | Unit (full, `--exclude '.phase5-local/**'`, on `7b72d18`) | **1,390/1,390** in 84 files (1,366 + 24). `0610688` changes only the two pages, which the unit suite does not import |
 | Typecheck, lint, secret scan, `git diff --check` | PASS (typecheck and lint repeated after `0610688` and the final test change) |
 | Production build (CI's synthetic env, one worker) | PASS on `0610688` |
