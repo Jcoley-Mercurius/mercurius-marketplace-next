@@ -1,10 +1,11 @@
 /* eslint-disable @next/next/no-img-element -- Reviewed, pre-generated WebP crops with their own srcset (scripts/build-services-page-imagery.mjs), as for provider-profile service photos. */
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowDown } from "lucide-react";
+import { CatalogRowLink } from "@/components/services/CatalogRowLink";
 import type { FeaturedService } from "@/lib/servicesPage/catalog";
 
-// TRACE-161: four equal photo cards. Each whole card is one link; the photo's alt text is empty
-// because the service name below it names the link. One caption covers the group.
+// TRACE-161: four equal photo cards. Each whole card is one link to that service's row in "All
+// home services", where its early-access link lives; the photo's alt text is empty because the
+// service name below it names the link. One caption covers the group.
 export function FeaturedServices({ services }: { services: FeaturedService[] }) {
   if (services.length === 0) return null;
   return (
@@ -14,8 +15,8 @@ export function FeaturedServices({ services }: { services: FeaturedService[] }) 
         <ul className="mt-5 grid grid-cols-1 gap-x-4 gap-y-5 min-[360px]:grid-cols-2 sm:mt-6 lg:grid-cols-4 lg:gap-x-5">
           {services.map((service) => (
             <li key={service.id}>
-              <Link
-                href={service.href}
+              <CatalogRowLink
+                serviceId={service.id}
                 data-featured-service={service.id}
                 className="group block rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-focus-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
               >
@@ -34,10 +35,10 @@ export function FeaturedServices({ services }: { services: FeaturedService[] }) 
                 </span>
                 <span className="mt-3 flex items-center justify-between gap-2 px-1">
                   <span className="text-base font-semibold text-foreground group-hover:underline group-hover:underline-offset-4 sm:text-lg">{service.name}</span>
-                  <ArrowRight aria-hidden="true" className="size-5 shrink-0 text-commitment transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+                  <ArrowDown aria-hidden="true" className="size-5 shrink-0 text-commitment transition-transform group-hover:translate-y-0.5 motion-reduce:transition-none" />
                 </span>
-                <span className="sr-only">, join early access for this service</span>
-              </Link>
+                <span className="sr-only">, view in All home services</span>
+              </CatalogRowLink>
             </li>
           ))}
         </ul>
