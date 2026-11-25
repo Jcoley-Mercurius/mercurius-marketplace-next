@@ -2,6 +2,8 @@
 
 **Status:** IMPLEMENTED FOR REVIEW (Codex). Not merged, not deployed, nothing activated. No hosted action.
 **Review (2026-11-24 ET):** Codex accepted D-1..D-7 subject to repairing its PR #202 findings F-1 (account-bound state) and F-2 (uncertain mark-read outcomes). Repaired for re-review in §11. This is not review acceptance.
+**Status update (2026-11-24 ET, factual; recorded by the review repair):** PR #202 was **merged** to `main` as `afa0be8` (2026-11-25 00:33:39 UTC) from head `8569ece`, **before** the F-1/F-2 repairs below; GitHub shows no review object. `main` therefore carries the unrepaired hook and pages; under DEC-2026-037 that is the production code (deployment not verified). The repairs are in a follow-up PR from `afa0be8` (§11). The status line above is kept as history.
+**Review (2026-11-24 ET):** Codex accepted D-1..D-7 subject to repairing its PR #202 findings F-1 (account-bound state) and F-2 (uncertain mark-read outcomes). Repaired for re-review in §11, in a follow-up PR because #202 had merged. This is not review acceptance.
 **Date:** 2026-11-24 (America/New_York).
 **Base:** `main` `dcc62e1` (#201 merge, 2026-11-24 18:18:48 UTC), fetched before work. Branch `claude/phase7-5e-admin-notification-readback`.
 **Authority:** owner approval of OD-5, limited ([DEC-2026-068](DECISION-LOG.md), 2026-11-24). [Operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) (OQ-1) X-4, §9 OD-5, §10 step 4. [Notification contract](PHASE-7-NOTIFICATION-CONTRACT.md) (NM-1) §4.1, G3-03. MTS §6 l.150 (messages visible only to participants/admin). MDS accessibility and state rules. Precedent: [7.2B vendor readback](PHASE-7-VENDOR-NOTIFICATION-READBACK.md) (TRACE-153).
@@ -196,6 +198,8 @@ Revert the merge commit. No data, schema or configuration changes. `read_at` val
 
 ## 11. Review repair (Codex PR #202 findings F-1, F-2; 2026-11-24 ET)
 
+Base: `main` `afa0be8` (#202 merged without these repairs; its tree equals `8569ece`, on which the repair was built and tested). The repair commits were first pushed to the merged #202 branch, where they cannot reach `main`; they were cherry-picked unchanged (identical tree) onto `claude/phase7-5e-review-repair`.
+
 Scope as instructed: no migration, hosted mutation, merge, deployment, email activation, scheduler, booking or payment change. Own-account query filters and the admin and vendor route guards are unchanged. (Codex's F-1/F-2 are not this record's §8 F-1/F-2.)
 
 ### 11.1 F-1 — account-bound state
@@ -253,6 +257,11 @@ Browser (`tests/e2e/admin-notifications.spec.ts`, 2 new): committed write with a
 | Production build (CI's synthetic env, one worker) | PASS on `8b75582` |
 | Browser on `d34b2a2` | 60/62: admin and vendor pagination failed, focus not moved to the first older notice. A regression from this repair, fixed in `8b75582` (§11.1) |
 | Browser on `8b75582`: `admin-notifications` (13, incl. 2 new) + `vendor-notifications`, `admin-operations`, `portals` (49) | **62/62** (5.2 min) |
+| Unit (full, `--exclude '.phase5-local/**'`, on `7b72d18`) | **1,390/1,390** in 84 files (1,366 + 24). `0610688` changes only the two pages, which the unit suite does not import |
+| Typecheck, lint, secret scan, `git diff --check` | PASS (typecheck and lint repeated after `0610688` and the final test change) |
+| Production build (CI's synthetic env, one worker) | PASS on `0610688` |
+| Browser on `7b72d18` | 60/62: admin and vendor pagination failed, focus not moved to the first older notice. A regression from this repair, fixed in `0610688` (§11.1) |
+| Browser on `0610688`: `admin-notifications` (13, incl. 2 new) + `vendor-notifications`, `admin-operations`, `portals` (49) | **62/62** (5.2 min) |
 | `admin-notifications` after tightening the sign-out test | **13/13** (2.3 min). An earlier run of the same spec at load average 21–28 (other sessions) took 25 min and failed 4 tests that do not touch the changed test (both overview tests, pagination, mark visible); their errors were not captured. They passed at normal load and are recorded here, not explained |
 | SQL | Not rerun: no SQL, migration or policy change |
 
