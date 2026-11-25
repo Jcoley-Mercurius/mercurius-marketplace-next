@@ -9,6 +9,9 @@
 - **Found:** F-3 three TRACE-159 rows in TRACEABILITY (stale merge copies); the complete row was updated, none deleted.
 - **Not done:** hosted action, merge, deploy, external alerting, email, scheduler, breach detector, thresholds, producers. OD-1/2/6, OD-5 external channel, HQ-1..HQ-6 open.
 - **Next:** Codex reviews the PR (D-1..D-7, record §7); owner confirms whether `20261202001000` was pushed.
+- **Review repair (2026-11-24 ET, record §11):** Codex accepted D-1..D-7 subject to F-1 and F-2. F-1: `src/lib/ownNotificationsController.ts` binds state and every async completion (loads, pages, counts, writes, readbacks, realtime) to an owner epoch; an account change, sign-out, disable or unmount resets state and makes late writes `stale` (no feedback, no navigation); the hook never renders another owner's snapshot; both pages remount per account. F-2: only a confirmed write or a successful readback establishes read state; a failed readback is `unknown` ("couldn’t confirm … may be out of date", Refresh). Tests: `tests/unit/own-notifications-controller.test.ts` (24, held-request switches A→B, A→B→A, sign-out/disable; F-2 single, bulk, chunks) and 2 browser tests. 7.5D record now carries Codex's hosted readback at 22:50:29 UTC (`20261202001000` latest; three md5s match local); push timing and deployment READY still unverified. Evidence: record §11.4. No migration, hosted action, merge or deploy.
+- **#202 merged before the repair:** `afa0be8` at 2026-11-25 00:33:39 UTC from `8569ece`, no review object; `main` (and, per DEC-2026-037, production; not verified) has the unrepaired code. Repairs moved to branch `claude/phase7-5e-review-repair` (cherry-picked, identical tree; the copies pushed to the merged branch are inert).
+- **Next (after repair):** Codex re-reviews the follow-up PR's head; merging it is the owner's release decision.
 
 # Phase 7.5D support first reply (TRACE-159, DF-3) — 2026-11-24 ET
 

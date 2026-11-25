@@ -1,6 +1,8 @@
 # Phase 7.5E — Admin in-app notification readback (TRACE-159, OD-5)
 
 **Status:** IMPLEMENTED FOR REVIEW (Codex). Not merged, not deployed, nothing activated. No hosted action.
+**Status update (2026-11-24 ET, factual; recorded by the review repair):** PR #202 was **merged** to `main` as `afa0be8` (2026-11-25 00:33:39 UTC) from head `8569ece`, **before** the F-1/F-2 repairs below; GitHub shows no review object. `main` therefore carries the unrepaired hook and pages; under DEC-2026-037 that is the production code (deployment not verified). The repairs are in a follow-up PR from `afa0be8` (§11). The status line above is kept as history.
+**Review (2026-11-24 ET):** Codex accepted D-1..D-7 subject to repairing its PR #202 findings F-1 (account-bound state) and F-2 (uncertain mark-read outcomes). Repaired for re-review in §11, in a follow-up PR because #202 had merged. This is not review acceptance.
 **Date:** 2026-11-24 (America/New_York).
 **Base:** `main` `dcc62e1` (#201 merge, 2026-11-24 18:18:48 UTC), fetched before work. Branch `claude/phase7-5e-admin-notification-readback`.
 **Authority:** owner approval of OD-5, limited ([DEC-2026-068](DECISION-LOG.md), 2026-11-24). [Operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) (OQ-1) X-4, §9 OD-5, §10 step 4. [Notification contract](PHASE-7-NOTIFICATION-CONTRACT.md) (NM-1) §4.1, G3-03. MTS §6 l.150 (messages visible only to participants/admin). MDS accessibility and state rules. Precedent: [7.2B vendor readback](PHASE-7-VENDOR-NOTIFICATION-READBACK.md) (TRACE-153).
@@ -20,6 +22,7 @@ No migration, producer, recipient, copy, policy, grant, index, realtime or reten
 | `origin/main` | `dcc62e1` (#201 merge). Before it: #200 (`799303e`, TRACE-156 profile framing), #199 (`aeb20e4`, 7.5C) |
 | #201 (7.5D) | **Merged** 18:18:48 UTC as `dcc62e1`, from head `28b31ca`. Exact-head CI 45442433660 success (PR comment). No GitHub review object |
 | `20261202001000` hosted push | **Not verified.** No dry-run or push record exists on #201 or in the 7.5D record, and this slice made no hosted query. If it was not pushed before merge (DEC-2026-037), it is outstanding and needs the owner's authorization. Dated note added to the [7.5D record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md) header |
+| `20261202001000` hosted readback (added by the review repair) | Codex's privileged read-only verification at **2026-11-24 22:50:29 UTC**: recorded and latest; the three definition md5s equal the local 7.5D values. Recorded in the [7.5D record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md) header. It does not establish push timing or deployment READY. Claude made no hosted query |
 | Deployment of `dcc62e1` | **Not verified** (no Vercel readback) |
 | Main CI on `dcc62e1` | Run 45458156906 **success** (backend, lifecycle, application; completed 18:51:40 UTC), checked before this slice's first push |
 | Earlier main CI | Run 45452041620 on `799303e` was cancelled (superseded by the next push; concurrency group), not a test failure |
@@ -88,7 +91,7 @@ Implementation choices for Codex are in §7.
 | Path | Change |
 |---|---|
 | `src/app/admin/notifications/page.tsx` | New page inside the admin layout and its role guard |
-| `src/hooks/useOwnNotifications.ts` | The 7.2B vendor hook's body, moved unchanged except: the realtime channel prefix is a parameter (`vendor-notifications` or `admin-notifications`), and a realtime insert or update naming another account is ignored (defense in depth for admins) |
+| `src/hooks/useOwnNotifications.ts` | (Superseded by §11: now binds `OwnNotificationsController` to the signed-in account.) The 7.2B vendor hook's body, moved unchanged except: the realtime channel prefix is a parameter (`vendor-notifications` or `admin-notifications`), and a realtime insert or update naming another account is ignored (defense in depth for admins) |
 | `src/hooks/useVendorNotifications.ts` | Now a two-line wrapper over `useOwnNotifications(enabled, "vendor-notifications")`; vendor behavior and channel name unchanged |
 | `src/lib/notificationDestination.ts` | Adds the `admin` reader (§5.3). Homeowner and vendor results unchanged |
 | `src/lib/adminNotificationPresentation.ts` | Stored title and body as bounded text with fallbacks (§5.2) |
@@ -106,7 +109,7 @@ Implementation choices for Codex are in §7.
 - **Who.** The proxy and the admin layout admit only `has_role(uid, 'admin')`; the page never mounts, and makes no request, for anyone else. Every read, count, write and the realtime subscription names `user_id = <signed-in operator>`. Because RLS lets an admin read all rows, that filter is the isolation; SQL 130 pins both facts.
 - **Order and paging.** Newest first by `created_at desc, id desc`, 25 per page with "Load older" (keyset cursor). Every row of the operator's history is reachable; no date cutoff.
 - **Unread count.** Exact (`count: exact, head: true`, `read_at is null`) over the operator's own history, with "· X shown, Y in older notices" when some unread rows are not loaded.
-- **Read state.** Per account: each admin has their own row for an event, so marking one admin's copy leaves the others unread. Opening sets `read_at` once (guarded by `read_at is null` and the operator's `user_id`), then navigates; an already read notice navigates with no write. "Mark visible as read" marks only the loaded, displayed unread rows; the page says so. No optimistic writes: after any write the affected rows and the count are read back. A failed write shows a focused alert, leaves the row unread and offers a direct link.
+- **Read state.** Per account: each admin has their own row for an event, so marking one admin's copy leaves the others unread. Opening sets `read_at` once (guarded by `read_at is null` and the operator's `user_id`), then navigates; an already read notice navigates with no write. "Mark visible as read" marks only the loaded, displayed unread rows; the page says so. No optimistic writes: after any write the affected rows and the count are read back. A failed write shows a focused alert, leaves the row unread and offers a direct link. (Superseded by §11.2: what is said after a failed write response depends on the readback.)
 - **Realtime.** Channel `admin-notifications:<operator>`, filtered to the operator. A row naming another account is ignored even if delivered. If the channel errors or times out: "Live updates are unavailable. Refresh to check for new notices."
 - **States.** Loading, error with "Try again", empty ("No notices for your account" with wording that promises nothing), older-page error with retry, end of history.
 
@@ -182,7 +185,7 @@ Sources were restored after each mutation and the application rebuilt from the u
 - **F-1 (characterization).** RLS does not isolate admins on `public.notifications`. Correct for this page only because every query names the operator. Any future admin surface over this table must do the same; SQL 130 pins the policy so a change is deliberate.
 - **F-2.** `/notifications` is written to admins by three producers (§2.2) and never was a working admin link. Mapped on read (§5.3); producers unchanged.
 - **F-3 (documentation).** `governance/TRACEABILITY.md` holds three TRACE-159 rows (earlier merge resolutions kept stale copies). This slice updates the most complete row only and leaves the others for Codex to decide; no row is deleted.
-- **Carried, unchanged:** own-row UPDATE allows any column (the page writes only `read_at`); admin direct INSERT for any user, unaudited; no dedupe key; retention class (G3-06); hosted policy and realtime parity (G2-06); A2 human checks (screen reader, real devices, 200% zoom); 7.5D hosted push and deployment unverified (§1).
+- **Carried, unchanged:** own-row UPDATE allows any column (the page writes only `read_at`); admin direct INSERT for any user, unaudited; no dedupe key; retention class (G3-06); hosted policy and realtime parity (G2-06); A2 human checks (screen reader, real devices, 200% zoom); 7.5D push timing and deployment READY unverified (§1; the hosted schema state was read back by Codex).
 
 ## 9. Not done
 
@@ -191,3 +194,75 @@ Codex review; merge (= deploy, DEC-2026-037); any hosted read or push (none is n
 ## 10. Rollback
 
 Revert the merge commit. No data, schema or configuration changes. `read_at` values operators set stay; they are the operator's own state and harmless.
+
+## 11. Review repair (Codex PR #202 findings F-1, F-2; 2026-11-24 ET)
+
+Base: `main` `afa0be8` (#202 merged without these repairs; its tree equals `8569ece`, on which the repair was built and tested). The repair commits were first pushed to the merged #202 branch, where they cannot reach `main`; they were cherry-picked unchanged (identical tree) onto `claude/phase7-5e-review-repair`.
+
+Scope as instructed: no migration, hosted mutation, merge, deployment, email activation, scheduler, booking or payment change. Own-account query filters and the admin and vendor route guards are unchanged. (Codex's F-1/F-2 are not this record's §8 F-1/F-2.)
+
+### 11.1 F-1 — account-bound state
+
+**Finding.** The hook's state outlived the account it was loaded for. `load` and counts were guarded only against a newer refresh; `loadOlder`'s cursor, write results, reconciliation and realtime callbacks were not guarded at all, and `open()` navigated after `await markRead` whatever had happened meanwhile. After a sign-out or account change, a late response could put the previous account's rows, count or feedback on screen, or navigate.
+
+**Repair.**
+- `src/lib/ownNotificationsController.ts` (new) holds all state for one **owner**. `setOwner(next)` starts a new epoch: state is reset at once, the previous realtime channel is removed and a channel for the new owner is subscribed, and every request, write, readback, count and realtime/status callback started under an older epoch is discarded on completion. Writes started under an older epoch return `stale`. Each request uses the owner captured when it started, so its `user_id` filter is never the next account's. A → B → A does not revive the first session's responses (epochs, not owner ids).
+- `src/hooks/useOwnNotifications.ts` binds the controller to `enabled && user.id` (`null` when signed out or disabled; also on unmount) and never returns a snapshot whose owner differs from the current account, so not even one render shows the previous account's rows.
+- Both pages (`/admin/notifications`, `/vendor/notifications`) render their body keyed by the account id, so feedback, announcements and focus targets are discarded on an account change or sign-out. `open()` and "Mark visible as read" act on the outcome: `stale` shows nothing and navigates nowhere (`src/lib/ownNotificationFeedback.ts`).
+- Regression found by the browser run and fixed: the controller notifies React synchronously, so rows loaded by "Load older" rendered before the page set its focus target, and focus stayed on the button (admin and vendor pagination tests). The page now focuses the first new row directly when it has already rendered.
+
+### 11.2 F-2 — uncertain mark-read outcomes
+
+**Finding.** A failed write response was reported as "This notice wasn’t marked as read" / "The list now shows what was saved", although the write may have committed, and even when the readback after it had also failed (that readback silently returned).
+
+**Repair.** `markRead` and `markVisibleRead` resolve to one of:
+
+| Outcome | When | Page says / does |
+|---|---|---|
+| `read` | Every requested row is confirmed read by the write response, or by a successful readback (or no longer exists) | Single: opens the destination. Bulk: "N visible notices marked as read." |
+| `unread` | A successful readback shows rows still unread | "This notice wasn’t marked as read … It still shows as unread" / "Notices weren’t all marked as read. The list now shows what was saved: N visible notices still unread." |
+| `unknown` | Any row's state is established by neither the write response nor a successful readback | "We couldn’t confirm whether this notice was marked as read" / "…which notices were marked as read": the change may have been saved, the list may be out of date; "Refresh notices" (and the direct link for a single notice). The list is not changed by inference |
+| `stale` | The account changed first | Nothing |
+
+A failed chunk's write response is never treated as "not written": it and all later chunks are read back. Readback chunks that succeed are applied even if another fails; any failed chunk makes the outcome `unknown`. A successful write that did not return a requested row still needs a readback.
+
+### 11.3 Tests
+
+`tests/unit/own-notifications-controller.test.ts` (new, 24): a fake client holds **every** request until the test releases it, so completion order is chosen by the test.
+
+| Area | Scenario (A's requests held, switch to B or sign out, then A's released) | Asserted under B / signed out |
+|---|---|---|
+| Initial load | A's page and count; A's failed page after B loaded | No A rows; count stays B's (or unknown); B not put in error |
+| Pagination | A's older page (success, failure) | No A rows, no "older failed", `loadingMore` false |
+| Count | Two A counts (success 99, failure) | B's count, `countFailed` false |
+| Write result | A's single and bulk write confirmed after the switch | `stale`; no A readback or count issued; B rows, count, busy state unchanged; no feedback, no navigation |
+| Reconciliation | A's readback and count after the switch (single, bulk; colliding id) | `stale`; B unchanged; no feedback, no navigation |
+| Realtime | A's INSERT, DELETE and CHANNEL_ERROR after the switch | A channel removed; B unaffected; B's own channel works and still ignores a foreign row |
+| A → B → A | First-session page and count | Not applied to the second session |
+| Disable / sign-out | During single, bulk and older | State empty, channel removed, late result and realtime ignored, no further request; actions while signed out are inert |
+| Filters | Every request | Names the owner it started for |
+| F-2 single and bulk | Write committed, response failed: readback success → `read`; readback failure → `unknown`; readback shows unread → `unread` | Item state and page wording as above; `unknown` wording never says "wasn’t marked" or "shows what was saved" |
+| F-2 chunks | 150 rows: chunk 1 confirmed, chunk 2's response failed, its readback failed | `unknown`; chunk 1 shown read, chunk 2 as last read |
+
+Browser (`tests/e2e/admin-notifications.spec.ts`, 2 new): committed write with a failed response, single and bulk, with readback success and failure (the store commits, then answers 500); signing out while a write is held, then releasing it: URL stays `/login`, no feedback, no rows, no further request.
+
+### 11.4 Results (local, 2026-11-24 ET)
+
+| Check | Result |
+|---|---|
+| `own-notifications-controller` (new) | **24/24** |
+| Unit (full, `--exclude '.phase5-local/**'`, on `7b72d18`) | **1,390/1,390** in 84 files (1,366 + 24). `0610688` changes only the two pages, which the unit suite does not import |
+| Typecheck, lint, secret scan, `git diff --check` | PASS (typecheck and lint repeated after `0610688` and the final test change) |
+| Production build (CI's synthetic env, one worker) | PASS on `0610688` |
+| Browser on `7b72d18` | 60/62: admin and vendor pagination failed, focus not moved to the first older notice. A regression from this repair, fixed in `0610688` (§11.1) |
+| Browser on `0610688`: `admin-notifications` (13, incl. 2 new) + `vendor-notifications`, `admin-operations`, `portals` (49) | **62/62** (5.2 min) |
+| `admin-notifications` after tightening the sign-out test | **13/13** (2.3 min). An earlier run of the same spec at load average 21–28 (other sessions) took 25 min and failed 4 tests that do not touch the changed test (both overview tests, pagination, mark visible); their errors were not captured. They passed at normal load and are recorded here, not explained |
+| SQL | Not rerun: no SQL, migration or policy change |
+
+| ID | Mutation | Caught by |
+|---|---|---|
+| U-M7 | Epoch check always true (`current()`) | unit: 9 fail (writes, reconciliation, realtime, sign-out, filter test). Load and count switches are still caught by the refresh generation, which an owner change also bumps |
+| U-M8 | Failed readback reported as `unread` | unit: 4 fail (F-2 single, bulk, chunks, unreturned row) |
+| B-M2 | `stale` outcome navigates (pre-repair page behavior), rebuilt | browser: the sign-out test fails, recording `/login?redirect=%2Fadmin%2Fdisputes`. Its first version **missed** this mutant: the signed-out layout bounces the late push back to `/login`, which a loose URL check accepted. The test now records every navigation after the release |
+
+Sources were restored after each mutation and the application rebuilt from the unmutated tree. Not run locally: the full browser suite (`test:a11y`); exact-head CI is the authority (PR comment).
