@@ -462,8 +462,13 @@ test("signing out while a notice is being marked read: the late result shows not
   await rowFor(page, 2).click();
   await expect.poll(() => store.patches().length).toBe(1);
   await page.getByRole("button", { name: "Sign Out" }).click();
-  await expect(page).toHaveURL(/\/login/);
+  // The sidebar replaces to /login and the signed-out admin layout to /login?redirect=<this page>.
+  await expect(page).toHaveURL(/\/login(\?redirect=%2Fadmin%2Fnotifications)?$/);
   await expect(page.getByRole("list", { name: "Notices" })).toHaveCount(0);
+  // Record every navigation from here on: a late push to Disputes would be bounced straight back to
+  // /login?redirect=%2Fadmin%2Fdisputes by the signed-out admin layout, so the final URL is not enough.
+  const navigations: string[] = [];
+  page.on("framenavigated", (frame) => { if (frame === page.mainFrame()) navigations.push(frame.url()); });
 
   const before = store.requests.length;
   release();
@@ -471,7 +476,8 @@ test("signing out while a notice is being marked read: the late result shows not
   // The write succeeded; before the repair its late result would navigate to Disputes. Allow it the
   // time it would need, then check nothing happened.
   await page.waitForTimeout(1000);
-  await expect(page).toHaveURL(/\/login/);
+  expect(navigations.filter((url) => new URL(url).pathname.startsWith("/admin") || url.includes("disputes"))).toEqual([]);
+  await expect(page).toHaveURL(/\/login(\?redirect=%2Fadmin%2Fnotifications)?$/);
   await expect(page.getByRole("alert").filter({ hasText: /marked as read/ })).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(/Service dispute needs review|Support request MS-000123/);
   expect(store.requests.slice(before).filter((r) => r.method !== "OPTIONS")).toEqual([]);
