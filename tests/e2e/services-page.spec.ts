@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // TRACE-161 synthetic browser evidence for the /services redesign. The page's server read gets the
 // synthetic catalog from tests/fixtures/portal-server.mjs; the browser catalog read (names,
@@ -8,7 +9,7 @@ import { readFileSync } from "node:fs";
 const app = "http://127.0.0.1:3103";
 const supabase = "http://127.0.0.1:55831";
 const tags = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
-const fixture = JSON.parse(readFileSync(new URL("../fixtures/services-public-catalog.json", import.meta.url), "utf8")) as {
+const fixture = JSON.parse(readFileSync(join(process.cwd(), "tests/fixtures/services-public-catalog.json"), "utf8")) as {
   categories: { id: string; name: string }[];
   services: { id: string; name: string; category_id: string; icon: string; descriptor: string }[];
 };
@@ -195,7 +196,8 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 900 }, { name: "
       // A visible focus ring.
       expect(await card.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
       await page.keyboard.press("Enter");
-      await expect(page).toHaveURL(/\/early-access\?service=pool-service$/);
+      // The client navigation renders the early-access page on the server first.
+      await expect(page).toHaveURL(/\/early-access\?service=pool-service$/, { timeout: 15_000 });
       await expect(page.getByRole("checkbox", { name: "Pool Service" })).toBeChecked();
     });
 

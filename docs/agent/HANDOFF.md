@@ -1,3 +1,13 @@
+# /services Option C redesign (TRACE-161) — 2026-11-24 ET
+
+- **Base:** `main` `afa0be8`, fetched before work. Branch `claude/services-option-c-redesign` in the main checkout (the 7.5E repair branch is pushed and unchanged). Record: [Option C](../../governance/SERVICES-PAGE-OPTION-C.md).
+- **Owner instruction:** redesign `/services` from the Option C reference with live catalog data and licensed stock photos; Plan Builder deferred, builder and its entry points untouched.
+- **Built:** split hero, four featured photo cards, compact catalog rows under the existing filters, one closing block; names, descriptions and links in the initial HTML from an anonymous server read (`force-dynamic`); five Pexels photos through a manifest-checked WebP pipeline (`pending_owner_review`); pricing-read failure is reported.
+- **Evidence:** record §6 (unit 1,383; lint, types, secrets, build; browser 12/12 isolated; 4/4 unit mutations; screenshots).
+- **Flags:** D-1 no service detail page, so cards and rows lead to early access with the service preselected; F-1 no canonical/`metadataBase` site-wide.
+- **Not done:** merge, deploy, detail page, canonical.
+- **Next:** Josh reviews the draft PR (photos, D-1..D-5); Codex reviews the diff.
+
 # Phase 7.5E admin notification readback (TRACE-159, OD-5) — 2026-11-24 ET
 
 - **Base:** `main` `dcc62e1` (#201 merged 18:18:48 UTC), fetched before work; main CI 45458156906 success. Branch `claude/phase7-5e-admin-notification-readback` in the main checkout (reuses the `phase5-isolated` stack). Record: [7.5E](../../governance/PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md).
