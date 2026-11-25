@@ -1,0 +1,18 @@
+{
+  "purpose": "Synthetic public catalog for /services browser tests (TRACE-161). Served by portal-server.mjs to the page's anonymous server read; specs reuse it for the browser read. Not production data.",
+  "categories": [
+    { "id": "lawn-landscape", "name": "Lawn & Landscape", "icon": "Leaf", "description": "", "sort_order": 0, "is_active": true },
+    { "id": "cleaning", "name": "Cleaning", "icon": "Sparkles", "description": "", "sort_order": 1, "is_active": true },
+    { "id": "repairs-trades", "name": "Repairs & Trades", "icon": "Wrench", "description": "", "sort_order": 2, "is_active": true },
+    { "id": "outdoor-exterior", "name": "Outdoor & Exterior", "icon": "Home", "description": "", "sort_order": 3, "is_active": true },
+    { "id": "specialty", "name": "Specialty", "icon": "Star", "description": "", "sort_order": 4, "is_active": true }
+  ],
+  "services": [
+    { "id": "lawn-mowing", "name": "Lawn Care", "category_id": "lawn-landscape", "icon": "Scissors", "descriptor": "Mowing, edging & yard upkeep" },
+    { "id": "irrigation-maintenance", "name": "Irrigation Maintenance", "category_id": "lawn-landscape", "icon": "Droplets", "descriptor": "Sprinkler checks, repairs & seasonal activation" },
+    { "id": "house-cleaning", "name": "House Cleaning", "category_id": "cleaning", "icon": "Sparkles", "descriptor": "Recurring interior cleaning visits" },
+    { "id": "window-cleaning", "name": "Window Cleaning", "category_id": "cleaning", "icon": "SquareDashedBottom", "descriptor": "" },
+    { "id": "handyman", "name": "Handyman", "category_id": "repairs-trades", "icon": "Wrench", "descriptor": "Odd jobs, installs & minor repairs" },
+    { "id": "pool-service", "name": "Pool Service", "category_id": "outdoor-exterior", "icon": "Waves", "descriptor": "Chemical balance & weekly cleaning" }
+  ]
+}
