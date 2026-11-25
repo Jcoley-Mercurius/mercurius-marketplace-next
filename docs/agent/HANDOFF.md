@@ -1,3 +1,11 @@
+# Phase 7.5F SLA-breach observation plan (TRACE-159, OD-1/OD-2) — 2026-11-25 ET
+
+- **Base:** `main` `846dd34` (#204), fetched before work. Branch `claude/phase7-5f-sla-observation-plan`, documentation only. Record: [7.5F plan](../../governance/PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md).
+- **Reconciled:** #203 merged as `01a5dd1` (CI success; Codex re-review not recorded; READY not verified). #204 re-merged #202's branch: trees identical to #203's commits, duplicate documentation lines only, left as history (plan §1.2). Open PRs: #206 (draft, untouched).
+- **Planned, not built:** append-only `private.operations_sla_observations` + `private.operations_sla_detector_runs`; `admin_detect_sla_breaches(run_key, limit)` calls the existing T-3/T-4/T-5/T-8/T-10 readers as the invoking admin; key `(rule, kind, subject, due_at)`; try-lock with audited `skipped`; per-rule savepoints; unknown outcomes resolved by run-key readback; four admin readbacks. M-1..M-9 state what manual scans miss (counts are a lower bound).
+- **Not done:** any code, test, migration, CI, hosted action, scheduler, notice. OD-1/OD-2 unapproved; P-1..P-6, D-1..D-9 open.
+- **Next:** Codex reviews the plan PR; owner decides OD-1/OD-2 (card §10) with P-1..P-3; then 7.5F-1 (database), 7.5F-2 (page).
+
 # /services Option C redesign (TRACE-161) — 2026-11-24 ET
 
 - **Base:** `main` `afa0be8`, fetched before work. Branch `claude/services-option-c-redesign` in the main checkout (the 7.5E repair branch is pushed and unchanged). Record: [Option C](../../governance/SERVICES-PAGE-OPTION-C.md).
