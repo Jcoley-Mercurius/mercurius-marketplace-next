@@ -1,3 +1,15 @@
+# Phase 7.5E admin notification readback (TRACE-159, OD-5) — 2026-11-24 ET
+
+- **Base:** `main` `dcc62e1` (#201 merged 18:18:48 UTC), fetched before work; main CI 45458156906 success. Branch `claude/phase7-5e-admin-notification-readback` in the main checkout (reuses the `phase5-isolated` stack). Record: [7.5E](../../governance/PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md).
+- **Owner approval (2026-11-24 ET):** OD-5 only for an admin page of existing notices addressed to the signed-in operator; recorded as [DEC-2026-068](../../governance/DECISION-LOG.md). Not external alerts, email, new producers or automation.
+- **#201 reconciled (dated note):** merged as `dcc62e1` from `28b31ca` (exact-head CI 45442433660 success, no review object). Hosted push of `20261202001000` and the deployment are **not verified**: no record exists and no hosted query was made. If not pushed, it needs the owner's authorization.
+- **Characterized:** admins can SELECT every notification row (RLS "Admins can view all notifications") but UPDATE only their own; 14 producers write one row per admin; links are four admin routes plus `/notifications` (homeowner-only) from three shared loops. No migration needed.
+- **Built:** `/admin/notifications` and a Notifications entry under Overview. The 7.2B vendor hook moved to `useOwnNotifications` (vendor behavior and channel unchanged); every read, count, write and realtime subscription names the operator's `user_id`, and a realtime row for another account is ignored. Stored text as bounded text; severity hidden; links limited to existing admin routes, request-related and homeowner-only links open `/admin/requests?request=<id>`. The page states it is in-app only and proves no one was alerted.
+- **Evidence:** SQL 130 47/47; full SQL 123 files / 8,974 PASS (clean replay); unit 1,366; typecheck, lint, secrets, build pass; browser admin-notifications 11/11 and vendor-notifications/admin-operations/portals 49/49 (three load timeouts passed on rerun); 13 mutations caught (6 SQL, 6 unit, 1 browser). Final-head CI: PR body.
+- **Found:** F-3 three TRACE-159 rows in TRACEABILITY (stale merge copies); the complete row was updated, none deleted.
+- **Not done:** hosted action, merge, deploy, external alerting, email, scheduler, breach detector, thresholds, producers. OD-1/2/6, OD-5 external channel, HQ-1..HQ-6 open.
+- **Next:** Codex reviews the PR (D-1..D-7, record §7); owner confirms whether `20261202001000` was pushed.
+
 # Phase 7.5D support first reply (TRACE-159, DF-3) — 2026-11-24 ET
 
 - **Base:** built on `main` `7f66d9a` + #199's reconciled head `6a753f3` while #199 was open; #199 then merged as `aeb20e4` (same tree), and the branch was rebased onto it with no content change. Branch `claude/phase7-5d-support-first-reply` in worktree `mercurius-phase7-5d-support-first-reply` (reuses the `phase5-isolated` stack; `node_modules` hard-linked, since Turbopack refuses a symlink outside the root). Record: [7.5D](../../governance/PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md).

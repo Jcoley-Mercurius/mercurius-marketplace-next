@@ -1,4 +1,5 @@
 // Phase 7.2B / TRACE-153: where opening an in-app notification goes, by the reader's portal.
+// Phase 7.5E / TRACE-159 adds the admin reader.
 //
 // A destination is navigation only. It confers no permission: every destination page still checks
 // the signed-in account itself, and an unauthorized detail page stays inaccessible.
@@ -6,9 +7,11 @@
 // Homeowner results are unchanged from the original homeowner notifications page. Vendor results
 // accept only supported vendor routes. Anything external, protocol-relative, containing a backslash,
 // control character or whitespace, or using dot segments or encoded separators is dropped. Obsolete
-// and homeowner-only links map to an existing vendor surface. The stored body is never read.
+// and homeowner-only links map to an existing vendor surface. Admin results accept only existing admin
+// routes, under the same strict parse; anything else maps to the request record or the overview. The
+// stored body is never read.
 
-export type NotificationReader = "homeowner" | "vendor";
+export type NotificationReader = "homeowner" | "vendor" | "admin";
 
 export type NotificationLinkFields = {
   link: string | null;
@@ -21,9 +24,9 @@ export function notificationDestination(
   notification: NotificationLinkFields,
   reader: NotificationReader,
 ): string {
-  return reader === "vendor"
-    ? vendorNotificationDestination(notification)
-    : homeownerNotificationDestination(notification);
+  if (reader === "vendor") return vendorNotificationDestination(notification);
+  if (reader === "admin") return adminNotificationDestination(notification);
+  return homeownerNotificationDestination(notification);
 }
 
 // ----- Homeowner (behavior preserved exactly) -------------------------------------------------------
@@ -124,4 +127,68 @@ function strictLocalPath(value: string | null): { pathname: string; hash: string
   if (url.origin !== BASE) return null;
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : url.pathname;
   return { pathname, hash: url.hash };
+}
+
+// ----- Admin (Phase 7.5E / TRACE-159) ----------------------------------------------------------------
+
+export const ADMIN_NOTIFICATION_FALLBACK = "/admin";
+const ADMIN_REQUESTS = "/admin/requests";
+
+// Existing admin routes (src/app/admin/**/page.tsx, static segments only; a unit test walks the
+// directory). A link outside this set is not kept. /admin/notifications is left out on purpose: a
+// notice never opens the list it is in. /admin/smart-picks is a retired, unlisted page.
+export const ADMIN_NOTIFICATION_ROUTES: ReadonlyMap<string, string> = new Map([
+  ["/admin", "Overview"],
+  ["/admin/requests", "Service Requests"],
+  ["/admin/applications", "Applications"],
+  ["/admin/recruiting", "Recruiting Readiness"],
+  ["/admin/vendors", "Vendors"],
+  ["/admin/compliance", "Provider Compliance"],
+  ["/admin/compliance/renewals", "Compliance Expiry"],
+  ["/admin/compliance/retention", "Document Retention"],
+  ["/admin/homeowners", "Homeowners"],
+  ["/admin/catalog", "Service Catalog"],
+  ["/admin/coverage", "Coverage Areas"],
+  ["/admin/pricing-templates", "Pricing Templates"],
+  ["/admin/vendor-prices", "Vendor Prices"],
+  ["/admin/pricing-reviews", "Package Reviews"],
+  ["/admin/finance", "Finance Reconciliation"],
+  ["/admin/disputes", "Disputes"],
+  ["/admin/promotions", "Promotions"],
+  ["/admin/invoices", "Legacy Invoices"],
+  ["/admin/tickets", "Support Tickets"],
+  ["/admin/owner-emails", "Owner Emails"],
+  ["/admin/email-evidence", "Email Evidence"],
+  ["/admin/reviews", "Reviews"],
+  ["/admin/quality", "Quality"],
+  ["/admin/messages", "Message Audit"],
+  ["/admin/featured", "Featured Providers"],
+  ["/admin/pricing-analytics", "Pricing Analytics"],
+]);
+
+// The request id /admin/requests accepts in ?request= (parseRequestsQuery).
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Admin rows are written by 14 producers (Phase 7.5E record §2). Their links are /admin/requests,
+// /admin/disputes, /admin/applications and /admin/tickets, plus "/notifications" from three loops that
+// share one link with homeowners or providers (record_job_operation, respond_to_reschedule_request,
+// homeowner_respond_replacement). "/notifications" is a homeowner route that sends an admin away, so
+// it, and anything else not kept, opens the related request record or, with no request, the overview.
+// Only /admin/requests can open one record (?request=<uuid>); no other query string or anchor is kept.
+function adminNotificationDestination(notification: NotificationLinkFields) {
+  const request = notification.related_request_id && REQUEST_ID.test(notification.related_request_id)
+    ? notification.related_request_id
+    : null;
+  const requestRecord = request ? `${ADMIN_REQUESTS}?request=${request.toLowerCase()}` : null;
+  const parsed = strictLocalPath(notification.link);
+  if (parsed && ADMIN_NOTIFICATION_ROUTES.has(parsed.pathname)) {
+    return parsed.pathname === ADMIN_REQUESTS && requestRecord ? requestRecord : parsed.pathname;
+  }
+  return requestRecord ?? ADMIN_NOTIFICATION_FALLBACK;
+}
+
+export function adminDestinationLabel(destination: string): string {
+  const pathname = destination.split(/[?#]/, 1)[0];
+  if (pathname === ADMIN_REQUESTS && destination.includes("?request=")) return "the service request record";
+  return ADMIN_NOTIFICATION_ROUTES.get(pathname) ?? "Overview";
 }
