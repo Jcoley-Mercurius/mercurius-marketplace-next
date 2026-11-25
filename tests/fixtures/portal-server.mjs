@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 
 const operationsSummary = JSON.parse(readFileSync(new URL("./admin-operations-summary.json", import.meta.url), "utf8"));
+const publicCatalog = JSON.parse(readFileSync(new URL("./services-public-catalog.json", import.meta.url), "utf8"));
 
 const homeowner = "00000000-0000-4000-8000-000000000001";
 const contractor = "00000000-0000-4000-8000-000000000002";
@@ -49,6 +50,12 @@ const server = createServer(async (request, response) => {
   if (request.method === "OPTIONS") return send({});
   if (url.pathname === "/health") return send({ fixture: "mds-only" });
   const user = identity(request);
+  // TRACE-161: the /services page reads the public catalog on the server, anonymously and with no
+  // Origin header. Browser reads always carry an Origin and keep the 401 below.
+  if (!user && request.method === "GET" && !request.headers.origin) {
+    if (url.pathname === "/rest/v1/service_categories") return send(publicCatalog.categories.map(({ id, name }) => ({ id, name })));
+    if (url.pathname === "/rest/v1/services_catalog") return send(publicCatalog.services);
+  }
   if (!user) return send({ message: "Synthetic authentication required" }, 401);
   let body = {};
   if (request.method !== "GET") {
