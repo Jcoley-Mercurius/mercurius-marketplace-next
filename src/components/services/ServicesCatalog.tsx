@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, CircleAlert, Loader2, RefreshCw, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { useServiceCatalog } from "@/hooks/useServiceCatalog";
 import { EARLY_ACCESS_CTA } from "@/lib/earlyAccessExperience";
 import type { Service } from "@/lib/serviceData";
 import { ALL_SERVICES_ANCHOR, livePriceFor, serviceDestination, type PublicCatalog } from "@/lib/servicesPage/catalog";
+import { REVEAL_SERVICE_ROW_EVENT, serviceIdFromHash, serviceRowAnchor } from "@/lib/servicesPage/rowAnchor";
 import { cn } from "@/lib/utils";
 
 type Row = { id: string; name: string; categoryId: string; descriptor: string };
@@ -31,6 +32,43 @@ export function ServicesCatalog({ initial, icons }: { initial: PublicCatalog | n
   const filtered = category === "all" ? rows : rows.filter((row) => row.categoryId === category);
   const coverage = filtered.filter((row) => (liveById.get(row.id)?.availability ?? "sourcing") !== "sourcing").length;
   const waiting = loading && !initial;
+
+  // A featured card, a `#service-<id>` link opened directly, or history navigation asks for a row.
+  // The row may be hidden by a category filter, so the filter returns to all services first; once
+  // the row is rendered it is scrolled into view (its scroll margin clears the sticky header) and
+  // focused, so the next Tab reaches its early-access link.
+  const pendingReveal = useRef<string | null>(null);
+  const [revealRequest, setRevealRequest] = useState(0);
+  const requestReveal = useCallback((serviceId: string) => {
+    pendingReveal.current = serviceId;
+    if (!document.getElementById(serviceRowAnchor(serviceId))) setCategory("all");
+    setRevealRequest((request) => request + 1);
+  }, []);
+
+  useEffect(() => {
+    const fromHash = () => {
+      const serviceId = serviceIdFromHash(window.location.hash);
+      if (serviceId) requestReveal(serviceId);
+    };
+    const fromEvent = (event: Event) => requestReveal((event as CustomEvent<string>).detail);
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    window.addEventListener(REVEAL_SERVICE_ROW_EVENT, fromEvent);
+    return () => {
+      window.removeEventListener("hashchange", fromHash);
+      window.removeEventListener(REVEAL_SERVICE_ROW_EVENT, fromEvent);
+    };
+  }, [requestReveal]);
+
+  useEffect(() => {
+    const serviceId = pendingReveal.current;
+    if (!serviceId) return;
+    const target = document.getElementById(serviceRowAnchor(serviceId));
+    if (!target) return; // Not rendered yet: waits for the filter reset or the catalog read.
+    pendingReveal.current = null;
+    target.scrollIntoView({ block: "start" });
+    target.focus({ preventScroll: true });
+  }, [revealRequest, filtered]);
 
   return (
     <section aria-labelledby={ALL_SERVICES_ANCHOR} className="pb-8 pt-10 md:pt-14">
@@ -105,13 +143,19 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
 
 function ServiceRow({ row, icon, live }: { row: Row; icon: ReactNode; live: Service | null }) {
   return (
-    <li data-service-row={row.id} className="flex gap-4 px-4 py-4 sm:items-center sm:px-5">
+    <li
+      id={serviceRowAnchor(row.id)}
+      tabIndex={-1}
+      aria-labelledby={`${serviceRowAnchor(row.id)}-name`}
+      data-service-row={row.id}
+      className="flex scroll-mt-24 gap-4 px-4 py-4 outline-none focus:ring-3 focus:ring-inset focus:ring-focus-ring sm:items-center sm:px-5"
+    >
       <span aria-hidden="true" className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-sage-light text-sage-dark">
         {icon ?? <Star className="size-6" />}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="min-w-0">
-          <h3 className="text-base font-semibold text-foreground sm:text-lg">{row.name}</h3>
+          <h3 id={`${serviceRowAnchor(row.id)}-name`} className="text-base font-semibold text-foreground sm:text-lg">{row.name}</h3>
           {row.descriptor && <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{row.descriptor}</p>}
           {live && <Availability service={live} />}
         </div>

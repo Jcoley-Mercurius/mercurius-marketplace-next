@@ -10,6 +10,7 @@ import {
   type ServiceFrequency,
 } from "@/lib/serviceData";
 import { featuredPhoto, type FeaturedPhotoKey, type ResponsiveImage } from "@/lib/servicesPage/imagery";
+import { serviceRowHref } from "@/lib/servicesPage/rowAnchor";
 
 export type PublicCategory = { id: string; name: string };
 export type PublicService = { id: string; name: string; categoryId: string; descriptor: string; icon: string };
@@ -53,7 +54,7 @@ export function fallbackPublicCatalog(): PublicCatalog {
 /** The "All home services" heading; the hero's secondary action jumps here. */
 export const ALL_SERVICES_ANCHOR = "all-services";
 
-/** Where a service on /services leads. There is no service detail page, so this is early access with the service preselected. */
+/** Where a catalog row's action leads. There is no service detail page, so this is early access with the service preselected. */
 export const serviceDestination = (serviceId: string) => earlyAccessHref([serviceId]);
 
 /** Featured cards, in display order. Each catalog id was checked against the hosted catalog on 2026-11-24. */
@@ -62,14 +63,15 @@ export const FEATURED_SERVICE_IDS: readonly FeaturedPhotoKey[] = ["lawn-mowing",
 export type FeaturedService = { id: string; name: string; href: string; photo: ResponsiveImage };
 
 /**
- * The featured services that exist in the catalog, named as the catalog names them. When the
- * catalog could not be read, the static fallback names are used; the destination is the same.
+ * The featured services that exist in the catalog, named as the catalog names them. Each card leads
+ * to its own row in "All home services" (`#service-<id>`), whose action is the early-access link.
+ * When the catalog could not be read, the static fallback names are used; the destination is the same.
  */
 export function featuredServices(catalog: PublicCatalog | null): FeaturedService[] {
   const source = catalog ?? fallbackPublicCatalog();
   return FEATURED_SERVICE_IDS.flatMap((id) => {
     const service = source.services.find((item) => item.id === id);
-    return service ? [{ id, name: service.name, href: serviceDestination(id), photo: featuredPhoto(id) }] : [];
+    return service ? [{ id, name: service.name, href: serviceRowHref(id), photo: featuredPhoto(id) }] : [];
   });
 }
 
