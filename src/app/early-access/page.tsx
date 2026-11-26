@@ -7,6 +7,7 @@ import { EarlyAccessForm } from "@/components/early-access/EarlyAccessForm";
 import { earlyAccessServicesFromQuery } from "@/lib/earlyAccessExperience";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "https://www.mercuriusmarketplace.com/early-access" },
   title: "Join early access | Mercurius Marketplace",
   description: "Lee County homeowners can join Mercurius early access. Booking opens by invitation in stages as approved providers become available.",
 };
