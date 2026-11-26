@@ -1,6 +1,6 @@
 # Phase 7.5F-1 — SLA-breach observation: database foundation (TRACE-159)
 
-**Status:** **IMPLEMENTED FOR REVIEW** (local evidence only). Not pushed to hosted Supabase, not merged, not deployed, never run on production data. 7.5F-2 (operator page) not started.
+**Status:** **IMPLEMENTED FOR REVIEW.** Migration **pushed to hosted Supabase 2026-11-26 ET** on the owner's instruction (§6.1). Not merged, not deployed, never run on production data. 7.5F-2 (operator page) not started.
 **Date:** 2026-11-25 (America/New_York).
 **Base:** `main` `80100d3` (#207 merge, the 7.5F plan), fetched before work. Branch `claude/phase7-5f1-sla-db-foundation`.
 **Authority:** owner approval 2026-11-25 ET ([DEC-2026-069](DECISION-LOG.md); verbatim in [OWNER-APPROVALS](OWNER-APPROVALS.md)); [7.5F plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md) revision 4 with Codex's D-1..D-9 and F-1..F-10; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) §4, §6.1, §9, §10; CFG-010, CFG-011, CFG-015; DEC-2026-006.
@@ -230,9 +230,25 @@ Each step needs its own owner authorization (plan §10.2). None is done.
 - After hosted scans: a reviewed migration revoking `execute` on `admin_detect_sla_breaches` (and `admin_purge_sla_records`) from `authenticated` stops new scans and keeps the records; dropping retained rows needs an owner decision.
 - Application: `vercel promote <previous dpl_id>`; the database objects are inert without a caller. No business data is written, so nothing needs repair.
 
+### 6.1 Hosted push (2026-11-26 ET)
+
+Owner instruction (2026-11-26 ET): "Please push migration and agents MD." This authorizes step B (dry run and push) only. Merge, deployment, scans and purges remain unauthorized.
+
+| Step | Time (UTC) | Result |
+|---|---|---|
+| `npx supabase db push --linked --dry-run` (CLI 2.116.0) | 2026-11-26 13:14 | Would push exactly `20261203001000_phase7_sla_breach_observations.sql`. This also shows `20261202001000` (7.5D) was already on hosted, which settles the open point in the 7.5D record |
+| `npx supabase db push --linked` | 13:14:20–13:14:37 | `Applying migration 20261203001000_phase7_sla_breach_observations.sql`; finished |
+| Readback: migrations | after push | latest `20261203001000`, 239 rows |
+| Readback: 7.5F tables | after push | runs, observations, results and purges all 0; retention `90 days`, DEC-2026-069 reference |
+| Readback: access | after push | the 7 client functions are executable by `authenticated` (7 of 7) and by `anon`/`service_role` 0 of 7; the 5 tables have RLS on and no `authenticated`/`service_role` select |
+| Readback: unchanged definitions | after push | `admin_quote_queue` `b56a6dc0…`, `admin_fulfillment_queue` `d3e94c1f…`, `admin_support_queue` `c426ab1a…`, `admin_offer_terms_queue` `6d3fa5f5…`, `admin_operations_summary` `3bc2497f…`, `run_lifecycle_batch` `82818770…`, `fulfillment_queue_items` `d37abbd9…`, `money_payment_exceptions` `c9a2e11a…`, all equal to §5.1 |
+| Readback: money fingerprint | after push | `61 \| eb3f9702d45f9f22e61f6a7da17349c4`, equal to §5.1 |
+
+Readback queries read schema, privileges and counts only, never row content. Production now has the objects. With no client calling them they stay inert until the merge and 7.5F-2.
+
 ## 7. Open items
 
 - Codex review of this PR (I-1..I-15, §3).
-- Owner authorizations B (dry run and push, before merge), C (merge), D (first hosted scan), first hosted purge.
+- Owner authorizations C (merge), D (first hosted scan), first hosted purge. B (dry run and push) done 2026-11-26 ET (§6.1).
 - 7.5F-2 operator page after this merges.
 - Carried unchanged: HQ-1..HQ-6 (HQ-5 open until a hosted staged breach is observed under its own authorization); OD-3..OD-7; OD-5 external channel; AC-1 D-1, D-4..D-6; SD-1, SD-2; 7.5D F-1, O-1..O-3; #203 Codex re-review; READY readbacks of `01a5dd1` and `846dd34`.
