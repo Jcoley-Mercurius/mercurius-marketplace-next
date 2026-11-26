@@ -1,3 +1,12 @@
+# Phase 7.5F-1 forward repair F208-1 (TRACE-159) — 2026-11-26 ET
+
+- **Base:** `main` `89973fa` (#208 merged 15:59:55 UTC), fetched before work. Branch `claude/phase7-5f1-replay-purge-repair`, main checkout, `phase5-isolated` stack. Record: [7.5F-1 §8](../../governance/PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md).
+- **Verified:** `20261203001000` pushed to hosted per record §6.1 (not re-queried); `main` deployment not verified; no open PR; numbering free.
+- **Built:** migration `20261204001000` (detector step 4 reads start and result in one statement; start without result `XX000`; absent pair too old); SQL 132; `scripts/sla-replay-purge-concurrency.mjs` + `backend` CI step. `20261203001000` unedited.
+- **Evidence:** record §8.5 (merged function fails SQL 132 ×4 and the script at W1; repaired passes; 6 mutants; fingerprints unchanged except the detector).
+- **Not done:** hosted dry run and push, merge, deploy, scans, purges, 7.5F-2.
+- **Next:** Codex reviews the repair PR (R-1, O-1); owner authorizes the dry run and push (record §8.6) before merge; then 7.5F-2.
+
 # Phase 7.5F-1 SLA-breach observation database foundation (TRACE-159) — 2026-11-25 ET
 
 - **Base:** `main` `80100d3` (#207 merged), fetched before work. Branch `claude/phase7-5f1-sla-db-foundation`, main checkout, `phase5-isolated` stack. Record: [7.5F-1](../../governance/PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md).

@@ -1,6 +1,7 @@
 # Phase 7.5F-1 — SLA-breach observation: database foundation (TRACE-159)
 
 **Status:** **IMPLEMENTED FOR REVIEW.** Migration **pushed to hosted Supabase 2026-11-26 ET** on the owner's instruction (§6.1). Not merged, not deployed, never run on production data. 7.5F-2 (operator page) not started.
+**Update (2026-11-26 ET):** #208 merged as `89973fa` (15:59:55 UTC); deployment READY not verified. Codex finding **F208-1** (replay racing the purge could return an incomplete `visible` result) has a forward repair for review, migration `20261204001000`, not pushed (§8).
 **Date:** 2026-11-25 (America/New_York).
 **Base:** `main` `80100d3` (#207 merge, the 7.5F plan), fetched before work. Branch `claude/phase7-5f1-sla-db-foundation`.
 **Authority:** owner approval 2026-11-25 ET ([DEC-2026-069](DECISION-LOG.md); verbatim in [OWNER-APPROVALS](OWNER-APPROVALS.md)); [7.5F plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md) revision 4 with Codex's D-1..D-9 and F-1..F-10; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) §4, §6.1, §9, §10; CFG-010, CFG-011, CFG-015; DEC-2026-006.
@@ -248,7 +249,143 @@ Readback queries read schema, privileges and counts only, never row content. Pro
 
 ## 7. Open items
 
-- Codex review of this PR (I-1..I-15, §3).
-- Owner authorizations C (merge), D (first hosted scan), first hosted purge. B (dry run and push) done 2026-11-26 ET (§6.1).
+- Codex review of this PR (I-1..I-15, §3). #208 merged 2026-11-26 ET; F208-1 repair under review (§8).
+- Owner authorizations C (merge; done for #208), D (first hosted scan), first hosted purge. B (dry run and push) done 2026-11-26 ET (§6.1). The repair's push is a separate authorization (§8.6).
 - 7.5F-2 operator page after this merges.
 - Carried unchanged: HQ-1..HQ-6 (HQ-5 open until a hosted staged breach is observed under its own authorization); OD-3..OD-7; OD-5 external channel; AC-1 D-1, D-4..D-6; SD-1, SD-2; 7.5D F-1, O-1..O-3; #203 Codex re-review; READY readbacks of `01a5dd1` and `846dd34`.
+
+## 8. Forward repair F208-1 (2026-11-26 ET)
+
+**Owner instruction (2026-11-26 ET):** implement a bounded forward repair for Codex's F208-1 before 7.5F-2; leave `20261203001000` unedited; no hosted query, migration push, merge, deployment, production scan or purge; do not build 7.5F-2. Branch `claude/phase7-5f1-replay-purge-repair` from `main` `89973fa`.
+
+### 8.1 State verified before work
+
+| Item | Evidence |
+|---|---|
+| #208 | merged as `89973fa` at 2026-11-26 15:59:55 UTC (`gh pr view 208`); `main` then also had `9351bb7` (#209, sitemap, unrelated) |
+| `20261203001000` on hosted | §6.1 (pushed 13:14:20–13:14:37 UTC, readback matched). Not re-queried: no hosted query was made for this repair |
+| Deployment of `89973fa` | not verified (DEC-2026-037 deploys `main`; no client calls the 7.5F functions) |
+| Numbering | latest migration `20261203001000`, latest SQL test `131`; no open PR |
+
+### 8.2 Defect
+
+Step 4 of `admin_detect_sla_breaches` read the run start (`select * into v_run …`) and, in a second statement, its result. Under READ COMMITTED each statement takes its own snapshot. The retention purge deletes an expired result and its start in one transaction and takes no key lock, so its commit can fall between the two reads: the start is found, the result is not. The function then returned `state: 'visible'` because `operations_sla_expired(null)` is false. Observed on the merged function (local, synthetic, one start row 100 days old with no result):
+
+```
+{"state": "visible", "replayed": true, "outcome": null, "rules": null, "finished_at": null,
+ "actor": "…", "rule_set": "synthetic", "started_at": "2026-08-18T…", "applied_limit": 200, "totals": {all 0}}
+```
+
+That is both an incomplete `visible` result and disclosure of an expired run's actor, rule set and times. The run itself was already purged, so no duplicate scan or orphan followed; a retry was refused as too old.
+
+### 8.3 Repair
+
+Migration `20261204001000_phase7_sla_replay_pair_read.sql`: `create or replace` of `admin_detect_sla_breaches(uuid, integer)` only. Its body is the merged body with step 4 changed (diff below); signature, owner, `security definer`, `search_path = ''`, ACL (CREATE OR REPLACE keeps it) and steps 1–3 and 5–8 are unchanged.
+
+```diff
+-  select * into v_run from private.operations_sla_detector_runs where id = p_run_key;
++  select r as run_row, x as result_row into v_pair
++    from private.operations_sla_detector_runs r
++    left join private.operations_sla_detector_run_results x on x.run_id = r.id
++   where r.id = p_run_key;
+   if found then
++    v_run := v_pair.run_row;
++    v_res := v_pair.result_row;  -- all fields null when the start has no result
+     (actor check, normalized-limit check: unchanged and still first)
+-    select * into v_res from private.operations_sla_detector_run_results where run_id = p_run_key;
++    if v_res.run_id is null then
++      raise exception 'SLA run start found without its result' using errcode = 'XX000';
++    end if;
+     (expiry → 'expired' with no content; else 'visible' replay: unchanged)
+```
+
+Outcomes of the single read:
+
+| Pair as read | Result |
+|---|---|
+| start and result | as merged: actor and limit checks, then `expired` (content withheld) or `visible` replay |
+| neither | as merged: the 24 h key window. A purged run's key is refused as too old (`22023`): its key was issued at most 5 min after its start, its result expired ≥ 7 days ago (retention floor), so the key is past the 24 h start window. No second scan |
+| start, no result | **new:** `XX000`, after the actor and limit checks; nothing written. One statement cannot see this from a purge (start and result commit together and are purged together), so only a damaged ledger reaches it |
+
+The key lock is still taken before the read and the scan try-lock after it, so a purge still never overlaps a scan and a replay still takes no scan lock. An `XX000` is an error, so a 7.5F-2 client treats it like any other: outcome unknown, resolve through the lookup.
+
+**R-1 (for Codex):** `XX000` was chosen to match the purge's own consistency refusal (`SLA purge found a run without its start or result`). `55000` would also fit.
+
+**O-1 (observation, not repaired, outside the bound):** `admin_sla_detector_run` (the lookup) also reads start and result in two statements. A purge committing between them yields `not_visible`, which its contract already includes ("the run may have been purged"); it can never return `visible` without a result, because it requires both rows. Unchanged here, as instructed.
+
+### 8.4 Tests
+
+| File | What |
+|---|---|
+| `supabase/tests/132_sla_replay_pair_read.sql` | 42 assertions, one rolled-back transaction. **C** contract: signature and default, security definer, volatile, empty search path, owner, execute for `authenticated` only, no PUBLIC, no overload, homeowner refused; the replay reads the pair in one statement (text check). **I** a start without its result (the race's state, made directly as owner): fresh key and 100-day-old key → `XX000`, nothing written, the key still holds only its start; another admin and limit 100 / 999 still refused first (`22023`); null limit normalizes to 200. **V** visible replay returns the stored run unchanged; null limit replays; mismatches refused. **E** expired → exactly `{run_key, state: expired, replayed}`; mismatches refused; unexpired after the key lifetime replays with content. **A** absent: 100-day key too old, future and v4 keys refused, nothing written; a 23-hour key scans. **P** after the real purge, a retry is too old and scans nothing; lookup `not_visible`; no result without start, no observation without result |
+| `scripts/sla-replay-purge-concurrency.mjs` | Three persistent psql sessions, real commits, rerunnable (each round purges its own fixtures; refuses to start if other expired SLA rows exist). **W ×10:** the purge's transaction takes `ACCESS EXCLUSIVE` on `operations_sla_detector_run_results` (a test device; the purge is the real function); the replay is started; the script waits until `pg_locks` shows the replay holding its key lock and waiting on that table; the purge runs and commits; the replay resumes with a snapshot taken after the wait. Asserts: never `visible`, no content of the expired run, the replay is `22023` too old, the purge deleted exactly the round's run and observation, nothing remains under the key (no duplicate scan), no orphaned start, result or observation ledger-wide, a later retry is too old and starts nothing, lookup `not_visible`. **H ×10:** purge deleted but uncommitted → replay `expired`, content withheld, no wait; after commit, too old. **B ×3:** purge rolled back inside the window → replay `expired`; pair and observation remain. Baseline: an expired run replays as expired |
+| `.github/workflows/ci.yml` | `backend` step `SLA detector replay racing the retention purge (TRACE-159, F208-1)` right after the existing SLA step (the earlier script's R group drains every expired row, so this one's precondition holds) |
+
+### 8.5 Evidence
+
+Local isolated stack (`phase5-isolated`), 2026-11-26 ET.
+
+**Unrepaired vs repaired.** "Unrepaired" is a clean reset of `main` `89973fa` (239 migrations), detector md5 `e841593e…`, and later the same definition restored from `20261203001000` lines 260–377 as `create or replace` (md5 again `e841593e…`).
+
+| Test | Unrepaired | Repaired |
+|---|---|---|
+| SQL 132 | 38/42; fails C one-statement read and I ×3 (each "have: ok": the function returned for a start without its result) | 42/42 |
+| `sla-replay-purge-concurrency.mjs` | fails at W1: `W1: no 'visible' result for an expired or purged run (F208-1; got outcome null)` (baseline passed first) | pass, 1.6 s; rerun on the same database passes |
+
+**Mutants of the repair** (one edit, applied, both tests run, repair re-applied; control passes both):
+
+| Mutant | SQL 132 | Script |
+|---|---|---|
+| M1 repair reverted (the merged function) | 38/42 | fails W1 (incomplete `visible`) |
+| M2 start-without-result refusal removed | 39/42 (I) | passes: unreachable from a purge in one statement |
+| M3 refusal moved before the actor check | 41/42 ("another admin is refused as before") | passes (same reason) |
+| M4 inner join instead of left join | 35/42 (C, I: falls through to a scan and a key conflict) | passes (same reason) |
+| M5 two reads kept, null result refused with `XX000` | 41/42 (C text check only) | fails W1: `XX000` instead of too old |
+| M6 expiry withholding removed | 41/42 (E) | fails at baseline: `visible` with content |
+
+M2–M4 alter only the damaged-ledger branch, so SQL 132 is their test; M5 is caught behaviourally only by the script.
+
+**Clean replay with the repair** (`node scripts/prepare-phase5-local.mjs`, `sh scripts/phase5-db.sh reset`): 240 migrations applied, latest `20261204001000`, seed applied; the CLI then reported `LegacyHealthCheckTimeoutError` for the storage container at host load ≈ 16 (as in §5.5); every container was healthy afterwards and `schema_migrations` held all 240.
+
+| Measure (Appendix A query of the 7.5D record; money script) | Base (`89973fa`, 239) | Repaired (240) |
+|---|---|---|
+| Functions excluding `admin_detect_sla_breaches` | `862 \| 48815793e78595175daac17b34bd54bb` | same |
+| Functions, all | `863 \| 0fe69d3d…` | `863 \| 01c8e87e…` (the detector only) |
+| `admin_detect_sla_breaches` | `e841593e…`, `{postgres, authenticated}` | `8556973a…`, same ACL |
+| Other 7.5F functions (13), the four readers, `admin_operations_summary`, `run_lifecycle_batch`, `fulfillment_queue_items`, `money_payment_exceptions` | §5.1 values (`admin_purge_sla_records` `94218dea…`, `admin_sla_detector_run` `1e6fdf53…`, …) | same, each md5 and ACL |
+| Relations / columns / triggers / indexes / policies | `216 \| e47295e2…` / `2096 \| ba91a6e7…` / `226 \| 064d320b…` / `516 \| 69be4349…` / `154 \| f31814e7…` | same |
+| Money (`scripts/promotion-money-fingerprint.sql`) | `61 \| eb3f9702d45f9f22e61f6a7da17349c4` | same |
+
+| Check | Result |
+|---|---|
+| SQL 131 | 175/175 |
+| SQL 132 | 42/42 |
+| Full SQL suite (`sh scripts/phase5-db.sh test`) | 125 files, 9,191 tests, PASS (1,049 s at load ≈ 14) |
+| `sla-detector-concurrency.mjs` then `sla-replay-purge-concurrency.mjs` (CI order) | both pass on the post-suite database (38.8 s; 6.9 s) |
+| Fingerprints after the suite and scripts | identical to the repaired column above |
+| `npx eslint scripts/sla-replay-purge-concurrency.mjs`; `npm run scan:secrets`; `git diff --check` | pass |
+| Typecheck, unit, full lint, build, browser | not run locally: no application code changed; CI runs them |
+| Final-head CI | PR body |
+
+### 8.6 Rollout (each step needs the owner's authorization; none done)
+
+1. **Dry run:** `npx supabase db push --linked --dry-run`. Expected: exactly `20261204001000_phase7_sla_replay_pair_read.sql`. Stop if anything else is listed.
+2. **Push, before merge (DEC-2026-037):** `npx supabase db push --linked`.
+3. **Read-only readback** (`npx supabase db query --linked`; schema and privileges only, no row content):
+   - `select max(version) from supabase_migrations.schema_migrations` = `20261204001000`;
+   - `select md5(pg_get_functiondef('public.admin_detect_sla_breaches(uuid,integer)'::regprocedure))` = `8556973a4224090772e873997320367a`;
+   - `select proacl from pg_proc where oid = 'public.admin_detect_sla_breaches(uuid,integer)'::regprocedure` = `{postgres=X/postgres,authenticated=X/postgres}`; `has_function_privilege` false for `anon` and `service_role`;
+   - md5s of `admin_purge_sla_records(integer)` `94218deabea843502cd99dcd3aa2aea7` and `admin_sla_detector_run(uuid)` `1e6fdf5357c837f55c9f5f4cd6924925`, the four readers, `admin_operations_summary`, `run_lifecycle_batch` equal §5.1 / §6.1;
+   - `scripts/promotion-money-fingerprint.sql` = `61 | eb3f9702d45f9f22e61f6a7da17349c4`;
+   - the five 7.5F tables still empty (counts only), retention `90 days`.
+4. **Release:** merge the reviewed PR; Vercel deploys `main` (no application change). Read back deployment READY.
+
+Order matters only weakly: until the push, hosted keeps the defect, but no client calls the detector (7.5F-2 is not built) and no hosted scan or purge has been authorized, so the window cannot occur on hosted. The push should still precede 7.5F-2's release and any first hosted scan or purge.
+
+**Rollback:** forward only. A reviewed migration restoring the merged body would reintroduce F208-1; prefer a fix forward. `vercel promote <previous dpl_id>` is unaffected (no application change).
+
+### 8.7 Open after the repair
+
+- Codex review of this repair (R-1, O-1, the test device in §8.4).
+- Owner authorizations: dry run and push of `20261204001000` (§8.6 steps 1–3), merge. First hosted scan and purge unchanged (§7).
+- 7.5F-2 starts after this repair; not built here.
