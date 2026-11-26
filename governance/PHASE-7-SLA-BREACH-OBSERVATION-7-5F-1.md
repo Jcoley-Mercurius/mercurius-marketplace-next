@@ -111,19 +111,106 @@ SQL 131 group Z also shows that a scan and a purge leave every other `public`/`p
 
 ### 5.2 SQL 131
 
-EVIDENCE-PLACEHOLDER-5.2
+`supabase/tests/131_sla_breach_observations.sql`: **175/175** through plain psql (CI's lifecycle runner) after a clean reset; one rolled-back transaction, fixed `now()`, staged times relative to it (7.5C method), synthetic `example.invalid` users. Real readers throughout; offer-terms items through the real submission, matching and acceptance commands (as SQL 116). Run keys are composed by the test.
+
+| Group | What it proves |
+|---|---|
+| A | Execute for `authenticated` only on the seven client functions; private helpers owner only; five tables with RLS, no policy, no client privilege, in no publication; homeowner, provider and anon refused (`42501`); no direct select or delete even for an admin; retention row 90 days with its DEC-2026-069 reference |
+| B | First scan on an empty ledger: per rule, absent at `due − 1 µs`, present at `due` (not T-8) and `due + 1 µs`; recorded `due_at` equals the named source (T-3 three kinds; T-4 expiry and first `checkout_expired` webhook; T-5 72 h mark; T-8 `response_due_at`, strict; T-10 acceptance + 24 h); observed set equals the qualifying set derived independently from each reader; P-1 disputes and appeals once under T-8 with their kind |
+| T | `evaluated_at = now()` on every row; `due_at <= evaluated_at <= observed_at` (T-8 strict); each rule's `observed_at` later than `evaluated_at` and strictly increasing in rule order; the summary has no coverage, completeness or miss-rate field and states the lower bound |
+| M | M-7: an episode overdue before the first scan and still qualifying is observed with its full lag; one that ended before it is not. M-1: due and resolved between scans: never recorded. M-3: T-10 reclassified to `not_acceptable` before a scan: never recorded. M-6 (D-7): a moved `due_at` is a second row. M-10: an expired, unpurged row still blocks; after the purge the episode is recorded again |
+| N, Q | `null`/`200`, `0`/`1`, `999`/`500` replay; `100` vs `200` and another admin refused (`22023`), writing nothing. Non-admin with a valid fresh key `42501`; v4, null, wrong-variant, > 5 min ahead and absent > 24 h keys `22023`; ≤ 5 min ahead and within 24 h accepted. After the lifetime an unexpired run replays with content; at the 7-day floor a run committed in its key's lifetime replays at `retry_until`; an expired run returns `expired` with no content (actor and limit mismatches still refused); a purged key is refused as too old and the lookup is `not_visible` with `retry_until` in the past |
+| P | Limit 1: with an earlier episode already recorded, runs insert p1, p2, p3 oldest first, then nothing; `already_recorded` 0, 1, 2, 3; invariant on every run and rule |
+| F | No deferrable constraint; both foreign keys reference the run start; `set constraints all immediate` succeeds; every start has its result; observations copy their run's `evaluated_at` |
+| S | One rule raising: `partial`, SQLSTATE only (no message), its inserts rolled back, the others recorded; every rule raising: `failed`; summary counts equal the ledger; totals are the sum of ok rules; readback order, keyset, rule filter, lag and actor name; bad window and unknown rule refused |
+| E | The DEC-2026-006 batch's output, flag, events, notices and run records are identical with and without a prior scan; T-5 is observed either way |
+| R | Retention null: nothing expires, the purge refuses (`55000`) and writes nothing; below 7 days refused by the check. UPDATE refused on all four tables; DELETE refused outside the purge, of an unexpired row even with the purge setting, and of a run start before its result. Expired rows (including a run still referenced by expired observations) hidden from every readback, the lookup and the summary. Purge at limit 2 with more than 2 eligible per class: exactly 2 observations, 2 runs, 2 purge-log rows, oldest first; physical 2 + 2 + 2 + 2 = 4n; log row and return match the table changes; a referenced run stays; repeated purges drain every class; never its own log row; remaining count capped at 10,000 with `over_cap` |
+| Z | A scan and a purge change no other `public`/`private` table, HTTP request or cron job; reader, summary and batch definitions unchanged |
 
 ### 5.3 Concurrency script
 
-EVIDENCE-PLACEHOLDER-5.3
+`node scripts/sla-detector-concurrency.mjs` after a clean reset: **pass** (45.7 s locally). Four persistent psql sessions; real commits.
+
+| Group | Result |
+|---|---|
+| READ COMMITTED | Detector and purge refuse `REPEATABLE READ` and `SERIALIZABLE` with `55000` (I-8) |
+| K1 ×20 | Same key, same actor, overlapping: the second waits on the key lock, then replays the first's stored result; one start, one result |
+| K2 ×20 | Same key, another admin: `22023` after the first commits; nothing written |
+| K3 ×20 | First rolls back while the second waits: the second runs and owns the key; one run |
+| K4 ×20 | Different keys: one `complete`, one `skipped` at once (no wait); the skipped call commits a start and result and no observation; no duplicate episode |
+| U ×20 | Lookup `not_visible` while the original is held. Held original, cancelled retry (`statement_timeout` 300 ms on the key lock → `57014`): original commits → lookup `visible` with its result, next retry replays; original rolls back → lookup `not_visible` with `retry_until` ahead, next retry runs and owns the key; one start and one result either way |
+| F | An uncommitted scan is invisible to another session; a rolled-back one leaves no start, result or observation; every committed run has exactly one result; each run's `inserted` equals its rows |
+| R | Purge during a scan → logged `skipped`; scan during a purge → `skipped`; two concurrent purges → one `complete`, one `skipped`, every expired row deleted once |
+| L | 5,008-item T-5 queue: `statement_timeout` 50 ms → `57014`, nothing written; normal timeout → `complete`, T-5 inserted exactly 500 (the cap), the rest `over_limit` (that scan took 4.0 s locally under load) |
+
+The first version of the script (one process per statement) also passed every group in 20 min 53 s; it was rewritten to persistent sessions for CI time, with no assertion changed.
 
 ### 5.4 Mutations
 
-EVIDENCE-PLACEHOLDER-5.4
+Each mutant is the migration with one literal edit, dropped and re-applied whole; the original is restored after each. SQL mutants against SQL 131 (`ok`/`not ok` counts, or an aborting error, from the run); script mutants against the concurrency script. Unmutated control: 175/175 and the script passes.
+
+| Mutation (plan §6 list, plus I-4) | Result | SQL 131 |
+|---|---|---|
+| actor check removed (K2/N) | caught | `ok=172 notok=3` |
+| limit not normalized (N) | caught | `ok=54 notok=0` |
+| limit not compared (N) | caught | `ok=172 notok=3` |
+| deferrable foreign key (F) | caught | `ok=174 notok=1` |
+| anti-join removed (P, F-3) | caught | `ok=170 notok=5` |
+| observed_at := evaluated_at (T, F-5) | caught | `ok=172 notok=3` |
+| expiry filter removed from observations readback (R) | caught | `ok=174 notok=1` |
+| expiry filter removed from runs readback (R) | caught | `ok=174 notok=1` |
+| expiry filter removed from summary (R) | caught | `ok=174 notok=1` |
+| run expiry waits for unreferenced status (R, F-8) | caught | `ok=174 notok=1` |
+| purge-log rows never deleted (R) | caught | `ok=167 notok=8` |
+| observation phase not limited (R) | caught | `ok=170 notok=5` |
+| run phase not limited (R) | caught | `ok=170 notok=5` |
+| physical run rows reported as logical runs (R) | caught | `ok=173 notok=2` |
+| purge allowed while retention is null (R) | caught | `ok=173 notok=2` |
+| guard allows deleting an unexpired row (R) | caught | `ok=165 notok=10` |
+| purge permission not cleared (I-4) | caught | `ok=172 notok=3` |
+| key age check removed (Q, F-9) | caught | `ok=169 notok=6` |
+| expired run replayed with content (Q) | caught | `ok=174 notok=1` |
+| retention floor removed (R/Q) | caught | `ok=174 notok=1` |
+| future-key bound removed (Q) | caught | `ok=173 notok=2` |
+| T-8 at due (<=) instead of the reader’s overdue (B) | caught | `ok=162 notok=13` |
+| T-10 without + 24 h (B, D-2) | caught | `ok=173 notok=2` |
+| T-3 without aged (B) | **survived (equivalent)** | `ok=175 notok=0` |
+| T-4 without aged (B, D-3) | caught | `ok=163 notok=12` |
+| unique key without due_at (M-6, D-7) | caught | `ok=173 notok=2` |
+| savepoint removed (S, D-5) | caught | `ok=84 notok=0` |
+| detector writes a notification (Z) | caught | `ok=174 notok=1` |
+| service_role granted (A, OD-2) | caught | `ok=174 notok=1` |
+| error message stored instead of SQLSTATE (S) | caught | `ok=172 notok=3` |
+| admin check removed: purge (A) | caught | `ok=173 notok=2` |
+| admin check removed: readback (A) | caught | `ok=174 notok=1` |
+
+| Script mutation | Result | First failing assertion |
+|---|---|---|
+| Key lock removed (K1/K2) | caught | "a same-key call waits on the key lock" |
+| Key lock taken after the lookup (K1/K2) | caught | the waiting call gets `23505` instead of a replay |
+| Purge without the shared scan lock (R) | caught | "R: a purge during a scan is skipped" |
+| Detector without the scan lock (K4, D-4) | caught | "K4: the concurrent scan with another key is skipped" |
+
+**Equivalent mutant:** removing `aged` from T-3 changes nothing, because `admin_quote_queue` lists `proposal_missing`, `proposal_review` and `quote_decision` only once due, so `aged` is always true for them. The filter stays as a statement of the rule. The T-4 counterpart is caught (`payment_failed` is listed before it ages).
+
+**Not applicable to 7.5F-1 (I-15):** "`not_visible` mapped to failure" and "`57014` mapped to recorded nothing without a lookup" are client mappings in 7.5F-2. "Result inserted before the start" cannot be expressed with the non-deferrable foreign key (the insert fails); the deferrable-key mutation covers F-2.
 
 ### 5.5 Repository checks and CI
 
-EVIDENCE-PLACEHOLDER-5.5
+| Check | Result |
+|---|---|
+| Clean replay (`sh scripts/phase5-db.sh reset`) | 239 migrations, latest `20261203001000`. One earlier attempt was reported failed by the CLI after every migration applied (the storage container's health check timed out at host load ≈ 50, unrelated); the retry is the evidence |
+| Full SQL suite (`sh scripts/phase5-db.sh test`) | in the PR body (final local run) |
+| SQL 131 through plain psql | 175/175 |
+| Concurrency script on a clean reset | pass (§5.3) |
+| `npm run typecheck` | pass |
+| `npx eslint scripts/sla-detector-concurrency.mjs` | pass, no warnings (two unused-name warnings fixed) |
+| `npm run scan:secrets` | pass |
+| `git diff --check` | pass |
+| Unit tests, full lint, production build | not run locally: no application, page or client code changed in this slice; CI runs them |
+| Final-head CI | PR body |
+
+Numbering rechecked on `main` `80100d3` before work: latest migration `20261202001000`, latest SQL test `130`; no open PR adds a migration or SQL test.
 
 ## 6. Rollout and rollback
 
