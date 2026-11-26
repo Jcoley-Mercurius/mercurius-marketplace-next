@@ -1,3 +1,13 @@
+# Phase 7.5F-1 SLA-breach observation database foundation (TRACE-159) — 2026-11-25 ET
+
+- **Base:** `main` `80100d3` (#207 merged), fetched before work. Branch `claude/phase7-5f1-sla-db-foundation`, main checkout, `phase5-isolated` stack. Record: [7.5F-1](../../governance/PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md).
+- **Owner approval (2026-11-25 ET):** OD-1, OD-2, P-1..P-7 as [DEC-2026-069](../../governance/DECISION-LOG.md) (90-day logical retention, manual purge, any admin, no scheduler); implementation and local verification only.
+- **Built:** migration `20261203001000` (five `private` tables, guard trigger, detector, key issuer, four readbacks, purge, grants; retention row 90 days); SQL 131; `scripts/sla-detector-concurrency.mjs` + `backend` CI step. Implementation choices I-1..I-15 for Codex (record §4).
+- **Evidence:** record §5 (SQL 131, full suite, script, mutations, fingerprints, CI).
+- **Hosted push (2026-11-26 ET, owner instruction):** dry run listed only `20261203001000` (so 7.5D's `20261202001000` was already on hosted); pushed 13:14 UTC; readback matched (record §6.1).
+- **Not done:** merge, deploy, scans, purges, 7.5F-2 page, scheduler, alerts.
+- **Next:** Codex reviews PR #208; merging is the owner's release decision; then 7.5F-2.
+
 # Phase 7.5F SLA-breach observation plan (TRACE-159, OD-1/OD-2) — 2026-11-25 ET
 
 - **Base:** `main` `846dd34` (#204), fetched before work. Branch `claude/phase7-5f-sla-observation-plan`, documentation only. Record: [7.5F plan](../../governance/PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md).

@@ -90,3 +90,22 @@ Josh asked Codex to inspect and fix public profile pictures that did not fit the
 “Can you fix that, or do we need Claude to fix that?” This authorizes the bounded implementation
 in [TRACE-156 photo framing](../docs/agent/PROFILE-IMAGE-FRAMING.md). It does not establish
 owner visual acceptance of the resulting crop/viewer or authorize merge/deployment.
+
+## Phase 7.5F SLA-breach observation — 2026-11-25
+
+Josh approved the Phase 7.5F decisions and the 7.5F-1 database implementation (2026-11-25, America/New_York), recorded as [DEC-2026-069](DECISION-LOG.md). The instruction's approval text, verbatim:
+
+> I approve:
+> - OD-1: record the five proposed rules and their specified qualifying kinds: T-3, T-4 failure aging, T-5, T-8 and T-10.
+> - OD-2: manual operator scans only; no scheduler.
+> - P-1: include dispute and dispute-appeal tickets once under T-8.
+> - P-2: classify observations, runs and purge logs as operational records, with 90-day logical retention and the reviewed manual purge mechanism. This does not approve a scheduler or assert automatic physical deletion at 90 days.
+> - P-3: any authenticated admin may scan.
+> - P-4: defer derived first-response lateness reporting.
+> - P-5: no historical backfill.
+> - P-6: no scan cadence established by this implementation.
+> - P-7: any authenticated admin may use the manual purge control after separately authorized production activation.
+>
+> This approves implementation and local verification, including the planned concurrency CI step. It does not authorize hosted queries, migration pushes, release, production scans or purges.
+
+The same instruction scoped the work to 7.5F-1 (database foundation) and excluded 7.5F-2, any hosted action, merge, deployment, production scan or purge, scheduler, notification, email activation, booking or payment change. Plan: [7.5F](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md); record: [7.5F-1](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md).

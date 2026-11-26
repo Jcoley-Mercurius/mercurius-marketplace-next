@@ -271,6 +271,27 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-069 — OD-1, OD-2 and P-1..P-7: SLA-breach observation records, manual operator scans, 90-day retention
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-25 (America/New_York). **Date:** 2026-11-25.
+
+**Source of approval.** The owner's Phase 7.5F implementation instruction (2026-11-25 ET), recorded verbatim in [OWNER-APPROVALS](OWNER-APPROVALS.md) ("Phase 7.5F SLA-breach observation — 2026-11-25").
+
+**What it settles** (against the [7.5F plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md) §9–§10 and the [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) §9):
+- **OD-1:** five rules are recorded, with the plan's qualifying kinds: T-3 (`proposal_missing` 24 h, `proposal_review` 4 h, `quote_decision` 12 h), T-4 failure aging (`payment_failed` 24 h), T-5 (`confirmation_overdue` 72 h), T-8 (support first reply, CFG-010) and T-10 (`unanswered` offer terms 24 h). No other rule, and no new threshold.
+- **OD-2:** manual operator scans only. No scheduler.
+- **P-1:** dispute and dispute-appeal tickets are recorded once, under T-8 (labelled by ticket kind); there is no separate T-9 record.
+- **P-2:** observations, detector runs and purge logs are operational records (CFG-011 "Operational application logs"), with **90-day logical retention** and the reviewed manual purge. This approves no scheduler and does not assert automatic physical deletion at 90 days: rows are hidden at 90 days and deleted only when an operator runs the purge.
+- **P-3:** any authenticated admin may scan.
+- **P-4:** derived first-response lateness reporting is deferred.
+- **P-5:** no historical backfill.
+- **P-6:** this implementation establishes no scan cadence.
+- **P-7:** any authenticated admin may use the manual purge control, after separately authorized production activation.
+
+**What it is not.** Approval of implementation and local verification only, including the planned backend CI concurrency step. Not authorization for hosted queries, migration pushes, release, production scans or purges (plan §10.2 B–E stay separate). Not a scheduler, notification, alert, email activation, booking or payment change. An observation is not an alert: HQ-5 and HQ-6 stay open. Not Phase 7 acceptance.
+
+**Implementation:** TRACE-159, Phase 7.5F-1 database foundation ([record](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md)); 7.5F-2 (operator page) not started. **Reads:** CFG-010, CFG-011, CFG-015; DEC-2026-006 (the completion escalation stays a separate business action); DEC-2026-025 (Josh sole admin in R0); DEC-2026-068 (OD-5 limited, unchanged).
+
 ### DEC-2026-068 — OD-5, limited: an admin page showing the in-app notices addressed to the signed-in operator
 
 **Status:** **APPROVED, limited**, by the owner (Josh), 2026-11-24 (America/New_York). **Date:** 2026-11-24.
