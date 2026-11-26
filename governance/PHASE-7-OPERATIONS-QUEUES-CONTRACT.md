@@ -1,7 +1,7 @@
 # Phase 7.5A — Operations queues, ownership and SLA contract (TRACE-159)
 
 **Status:** CONTRACT FOR REVIEW (Codex), revision 2. Documentation and planning only. It approves no policy, sets no threshold, implements nothing and activates nothing.
-**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12). Revision 3 (2026-11-23 ET) adds only the §7.1 coverage note for 7.5C. Revision 4 (2026-11-24 ET) adds the 7.5D DF-3 notes. Revision 5 (2026-11-24 ET) adds only the 7.5E notes on X-4, OD-5 and §10 (DEC-2026-068). Revision 6 (2026-11-25 ET) adds only the 7.5F plan notes in §6.1 and §10.
+**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12). Revision 3 (2026-11-23 ET) adds only the §7.1 coverage note for 7.5C. Revision 4 (2026-11-24 ET) adds the 7.5D DF-3 notes. Revision 5 (2026-11-24 ET) adds only the 7.5E notes on X-4, OD-5 and §10 (DEC-2026-068). Revision 6 (2026-11-25 ET) adds only the 7.5F plan notes in §6.1 and §10. Revision 7 (2026-11-25 ET) records OD-1/OD-2 as decided (DEC-2026-069) and the 7.5F-1 implementation status in §6.1, §9 and §10.
 **Checkpoint (revision 2):** 2026-11-22 (America/New_York), `main` `83c8fea` (#194 merge), merged into this branch. Every source reference below was rechecked at this commit: #194 changed no migration and no admin source, so all line references still hold.
 **Original baseline (history, 2026-11-22 ET):** `main` `63c8010` (#193 merge), the commit the first revision was written against (§1).
 **Branch:** `claude/phase7-5a-operations-queues-contract`, from `main` `63c8010`, with `main` `83c8fea` merged.
@@ -174,7 +174,7 @@ So no general breach observation exists: for T-3, T-4, T-8 and T-10, and for T-5
 
 **Owner decisions:** OD-1 (which rules count) and OD-2 (who invokes the detector). §9.
 
-**7.5F plan note (2026-11-25 ET, revision 6).** The design above is worked out in the [7.5F plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md) for review: per-rule qualifying conditions and `due_at` sources (T-3 three kinds, T-4 failure aging, T-5, T-8, T-10), what a manual scan cannot record, and an OD-1/OD-2 decision card. Two refinements to the bullets above, both proposals: the unique key adds the item kind, `(rule, kind, subject, due_at)`; and the detector calls the existing public readers as the invoking admin rather than private item functions, so no reader is restated. OD-1 and OD-2 remain open; nothing is built.
+**7.5F plan note (2026-11-25 ET, revision 6).** The design above is worked out in the [7.5F plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md) for review: per-rule qualifying conditions and `due_at` sources (T-3 three kinds, T-4 failure aging, T-5, T-8, T-10), what a manual scan cannot record, and an OD-1/OD-2 decision card. Two refinements to the bullets above, both proposals: the unique key adds the item kind, `(rule, kind, subject, due_at)`; and the detector calls the existing public readers as the invoking admin rather than private item functions, so no reader is restated. OD-1 and OD-2 remain open; nothing is built. **7.5F-1 note (2026-11-25 ET, revision 7):** OD-1 and OD-2 decided by the owner (DEC-2026-069); the database foundation is implemented for review ([7.5F-1 record](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md)): migration `20261203001000`, append-only ledger, admin-invoked detector calling the existing readers, four readbacks and the 90-day retention purge. Not pushed, merged or run on hosted data; no page yet (7.5F-2).
 
 ### 6.2 Eligible-provider counts (AC-1 L-1): correction
 
@@ -281,8 +281,8 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 
 | ID | Decision | Needed before | Recommendation (proposal only) |
 |---|---|---|---|
-| OD-1 | Which approved rules (T-1..T-11) are recorded as SLA breaches | Breach-record slice | Only T-3, T-4 (failure aging), T-5, T-8, T-10: the rules that already define a breach instant |
-| OD-2 | Who runs the breach detector: operator control (as the 7.3D-2 purge control does) or the scheduler | Breach-record slice | Operator control first; scheduler under the DEC-2026-003 activation sequence |
+| OD-1 | Which approved rules (T-1..T-11) are recorded as SLA breaches | Breach-record slice | Only T-3, T-4 (failure aging), T-5, T-8, T-10: the rules that already define a breach instant. **Decided 2026-11-25 ET (DEC-2026-069):** as recommended, with the 7.5F plan's qualifying kinds; disputes and dispute appeals once under T-8 (P-1) |
+| OD-2 | Who runs the breach detector: operator control (as the 7.3D-2 purge control does) or the scheduler | Breach-record slice | Operator control first; scheduler under the DEC-2026-003 activation sequence. **Decided 2026-11-25 ET (DEC-2026-069):** manual operator scans only, any admin (P-3); no scheduler; no cadence (P-6) |
 | OD-3 | Eligible-pool record definition (§6.2) | Pool-record slice | Count at each matching run, after excluding earlier attempts, with gate-blocked counted separately |
 | OD-4 | "Sourced" (§6.3) | Any liquidity measure of it | Option (a): none in beta |
 | OD-5 | Operator alert channel and recipient (admin in-app readback, owner email, external provider per MTS §15 item 6) | Any alert slice; HQ-6 | Admin in-app readback first (rows already written); external provider as a separate MTS decision. **Partly decided 2026-11-24 ET (DEC-2026-068):** approved only for the admin page showing existing notices addressed to the signed-in operator (7.5E). External alert services, email alerts, new producers and automation are not approved; the channel and named recipient for HQ-6 stay open |
@@ -298,7 +298,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 2 | **7.5C** staged-failure characterization tests (§7.1), tests only | 7.5B merged (SF-12 expects `null`) |
 | 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9). Implemented for review 2026-11-24 ET, after 7.5C merged ([record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md)) |
 | 4 | **7.5E** admin in-app readback, so existing admin rows become the first alert surface | OD-5. Implemented for review 2026-11-24 ET under DEC-2026-068 (OD-5 limited), no migration ([record](PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md)) |
-| 5 | **7.5F** breach observation records and operator detector | OD-1, OD-2. Plan for review 2026-11-25 ET, not implemented ([plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md)) |
+| 5 | **7.5F** breach observation records and operator detector | OD-1, OD-2. Plan for review 2026-11-25 ET ([plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md)). OD-1/OD-2 decided (DEC-2026-069); **7.5F-1 database implemented for review** 2026-11-25 ET ([record](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md)); 7.5F-2 page not started |
 | 6 | **7.5G** server sourcing and applications queues (no thresholds) | OD-4 for sourcing wording |
 | 7 | Pool record | OD-3 |
 | 8 | Scheduler activation (HQ-3, HQ-4) | DEC-2026-003 sequence; owner approval |
@@ -319,6 +319,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 4 | 2026-11-24 | `main` `7f66d9a` + #199 `6a753f3`; rebased onto `main` `aeb20e4` (#199 merged, same tree) | 7.5D: dated DF-3 repair note (§5.3), SF-9 note (§7.1), sequence status (§10). Original rows kept as history; no other expectation, status or recommendation changed |
 | 5 | 2026-11-24 | `main` `dcc62e1` (#201, 7.5D, merged) | 7.5E: X-4 note (§3), OD-5 partly decided (§9, DEC-2026-068), sequence status (§10). No expectation, threshold or other decision changed. §7.1 SF-6b and SF-8 call their admin rows "(write-only)": since 7.5E each admin can read their own copy in the app; SQL 128 asserts the rows, not their readability, so no assertion changes. The "alert: none" pins stay, because an in-app row for an admin is not an alert delivered to anyone |
 | 6 | 2026-11-25 | `main` `846dd34` | 7.5F plan notes in §6.1 and §10. No expectation, status, threshold or decision changed |
+| 7 | 2026-11-25 | `main` `80100d3` (#207, 7.5F plan, merged) | OD-1/OD-2 decided (§9, DEC-2026-069); 7.5F-1 status notes (§6.1, §10). No expectation, threshold or other decision changed |
 
 **Codex 7.5A review, applied in revision 2:**
 

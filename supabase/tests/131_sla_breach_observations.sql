@@ -451,6 +451,15 @@ select is((select array_agg((pg_temp.rule(v, 'T-5')->>'already_recorded')::int -
 select is((select array_agg((pg_temp.rule(v, 'T-5')->>'over_limit')::int order by label) from res where label in ('p1','p2','p3','p4')), array[2,1,0,0], 'P: over_limit 2, 1, 0, 0');
 select ok((select bool_and(pg_temp.invariant(v)) from res), 'P: the invariant holds on every run and rule');
 
+-- M-6 / D-7: a moved source timestamp is a new episode. r15's notice is resent 1 h after its first
+-- 72 h mark passed (a new confirmation_sent_at), so its due_at moves; the next scan records a second,
+-- unlinked row for the same subject. The first row is kept.
+select pg_temp.backdate($b$update public.service_requests set confirmation_sent_at = now() - interval '73 hours' where id = 'f75f2000-0000-4000-8000-000000000015'$b$);
+insert into res values ('m6', pg_temp.scan(1, pg_temp.k(now(), 25), 200));
+select is((select array_agg(due_at order by due_at) from private.operations_sla_observations where rule_id = 'T-5' and subject_id = pg_temp.r(15)),
+  array[now() - interval '1 hour', now()], 'M-6: the same subject with a new due_at is a second row; the first is kept (D-7)');
+select is((select (pg_temp.rule(v, 'T-5')->>'inserted')::int from res where label = 'm6'), 1, 'M-6: the scan inserted only that new episode');
+
 -- ================================================================================================
 -- F  Constraints and the commit boundary (the cross-session half is in the script).
 select is((select count(*)::int from pg_constraint where conrelid in ('private.operations_sla_detector_runs'::regclass, 'private.operations_sla_observations'::regclass,

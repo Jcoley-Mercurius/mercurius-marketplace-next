@@ -98,6 +98,8 @@ jobs:
         run: node scripts/owner-email-concurrency.mjs
       - name: Provider-event migration under ledger lock contention, aborting on its 2 s lock timeout (TRACE-155)
         run: node scripts/email-provider-events-migration-lock.mjs
+      - name: Concurrent SLA detector run keys, scans and purges (TRACE-159)
+        run: node scripts/sla-detector-concurrency.mjs
       - name: Concurrent provider-event receipts, conflicts, source deletion and purges (TRACE-155)
         run: node scripts/email-provider-events-concurrency.mjs
       - name: Phase 7.3D-1 concurrent arm and disarm commands, and probe readbacks racing a content conflict
