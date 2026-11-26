@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createClient } from "@supabase/supabase-js";
 import { getAnonymousSupabaseEnvironment } from "@/lib/env/server";
+import type { Database } from "@/lib/supabase/database.types";
 
 // TRACE-103: expose the same eligible provider profiles as the public directory.
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ const PAGE_SIZE = 500;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { supabaseUrl, supabaseAnonKey } = getAnonymousSupabaseEnvironment();
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
   const signal = AbortSignal.timeout(4000);
