@@ -17,6 +17,8 @@
 - **Flags:** D-1 no service detail page, so cards and rows lead to early access with the service preselected; F-1 no canonical/`metadataBase` site-wide.
 - **Not done:** merge, deploy, detail page, canonical.
 - **Next:** Josh reviews the draft PR (photos, D-1..D-5); Codex reviews the diff.
+- **#205 merged** as `24fd251` (2026-11-25 21:29:45 UTC); deployment not verified.
+- **Revision 1 (2026-11-25 ET, owner instruction):** branch `claude/services-option-c-r1` from `main` `24fd251`, new draft PR (the instruction named #205, merged meanwhile). featured cards jump to their own catalog row (`#service-<id>`; a hiding filter resets to All services; row scrolled clear of the header and focused; rows keep "Join early access" with the service preselected). Pool Service photo replaced with a screened pool (Pexels 11400444, An Flamand; `pending_owner_review`). Evidence: record §§6.5–6.6. Plan Builder and detail pages still out of scope.
 
 # Phase 7.5E admin notification readback (TRACE-159, OD-5) — 2026-11-24 ET
 

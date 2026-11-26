@@ -29,7 +29,7 @@ const packages = [
 ];
 const tiers = [{ id: "00000000-0000-4000-8000-0000000000c1", package_id: packages[0].id, name: "Standard", price: 140, frequency: "weekly", includes: ["Skim and brush"] }];
 
-type Setup = { width: number; height?: number; packagesFail?: (attempt: number) => boolean };
+type Setup = { width: number; height?: number; path?: string; packagesFail?: (attempt: number) => boolean };
 
 async function open(page: Page, setup: Setup) {
   let packageReads = 0;
@@ -51,12 +51,35 @@ async function open(page: Page, setup: Setup) {
     if (url.pathname === "/rest/v1/rpc/r0_public_providers") return route.fulfill({ json: [{ id: provider }] });
     return route.continue();
   });
-  await page.goto("/services");
+  await page.goto(setup.path ?? "/services");
   await expect(page.getByRole("heading", { level: 1, name: "Explore home services in Lee County" })).toBeVisible();
 }
 
 const catalog = (page: Page) => page.getByRole("region", { name: "All home services" });
 const row = (page: Page, id: string) => page.locator(`[data-service-row="${id}"]`);
+const featured = ["lawn-mowing", "house-cleaning", "pool-service", "handyman"] as const;
+const nameOf = (id: string) => fixture.services.find((service) => service.id === id)!.name;
+const card = (page: Page, id: string) => page.getByRole("link", { name: new RegExp(`^${nameOf(id)}\\s*,\\s*view in All home services$`) });
+const filters = (page: Page) => page.getByRole("group", { name: "Filter services by category" });
+
+/** The row is focused, in view and clear of the sticky header. */
+async function expectRevealed(page: Page, id: string) {
+  await expect(page).toHaveURL(new RegExp(`/services#service-${id}$`));
+  await expect(row(page, id)).toBeFocused();
+  await expect(row(page, id)).toBeInViewport();
+  await expect.poll(async () => {
+    const header = (await page.getByRole("banner").boundingBox())!;
+    return (await row(page, id).boundingBox())!.y - (header.y + header.height);
+  }).toBeGreaterThanOrEqual(8);
+}
+
+/** Moves keyboard focus to the element with Tab (or Shift+Tab), as a keyboard user would. */
+async function tabTo(page: Page, target: ReturnType<Page["locator"]>, key: "Tab" | "Shift+Tab" = "Tab") {
+  for (let presses = 0; presses < 80 && !(await target.evaluate((element) => element === document.activeElement)); presses += 1) {
+    await page.keyboard.press(key);
+  }
+  await expect(target).toBeFocused();
+}
 
 const escaped = (value: string) => value.replaceAll("&", "&amp;");
 /** The opening tag of the first <a> carrying this attribute, whatever the attribute order. */
@@ -103,12 +126,14 @@ test.describe("initial HTML", () => {
     expect(html).toContain('name="description" content="Browse local home services in Lee County, Florida, and see package pricing where available. Booking opens by invitation."');
     expect(html).not.toMatch(/rel="canonical"/);
     for (const heading of ["Featured services", "All home services", "Want to know when booking opens?"]) expect(html).toContain(heading);
-    for (const id of ["lawn-mowing", "house-cleaning", "pool-service", "handyman"]) {
-      expect(anchor(html, `data-featured-service="${id}"`)).toContain(`href="/early-access?service=${id}"`);
+    // Each featured card is a plain anchor to its own catalog row, so it works before scripts run.
+    for (const id of featured) {
+      expect(anchor(html, `data-featured-service="${id}"`)).toContain(`href="#service-${id}"`);
     }
-    // Every catalog service's name, description and link is in the HTML before any script runs.
+    // Every catalog service's row (with its stable anchor), name, description and link is in the
+    // HTML before any script runs.
     for (const service of fixture.services) {
-      expect(html).toContain(`data-service-row="${service.id}"`);
+      expect(html).toMatch(new RegExp(`<li[^>]*id="service-${service.id}"[^>]*data-service-row="${service.id}"`));
       expect(html).toContain(`href="/early-access?service=${service.id}"`);
       expect(html).toContain(escaped(service.name));
       if (service.descriptor) expect(html).toContain(escaped(service.descriptor));
@@ -184,17 +209,52 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 900 }, { name: "
       await expectAccessible(page);
     });
 
-    test("a homeowner opens Pool Service by keyboard and lands on early access with it selected", async ({ page }) => {
+    test("each featured card jumps to its own catalog row", async ({ page }) => {
       await open(page, viewport);
-      const card = page.getByRole("link", { name: /^Pool Service\s*,\s*join early access/ });
-      await expect(card).toHaveAttribute("href", "/early-access?service=pool-service");
-      // Reach it with the keyboard from the top of the page.
-      for (let presses = 0; presses < 60 && !(await card.evaluate((element) => element === document.activeElement)); presses += 1) {
-        await page.keyboard.press("Tab");
+      for (const id of featured) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await expect(card(page, id)).toHaveAttribute("href", `#service-${id}`);
+        await card(page, id).click();
+        await expectRevealed(page, id);
+        // The row keeps its own early-access action for that service.
+        await expect(row(page, id).getByRole("link", { name: `Join early access for ${nameOf(id)}`, exact: true }))
+          .toHaveAttribute("href", `/early-access?service=${id}`);
       }
-      await expect(card).toBeFocused();
-      // A visible focus ring.
-      expect(await card.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
+      // The same card again, after a filter has hidden its row: the filter returns to all services.
+      await filters(page).getByRole("button", { name: "Lawn & Landscape" }).click();
+      await expect(row(page, "handyman")).toHaveCount(0);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await card(page, "handyman").click();
+      await expect(filters(page).getByRole("button", { name: "All services" })).toHaveAttribute("aria-pressed", "true");
+      await expect(catalog(page).locator("[data-service-row]")).toHaveCount(6);
+      await expectRevealed(page, "handyman");
+      await expectNoHorizontalOverflow(page);
+    });
+
+    test("by keyboard, Pool Service reaches its row through a hiding filter, and its action opens early access with it selected", async ({ page }) => {
+      await open(page, viewport);
+      // A filter that hides Pool Service.
+      const cleaning = filters(page).getByRole("button", { name: "Cleaning", exact: true });
+      await tabTo(page, cleaning);
+      await page.keyboard.press("Enter");
+      await expect(cleaning).toHaveAttribute("aria-pressed", "true");
+      await expect(row(page, "pool-service")).toHaveCount(0);
+
+      // Back up to the featured card with Shift+Tab, then Enter.
+      await tabTo(page, card(page, "pool-service"), "Shift+Tab");
+      expect(await card(page, "pool-service").evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
+      await page.keyboard.press("Enter");
+      await expect(filters(page).getByRole("button", { name: "All services" })).toHaveAttribute("aria-pressed", "true");
+      await expect(cleaning).toHaveAttribute("aria-pressed", "false");
+      await expectRevealed(page, "pool-service");
+      // A visible focus indicator on the row.
+      expect(await row(page, "pool-service").evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
+      await expectAccessible(page);
+
+      // The next Tab is the row's own action.
+      await page.keyboard.press("Tab");
+      const action = row(page, "pool-service").getByRole("link", { name: "Join early access for Pool Service", exact: true });
+      await expect(action).toBeFocused();
       await page.keyboard.press("Enter");
       // The client navigation renders the early-access page on the server first.
       await expect(page).toHaveURL(/\/early-access\?service=pool-service$/, { timeout: 15_000 });
@@ -209,6 +269,16 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 900 }, { name: "
     });
   });
 }
+
+test("a shared link to a catalog row opens with that row in view and focused", async ({ page }) => {
+  await open(page, { width: 390, height: 844, path: "/services#service-house-cleaning" });
+  await expectRevealed(page, "house-cleaning");
+  // Back to the page top, then forward to the row again through the browser history.
+  await page.getByRole("link", { name: "Browse all services" }).click();
+  await expect(page).toHaveURL(/\/services#all-services$/);
+  await page.goBack();
+  await expectRevealed(page, "house-cleaning");
+});
 
 test("a failed pricing read keeps the catalog, says so, and recovers on retry", async ({ page }) => {
   await open(page, { width: 1440, packagesFail: (attempt) => attempt === 1 });

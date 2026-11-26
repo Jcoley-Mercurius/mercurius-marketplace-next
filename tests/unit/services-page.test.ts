@@ -13,6 +13,7 @@ import {
   type PublicCatalog,
 } from "@/lib/servicesPage/catalog";
 import { FEATURED_PHOTO_KEYS, SERVICES_HERO_IMAGE, featuredPhoto, type ResponsiveImage } from "@/lib/servicesPage/imagery";
+import { REVEAL_SERVICE_ROW_EVENT, revealServiceRow, serviceIdFromHash, serviceRowAnchor, serviceRowHref } from "@/lib/servicesPage/rowAnchor";
 
 const category = (id: string, name = id) => ({ id, name, icon: "Leaf", sort_order: 0 });
 const service = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: `Name ${id}`, category_id: "lawn-landscape", descriptor: ` About ${id} `, icon: "Leaf", ...extra });
@@ -67,11 +68,11 @@ describe("featured services", () => {
     expect(FEATURED_PHOTO_KEYS).toEqual(FEATURED_SERVICE_IDS);
   });
 
-  it("use the catalog's names, lead to early access with the service selected, and skip a missing service", () => {
+  it("use the catalog's names, lead to their own catalog row, and skip a missing service", () => {
     expect(featuredServices(catalog).map(({ id, name, href }) => ({ id, name, href }))).toEqual([
-      { id: "lawn-mowing", name: "Lawn Care", href: "/early-access?service=lawn-mowing" },
-      { id: "pool-service", name: "Pool Service", href: "/early-access?service=pool-service" },
-      { id: "handyman", name: "Handyman Pro", href: "/early-access?service=handyman" },
+      { id: "lawn-mowing", name: "Lawn Care", href: "#service-lawn-mowing" },
+      { id: "pool-service", name: "Pool Service", href: "#service-pool-service" },
+      { id: "handyman", name: "Handyman Pro", href: "#service-handyman" },
     ]);
   });
 
@@ -82,6 +83,46 @@ describe("featured services", () => {
   it("never lead to the request form", () => {
     expect(serviceDestination("pool-service")).toBe("/early-access?service=pool-service");
     expect(fallbackPublicCatalog().services.every((item) => !serviceDestination(item.id).startsWith("/request"))).toBe(true);
+  });
+});
+
+describe("catalog row anchors", () => {
+  it("are derived from the catalog id", () => {
+    expect(serviceRowAnchor("pool-service")).toBe("service-pool-service");
+    expect(serviceRowHref("pool-service")).toBe("#service-pool-service");
+  });
+
+  it("read back only a well-formed service fragment", () => {
+    expect(serviceIdFromHash("#service-pool-service")).toBe("pool-service");
+    expect(serviceIdFromHash("service-handyman")).toBe("handyman");
+    for (const hash of ["", "#", "#all-services", "#service-", "#service-Pool", "#service-a b", `#service-${"a".repeat(65)}`, "#services-pool"]) {
+      expect(serviceIdFromHash(hash)).toBeNull();
+    }
+  });
+
+  describe("revealServiceRow", () => {
+    const pushState = vi.fn();
+    const dispatchEvent = vi.fn();
+    beforeEach(() => {
+      vi.stubGlobal("window", { location: { hash: "" }, history: { pushState }, dispatchEvent });
+      vi.stubGlobal("CustomEvent", class { constructor(public type: string, public init: { detail: string }) {} });
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      pushState.mockReset();
+      dispatchEvent.mockReset();
+    });
+
+    it("records the fragment once and always asks the catalog to reveal the row", () => {
+      revealServiceRow("pool-service");
+      expect(pushState).toHaveBeenCalledWith(null, "", "#service-pool-service");
+      expect(dispatchEvent.mock.calls[0][0]).toMatchObject({ type: REVEAL_SERVICE_ROW_EVENT, init: { detail: "pool-service" } });
+
+      (window as unknown as { location: { hash: string } }).location.hash = "#service-pool-service";
+      revealServiceRow("pool-service");
+      expect(pushState).toHaveBeenCalledTimes(1);
+      expect(dispatchEvent).toHaveBeenCalledTimes(2);
+    });
   });
 });
 
