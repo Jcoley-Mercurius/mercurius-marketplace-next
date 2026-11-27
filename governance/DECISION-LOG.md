@@ -290,7 +290,7 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **What it is not.** Approval of implementation and local verification only, including the planned backend CI concurrency step. Not authorization for hosted queries, migration pushes, release, production scans or purges (plan §10.2 B–E stay separate). Not a scheduler, notification, alert, email activation, booking or payment change. An observation is not an alert: HQ-5 and HQ-6 stay open. Not Phase 7 acceptance.
 
-**Implementation:** TRACE-159, Phase 7.5F-1 database foundation ([record](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md)); 7.5F-2 (operator page) not started. **Reads:** CFG-010, CFG-011, CFG-015; DEC-2026-006 (the completion escalation stays a separate business action); DEC-2026-025 (Josh sole admin in R0); DEC-2026-068 (OD-5 limited, unchanged).
+**Implementation:** TRACE-159, Phase 7.5F-1 database foundation ([record](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md)); 7.5F-2 (operator page) not started. **Dated note (2026-11-27 ET):** 7.5F-2 [operator page](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-2.md) implemented for review; release, first hosted scan and first hosted purge remain separate authorizations. **Reads:** CFG-010, CFG-011, CFG-015; DEC-2026-006 (the completion escalation stays a separate business action); DEC-2026-025 (Josh sole admin in R0); DEC-2026-068 (OD-5 limited, unchanged).
 
 ### DEC-2026-068 — OD-5, limited: an admin page showing the in-app notices addressed to the signed-in operator
 

@@ -139,6 +139,8 @@ const ADMIN_REQUESTS = "/admin/requests";
 // notice never opens the list it is in. /admin/smart-picks is a retired, unlisted page.
 export const ADMIN_NOTIFICATION_ROUTES: ReadonlyMap<string, string> = new Map([
   ["/admin", "Overview"],
+  // Phase 7.5F-2: no producer links here (the detector writes no notice); listed as an existing page.
+  ["/admin/sla-observations", "SLA Observations"],
   ["/admin/requests", "Service Requests"],
   ["/admin/applications", "Applications"],
   ["/admin/recruiting", "Recruiting Readiness"],
