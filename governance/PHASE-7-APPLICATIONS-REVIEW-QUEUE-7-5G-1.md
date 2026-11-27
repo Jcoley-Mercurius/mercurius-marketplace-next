@@ -1,15 +1,15 @@
 # Phase 7.5G-1 — applications awaiting review: server reader and overview row (TRACE-159)
 
-**Status:** **IMPLEMENTED FOR REVIEW** (Codex). Not merged, not pushed to hosted, not deployed.
+**Status:** **IMPLEMENTED FOR REVIEW** (Codex), recovered onto `main` (§8). Hosted push and readback of `20261205001000` **recorded** (§5; not re-verified by the recovery). Not merged to `main`, not deployed. #215 merged into its stacked base branch, not `main` (§8).
 **Date:** 2026-11-27 (America/New_York).
-**Base:** built stacked on #214's head `5810e60` (7.5G plan revision 2 = `main` `2039d25` plus documentation). While it was in progress, #213 merged (`main` `e3a12a1`, 18:16:58 UTC) and `main` was merged into #214 (`1b3032b`). That head was merged into this branch (`383c3fc`; one conflict, the TRACE-159 row, resolved by keeping #213's text and appending the 7.5G notes). This PR targets #214's branch until #214 merges; it will then be retargeted to `main` and its diff reconciled.
+**Base:** built stacked on #214's head `5810e60` (7.5G plan revision 2 = `main` `2039d25` plus documentation). While it was in progress, #213 merged (`main` `e3a12a1`, 18:16:58 UTC) and `main` was merged into #214 (`1b3032b`). That head was merged into this branch (`383c3fc`; one conflict, the TRACE-159 row, resolved by keeping #213's text and appending the 7.5G notes). #215 was meant to be retargeted to `main` after #214 merged; it was not, and it merged into #214's branch after #214 had merged. The replacement PR from `main` is described in §8.
 **Authority:** the owner's 7.5G-1 instruction (2026-11-27 ET); [7.5G plan](PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md) §5 and §9 (Codex R-1..R-5 and C-1..C-3, relayed in conversation); [TRACE-136 brief](PHASE-6-ADMIN-OPERATIONS-BRIEF.md) A8 and §12.4 item 4; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) Q-12; TRACE-105 and TRACE-108 (DEC-2026-032) for the existing classification.
 
 ## What this slice does not do
 
 - The applications page is unchanged (R-2). It still classifies each row in the browser.
 - No threshold, aging, due time, owner or assignee field, notice, email, scheduler, matching, booking or payment change.
-- No hosted query, migration push, merge, deployment, production scan or purge.
+- No hosted query, migration push, merge, deployment, production scan or purge under the implementation instruction. The hosted dry run, push and readback were later run under separate owner instructions (§5).
 - Independent of #213: nothing here reads or changes the SLA observation page.
 
 ## 1. State verified before work (2026-11-27 ET)
@@ -155,11 +155,11 @@ All 14 caught.
 | Browser: `admin-operations`, `portals`, `application-retention` (on the tree before #214's new head, and so #213, was merged in) | First run 52/54. Failed: `admin-operations.spec.ts:28` (navigation, light 1440 px) and `:149` (record fetched by id). Neither asserts the new row. Both passed on rerun (3/3, including the dark 390 px variant), with host load 12–22. The rerun overwrote the first run's error context, so those errors are not retained |
 | Old client on the new summary | Pass. A throwaway worktree of `main` `e3a12a1` (no `applications` entry in `SUMMARY_QUEUES`) with only the new `tests/fixtures/admin-operations-summary.json` copied in; that fixture has the `applications` row for both callers. Built with CI's synthetic environment and the type-check step skipped (`typescript.ignoreBuildErrors` in the worktree only: two full builds rebooted this 5.6 GB host during the type check, and `main`'s types are checked by `main`'s own CI). No hosted host in the output. `main`'s own `admin-operations.spec.ts`: **18/18**. Its overview tests expect exactly its nine rows, so the old client drops the unknown `applications` row and renders everything else unchanged |
 | Browser on the merged tree | Not rerun locally (host reboots during builds); the full browser lane is exact-head CI's `application` job |
-| Final-head CI | PR body |
+| Final-head CI | The replacement PR's body (§8). #215's exact-head CI (`9fbdc04`) ran against the stacked base and is historical evidence only |
 
-## 5. Hosted steps for later authorization (not run)
+## 5. Hosted steps (steps 1–4 recorded as done below; step 5 not run)
 
-Each step needs the owner's authorization (DEC-2026-037). The push comes **before** #214 and this PR merge. The client already deployed from `main` filters a queue it does not know (§4.4), so it keeps working on the new summary until the deploy lands.
+The numbered steps were written before any hosted action, as the plan for later authorization. The dated notes after them record what was run. Each step needs the owner's authorization (DEC-2026-037). The push comes **before** #214 and this PR merge. The client already deployed from `main` filters a queue it does not know (§4.4), so it keeps working on the new summary until the deploy lands.
 
 1. **Preflight (read-only):** `npx supabase db query --linked "select max(version) from supabase_migrations.schema_migrations"`. Expected: `20261204001000`. Stop on anything else.
 2. **Dry run:** `npx supabase db push --linked --dry-run`. Expected: exactly one pending migration, `20261205001000_phase7_applications_review_queue.sql`. Stop if any other is listed.
@@ -169,7 +169,7 @@ Each step needs the owner's authorization (DEC-2026-037). The push comes **befor
    - `select p.oid::regprocedure, md5(pg_get_functiondef(p.oid)), proacl, provolatile, prosecdef, proconfig from pg_proc p where p.oid in ('public.admin_operations_summary()'::regprocedure, 'public.admin_application_review_queue()'::regprocedure)`. Expected: summary `779d61f5d3509895233bfaaff855ce5b`, `{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}`, `v`, `t`, `{"search_path=\"\""}`; reader `3070dcddc4b252000e0058475424f857`, `{postgres=X/postgres,authenticated=X/postgres}`, `s`, `t`, `{"search_path=\"\""}`;
    - `select r, has_function_privilege(r, 'public.admin_application_review_queue()', 'execute') from unnest(array['anon','service_role','authenticated']) r`. Expected: false, false, true;
    - `scripts/promotion-money-fingerprint.sql`. Expected: `61 | eb3f9702d45f9f22e61f6a7da17349c4`, unchanged.
-   
+
    No reader or summary is called on hosted: these statements read the catalog only, and no application data is selected.
 5. **After merge (separately authorized):** confirm the production deployment for the merge commit is READY, then HQ-1/HQ-2 extended to the `applications` row (contract §7.2), read-only, in one `REPEATABLE READ READ ONLY` transaction.
 
@@ -189,6 +189,8 @@ Each step needs the owner's authorization (DEC-2026-037). The push comes **befor
 
 The readback read the catalog and migration history only. Neither function was called, and no application data was selected. **Not done:** the merge of #214 and #215 (each still needs the owner's release authorization), the deployment READY check and HQ-1/HQ-2 (step 5). Until #215 deploys, Production runs `main`'s client, which drops the new `applications` row (§4.4).
 
+**Reconciled (2026-11-27 ET, §8):** #214 merged to `main`; #215 merged into #214's branch instead of `main`, so nothing of 7.5G-1 deployed. The paragraph above still holds with "the replacement PR" in place of #215: if the recorded push stands, hosted already serves the `applications` row and Production's client drops it. The recovery made no hosted query, so this push and readback are recorded, not re-verified.
+
 **Rollback.** Application: `vercel promote` of the previous production deployment, which works on the new summary (§4.4). Database: a forward migration restoring the `20261130001000` summary body, with the reader left in place or revoked. No data is written, so nothing needs repair.
 
 ## 6. Implementation decisions for Codex
@@ -204,6 +206,32 @@ The readback read the catalog and migration history only. Neither function was c
 
 ## 7. Open items
 
-- Codex review of this PR (I-1..I-6).
-- Owner: the hosted dry run and push before merge (§5), and the release of #214 and then this PR.
+- Codex review of the replacement PR (I-1..I-6, and the recovery in §8).
+- Owner: release of the replacement PR to `main` (DEC-2026-037). #214 is already merged. The hosted dry run, push and readback are recorded in §5; whether to re-verify them read-only before merge is the owner's call (§8.3).
+- After merge (separately authorized): deployment READY for the merge commit, then HQ-1/HQ-2 (§5 step 5).
 - Carried unchanged: 7.5G-2 (OD-4a, S-1..S-5), OD-3, OD-6, D-6, HQ-1..HQ-6.
+
+## 8. Recovery after #215 merged into its stacked base (2026-11-27 ET)
+
+### 8.1 What happened (verified with `git` and `gh`, no hosted query)
+
+| Item | Observation |
+|---|---|
+| #214 | Merged to `main` as `294eb22` at 21:52:04 UTC (merge of `1b3032b`) |
+| #215 | Head `9fbdc04`. Still based on `claude/phase7-5g-scope-plan` (never retargeted), merged into it at 22:59:37 UTC as `a028998`, after #214 had merged that branch. So 7.5G-1 did **not** reach `main` and was **not** deployed |
+| `main` | `294eb22`. Its tree equals `1b3032b`, the stacked base before #215 (empty diff), so `main..a028998` is exactly 7.5G-1 |
+| Numbering | Newest on `main`: migration `20261204001000`, SQL test `132`; no open PR. `20261205001000` and `133` remain free |
+
+### 8.2 The recovery
+
+- Branch `claude/phase7-5g1-recovery-main` from `main` `294eb22`. Commit `26d1594` copies the 13 files of `main..a028998` from `a028998`. `git diff a028998 26d1594` is empty: no plan or history change is duplicated, and `main`'s entries are kept.
+- The migration `20261205001000_phase7_applications_review_queue.sql` is blob `ca146a1` (sha256 `34673e52…`) at `77b6160`, `9826d52`, `9fbdc04`, `a028998` and in the recovery. So the recovery ships the same file the recorded push applied (from `9826d52`).
+- A second commit reconciles this record, TRACE-159 and the handoff. No code, test, fixture or migration changes after `26d1594`.
+- #215 and its CI stay as historical evidence: exact-head CI on `9fbdc04` (CI 46066556269 and push CI 46066549450 `backend`/`lifecycle`/`application` success; Analytics privacy 46066556274 success) was measured against the stacked base. It is not evidence for the replacement PR's head, whose own exact-head CI is in its PR body.
+- #215's PR body was not updated after the hosted actions: its "Hosted (not run)" and "Not done: no hosted query or push" sections, and its CI line citing `b7c5313`, predate the dry run and push recorded in §5.
+
+### 8.3 Hosted state of `20261205001000`: recorded, not re-verified
+
+- **Recorded:** the dry run (20:48 UTC), guard dry run and push (20:51:26–20:51:29 UTC) and the catalog readback (20:51:48–20:51:58 UTC) are recorded in §5, in the handoff and in TRACE-159, by the session that ran them under the owner's instructions, in commits `9826d52`, `5a60c9d` and `9fbdc04`.
+- **Not re-verified:** this recovery ran no hosted query. "Recorded as applied" is not the same as "observed applied now".
+- **Read-only re-verification, if the owner authorizes it:** §5 step 4's statements. Expected: latest `20261205001000` (or later, if a newer slice has since pushed), the two md5s, ACLs and execute privileges, and money `61 | eb3f9702…`. If the reader is absent, the push did not hold. Then the dry run must list only `20261205001000` before a push, as in §5 steps 2–3.
