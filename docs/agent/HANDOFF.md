@@ -6,6 +6,7 @@
 - **Separated:** approved requirements versus open decisions for sourcing (OD-4a/4b, OD-6), eligible-provider counts (OD-3, AC-1 D-4, no matching version defined) and operator reporting (D-6, OD-5 beyond in-app, P-4); plan §4.
 - **Not done:** no code, test, migration, CI, hosted query, merge, deploy, scan, purge, email, scheduler, booking or payment change.
 - **Next:** Codex reviews the plan (R-1..R-5). 7.5G-1 needs no owner policy decision, only the hosted push authorization and the release when it is built.
+- **Revision 2 (2026-11-27 ET):** Codex accepted R-1..R-5, relayed in conversation (not a GitHub review). R-3 wording is "application received", and intake revisions do not reset it. Clarifications C-1 (parity from real SQL output through the real `applicationQueueState`), C-2 (parity only for fully loaded data from one database state) and C-3 (order `created_at, id`; fixtures with several intake revisions and with linked onboarding but no review start). Plan §9. Not merged; merging needs owner release authorization.
 
 # Phase 7.5F-1 forward repair F208-1 (TRACE-159) — 2026-11-26 ET
 

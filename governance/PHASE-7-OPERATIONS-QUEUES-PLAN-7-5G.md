@@ -1,6 +1,6 @@
 # Phase 7.5G — next operations-queue slice: scope recommendation (TRACE-159)
 
-**Status:** **PLAN FOR REVIEW** (Codex), with owner decisions listed. Documentation only. It approves no policy, sets no threshold, implements nothing and activates nothing. "7.5G" is provisional.
+**Status:** **PLAN, revision 2: Codex technical review recorded** (§9, relayed in conversation; not a GitHub review and not release authorization). Owner decisions are listed. Documentation only. It approves no policy, sets no threshold, implements nothing and activates nothing. "7.5G" is provisional.
 **Date:** 2026-11-27 (America/New_York).
 **Base:** `main` `2039d25` (#212 merge), fetched before work. Branch `claude/phase7-5g-scope-plan`, from that commit.
 **Authority read:** [roadmap](../roadmap/MERCURIUS-REBUILD-ROADMAP.md) Phase 6 item 7 and Phase 7 ("Create owned operational queues with age, priority, SLA, alert, and next action"; the gate); MPS §5.2, §6.2, §8, §9, §11 (approved baseline per [OWNER-APPROVALS](OWNER-APPROVALS.md); values the MPS leaves open, such as metric thresholds and operational SLAs, stay open); CFG-002, CFG-009, CFG-010, CFG-015; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) (OQ-1, revision 7) §3, §5, §6.2, §6.3, §9, §10; [analytics coverage contract](PHASE-7-ANALYTICS-COVERAGE-CONTRACT.md) (AC-1) L-1, L-4, L-5, D-1, D-4, D-6; [TRACE-136 brief](PHASE-6-ADMIN-OPERATIONS-BRIEF.md) A8 and §12.4; [DECISION-LOG](DECISION-LOG.md) DEC-2026-032, -068, -069; [HANDOFF](../docs/agent/HANDOFF.md).
@@ -164,6 +164,8 @@ The owner decides OD-4a (§7.1). Pool counts (C-3) stay out of 7.5G-2.
 
 ### 7.2 Codex (technical)
 
+**Ruled 2026-11-27 ET (revision 2):** Codex's technical review was relayed by the owner in conversation. It is not a GitHub review object and not owner release authorization. The rulings are in §9 and govern where they differ from the proposals below, which are kept as written.
+
 | ID | Question | Proposal |
 |---|---|---|
 | R-1 | Is the authority for 7.5G-1 adequate, given that MPS §9 does not name the queue? | Yes: roadmap, MPS §8, TRACE-136 A8, TRACE-105/108 |
@@ -177,3 +179,32 @@ The owner decides OD-4a (§7.1). Pool counts (C-3) stay out of 7.5G-2.
 - Documentation only: this file, a dated 7.5G note in the [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) §10 (revision 8) and the handoff entry.
 - `git diff --check`, relative-link existence and `npm run scan:secrets`: results in the PR body.
 - No code, test, migration, workflow or configuration change. No hosted read or write.
+
+## 9. Codex review (revision 2, 2026-11-27 ET)
+
+Relayed by the owner in conversation, as Codex's technical review. It is not a GitHub review, not owner release authorization and not plan acceptance by merge. It authorizes no hosted query, push, merge or deployment.
+
+### 9.1 Rulings
+
+| ID | Ruling (as relayed) | Effect on §5 |
+|---|---|---|
+| R-1 | **Authority: accepted.** "The approved Phase 6 admin brief explicitly includes applications awaiting review in the overview. This fills an existing omission." | None |
+| R-2 | **Summary-only scope: accepted.** "Add the server reader and overview row. Leave the applications page unchanged." | None |
+| R-3 | **Timestamp: accepted with wording clarification.** "Use `vendor_applications.created_at`, described as application received, not the beginning of a new review episode. Intake revisions do not reset it." | Records and copy call `since` "application received". SQL 133 includes an application with several intake revisions and asserts that `since` stays `created_at` |
+| R-4 | **Response shape: accepted.** "Return `{application_id, since}` only, within the planned `{checked_at, items}` response." | None |
+| R-5 | **Summary placement: accepted.** "Place applications after offers at other terms and before finance." | None |
+
+### 9.2 Required clarifications
+
+| ID | Clarification (as relayed) | Effect on §5 |
+|---|---|---|
+| C-1 | **Actual cross-layer parity:** "compare real SQL results with the real `applicationQueueState`, using the same persisted fixtures. Two handwritten expected lists do not establish parity." | The parity test takes the database's own output for the SQL 133 fixtures: each application's `status`, the `vendor_onboarding_intake_status` readback the page uses, and `admin_application_review_queue()`. It passes them through the imported `applicationQueueState` and compares the sets. A handwritten list may still be used for SQL assertions, but never as the parity evidence |
+| C-2 | **Parity limits:** "equality applies to successfully loaded data representing the same database state. The existing browser page makes separate requests and can temporarily show 'Checking' or 'Status unavailable.'" | Parity is claimed only for fully loaded readbacks from one database state. The record states that the page's `checking` and `unavailable` states fall outside the claim, and that the page and the overview are separate reads, so they can differ for a moment |
+| C-3 | **Deterministic ordering and fixtures:** "order by `created_at`, then application ID. Include multiple intake revisions and linked onboarding without a review-start row in the fixtures." | Order is `created_at, id`. The fixtures include a tie on `created_at`, an application with several intake revisions, and a linked `vendor_onboarding` row with no review-start row |
+
+### 9.3 Revision history
+
+| Revision | Date (ET) | Base | Change |
+|---|---|---|---|
+| 1 | 2026-11-27 | `main` `2039d25` | First plan |
+| 2 | 2026-11-27 | `main` `2039d25` (unchanged) | Codex's review recorded (§9); a note in §7.2. No scope, criterion or owner decision changed except as §9 states |
