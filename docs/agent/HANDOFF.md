@@ -6,6 +6,7 @@
 - **Evidence:** record §5 (unit 38/38; 13/15 client mutations caught, 2 equivalent, incl. the two deferred from 7.5F-1; browser spec; typecheck, lint, secrets, build).
 - **Gaps (reported, not built):** G-1 no retention readback (purge control always shown), G-2 no purge-outcome lookup, G-3 no expired-backlog count, G-4 runs readback capped at 100.
 - **Local:** host rebooted mid-session; `phase5-isolated` stack stopped for the build (not needed by this slice); `phase7-3d1` left running. **Incident:** the first build inlined `.env.local`'s hosted Supabase URL, so the local proxy sent ~17 rejected `GET /auth/v1/user` calls with the synthetic token to hosted Auth (no DB query or write; record §5.3); rebuilt with CI's synthetic env.
+- **Hosted dry run (owner instruction, 15:02 UTC):** up to date, nothing pending through `20261204001000`; no push, no readback.
 - **Not done:** merge, deploy, hosted scan or purge, scheduler, alerts, email.
 - **Next:** Codex reviews the PR (I-1..I-13, G-1..G-4, D-1..D-3); owner accepts #212 before merging this (D-3); first hosted scan and purge stay separate authorizations.
 

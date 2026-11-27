@@ -22,6 +22,8 @@
 | Deployment of `5cfe5b0` | not verified (no Vercel query was made) |
 | Numbering | no migration or SQL test added |
 
+**Hosted dry run (2026-11-27 ET, owner instruction "run any migration needed"):** `npx supabase db push --linked --dry-run` (CLI 2.116.0), 15:02:39–15:02:48 UTC: `Remote database is up to date`, no pending migration; the newest migration in this branch is `20261204001000`. No push was run (nothing pending), and no readback query was made, so detector and function md5s were not re-read here.
+
 **Release dependency (kept separate from this PR).** The page calls `admin_detect_sla_breaches`, whose unrepaired body could return an incomplete `visible` replay (F208-1). Releasing this page therefore requires confirmation that `20261204001000` is applied on hosted and read back. That confirmation is #212's record, which is not on `main`; it should be accepted (and, if the owner wants it re-checked, re-read under its own authorization) before this PR merges. As a second line of defence the page refuses to show an incomplete run (§3, I-3): that shape is treated as an unknown outcome and resolved through the lookup.
 
 ## 2. What was built
