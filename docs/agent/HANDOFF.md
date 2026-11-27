@@ -1,3 +1,12 @@
+# Phase 7.5G scope plan (TRACE-159) — 2026-11-27 ET
+
+- **Base:** `main` `2039d25` (#212 merged 16:01:03 UTC), fetched before work. Branch `claude/phase7-5g-scope-plan`, documentation only. Record: [7.5G plan](../../governance/PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md).
+- **Independent of #213 (7.5F-2):** open, head `57a1e7a`. When read, its `analytics-privacy` check had failed (run 46030022960) and `backend` was still running; it was not rerun or investigated. Its review, CI and release are not complete. TRACEABILITY's TRACE-159 row and DEC-2026-069 are left alone because #213 edits them.
+- **Planned, not built:** OQ-1 step 6 is split. **7.5G-1** (recommended): `admin_application_review_queue()`, which restates the merged `applicationQueueState` awaiting-review rule on the server, plus an `applications` row in `admin_operations_summary` (one function-only migration, `20261205001000` provisional; SQL 133; SQL 127 S1 and the browser fixture change on purpose). **7.5G-2:** a sourcing queue after OD-4a and Codex S-1..S-5.
+- **Separated:** approved requirements versus open decisions for sourcing (OD-4a/4b, OD-6), eligible-provider counts (OD-3, AC-1 D-4, no matching version defined) and operator reporting (D-6, OD-5 beyond in-app, P-4); plan §4.
+- **Not done:** no code, test, migration, CI, hosted query, merge, deploy, scan, purge, email, scheduler, booking or payment change.
+- **Next:** Codex reviews the plan (R-1..R-5). 7.5G-1 needs no owner policy decision, only the hosted push authorization and the release when it is built.
+
 # Phase 7.5F-1 forward repair F208-1 (TRACE-159) — 2026-11-26 ET
 
 - **Base:** `main` `89973fa` (#208 merged 15:59:55 UTC), fetched before work. Branch `claude/phase7-5f1-replay-purge-repair`, main checkout, `phase5-isolated` stack. Record: [7.5F-1 §8](../../governance/PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md).

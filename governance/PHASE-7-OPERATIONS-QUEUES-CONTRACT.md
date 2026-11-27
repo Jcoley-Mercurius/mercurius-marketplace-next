@@ -1,7 +1,7 @@
 # Phase 7.5A — Operations queues, ownership and SLA contract (TRACE-159)
 
 **Status:** CONTRACT FOR REVIEW (Codex), revision 2. Documentation and planning only. It approves no policy, sets no threshold, implements nothing and activates nothing.
-**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12). Revision 3 (2026-11-23 ET) adds only the §7.1 coverage note for 7.5C. Revision 4 (2026-11-24 ET) adds the 7.5D DF-3 notes. Revision 5 (2026-11-24 ET) adds only the 7.5E notes on X-4, OD-5 and §10 (DEC-2026-068). Revision 6 (2026-11-25 ET) adds only the 7.5F plan notes in §6.1 and §10. Revision 7 (2026-11-25 ET) records OD-1/OD-2 as decided (DEC-2026-069) and the 7.5F-1 implementation status in §6.1, §9 and §10.
+**Matrix version:** OQ-1 (revision 2, 2026-11-22 ET: Codex's 7.5A review applied, §12). Revision 3 (2026-11-23 ET) adds only the §7.1 coverage note for 7.5C. Revision 4 (2026-11-24 ET) adds the 7.5D DF-3 notes. Revision 5 (2026-11-24 ET) adds only the 7.5E notes on X-4, OD-5 and §10 (DEC-2026-068). Revision 6 (2026-11-25 ET) adds only the 7.5F plan notes in §6.1 and §10. Revision 7 (2026-11-25 ET) records OD-1/OD-2 as decided (DEC-2026-069) and the 7.5F-1 implementation status in §6.1, §9 and §10. Revision 8 (2026-11-27 ET) adds only the 7.5G plan note in §10.
 **Checkpoint (revision 2):** 2026-11-22 (America/New_York), `main` `83c8fea` (#194 merge), merged into this branch. Every source reference below was rechecked at this commit: #194 changed no migration and no admin source, so all line references still hold.
 **Original baseline (history, 2026-11-22 ET):** `main` `63c8010` (#193 merge), the commit the first revision was written against (§1).
 **Branch:** `claude/phase7-5a-operations-queues-contract`, from `main` `63c8010`, with `main` `83c8fea` merged.
@@ -299,7 +299,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 3 | **7.5D** DF-3 support response measure | CD-1 (direction recorded, §9). Implemented for review 2026-11-24 ET, after 7.5C merged ([record](PHASE-7-SUPPORT-FIRST-REPLY-7-5D.md)) |
 | 4 | **7.5E** admin in-app readback, so existing admin rows become the first alert surface | OD-5. Implemented for review 2026-11-24 ET under DEC-2026-068 (OD-5 limited), no migration ([record](PHASE-7-ADMIN-NOTIFICATION-READBACK-7-5E.md)) |
 | 5 | **7.5F** breach observation records and operator detector | OD-1, OD-2. Plan for review 2026-11-25 ET ([plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md)). OD-1/OD-2 decided (DEC-2026-069); **7.5F-1 database implemented for review** 2026-11-25 ET ([record](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md)); 7.5F-2 page not started |
-| 6 | **7.5G** server sourcing and applications queues (no thresholds) | OD-4 for sourcing wording |
+| 6 | **7.5G** server sourcing and applications queues (no thresholds) | OD-4 for sourcing wording. Plan for review 2026-11-27 ET ([7.5G plan](PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md)): split into 7.5G-1 applications awaiting review (no policy decision) and 7.5G-2 sourcing (OD-4a, S-1..S-5); nothing built |
 | 7 | Pool record | OD-3 |
 | 8 | Scheduler activation (HQ-3, HQ-4) | DEC-2026-003 sequence; owner approval |
 
@@ -320,6 +320,7 @@ Preview builds share the production database (DEC-2026-037), so a hosted staged 
 | 5 | 2026-11-24 | `main` `dcc62e1` (#201, 7.5D, merged) | 7.5E: X-4 note (§3), OD-5 partly decided (§9, DEC-2026-068), sequence status (§10). No expectation, threshold or other decision changed. §7.1 SF-6b and SF-8 call their admin rows "(write-only)": since 7.5E each admin can read their own copy in the app; SQL 128 asserts the rows, not their readability, so no assertion changes. The "alert: none" pins stay, because an in-app row for an admin is not an alert delivered to anyone |
 | 6 | 2026-11-25 | `main` `846dd34` | 7.5F plan notes in §6.1 and §10. No expectation, status, threshold or decision changed |
 | 7 | 2026-11-25 | `main` `80100d3` (#207, 7.5F plan, merged) | OD-1/OD-2 decided (§9, DEC-2026-069); 7.5F-1 status notes (§6.1, §10). No expectation, threshold or other decision changed |
+| 8 | 2026-11-27 | `main` `2039d25` (#212 merged) | 7.5G plan note in §10. No expectation, status, threshold or decision changed |
 
 **Codex 7.5A review, applied in revision 2:**
 
