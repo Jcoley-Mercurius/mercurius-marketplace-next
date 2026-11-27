@@ -152,8 +152,9 @@ All 14 caught.
 | `npm run scan:secrets` | pass |
 | `git diff --check` | pass |
 | `npm run build` with CI's synthetic environment | pass; the hosted project host appears in no file under `.next/server` or `.next/static` |
-| Browser: `admin-operations`, `portals`, `application-retention` | First run 52/54. Failed: `admin-operations.spec.ts:28` (navigation, light 1440 px) and `:149` (record fetched by id). Neither asserts the new row. Both passed on rerun (3/3, including the dark 390 px variant), with host load 12–22. The rerun overwrote the first run's error context, so those errors are not retained |
-| Old client on the new summary | MAIN_COMPAT |
+| Browser: `admin-operations`, `portals`, `application-retention` (on the tree before #214's new head, and so #213, was merged in) | First run 52/54. Failed: `admin-operations.spec.ts:28` (navigation, light 1440 px) and `:149` (record fetched by id). Neither asserts the new row. Both passed on rerun (3/3, including the dark 390 px variant), with host load 12–22. The rerun overwrote the first run's error context, so those errors are not retained |
+| Old client on the new summary | Pass. A throwaway worktree of `main` `e3a12a1` (no `applications` entry in `SUMMARY_QUEUES`) with only the new `tests/fixtures/admin-operations-summary.json` copied in; that fixture has the `applications` row for both callers. Built with CI's synthetic environment and the type-check step skipped (`typescript.ignoreBuildErrors` in the worktree only: two full builds rebooted this 5.6 GB host during the type check, and `main`'s types are checked by `main`'s own CI). No hosted host in the output. `main`'s own `admin-operations.spec.ts`: **18/18**. Its overview tests expect exactly its nine rows, so the old client drops the unknown `applications` row and renders everything else unchanged |
+| Browser on the merged tree | Not rerun locally (host reboots during builds); the full browser lane is exact-head CI's `application` job |
 | Final-head CI | PR body |
 
 ## 5. Hosted steps for later authorization (not run)
