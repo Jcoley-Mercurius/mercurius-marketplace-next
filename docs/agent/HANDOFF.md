@@ -7,6 +7,7 @@
 - **Local:** the host rebooted during the old-client build, which cleared the scratchpad. Another slice's `phase7-3d1` stack came back up and was left running.
 - **Not done:** hosted dry run, push and readback (record §5 gives the exact steps), merge, deploy.
 - **Next:** Codex reviews (I-1..I-6). The owner authorizes the push before merge, then merges #214 and then this PR.
+- **Hosted (2026-11-27 ET, owner instructions):** dry run 20:48 UTC listed only `20261205001000`. Pushed 20:51:26–20:51:29 UTC after a guard dry run. Readback matched: latest `20261205001000` (241), reader md5 `3070dcdd…` (execute for `authenticated` only), summary md5 `779d61f5…`, money `61 | eb3f9702…` (record §5). Not merged or deployed; the release of #214, then #215, is the owner's.
 
 # Phase 7.5G scope plan (TRACE-159) — 2026-11-27 ET
 

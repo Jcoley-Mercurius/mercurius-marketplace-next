@@ -175,6 +175,20 @@ Each step needs the owner's authorization (DEC-2026-037). The push comes **befor
 
 **Dry run done (2026-11-27 ET, owner instruction "Run the hosted dry run for 20261205001000").** `npx supabase db push --linked --dry-run` (CLI 2.116.0) from branch head `b7c5313`, 20:48:00–20:48:06 UTC: "Would push these migrations: 20261205001000_phase7_applications_review_queue.sql", JSON `upToDate: false`, one migration, no seeds or roles, exit 0. So every earlier migration, through `20261204001000`, is already on hosted, and only this slice's is pending. Step 1's preflight query was not run separately; the dry run's listing covers it. **Not run:** the push (step 3) and the readback (step 4); each still needs the owner's authorization. Nothing was written to hosted.
 
+**Push and readback done (2026-11-27 ET, owner instruction "Push 20261205001000 and run the readback").** From branch head `9826d52` (the migration file is unchanged since `77b6160`):
+
+| Step | Time (UTC) | Result |
+|---|---|---|
+| Guard: `npx supabase db push --linked --dry-run` | 20:51 | Exactly `20261205001000_phase7_applications_review_queue.sql`, the same JSON as the 20:48 dry run; the script would have stopped on any difference |
+| Push: `npx supabase db push --linked --yes` (CLI 2.116.0) | 20:51:26–20:51:29 | `Applying migration 20261205001000_phase7_applications_review_queue.sql...`; `dryRun: false`, one migration, no seeds or roles; exit 0 |
+| Readback: migrations (`npx supabase db query --linked`) | 20:51:48–20:51:58 | latest `20261205001000`, 241 rows; matches the local clean replay |
+| Readback: `admin_application_review_queue()` | same | md5 `3070dcddc4b252000e0058475424f857`, ACL `{postgres=X/postgres,authenticated=X/postgres}`, `s`, definer, `search_path=""`, owner postgres; as expected |
+| Readback: `admin_operations_summary()` | same | md5 `779d61f5d3509895233bfaaff855ce5b`, ACL `{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}`, `v`, definer, `search_path=""`, owner postgres; as expected |
+| Readback: execute privilege on the reader | same | `anon` false, `service_role` false, `authenticated` true; as expected |
+| Readback: `scripts/promotion-money-fingerprint.sql` | same | `61 \| eb3f9702d45f9f22e61f6a7da17349c4`, unchanged |
+
+The readback read the catalog and migration history only. Neither function was called, and no application data was selected. **Not done:** the merge of #214 and #215 (each still needs the owner's release authorization), the deployment READY check and HQ-1/HQ-2 (step 5). Until #215 deploys, Production runs `main`'s client, which drops the new `applications` row (§4.4).
+
 **Rollback.** Application: `vercel promote` of the previous production deployment, which works on the new summary (§4.4). Database: a forward migration restoring the `20261130001000` summary body, with the reader left in place or revoked. No data is written, so nothing needs repair.
 
 ## 6. Implementation decisions for Codex
