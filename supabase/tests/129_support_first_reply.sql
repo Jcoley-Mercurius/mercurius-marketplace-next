@@ -311,9 +311,11 @@ select is(pg_temp.refused(3, format('select public.support_ticket_detail(%L)', p
 select is(pg_temp.state('by_operator'), 'true / true / none / none', 'R14b: operator-filed, unanswered: still overdue');
 
 -- ================================================================================================
--- R15 Summary parity. admin_operations_summary is not restated; it counts the queue items' overdue.
-select is((select md5(pg_get_functiondef('public.admin_operations_summary()'::regprocedure))), '3bc2497fbdc2a1bc8f1da5dccc182f7d',
-  'R15: admin_operations_summary is the 7.5B definition, unchanged');
+-- R15 Summary parity. admin_operations_summary is not restated by 7.5D; it counts the queue items' overdue.
+-- Phase 7.5G-1 (20261205001000) restated it on purpose to append the applications row (7.5B body
+-- 3bc2497f…); the support row is unchanged, as the assertions below show.
+select is((select md5(pg_get_functiondef('public.admin_operations_summary()'::regprocedure))), '779d61f5d3509895233bfaaff855ce5b',
+  'R15: admin_operations_summary is the 7.5G-1 definition (7.5B body plus the applications row)');
 create function pg_temp.support_row(n int) returns jsonb language sql as $$
   select r from jsonb_array_elements(pg_temp.call(n, 'select public.admin_operations_summary()')->'queues') r where r->>'queue' = 'support' $$;
 select is(pg_temp.support_row(2), jsonb_build_object('queue', 'support', 'state', 'ready', 'count', jsonb_array_length(pg_temp.queue()->'items'),

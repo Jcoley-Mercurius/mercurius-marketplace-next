@@ -5,6 +5,8 @@
 -- `aged` equals that queue's flagged items where the queue has an aging rule and is null where it
 -- has none, the offers-at-other-terms row (including a rematch_failed item), the exact queue list,
 -- authorization, grants, no writes, and per-queue error isolation.
+-- Phase 7.5G-1 (20261205001000) changed this file on purpose: the 'applications' row (applications
+-- awaiting review) is appended after offer_terms, with one awaiting application in the fixtures.
 --
 -- The two exact summaries below (S8, S9) are the browser fixture: tests/fixtures/
 -- admin-operations-summary.json holds the same values with checked_at normalized, a unit test
@@ -72,6 +74,9 @@ insert into public.job_operations(id,job_id,operation_key,actor_id,kind,reason,b
 insert into public.support_tickets(id,user_id,ticket_number,subject,description,issue_type,status,priority,response_due_at,queue_owner,version,created_at,updated_at) values
  ('c75b3000-0000-4000-8000-000000000001','c75b0000-0000-4000-8000-000000000002','P75B-1','P75B past target','Synthetic','general','open','standard',now()-interval '1 hour','project_owner',1,now()-interval '30 hours',now()-interval '30 hours'),
  ('c75b3000-0000-4000-8000-000000000002','c75b0000-0000-4000-8000-000000000002','P75B-2','P75B within target','Synthetic','general','open','standard',now()+interval '20 hours','project_owner',1,now()-interval '4 hours',now()-interval '4 hours');
+-- Applications awaiting review (7.5G-1): one received application, no onboarding and no review start.
+insert into public.vendor_applications(id,business_name,first_name,last_name,email,phone,address,status,created_at) values
+ ('c75b6000-0000-4000-8000-000000000001','P75B applicant','Ann','Applicant','p75b-applicant@example.invalid','synthetic','1 Probe St','pending',now()-interval '6 hours');
 set local session_replication_role = origin;
 -- END 7.5B FIXTURES
 
@@ -100,7 +105,8 @@ begin
     (caller, 'support', public.admin_support_queue(false)->'items'),
     (caller, 'compliance_renewal', public.vendor_evidence_renewal_queue()->'entries'),
     (caller, 'renewal_documents', public.vendor_renewal_document_queue()->'entries'),
-    (caller, 'offer_terms', public.admin_offer_terms_queue()->'items');
+    (caller, 'offer_terms', public.admin_offer_terms_queue()->'items'),
+    (caller, 'applications', public.admin_application_review_queue()->'items');
 end $$;
 grant execute on function pg_temp.capture(text) to authenticated;
 create function pg_temp.row_of(caller text, queue text) returns jsonb language sql as $$
@@ -119,10 +125,10 @@ insert into pg_temp.q values ('finance', 'finance_exceptions', public.money_fina
 reset role;
 
 -- S1 The exact queue list and order: the seven existing queues unchanged, offers at other terms
--- appended, finance last.
+-- appended, then applications awaiting review (7.5G-1), finance last.
 select is((select array_agg(r->>'queue' order by n) from pg_temp.s, jsonb_array_elements(s.summary->'queues') with ordinality x(r, n) where s.caller = 'admin'),
-  array['quote','recurring_payment','fulfillment','cancellation','support','compliance_renewal','renewal_documents','offer_terms','finance_exceptions'],
-  'S1 queue list and order (offer_terms appended; finance last)');
+  array['quote','recurring_payment','fulfillment','cancellation','support','compliance_renewal','renewal_documents','offer_terms','applications','finance_exceptions'],
+  'S1 queue list and order (offer_terms, then applications appended; finance last)');
 select is((select array_agg(r->>'queue' order by n) from pg_temp.s, jsonb_array_elements(s.summary->'queues') with ordinality x(r, n) where s.caller = 'finance'),
   (select array_agg(r->>'queue' order by n) from pg_temp.s, jsonb_array_elements(s.summary->'queues') with ordinality x(r, n) where s.caller = 'admin'),
   'S1b the same list for a finance-authority holder');
@@ -130,7 +136,7 @@ select is((select array_agg(r->>'queue' order by n) from pg_temp.s, jsonb_array_
 -- S2 Count parity, per queue, for both callers: the summary count is its queue's list length.
 select is((pg_temp.row_of(c, k)->>'count')::int, jsonb_array_length(pg_temp.list_of(c, k)), format('S2 %s count = queue (%s)', k, c))
   from unnest(array['admin','finance']) c,
-       unnest(array['quote','recurring_payment','fulfillment','cancellation','support','compliance_renewal','renewal_documents','offer_terms']) k;
+       unnest(array['quote','recurring_payment','fulfillment','cancellation','support','compliance_renewal','renewal_documents','offer_terms','applications']) k;
 select is((pg_temp.row_of('finance', 'finance_exceptions')->>'count')::int, jsonb_array_length(pg_temp.list_of('finance', 'finance_exceptions')),
   'S2 finance_exceptions count = money_finance_reconciliation exceptions (finance holder)');
 select is((select count(*)::int from pg_temp.s, jsonb_array_elements(s.summary->'queues') r where r->>'state' <> 'ready'
@@ -143,15 +149,15 @@ select is((pg_temp.row_of(c, k)->>'aged')::int, pg_temp.flagged(c, k, f), format
        (values ('quote', 'aged'), ('recurring_payment', 'aged'), ('support', 'overdue')) v(k, f);
 select is(jsonb_typeof(pg_temp.row_of(c, k)->'aged'), 'null', format('S3 %s aged is null: no aging rule (%s)', k, c))
   from unnest(array['admin','finance']) c,
-       unnest(array['fulfillment','cancellation','compliance_renewal','renewal_documents','offer_terms','finance_exceptions']) k;
+       unnest(array['fulfillment','cancellation','compliance_renewal','renewal_documents','offer_terms','applications','finance_exceptions']) k;
 -- DF-1: the fulfillment queue emits no aged flag at all, so a summary aged count for it could only
 -- ever be 0. Offers at other terms emits none either.
 select is((select count(*)::int from jsonb_array_elements(pg_temp.list_of('admin', k)) i where i ? 'aged'), 0, format('S3b %s items carry no aged field', k))
-  from unnest(array['fulfillment','offer_terms']) k;
+  from unnest(array['fulfillment','offer_terms','applications']) k;
 
 -- S4 The fixtures are nonempty where parity needs it, with both aged and not-aged items.
 select ok(jsonb_array_length(pg_temp.list_of('admin', k)) > 0, format('S4 %s fixture is nonempty', k))
-  from unnest(array['quote','recurring_payment','fulfillment','support','offer_terms']) k;
+  from unnest(array['quote','recurring_payment','fulfillment','support','offer_terms','applications']) k;
 select ok(pg_temp.flagged('admin', k, f) between 1 and jsonb_array_length(pg_temp.list_of('admin', k)) - 1, format('S4 %s has aged and not-aged items', k))
   from (values ('quote', 'aged'), ('recurring_payment', 'aged'), ('support', 'overdue')) v(k, f);
 select is((select array_agg(i->>'kind' order by i->>'kind') from jsonb_array_elements(pg_temp.list_of('admin', 'offer_terms')) i),
@@ -178,7 +184,8 @@ select is((select coalesce(sum(n_tup_ins + n_tup_upd + n_tup_del), 0)::bigint fr
 
 -- S8, S9 The exact summaries (checked_at removed): the browser fixture. Values follow from the
 -- fixtures above: quote 2 (1 aged), recurring 2 (1 aged), fulfillment 3 (no rule), support 2
--- (1 past target), offers at other terms 2 (no rule), all others empty.
+-- (1 past target), offers at other terms 2 (no rule), applications awaiting review 1 (no rule), all
+-- others empty.
 select is((select summary - 'checked_at' from pg_temp.s where caller = 'admin'),
   $admin_summary${"queues": [
   {"queue":"quote","state":"ready","count":2,"aged":1},
@@ -189,6 +196,7 @@ select is((select summary - 'checked_at' from pg_temp.s where caller = 'admin'),
   {"queue":"compliance_renewal","state":"ready","count":0,"aged":null},
   {"queue":"renewal_documents","state":"ready","count":0,"aged":null},
   {"queue":"offer_terms","state":"ready","count":2,"aged":null},
+  {"queue":"applications","state":"ready","count":1,"aged":null},
   {"queue":"finance_exceptions","state":"restricted","count":null,"aged":null}
 ]}$admin_summary$::jsonb, 'S8 exact summary, admin without finance authority');
 select is((select summary - 'checked_at' from pg_temp.s where caller = 'finance'),
@@ -201,6 +209,7 @@ select is((select summary - 'checked_at' from pg_temp.s where caller = 'finance'
   {"queue":"compliance_renewal","state":"ready","count":0,"aged":null},
   {"queue":"renewal_documents","state":"ready","count":0,"aged":null},
   {"queue":"offer_terms","state":"ready","count":2,"aged":null},
+  {"queue":"applications","state":"ready","count":1,"aged":null},
   {"queue":"finance_exceptions","state":"ready","count":0,"aged":null}
 ]}$finance_summary$::jsonb, 'S9 exact summary, finance-authority holder');
 
