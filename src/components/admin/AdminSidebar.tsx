@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Archive, BadgePercent, BarChart3, Bell, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, House, LayoutDashboard, Loader2, LogOut, Mail, MailCheck, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Archive, BadgePercent, BarChart3, Bell, BookOpen, CalendarClock, ChevronLeft, ClipboardList, DollarSign, FileText, Hourglass, House, LayoutDashboard, Loader2, LogOut, Mail, MailCheck, MapPin, MessageSquare, Radar, Receipt, Scale, Shield, ShieldCheck, Sparkles, Star, Tags, Ticket, TrendingUp, UserCheck, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -50,8 +50,13 @@ export const navigationGroups: { label: string; items: NavEntry[] }[] = [
 ];
 const overview: NavEntry = { label: "Overview", href: "/admin", icon: LayoutDashboard };
 // Phase 7.5E (TRACE-159, OD-5): the operator's own in-app notices span every queue, so the entry sits
-// with Overview, outside the task groups.
-export const primaryEntries: NavEntry[] = [overview, { label: "Notifications", href: "/admin/notifications", icon: Bell }];
+// with Overview, outside the task groups. Phase 7.5F-2 (TRACE-159): SLA observations, recorded by manual
+// scans across five queues, sit beside it for the same reason.
+export const primaryEntries: NavEntry[] = [
+  overview,
+  { label: "Notifications", href: "/admin/notifications", icon: Bell },
+  { label: "SLA Observations", href: "/admin/sla-observations", icon: Hourglass },
+];
 const allEntries: NavEntry[] = [...primaryEntries, ...navigationGroups.flatMap((group) => group.items)];
 
 
