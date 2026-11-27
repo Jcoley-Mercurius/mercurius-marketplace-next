@@ -1,7 +1,7 @@
 # Phase 7.5F-1 — SLA-breach observation: database foundation (TRACE-159)
 
 **Status:** **IMPLEMENTED FOR REVIEW.** Migration **pushed to hosted Supabase 2026-11-26 ET** on the owner's instruction (§6.1). Not merged, not deployed, never run on production data. 7.5F-2 (operator page) not started.
-**Update (2026-11-26 ET):** #208 merged as `89973fa` (15:59:55 UTC); deployment READY not verified. Codex finding **F208-1** (replay racing the purge could return an incomplete `visible` result) has a forward repair for review, migration `20261204001000`, not pushed (§8).
+**Update (2026-11-26 ET):** #208 merged as `89973fa` (15:59:55 UTC); deployment READY not verified. Codex finding **F208-1** (replay racing the purge could return an incomplete `visible` result) has a forward repair, migration `20261204001000`: #211 merged as `5cfe5b0` (2026-11-26 23:55:34 UTC); on hosted, read back 2026-11-27 ET (§8.6.1).
 **Date:** 2026-11-25 (America/New_York).
 **Base:** `main` `80100d3` (#207 merge, the 7.5F plan), fetched before work. Branch `claude/phase7-5f1-sla-db-foundation`.
 **Authority:** owner approval 2026-11-25 ET ([DEC-2026-069](DECISION-LOG.md); verbatim in [OWNER-APPROVALS](OWNER-APPROVALS.md)); [7.5F plan](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md) revision 4 with Codex's D-1..D-9 and F-1..F-10; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) §4, §6.1, §9, §10; CFG-010, CFG-011, CFG-015; DEC-2026-006.
@@ -384,8 +384,24 @@ Order matters only weakly: until the push, hosted keeps the defect, but no clien
 
 **Rollback:** forward only. A reviewed migration restoring the merged body would reintroduce F208-1; prefer a fix forward. `vercel promote <previous dpl_id>` is unaffected (no application change).
 
+### 8.6.1 Hosted state and readback (2026-11-27 ET)
+
+#211 merged as `5cfe5b0` at 2026-11-26 23:55:34 UTC, with no push recorded beforehand. Owner instruction (2026-11-27 ET): "Yes, push it and record the readback." The dry run showed the migration was already on hosted, so **no push was run by Claude**. Who applied `20261204001000` and when, and whether that was before the merge, is not recorded: `supabase_migrations.schema_migrations` has only `version`, `statements` and `name`.
+
+| Step (CLI 2.116.0) | Time (UTC) | Result |
+|---|---|---|
+| `npx supabase db push --linked --dry-run` | 2026-11-27 13:17:38–13:17:45 | `Remote database is up to date`, no pending migration |
+| `npx supabase db push --linked` | — | not run (nothing pending) |
+| Readback: migrations | 13:17:58–13:18:13 | latest `20261204001000` (`phase7_sla_replay_pair_read`), then `20261203001000`, `20261202001000`; 240 rows |
+| Readback: detector | same | `admin_detect_sla_breaches(uuid,integer)` md5 `8556973a4224090772e873997320367a`, ACL `{postgres=X/postgres,authenticated=X/postgres}`; execute `anon` false, `authenticated` true, `service_role` false |
+| Readback: other functions | same | the other 13 7.5F functions (e.g. `admin_purge_sla_records` `94218dea…`, `admin_sla_detector_run` `1e6fdf53…`), `admin_quote_queue` `b56a6dc0…`, `admin_fulfillment_queue` `d3e94c1f…`, `admin_support_queue` `c426ab1a…`, `admin_offer_terms_queue` `6d3fa5f5…`, `admin_operations_summary` `3bc2497f…`, `run_lifecycle_batch` `82818770…`, `fulfillment_queue_items` `d37abbd9…`, `money_payment_exceptions` `c9a2e11a…`: every md5 and ACL equal to the local repaired stack (§8.5) |
+| Readback: 7.5F tables | same | runs, results, observations, purges all 0; retention `90 days` |
+| Readback: money fingerprint | 13:18:34 | `61 \| eb3f9702d45f9f22e61f6a7da17349c4`, unchanged |
+
+Readback queries read schema, privileges and counts only, never row content. Hosted runs the repaired detector, and no scan or purge has run there. Deployment READY of `5cfe5b0` not verified (no application change).
+
 ### 8.7 Open after the repair
 
 - Codex review of this repair (R-1, O-1, the test device in §8.4).
-- Owner authorizations: dry run and push of `20261204001000` (§8.6 steps 1–3), merge. First hosted scan and purge unchanged (§7).
+- Done: #211 merged (`5cfe5b0`); `20261204001000` on hosted, read back 2026-11-27 ET (§8.6.1; push time and actor unrecorded). First hosted scan and purge unchanged (§7).
 - 7.5F-2 starts after this repair; not built here.
