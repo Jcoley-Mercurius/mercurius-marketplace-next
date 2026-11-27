@@ -57,6 +57,8 @@ const expectedRows = (finance: string) => [
   ["Compliance renewals", "0", "—"],
   ["Renewal documents", "0", "—"],
   ["Offers at other terms", "2", "—"],
+  // Phase 7.5G-1: applications awaiting review, no aging rule.
+  ["Applications awaiting review", "1", "—"],
   ["Finance exceptions", finance, "—"],
 ];
 
@@ -95,6 +97,14 @@ test("the offers-at-other-terms row opens its queue on the requests page", async
   const heading = page.getByRole("heading", { level: 2, name: "Offers at other terms" });
   await expect(heading).toBeInViewport();
   await expect(page.locator("#offer-terms-queue").getByText("Nothing needs follow-up.")).toBeVisible();
+});
+
+test("the applications row opens the applications page (7.5G-1)", async ({ page }) => {
+  await page.route("**/rest/v1/rpc/admin_operations_summary", route => route.fulfill({ json: derived.admin }));
+  await admin(page, "/admin");
+  await page.getByRole("table", { name: "Operational queues" }).getByRole("link", { name: "Applications awaiting review" }).click();
+  await expect(page).toHaveURL(/\/admin\/applications$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Vendor Applications" })).toBeVisible();
 });
 
 test("the old Smart Picks route goes to Featured Providers", async ({ page }) => {

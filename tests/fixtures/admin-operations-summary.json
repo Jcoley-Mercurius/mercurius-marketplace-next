@@ -11,6 +11,7 @@
       {"queue":"compliance_renewal","state":"ready","count":0,"aged":null},
       {"queue":"renewal_documents","state":"ready","count":0,"aged":null},
       {"queue":"offer_terms","state":"ready","count":2,"aged":null},
+      {"queue":"applications","state":"ready","count":1,"aged":null},
       {"queue":"finance_exceptions","state":"restricted","count":null,"aged":null}
     ]
   },
@@ -25,6 +26,7 @@
       {"queue":"compliance_renewal","state":"ready","count":0,"aged":null},
       {"queue":"renewal_documents","state":"ready","count":0,"aged":null},
       {"queue":"offer_terms","state":"ready","count":2,"aged":null},
+      {"queue":"applications","state":"ready","count":1,"aged":null},
       {"queue":"finance_exceptions","state":"ready","count":0,"aged":null}
     ]
   }
