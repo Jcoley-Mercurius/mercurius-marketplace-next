@@ -2,7 +2,7 @@
 
 **Status:** **IMPLEMENTED FOR REVIEW** (Codex). Not merged, not pushed to hosted, not deployed.
 **Date:** 2026-11-27 (America/New_York).
-**Base:** stacked on #214's head `5810e60` (7.5G plan revision 2), which is `main` `2039d25` plus documentation. This PR targets #214's branch until #214 merges; it will then be retargeted to `main` and its diff reconciled.
+**Base:** built stacked on #214's head `5810e60` (7.5G plan revision 2 = `main` `2039d25` plus documentation). While it was in progress, #213 merged (`main` `e3a12a1`, 18:16:58 UTC) and `main` was merged into #214 (`1b3032b`). That head was merged into this branch (`383c3fc`; one conflict, the TRACE-159 row, resolved by keeping #213's text and appending the 7.5G notes). This PR targets #214's branch until #214 merges; it will then be retargeted to `main` and its diff reconciled.
 **Authority:** the owner's 7.5G-1 instruction (2026-11-27 ET); [7.5G plan](PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md) §5 and §9 (Codex R-1..R-5 and C-1..C-3, relayed in conversation); [TRACE-136 brief](PHASE-6-ADMIN-OPERATIONS-BRIEF.md) A8 and §12.4 item 4; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) Q-12; TRACE-105 and TRACE-108 (DEC-2026-032) for the existing classification.
 
 ## What this slice does not do
@@ -17,9 +17,9 @@
 | Item | Observation |
 |---|---|
 | `main` | `2039d25` (#212), unchanged since the plan |
-| #214 | Open, draft; revision 2 pushed as `5810e60` (Codex's rulings recorded in plan §9) |
-| #213 | Open, head `57a1e7a`; not touched |
-| Numbering | Newest migration `20261204001000`, newest SQL test `132`, on `main` and on every remote branch; this slice uses `20261205001000` and `133` |
+| #214 | Open, draft; revision 2 pushed as `5810e60` (Codex's rulings recorded in plan §9); `main` merged into it as `1b3032b` |
+| #213 | Open at `57a1e7a` when work began; **merged** as `e3a12a1` at 18:16:58 UTC during this slice. It adds no migration and does not touch the summary or `SUMMARY_QUEUES` |
+| Numbering | Newest migration `20261204001000`, newest SQL test `132`, on `main` and on every remote branch; this slice uses `20261205001000` and `133`. Rechecked after #213 merged: unchanged |
 | Hosted | Not queried |
 
 ## 2. What was built
