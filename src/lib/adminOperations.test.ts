@@ -194,8 +194,11 @@ describe("admin navigation", () => {
     walk(root);
     const hrefs = [...primaryEntries.slice(1), ...navigationGroups.flatMap((group) => group.items)].map((item) => item.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
-    // Phase 7.5E: Overview, then the operator's own notices, outside the task groups.
-    expect(primaryEntries.map((item) => [item.label, item.href])).toEqual([["Overview", "/admin"], ["Notifications", "/admin/notifications"]]);
+    // Phase 7.5E: Overview, then the operator's own notices, outside the task groups; Phase 7.5F-2:
+    // then SLA observations.
+    expect(primaryEntries.map((item) => [item.label, item.href])).toEqual([
+      ["Overview", "/admin"], ["Notifications", "/admin/notifications"], ["SLA Observations", "/admin/sla-observations"],
+    ]);
     const listed = routes.filter((route) => route !== "/admin" && !route.includes("[") && route !== "/admin/smart-picks");
     expect([...listed].sort()).toEqual([...hrefs].sort());
     expect(hrefs).not.toContain("/admin/smart-picks");
