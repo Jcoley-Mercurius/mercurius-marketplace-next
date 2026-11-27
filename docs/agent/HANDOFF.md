@@ -18,6 +18,7 @@
 - **Evidence:** record §8.5 (merged function fails SQL 132 ×4 and the script at W1; repaired passes; 6 mutants; fingerprints unchanged except the detector).
 - **Not done:** hosted dry run and push, merge, deploy, scans, purges, 7.5F-2.
 - **Next:** Codex reviews the repair PR (R-1, O-1); owner authorizes the dry run and push (record §8.6) before merge; then 7.5F-2.
+- **#211 merged** as `5cfe5b0` (2026-11-26 23:55:34 UTC). **2026-11-27 ET, owner instruction:** dry run showed `20261204001000` already on hosted (applier and time unrecorded); no push run; readback matched the repaired local values (record §8.6.1). Deployment READY not verified. Next: 7.5F-2.
 
 # Phase 7.5F-1 SLA-breach observation database foundation (TRACE-159) — 2026-11-25 ET
 
