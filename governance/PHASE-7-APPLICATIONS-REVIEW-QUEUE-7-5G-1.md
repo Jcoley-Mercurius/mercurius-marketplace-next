@@ -173,6 +173,8 @@ Each step needs the owner's authorization (DEC-2026-037). The push comes **befor
    No reader or summary is called on hosted: these statements read the catalog only, and no application data is selected.
 5. **After merge (separately authorized):** confirm the production deployment for the merge commit is READY, then HQ-1/HQ-2 extended to the `applications` row (contract §7.2), read-only, in one `REPEATABLE READ READ ONLY` transaction.
 
+**Dry run done (2026-11-27 ET, owner instruction "Run the hosted dry run for 20261205001000").** `npx supabase db push --linked --dry-run` (CLI 2.116.0) from branch head `b7c5313`, 20:48:00–20:48:06 UTC: "Would push these migrations: 20261205001000_phase7_applications_review_queue.sql", JSON `upToDate: false`, one migration, no seeds or roles, exit 0. So every earlier migration, through `20261204001000`, is already on hosted, and only this slice's is pending. Step 1's preflight query was not run separately; the dry run's listing covers it. **Not run:** the push (step 3) and the readback (step 4); each still needs the owner's authorization. Nothing was written to hosted.
+
 **Rollback.** Application: `vercel promote` of the previous production deployment, which works on the new summary (§4.4). Database: a forward migration restoring the `20261130001000` summary body, with the reader left in place or revoked. No data is written, so nothing needs repair.
 
 ## 6. Implementation decisions for Codex
