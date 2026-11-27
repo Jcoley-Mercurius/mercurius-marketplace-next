@@ -130,7 +130,7 @@ describe("wording", () => {
     expect(all).not.toMatch(/all breaches|complete coverage|no breaches (were )?missed|guarantee|every breach|coverage is complete/i);
     expect(LOWER_BOUND_STATEMENT).toMatch(/lower bound/);
     expect(INTERVAL_STATEMENT).toMatch(/do not bound, estimate or count missed breaches/);
-    expect(INTERVAL_STATEMENT).toMatch(/does not establish complete coverage/);
+    expect(INTERVAL_STATEMENT).toMatch(/scanning at any interval does not make the record complete/);
   });
 
   it("never labels an observation as still overdue", () => {

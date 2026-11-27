@@ -80,7 +80,7 @@ export function ticketKindLabel(kind: string | null) {
 export const LOWER_BOUND_STATEMENT =
   "Observation counts are a lower bound. A breach that begins and ends between two scans is never recorded, and no record is not evidence that nothing breached.";
 export const INTERVAL_STATEMENT =
-  "Intervals between scans describe when scans ran. They do not bound, estimate or count missed breaches, and how often scans run does not establish complete coverage.";
+  "Intervals between scans describe when scans ran. They do not bound, estimate or count missed breaches, and scanning at any interval does not make the record complete.";
 export const LAG_STATEMENT = "Lag is how long past due the item was when a scan observed it, not how long the breach lasted.";
 export const NOT_STILL_OVERDUE =
   "An observation is a record of what a scan saw. It doesn’t say the item is still overdue; open the queue for its current state.";
