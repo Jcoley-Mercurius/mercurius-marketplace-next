@@ -1,3 +1,13 @@
+# Phase 7.5G-1 applications awaiting review (TRACE-159) — 2026-11-27 ET
+
+- **Base:** stacked on #214's head `5810e60` (7.5G plan revision 2 = `main` `2039d25` plus documentation). Branch `claude/phase7-5g1-applications-review-queue`, main checkout, `phase5-isolated` stack. Record: [7.5G-1](../../governance/PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md). Retarget to `main` after #214 merges.
+- **Codex review (in conversation, not a GitHub review):** R-1..R-5 accepted; C-1 parity from real database output through the real `applicationQueueState`; C-2 parity only for fully loaded data from one database state; C-3 order `created_at, id`, with fixtures for intake revisions and for linked onboarding without a review start. Recorded in plan §9.
+- **Built:** migration `20261205001000`: `admin_application_review_queue()` (admin-only, `STABLE`, `{checked_at, items: [{application_id, since}]}`, `since` = application received) and `admin_operations_summary` with `applications` after `offer_terms`. `SUMMARY_QUEUES.applications`; SQL 133; parity script and fixture; unit parity test; browser rows. SQL 127 (S1–S4, S8/S9) and SQL 129 R15 (summary md5) changed on purpose.
+- **Evidence:** record §3–§4 (clean replay 241 migrations; fingerprints unchanged except the two functions; money `61 | eb3f9702…`; full SQL 126 files / 9,233 PASS; 14/14 mutants; unit 1,416; browser 52/54, then 2/2 on rerun).
+- **Local:** the host rebooted during the old-client build, which cleared the scratchpad. Another slice's `phase7-3d1` stack came back up and was left running.
+- **Not done:** hosted dry run, push and readback (record §5 gives the exact steps), merge, deploy.
+- **Next:** Codex reviews (I-1..I-6). The owner authorizes the push before merge, then merges #214 and then this PR.
+
 # Phase 7.5G scope plan (TRACE-159) — 2026-11-27 ET
 
 - **Base:** `main` `2039d25` (#212 merged 16:01:03 UTC), fetched before work. Branch `claude/phase7-5g-scope-plan`, documentation only. Record: [7.5G plan](../../governance/PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md).
