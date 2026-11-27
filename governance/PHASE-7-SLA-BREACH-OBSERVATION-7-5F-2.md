@@ -34,6 +34,7 @@
 | `src/app/admin/sla-observations/page.tsx` | The page (§3); remounted per account |
 | `src/components/admin/AdminSidebar.tsx` | "SLA Observations" entry beside Notifications (primary entries) |
 | `src/lib/adminOperations.test.ts` | Navigation test updated for the new entry |
+| `src/lib/notificationDestination.ts` | The new page listed as an existing admin route (I-13) |
 | `tests/fixtures/sla-observations.ts` | Synthetic detector answers shared by the unit and browser tests |
 | `tests/unit/sla-observations.test.ts`, `tests/unit/sla-observations-controller.test.ts` | Unit groups (§5.1) |
 | `tests/e2e/admin-sla-observations.spec.ts` | Browser groups (§5.3) |
@@ -111,19 +112,41 @@ Each mutant is one literal edit of the source, the two unit files run, the sourc
 
 ### 5.3 Browser
 
-`tests/e2e/admin-sla-observations.spec.ts`: PENDING (production build, `next start`, synthetic session; other origins aborted).
+`npx playwright test tests/e2e/admin-sla-observations.spec.ts` against a production build made with CI's synthetic environment (`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55831`, as the `application` job): **16/16**. Every 7.5F function is served per test and every call recorded; other origins are aborted.
+
+| Test | What it proves |
+|---|---|
+| Reads only (1440 and 320 px) | Opening, Refresh, the rule filter, Load older, the period, a reload and 1.5 s of waiting make no key, detector or purge call; the three facts, lower-bound and interval statements are shown; axe clean, no horizontal overflow |
+| Observations | Labelled as records with lag; T-8 shows the ticket kind; links go to `/admin/requests?request=<uuid>` or `/admin/tickets`; never "still overdue"; summary "At least N", no coverage claim; the request link navigates |
+| Scan now | One key, one detector call `{p_run_key, p_limit: 200}`, per-rule counts, focus on the status, runs re-read, no further write |
+| Outcomes | Partial (with the failed rule's SQLSTATE), failed, skipped as recorded; a replay says it had already run; a skipped scan says the key is used up and the next press uses a new key |
+| Unknown | `57014`: cancelled, looked up, stays unknown (never "nothing was recorded", "did not run" or "failed"), axe clean, same-key retry replays (same key and limit twice, one key issued). Aborted answer and aborted lookup: still unknown; Check again settles it by lookup without another detector call. F208-1 incomplete answer: unknown; `retry_until` passed: no retry button; expired lookup: no content |
+| Refusal and access | `22023` too old: refused, recorded nothing, key retired. A signed-in non-admin is sent home by the server proxy and no 7.5F function is called; an admin whose readback returns `42501` sees the permission state and no actions |
+| Stale and navigation | Sign-out while a scan is held: after release nothing is shown, requested or navigated. Leaving mid-scan and returning: the page is idle, nothing re-sent |
+| Purge | Dialog text (permanent, expired-only, per-class limit, Cancel focused), axe clean; Cancel calls nothing; one confirmation is one `{p_limit: 1000}`; logical and physical lines; nothing repeats. `55000` refusal, aborted (unknown) and skipped answers shown in the dialog; skipped recorded as "skipped", not "Done" |
+| States | Loading, empty runs and observations, summary error with Try again (reads only) at 320 px, axe clean |
+
+Regression specs sharing the sidebar, admin layout and `ConfirmAction` (`admin-notifications`, `admin-operations`, `email-evidence-purge`, `portals`): **67/67**. Final-source rerun: §5.5.
+
+**Local incident (disclosed).** The first local build used `.env.local`, whose hosted `NEXT_PUBLIC_SUPABASE_URL` Next.js inlines at build time. In that run every admin page redirected to sign-in: the browser aborted all non-local origins, but the server-side proxy (`src/proxy.ts`, `auth.getUser()`) sent about 17 `GET /auth/v1/user` requests to hosted Supabase Auth carrying the synthetic, unsigned test token. Each was rejected; no database query, write or user data was involved. The build was redone with CI's synthetic values and checked to contain no project host before any further run.
 
 ### 5.4 Repository checks
 
 | Check | Result |
 |---|---|
 | `npm run typecheck` | pass |
-| `npx eslint` on every changed file | pass, no warnings |
-| `npm run test:unit` (full) | PENDING |
-| `npm run scan:secrets` | PENDING |
-| `npm run build` | PENDING |
-| `git diff --check` | PENDING |
+| `npx eslint` on every changed source and test file | pass, no warnings |
+| `npx vitest run` (full unit suite) | **87 files, 1,448 tests, pass** |
+| `npm run scan:secrets` | pass |
+| `npm run build` | pass (synthetic environment) |
+| `git diff --check` | pass |
 | Final-head CI | PR body |
+
+### 5.5 Final-source rerun
+
+After the last source change (I-13), a fresh production build with CI's synthetic environment (no project host anywhere under `.next/server` or `.next/static`), then `admin-sla-observations`, `admin-notifications`, `admin-operations`, `email-evidence-purge` and `portals`: **83/83** (16 + 67). The full browser lane and the database jobs run in CI.
+
+**Not run locally:** browser-level mutants (each needs a rebuild); the deferred mutations are unit-level, as plan §6 U places them. The SQL suite and concurrency scripts are unaffected (no database change) and run in CI.
 
 ## 6. Implementation decisions for Codex review
 
@@ -141,6 +164,7 @@ Each mutant is one literal edit of the source, the two unit files run, the sourc
 | I-10 | The page names "90-day retention (DEC-2026-069)" | Policy-sourced copy; it changes with a new decision and migration (no readback, G-1) |
 | I-11 | The pending run key lives only in page memory; a reload or account change drops it | No client storage of run keys; a committed run is still listed under Recent runs |
 | I-12 | Rule targets are copied from OD-1 as display text; the database holds the rule logic | One place for wording; a rule change needs a migration and this table |
+| I-13 | `/admin/sla-observations` added to `ADMIN_NOTIFICATION_ROUTES` (7.5E) | That test requires every static admin page to be a valid notice destination; no producer links here and the detector writes no notice |
 
 ## 7. Decisions needed
 
@@ -150,6 +174,6 @@ Each mutant is one literal edit of the source, the two unit files run, the sourc
 
 ## 8. Open items
 
-- Codex review of this PR (I-1..I-12, G-1..G-4).
+- Codex review of this PR (I-1..I-13, G-1..G-4).
 - Owner authorizations: release (merge) after D-3; first hosted scan (D) and first hosted purge (P-7) remain separate actions.
 - Carried unchanged: HQ-1..HQ-6 (HQ-5 open until a hosted staged breach is observed under its own authorization); OD-3..OD-7; OD-5 external channel; AC-1 D-1, D-4..D-6; SD-1, SD-2; 7.5D F-1, O-1..O-3; 7.5F-1 O-1.
