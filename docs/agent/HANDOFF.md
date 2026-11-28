@@ -1,11 +1,10 @@
-# Phase 7 closeout register (TRACE-162) — 2026-11-28 ET
+# Phase 7 scope-freeze and closeout proposal (TRACE-162, PR #222 revision 2) — 2026-11-28 ET
 
-- **Base:** `main` `41d34ec` (#220 merged 18:01:53 UTC), fetched before work. Branch `claude/phase7-closeout-register`, documentation only. Open PR #221 (7.5G-2 post-merge record) not incorporated; its evidence is cited as "#221 only". Record: [closeout register](../../governance/PHASE-7-CLOSEOUT-REGISTER.md).
-- **Found:** gate not met (no alert anywhere; exhaustion and support-acknowledgement messages missing; SQL 128 is characterization). Fifteen merged code slices have no recorded Codex review outcome, including 7.5G-2. 11 of 18 API routes log raw errors outside `mercurius.oplog.v1`. CFG-011 log retention unmet. Most record status headers are stale (register §2.2).
-- **Raised:** CR-1 gate evidence (local vs hosted; scheduler in or out); CR-2 CFG-011 log meaning and mechanism; CR-3 queue priority; CR-4 superseded release checks; CR-5 phase boundary; CR-6 contact-submission retention class.
-- **Proposed:** 16 implementation slices plus at most 4 conditional (≤ 20); V-1..V-4 non-code tracks. Next: **P7-01** structured-log coverage (no decision, no migration).
-- **Not done:** no code, test, migration, hosted query, merge, deploy, email, scheduler, booking or payment change. Not Phase 7 acceptance; no deferral invented.
-- **Next:** Codex reviews the register; owner answers the §6 card; P7-01 on a fresh branch from `main`.
+- **Base:** `main` `41d34ec` (unchanged). Branch `claude/phase7-closeout-register`, documentation only. Replaces the first revision's register with [the proposal](../../governance/PHASE-7-SCOPE-FREEZE-PROPOSAL.md); every earlier gap is mapped in its Appendix A. #221 not incorporated.
+- **Reconciled:** review evidence split into design rulings, implementation review and "no review found" (not "not reviewed"). 11 code rows have no implementation review found (8 with design rulings), 5 lack a re-review. 7.5G-1: R-1..R-5/C-1..C-3 recorded; I-1..I-6 no recorded ruling. Codex's hosted readback of `20261202001000` (2026-11-24) recorded; its push time stays unrecorded. PR comments #162–#222 hold no Codex ruling.
+- **Proposed (unapproved):** alert outcome AO-1..AO-5 with channel options 1–4 (no provider mandated); DEC-2026-069 manual scans kept, scheduler as PD-1; superseded checks kept as not performed, replaced by current-release verification (PD-7); 14 packages in five workstreams (matcher M2 and money-function work isolated); card X-1..X-8, PD-1..PD-11, FD-A..FD-J. Proposed first package: O1 structured logs.
+- **Not done:** no code, test, migration, hosted query, merge, deploy, email, scheduler, booking or payment change. Not Phase 7 acceptance; nothing approved.
+- **Next:** Codex reviews; owner answers the §9 card.
 
 # Phase 7.5G-2 sourcing queue implementation (TRACE-159) — 2026-11-28 ET
 
