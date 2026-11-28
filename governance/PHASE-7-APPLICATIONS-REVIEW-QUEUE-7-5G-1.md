@@ -1,6 +1,6 @@
 # Phase 7.5G-1 — applications awaiting review: server reader and overview row (TRACE-159)
 
-**Status:** **IMPLEMENTED FOR REVIEW** (Codex), recovered onto `main` (§8). Hosted push and readback of `20261205001000` **recorded** (§5; not re-verified by the recovery). Not merged to `main`, not deployed. #215 merged into its stacked base branch, not `main` (§8).
+**Status:** **MERGED TO `main`, RELEASE NOT VERIFIED.** #217 merged #215's stacked base branch (head `a028998`) into `main` as `1e97f95` on 2026-11-27 20:23:19 ET (01:23:19 UTC on 11-28), so 7.5G-1 is on `main` (§8.4). Hosted push and readback of `20261205001000` **recorded** (§5; not re-verified since). Production deployment READY for `1e97f95`, HQ-1 and HQ-2: **not observed** (§8.6). Codex implementation review (I-1..I-6): **not recorded** (§8.5). *(Status before #217, kept as history: "IMPLEMENTED FOR REVIEW (Codex), recovered onto `main` (§8). Hosted push and readback recorded. Not merged to `main`, not deployed. #215 merged into its stacked base branch, not `main`.")*
 **Date:** 2026-11-27 (America/New_York).
 **Base:** built stacked on #214's head `5810e60` (7.5G plan revision 2 = `main` `2039d25` plus documentation). While it was in progress, #213 merged (`main` `e3a12a1`, 18:16:58 UTC) and `main` was merged into #214 (`1b3032b`). That head was merged into this branch (`383c3fc`; one conflict, the TRACE-159 row, resolved by keeping #213's text and appending the 7.5G notes). #215 was meant to be retargeted to `main` after #214 merged; it was not, and it merged into #214's branch after #214 had merged. The replacement PR from `main` is described in §8.
 **Authority:** the owner's 7.5G-1 instruction (2026-11-27 ET); [7.5G plan](PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md) §5 and §9 (Codex R-1..R-5 and C-1..C-3, relayed in conversation); [TRACE-136 brief](PHASE-6-ADMIN-OPERATIONS-BRIEF.md) A8 and §12.4 item 4; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) Q-12; TRACE-105 and TRACE-108 (DEC-2026-032) for the existing classification.
@@ -155,7 +155,7 @@ All 14 caught.
 | Browser: `admin-operations`, `portals`, `application-retention` (on the tree before #214's new head, and so #213, was merged in) | First run 52/54. Failed: `admin-operations.spec.ts:28` (navigation, light 1440 px) and `:149` (record fetched by id). Neither asserts the new row. Both passed on rerun (3/3, including the dark 390 px variant), with host load 12–22. The rerun overwrote the first run's error context, so those errors are not retained |
 | Old client on the new summary | Pass. A throwaway worktree of `main` `e3a12a1` (no `applications` entry in `SUMMARY_QUEUES`) with only the new `tests/fixtures/admin-operations-summary.json` copied in; that fixture has the `applications` row for both callers. Built with CI's synthetic environment and the type-check step skipped (`typescript.ignoreBuildErrors` in the worktree only: two full builds rebooted this 5.6 GB host during the type check, and `main`'s types are checked by `main`'s own CI). No hosted host in the output. `main`'s own `admin-operations.spec.ts`: **18/18**. Its overview tests expect exactly its nine rows, so the old client drops the unknown `applications` row and renders everything else unchanged |
 | Browser on the merged tree | Not rerun locally (host reboots during builds); the full browser lane is exact-head CI's `application` job |
-| Final-head CI | The replacement PR's body (§8). #215's exact-head CI (`9fbdc04`) ran against the stacked base and is historical evidence only |
+| Final-head CI | #217's exact-head CI on `a028998`, whose tree is `main` `1e97f95`'s tree, and `main`'s own CI on `1e97f95` (§8.4). #215's exact-head CI (`9fbdc04`) ran against the stacked base and is historical evidence only |
 
 ## 5. Hosted steps (steps 1–4 recorded as done below; step 5 not run)
 
@@ -191,6 +191,8 @@ The readback read the catalog and migration history only. Neither function was c
 
 **Reconciled (2026-11-27 ET, §8):** #214 merged to `main`; #215 merged into #214's branch instead of `main`, so nothing of 7.5G-1 deployed. The paragraph above still holds with "the replacement PR" in place of #215: if the recorded push stands, hosted already serves the `applications` row and Production's client drops it. The recovery made no hosted query, so this push and readback are recorded, not re-verified.
 
+**Reconciled again (2026-11-27 ET, §8.4):** the replacement PR did not release 7.5G-1; #217 did, by merging `a028998` into `main` as `1e97f95`. If the recorded push stands, the order DEC-2026-037 requires held: the push (20:51 UTC) came before the merge (01:23 UTC on 11-28). Whether Production now serves `1e97f95`'s client, which shows the `applications` row, is not observed (§8.6).
+
 **Rollback.** Application: `vercel promote` of the previous production deployment, which works on the new summary (§4.4). Database: a forward migration restoring the `20261130001000` summary body, with the reader left in place or revoked. No data is written, so nothing needs repair.
 
 ## 6. Implementation decisions for Codex
@@ -206,12 +208,16 @@ The readback read the catalog and migration history only. Neither function was c
 
 ## 7. Open items
 
-- Codex review of the replacement PR (I-1..I-6, and the recovery in §8).
-- Owner: release of the replacement PR to `main` (DEC-2026-037). #214 is already merged. The hosted dry run, push and readback are recorded in §5; whether to re-verify them read-only before merge is the owner's call (§8.3).
-- After merge (separately authorized): deployment READY for the merge commit, then HQ-1/HQ-2 (§5 step 5).
-- Carried unchanged: 7.5G-2 (OD-4a, S-1..S-5), OD-3, OD-6, D-6, HQ-1..HQ-6.
+*(Revised 2026-11-27 ET after #217, §8.4. The list as written before #217 asked for review and release of the replacement PR; that PR no longer releases anything.)*
+
+- **Implementation review (Codex), separate from CI:** I-1..I-6 (§6) have no recorded Codex ruling. #217 merged with its template checklist unticked and no GitHub review. §8.5 lists what is outstanding.
+- **Release verification (each needs the owner's authorization; none run):** §8.6. Optional read-only catalog recheck; Production READY for `1e97f95`; HQ-1; single-snapshot HQ-2 including `applications`.
+- **Ledger:** #216 now carries only this record, TRACE-159 and the handoff (§8.4).
+- Carried unchanged: 7.5G-2 (OD-4a, S-1..S-5; plan in preparation), OD-3, OD-6, D-6, HQ-3..HQ-6.
 
 ## 8. Recovery after #215 merged into its stacked base (2026-11-27 ET)
+
+*§8.1–§8.3 are kept as written before #217 merged. Where they say 7.5G-1 is not on `main` or that the replacement PR would release it, §8.4 supersedes them.*
 
 ### 8.1 What happened (verified with `git` and `gh`, no hosted query)
 
@@ -235,3 +241,84 @@ The readback read the catalog and migration history only. Neither function was c
 - **Recorded:** the dry run (20:48 UTC), guard dry run and push (20:51:26–20:51:29 UTC) and the catalog readback (20:51:48–20:51:58 UTC) are recorded in §5, in the handoff and in TRACE-159, by the session that ran them under the owner's instructions, in commits `9826d52`, `5a60c9d` and `9fbdc04`.
 - **Not re-verified:** this recovery ran no hosted query. "Recorded as applied" is not the same as "observed applied now".
 - **Read-only re-verification, if the owner authorizes it:** §5 step 4's statements. Expected: latest `20261205001000` (or later, if a newer slice has since pushed), the two md5s, ACLs and execute privileges, and money `61 | eb3f9702…`. If the reader is absent, the push did not hold. Then the dry run must list only `20261205001000` before a push, as in §5 steps 2–3.
+
+### 8.4 #217 brought 7.5G-1 to `main` (2026-11-27 ET; `git` and `gh` only, no hosted query)
+
+| Item | Observation |
+|---|---|
+| #217 | Opened 23:21:16 UTC from `claude/phase7-5g-scope-plan` (head `a028998`, the merge of #215 into that branch) to `main`. Merged 2026-11-28 01:23:19 UTC (20:23:19 ET on 11-27) as `1e97f95`. Body: the unfilled PR template, release checklist unticked. No GitHub review object |
+| Trees | `git diff a028998 1e97f95` is empty. `git diff 294eb22 1e97f95` is exactly 7.5G-1's 13 files (816 insertions, 14 deletions). The migration is blob `ca146a1` (sha256 `34673e52…`) on `main`, as at `77b6160`, `9826d52` and `9fbdc04`: the file the recorded push applied |
+| #216 | Head `5a19477` before this reconciliation. Its implementation files equal `main`'s (`26d1594` has an empty diff against `1e97f95` outside the three ledgers). It became redundant as a release vehicle. `main` was merged into it (`8374c84`, no implementation change) and it now carries only this record, TRACE-159 and the handoff. The migration is not duplicated or reapplied |
+| #217 exact-head CI (`a028998`) | CI 46082028446 (`pull_request`): `backend`, `lifecycle`, `application` success. Analytics privacy 46082028294 success. Push CI 46079894899 on the branch: success. "Supabase Preview" check: pass (GitHub integration; not run by this slice) |
+| `main` CI on `1e97f95` | CI 46092855229 (`push`): `backend`, `lifecycle`, `application` success (completed 01:53:22 UTC). Analytics privacy 46092855233 success. Nothing rerun |
+| Deployment | GitHub records Production deployment `8122571509` for `1e97f95` (created 01:23:53 UTC) and a `Vercel` commit status `success`, "Deployment has completed". That is GitHub's record, not an observed READY state or the currently serving deployment. **Not verified** (§8.6 step 2) |
+| Hosted | Not queried. The push and readback of `20261205001000` remain recorded, not re-verified (§8.3) |
+
+### 8.5 Implementation review: outstanding (separate from CI)
+
+CI shows the tests pass. It does not settle the review questions. No Codex ruling on any of these is recorded:
+
+| ID | Outstanding | Where |
+|---|---|---|
+| I-1..I-6 | Execute grants (no `service_role`), `vendor_require_operator` guard, parity fixture projection, absolute fixture times, replica-mode outcome writes, the unexercised R0 existing-provider start | §6 |
+| V-1 | Browser lane on the merged tree was not rerun locally. Its evidence is CI's `application` job on `a028998` and `1e97f95` | §4 |
+| V-2 | Old-client compatibility was shown with the type check skipped in a throwaway worktree (`typescript.ignoreBuildErrors`) | §4 |
+| V-3 | The first local browser run's two failures (`admin-operations.spec.ts:28`, `:149`) passed on rerun. Their error context was overwritten | §4 |
+| V-4 | Release order: the push preceded the merge (§5) as DEC-2026-037 requires, but the merge came through #217, not a reviewed 7.5G-1 PR | §8.4 |
+
+### 8.6 Release verification: prepared, not run
+
+Each step needs the owner's authorization. All are read-only. None was run for this reconciliation. Record counts and states only, never row contents. The owner's user id is supplied at run time and not recorded.
+
+1. **Optional catalog recheck (hosted, read-only).** §5 step 4's statements with `npx supabase db query --linked`. Expected: latest `20261205001000` (or later if a newer slice has pushed since; `main`'s newest migration is `20261205001000`); reader md5 `3070dcddc4b252000e0058475424f857`, ACL `{postgres=X/postgres,authenticated=X/postgres}`, `s`, definer, `search_path=""`; summary md5 `779d61f5d3509895233bfaaff855ce5b`, ACL `{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}`, `v`, definer, `search_path=""`; reader execute `anon` false, `service_role` false, `authenticated` true; money `61 | eb3f9702d45f9f22e61f6a7da17349c4`. **Stop** if the reader is absent or any value differs. Then `1e97f95`'s client (which expects an `applications` row) is reading a summary without it. How the overview renders that is not characterized here, and the forward fix is the owner's decision.
+2. **Production READY for `1e97f95` (Vercel, read-only).** Observe all three:
+   - the Vercel deployment behind GitHub deployment `8122571509`: `readyState` `READY`, target `production`, `meta.githubCommitSha` = `1e97f958b687785ee9d6f1c8794a665ad6666446` (Vercel connector `get_deployment`, or `npx -y vercel@latest inspect <deployment url>` from the scratchpad);
+   - `npx -y vercel@latest inspect www.mercuriusmarketplace.com` resolves to that deployment id, so it is the one serving;
+   - `/admin` loads signed in as the owner (also HQ-1).
+   **Stop** on any other state or SHA. Rollback is `vercel promote <previous dpl_id>`, which works on the new summary (§4.4).
+3. **HQ-1 (in-app, read-only).** Signed in as the owner on `/admin`: ten rows, in summary order quote, recurring payments, fulfillment, cancellation, support, compliance renewals, renewal documents, offers at other terms, **Applications awaiting review**, finance. Every row `ready` or `restricted`. Fulfillment, offers at other terms and applications show "—" for aged. The applications row links to `/admin/applications`. Record the counts.
+4. **HQ-2 runner check (hosted, read-only).** `npx supabase db query --linked "begin transaction isolation level repeatable read read only; select current_setting('transaction_isolation') as iso, current_setting('transaction_read_only') as ro; rollback;"`. Expected: one row, `repeatable read`, `on`. If no row is printed, the runner keeps only the last statement's result. **Stop**, and do not drop the trailing `rollback` without Codex's and the owner's agreement.
+5. **HQ-2 (hosted, read-only, contract §7.2 as corrected by RV-2).** One `REPEATABLE READ READ ONLY` transaction as the owner. One statement calls the summary and every reader once, so each reader sees the same snapshot and the same `now()`. Save it outside the repository with the owner's id substituted, then run `npx supabase db query --linked -f <file>`:
+
+   ```sql
+   begin transaction isolation level repeatable read read only;
+   set local role authenticated;
+   set local request.jwt.claims = '{"role":"authenticated","sub":"<owner user id>"}';
+   with
+     s as (select public.admin_operations_summary() as v),
+     summary as (
+       select q->>'queue' as queue, q->>'state' as state, (q->>'count')::int as count, (q->>'aged')::int as aged
+       from s, jsonb_array_elements(s.v->'queues') q),
+     readers as (
+       select 'quote' as queue, public.admin_quote_queue()->'items' as list, 'aged' as aged_key
+       union all select 'recurring_payment', public.admin_recurring_payment_queue()->'items', 'aged'
+       union all select 'fulfillment', public.admin_fulfillment_queue()->'items', null
+       union all select 'cancellation', public.admin_cancellation_queue()->'items', null
+       union all select 'support', public.admin_support_queue(false)->'items', 'overdue'
+       union all select 'compliance_renewal', public.vendor_evidence_renewal_queue()->'entries', null
+       union all select 'renewal_documents', public.vendor_renewal_document_queue()->'entries', null
+       union all select 'offer_terms', public.admin_offer_terms_queue()->'items', null
+       union all select 'applications', public.admin_application_review_queue()->'items', null
+       union all select 'finance_exceptions',
+         case when (select state from summary where queue = 'finance_exceptions') = 'ready'
+           then public.money_finance_reconciliation()->'exceptions' end, null),
+     counted as (
+       select queue, jsonb_array_length(list) as count,
+         case when aged_key is null then null
+           else (select count(*)::int from jsonb_array_elements(list) i where coalesce((i->>aged_key)::boolean, false)) end as aged
+       from readers)
+   select current_setting('transaction_isolation') as isolation,
+          current_setting('transaction_read_only') as read_only,
+          public.has_role(auth.uid(), 'admin') as caller_is_admin,
+          sm.queue, sm.state, sm.count as summary_count, c.count as reader_count,
+          sm.aged as summary_aged, c.aged as reader_aged,
+          (sm.state = 'restricted' or (sm.count is not distinct from c.count and sm.aged is not distinct from c.aged)) as parity
+   from summary sm left join counted c using (queue)
+   order by sm.queue;
+   rollback;
+   ```
+
+   **Pass:** ten rows; every row `isolation` `repeatable read`, `read_only` `on`, `caller_is_admin` true; every `state` `ready`, except finance, which may be `restricted`; `parity` true on every row; fulfillment, offer-terms and applications `aged` null on both sides. A row in `error`, or a statement that fails, is a **stop**. In a read-only transaction a reader that tried to write would raise. Inside the summary that shows as an `error` row; called directly in `readers`, it fails the whole statement. The finance reader is called only when the summary reports finance `ready`, so a non-finance owner gets `restricted` without an exception.
+   **Executability (local only, 2026-11-27 ET):** this statement was run once on the idle `phase7-3d1` local stack, inside one rolled-back transaction that first applied `20261130001000`..`20261205001000` and a synthetic admin. Output: ten rows, `repeatable read`, every queue `ready` with count 0, finance `restricted`, `parity` true. The stack read back unchanged afterwards (latest `20261129001000`, reader absent, no users). That run could not be read-only, because it applied DDL. Its queues were empty, so it shows the statement runs. It is not parity evidence.
+
+Steps 1–5 do not cover 7.5G-2 or any other queue change.
