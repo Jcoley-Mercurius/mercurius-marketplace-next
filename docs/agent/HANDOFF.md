@@ -1,3 +1,12 @@
+# Phase 7 closeout register (TRACE-162) — 2026-11-28 ET
+
+- **Base:** `main` `41d34ec` (#220 merged 18:01:53 UTC), fetched before work. Branch `claude/phase7-closeout-register`, documentation only. Open PR #221 (7.5G-2 post-merge record) not incorporated; its evidence is cited as "#221 only". Record: [closeout register](../../governance/PHASE-7-CLOSEOUT-REGISTER.md).
+- **Found:** gate not met (no alert anywhere; exhaustion and support-acknowledgement messages missing; SQL 128 is characterization). Fifteen merged code slices have no recorded Codex review outcome, including 7.5G-2. 11 of 18 API routes log raw errors outside `mercurius.oplog.v1`. CFG-011 log retention unmet. Most record status headers are stale (register §2.2).
+- **Raised:** CR-1 gate evidence (local vs hosted; scheduler in or out); CR-2 CFG-011 log meaning and mechanism; CR-3 queue priority; CR-4 superseded release checks; CR-5 phase boundary; CR-6 contact-submission retention class.
+- **Proposed:** 16 implementation slices plus at most 4 conditional (≤ 20); V-1..V-4 non-code tracks. Next: **P7-01** structured-log coverage (no decision, no migration).
+- **Not done:** no code, test, migration, hosted query, merge, deploy, email, scheduler, booking or payment change. Not Phase 7 acceptance; no deferral invented.
+- **Next:** Codex reviews the register; owner answers the §6 card; P7-01 on a fresh branch from `main`.
+
 # Phase 7.5G-2 sourcing queue implementation (TRACE-159) — 2026-11-28 ET
 
 - **Base:** built on #219's head `84359ea`; #219 merged as `7a52676` (same tree) before the push, so the commit was rebased onto it and the PR targets `main` (record §7). Branch `claude/phase7-5g2-sourcing-queue`, main checkout, `phase5-isolated` stack. Record: [7.5G-2](../../governance/PHASE-7-SOURCING-QUEUE-7-5G-2.md).
