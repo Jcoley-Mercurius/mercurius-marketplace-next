@@ -1,3 +1,11 @@
+# Phase 7.5G-2 sourcing queue plan (TRACE-159) — 2026-11-27 ET
+
+- **Base:** `main` `1e97f95` (#217 merged; 7.5G-1 on `main`, release checks not done). Branch `claude/phase7-5g2-sourcing-plan`, documentation only. Record: [7.5G-2 plan](../../governance/PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md).
+- **Planned, not built:** `admin_sourcing_queue()` plus a `sourcing` summary row (`20261206001000`, SQL 134 provisional). Entry: `pending` with `exhausted`, `awaiting_consent` or legacy `sourcing`. Excluded: cancelled, `awaiting_match` (incl. `rematch_failed`), offers past expiry (as stored, not settled on read). `since` is a derived lower bound with a named basis (`provider_left`, `last_offer_closed`, `request_received`), never `updated_at`. Overlap with `blocked_inactive` offers at other terms: listed in both with an `offer_terms_block` cross-reference.
+- **Decisions:** OD-4a wording is an owner proposal, **not approved**. Codex SG-1..SG-8. OD-4b and OD-6 unchanged.
+- **Not done:** no code, test, migration, hosted query (including the optional legacy count), merge or deploy. TRACEABILITY left to #216.
+- **Next:** Codex reviews the plan; the owner decides OD-4a.
+
 # Phase 7.5G-1 on main via #217: ledger reconciliation (TRACE-159) — 2026-11-27 ET
 
 - **Base:** `main` `1e97f95` (#217 merged 01:23:19 UTC on 11-28). #217 merged `claude/phase7-5g-scope-plan` (head `a028998`, which holds #215) into `main`, so 7.5G-1 is on `main`. `main`'s tree equals `a028998`; the migration blob `ca146a1` is unchanged. Record [§8.4](../../governance/PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md).
