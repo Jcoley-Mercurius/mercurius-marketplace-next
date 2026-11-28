@@ -199,9 +199,17 @@ describe("admin navigation", () => {
     expect(primaryEntries.map((item) => [item.label, item.href])).toEqual([
       ["Overview", "/admin"], ["Notifications", "/admin/notifications"], ["SLA Observations", "/admin/sla-observations"],
     ]);
-    const listed = routes.filter((route) => route !== "/admin" && !route.includes("[") && route !== "/admin/smart-picks");
+    // Phase 7.5G-2 (SG-9): /admin/sourcing has no sidebar entry in this slice; the overview's
+    // sourcing row is its only entry point.
+    const overviewOnly = ["/admin/sourcing"];
+    expect(routes).toEqual(expect.arrayContaining(overviewOnly));
+    const listed = routes.filter((route) => route !== "/admin" && !route.includes("[") && route !== "/admin/smart-picks" && !overviewOnly.includes(route));
     expect([...listed].sort()).toEqual([...hrefs].sort());
     expect(hrefs).not.toContain("/admin/smart-picks");
+    for (const route of overviewOnly) {
+      expect(hrefs).not.toContain(route);
+      expect(Object.values(SUMMARY_QUEUES).map((entry) => entry.href)).toContain(route);
+    }
     expect(navigationGroups.map((group) => group.label)).toEqual(["Marketplace Operations", "Catalog & Supply", "Money", "Trust & Support", "Merchandising & Insights"]);
   });
 });

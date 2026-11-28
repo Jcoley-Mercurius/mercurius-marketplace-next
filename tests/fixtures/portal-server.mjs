@@ -268,6 +268,9 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/rest/v1/rpc/public_provider_reviews") return send({ summary: { count: 0, average: null }, reviews: [] });
   if (url.pathname === "/rest/v1/rpc/admin_reviews") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [],
     counts: { public: 0, held_for_moderation: 0, rejected: 0, appealed: 0, private: 0, public_average: null, quality_feedback: 0 } } : { message: "Admin access required" }, user.testRole === "admin" ? 200 : 403);
+  // Phase 7.5G-2: the sourcing reader, empty by default; specs serve items per case.
+  if (url.pathname === "/rest/v1/rpc/admin_sourcing_queue") return send(user.testRole === "admin" ? { checked_at: now.toISOString(), items: [] }
+    : { message: "Admin access required", code: "42501" }, user.testRole === "admin" ? 200 : 403);
   if (url.pathname === "/rest/v1/rpc/admin_fulfillment_queue") return send(user.testRole === "admin" ? { items: [] } : { message: "Only admins can read the fulfillment queue" }, user.testRole === "admin" ? 200 : 403);
   if (url.pathname === "/functions/v1/list-payment-methods") return send({ payment_methods: [] });
   if (request.method === "GET") {

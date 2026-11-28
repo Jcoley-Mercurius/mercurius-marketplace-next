@@ -59,6 +59,8 @@ const expectedRows = (finance: string) => [
   ["Offers at other terms", "2", "—"],
   // Phase 7.5G-1: applications awaiting review, no aging rule.
   ["Applications awaiting review", "1", "—"],
+  // Phase 7.5G-2: sourcing (OD-4a name), no deadline or aging rule; SQL 127's gate-blocked exhaustion.
+  ["Sourcing", "1", "—"],
   ["Finance exceptions", finance, "—"],
 ];
 
@@ -105,6 +107,16 @@ test("the applications row opens the applications page (7.5G-1)", async ({ page 
   await page.getByRole("table", { name: "Operational queues" }).getByRole("link", { name: "Applications awaiting review" }).click();
   await expect(page).toHaveURL(/\/admin\/applications$/);
   await expect(page.getByRole("heading", { level: 1, name: "Vendor Applications" })).toBeVisible();
+});
+
+test("the sourcing row opens the read-only sourcing list, not the requests page (7.5G-2)", async ({ page }) => {
+  await page.route("**/rest/v1/rpc/admin_operations_summary", route => route.fulfill({ json: derived.admin }));
+  await admin(page, "/admin");
+  const link = page.getByRole("table", { name: "Operational queues" }).getByRole("link", { name: "Sourcing", exact: true });
+  await expect(link).toHaveAttribute("href", "/admin/sourcing");
+  await link.click();
+  await expect(page).toHaveURL(/\/admin\/sourcing$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Sourcing" })).toBeVisible();
 });
 
 test("the old Smart Picks route goes to Featured Providers", async ({ page }) => {

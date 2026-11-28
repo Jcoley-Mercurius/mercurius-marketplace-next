@@ -215,8 +215,8 @@ select is(pg_temp.got('parity'), $parity${"applications":[
 
 -- S  The summary row: after offer_terms, before finance; count = the queue; no aging rule.
 select is((select array_agg(r->>'queue' order by n) from jsonb_array_elements(pg_temp.got('summary_admin')->'queues') with ordinality x(r, n)),
-  array['quote','recurring_payment','fulfillment','cancellation','support','compliance_renewal','renewal_documents','offer_terms','applications','finance_exceptions'],
-  'S1 queue order: applications after offer_terms, finance last');
+  array['quote','recurring_payment','fulfillment','cancellation','support','compliance_renewal','renewal_documents','offer_terms','applications','sourcing','finance_exceptions'],
+  'S1 queue order: applications after offer_terms, finance last (7.5G-2 appends sourcing after applications)');
 select is(pg_temp.row_of(pg_temp.got(k), 'applications'), '{"queue":"applications","state":"ready","count":8,"aged":null}'::jsonb,
   format('S2 applications row: count 8 = queue, aged null (%s)', k)) from unnest(array['summary_admin','summary_finance']) k;
 select is((pg_temp.row_of(pg_temp.got('summary_admin'), 'applications')->>'count')::int, jsonb_array_length(pg_temp.got('queue')->'items'),
