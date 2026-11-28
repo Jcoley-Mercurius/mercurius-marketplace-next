@@ -4,8 +4,11 @@
 - **Built:** migration `20261206001000`: `admin_sourcing_queue()` (admin-only, `STABLE`, read-only; kinds, related event with basis and tie rule, `plan_visit`, `offer_terms_block`) and the `sourcing` summary row after `applications`. `/admin/sourcing` (Refresh only, no row links, no sidebar entry), account-bound controller. SQL 134; SQL 127, 129, 133 and two unit tests changed on purpose.
 - **Evidence:** SQL 134 104/104; 22/22 SQL mutants; full suite 127 files / 9,343 PASS on a clean replay of 242; fingerprints unchanged except the two functions (summary `5d98e849…`, reader `195b245c…`), money `61 | eb3f9702…`; browser sourcing 9/9, admin-operations + portals 40/40; unit 1,485; build with synthetic env; old client on the new summary: main's overview tests pass (one pre-existing deep-link failure on main's own build, record §4.6).
 - **Local:** session killed twice (host memory/load); scratchpad cleared once (mutation harness lost after its results were recorded). `phase7-3d1` left running; `phase5-isolated` stopped for builds.
-- **Not done:** hosted query or push, merge, deploy. 7.5G-1's READY/HQ-1/HQ-2 stay separate.
-- **Next:** Codex reviews (I-1..I-10); owner authorizes record §6 steps 1–4 before merge, 5–8 after.
+- **Not done by Claude:** hosted query or push, merge, deploy. 7.5G-1's READY/HQ-1/HQ-2 stay separate.
+- **CI on `d3e6126`:** CI `46151205881` (PR) success; push run `46151144882` attempt 1 cancelled by concurrency, attempt 2 (owner re-run) success; Analytics privacy and Supabase Preview pass (record §4.7). Later commits are docs-only.
+- **Merged early:** the owner merged #220 at 18:01:53Z (`41d34ec`) before Codex review and before any recorded migration push. Hosted state of `20261206001000` unknown (not queried); record §6.1 gives both paths.
+- **Review prep (2026-11-28, branch `claude/phase7-5g2-post-merge-record`, local):** record §5.1 review index; §6 stop conditions; §8 notes a 7.5G-1 sequencing question (docs-only deploys since `1e97f95`). Still not run: browser mutant; old-client check limited to the fixture (§4.6).
+- **Next:** owner confirms the migration state; record §6.1 (step 4, or steps 1–4, then 5–8 for `41d34ec`); Codex reviews the merged code (I-1..I-10, §5.1), with fixes forward.
 
 # Phase 7.5G-2 plan: OD-4a approved, SG-9 accepted (TRACE-159) — 2026-11-27 ET
 
