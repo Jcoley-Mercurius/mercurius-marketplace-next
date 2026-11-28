@@ -283,6 +283,26 @@ So the first path above applies: steps 5–8 for `41d34ec` remain.
 
 **Step 5, Production READY (2026-11-28, owner-authorized, Vercel read-only):** deployment `dpl_8zhNDYzgLyv4hvR2dmHbYThaJKmg`: `readyState` `READY`, target `production`, `meta.githubCommitSha` `41d34ec785942d04cde2f4d25b6765f5ad638e7c` (ref `main`), created 13:01:56 ET. `vercel inspect www.mercuriusmarketplace.com` resolves to the same id. **Pass.** Rollback target if needed: `dpl_B8qQYV3pTxJSR32NaNdG5e7jejZz` (`7a52676`, READY). CI `46173623785` on `41d34ec` was still in progress at this check. Steps 6–8 remain.
 
+**Step 7, HQ-2 (2026-11-28, owner-authorized, hosted read-only):** runner check: one row, `repeatable read`, `on`. HQ-2 as written in §6 step 7, with one difference in how the caller is set. Hosted has **two** admin users, so the plan's single-admin lookup could not be used. A `do` block, which returns no rows, set the claims to the one admin whose account email is the owner's, and raised an error if that match was not unique. The id was not printed or saved. A first attempt with a single-admin lookup returned 0 rows (two admins), and nothing ran under it.
+
+| Queue | State | Summary / reader count | Aged (summary / reader) | Parity |
+|---|---|---|---|---|
+| applications | ready | 0 / 0 | null / null | true |
+| cancellation | ready | 0 / 0 | null / null | true |
+| compliance_renewal | ready | 14 / 14 | null / null | true |
+| finance_exceptions | restricted | — | — | true |
+| fulfillment | ready | 0 / 0 | null / null | true |
+| offer_terms | ready | 0 / 0 | null / null | true |
+| quote | ready | 0 / 0 | 0 / 0 | true |
+| recurring_payment | ready | 0 / 0 | 0 / 0 | true |
+| renewal_documents | ready | 2 / 2 | null / null | true |
+| **sourcing** | ready | 0 / 0 | null / null | true |
+| support | ready | 0 / 0 | 0 / 0 | true |
+
+Eleven rows; every row `repeatable read`, `read_only` `on`, `caller_is_admin` true; parity true everywhere; fulfillment, offer-terms, applications and sourcing aged null on both sides; finance `restricted` (allowed). **Pass.** The sourcing queue is empty on hosted, so this shows the reader runs read-only and agrees with the summary; it does not exercise items. Steps 6 (HQ-1) and 8 (manual page) remain, and need the owner signed in.
+
+**Admin count (new, not decided here):** hosted `public.user_roles` has 2 distinct admin users. DEC-2026-025 recorded a sole admin for R0 (2026-09-30). Who the second admin is was not looked up.
+
 Optional and separate: the plan §4's read-only legacy count (`select status, count(*) from public.service_requests where matching_status = 'sourcing' group by status`), counts only.
 
 **Rollback.** Application: `vercel promote` of the previous deployment. Database: a forward migration restoring the `20261205001000` summary body (md5 `779d61f5…`), with the reader left in place or revoked. No data is written at any step.
