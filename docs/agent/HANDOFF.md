@@ -1,3 +1,12 @@
+# Phase 7.5G-2 sourcing queue implementation (TRACE-159) — 2026-11-28 ET
+
+- **Base:** built on #219's head `84359ea`; #219 merged as `7a52676` (same tree) before the push, so the commit was rebased onto it and the PR targets `main` (record §7). Branch `claude/phase7-5g2-sourcing-queue`, main checkout, `phase5-isolated` stack. Record: [7.5G-2](../../governance/PHASE-7-SOURCING-QUEUE-7-5G-2.md).
+- **Built:** migration `20261206001000`: `admin_sourcing_queue()` (admin-only, `STABLE`, read-only; kinds, related event with basis and tie rule, `plan_visit`, `offer_terms_block`) and the `sourcing` summary row after `applications`. `/admin/sourcing` (Refresh only, no row links, no sidebar entry), account-bound controller. SQL 134; SQL 127, 129, 133 and two unit tests changed on purpose.
+- **Evidence:** SQL 134 104/104; 22/22 SQL mutants; full suite 127 files / 9,343 PASS on a clean replay of 242; fingerprints unchanged except the two functions (summary `5d98e849…`, reader `195b245c…`), money `61 | eb3f9702…`; browser sourcing 9/9, admin-operations + portals 40/40; unit 1,485; build with synthetic env; old client on the new summary: main's overview tests pass (one pre-existing deep-link failure on main's own build, record §4.6).
+- **Local:** session killed twice (host memory/load); scratchpad cleared once (mutation harness lost after its results were recorded). `phase7-3d1` left running; `phase5-isolated` stopped for builds.
+- **Not done:** hosted query or push, merge, deploy. 7.5G-1's READY/HQ-1/HQ-2 stay separate.
+- **Next:** Codex reviews (I-1..I-10); owner authorizes record §6 steps 1–4 before merge, 5–8 after.
+
 # Phase 7.5G-2 plan: OD-4a approved, SG-9 accepted (TRACE-159) — 2026-11-27 ET
 
 - **Base:** #219 head `ed209ae` with `main` `d47b0f4` (#216 merged) merged in. Documentation only. Record: [7.5G-2 plan](../../governance/PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.4.

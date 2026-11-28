@@ -313,9 +313,10 @@ select is(pg_temp.state('by_operator'), 'true / true / none / none', 'R14b: oper
 -- ================================================================================================
 -- R15 Summary parity. admin_operations_summary is not restated by 7.5D; it counts the queue items' overdue.
 -- Phase 7.5G-1 (20261205001000) restated it on purpose to append the applications row (7.5B body
--- 3bc2497f…); the support row is unchanged, as the assertions below show.
-select is((select md5(pg_get_functiondef('public.admin_operations_summary()'::regprocedure))), '779d61f5d3509895233bfaaff855ce5b',
-  'R15: admin_operations_summary is the 7.5G-1 definition (7.5B body plus the applications row)');
+-- 3bc2497f…); Phase 7.5G-2 (20261206001000) restated it again to append the sourcing row (7.5G-1
+-- body 779d61f5…). The support row is unchanged, as the assertions below show.
+select is((select md5(pg_get_functiondef('public.admin_operations_summary()'::regprocedure))), '5d98e8493d8ccbf6bbd561f3db003710',
+  'R15: admin_operations_summary is the 7.5G-2 definition (7.5G-1 body plus the sourcing row)');
 create function pg_temp.support_row(n int) returns jsonb language sql as $$
   select r from jsonb_array_elements(pg_temp.call(n, 'select public.admin_operations_summary()')->'queues') r where r->>'queue' = 'support' $$;
 select is(pg_temp.support_row(2), jsonb_build_object('queue', 'support', 'state', 'ready', 'count', jsonb_array_length(pg_temp.queue()->'items'),

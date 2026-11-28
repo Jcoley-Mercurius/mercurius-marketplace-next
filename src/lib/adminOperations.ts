@@ -44,7 +44,9 @@ export type OperationsSummary = { checkedAt: string; queues: SummaryQueue[] };
  * (Phase 7.5B, TRACE-159: fulfillment has no aging rule beyond entry, DF-1; offers at other terms
  * added, DF-2). SQL 127 and the derived fixture hold this map equal to the summary's queues. Support's
  * aged count is tickets awaiting a first reply past target (Phase 7.5D, DF-3). Applications awaiting
- * review have no aging rule; their summary row counts the server reader (Phase 7.5G-1).
+ * review have no aging rule; their summary row counts the server reader (Phase 7.5G-1). Sourcing
+ * (Phase 7.5G-2, OD-4a / DEC-2026-070) has no deadline or aging rule (OD-6) and links to its
+ * read-only list, not to /admin/requests, which is defined differently and settles offers on load.
  */
 export const SUMMARY_QUEUES: Record<string, { label: string; href: string; agedLabel?: string }> = {
   quote: { label: "Quote exceptions", href: "/admin/requests#quote-exceptions", agedLabel: "aged" },
@@ -56,6 +58,7 @@ export const SUMMARY_QUEUES: Record<string, { label: string; href: string; agedL
   renewal_documents: { label: "Renewal documents", href: "/admin/compliance/renewals" },
   offer_terms: { label: "Offers at other terms", href: "/admin/requests#offer-terms-queue" },
   applications: { label: "Applications awaiting review", href: "/admin/applications" },
+  sourcing: { label: "Sourcing", href: "/admin/sourcing" },
   finance_exceptions: { label: "Finance exceptions", href: "/admin/finance" },
 };
 

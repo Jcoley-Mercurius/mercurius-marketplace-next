@@ -40,7 +40,11 @@ describe("admin destinations", () => {
   it("keeps only existing admin pages, every static page except this list and the retired Smart Picks", () => {
     const pages = adminPages();
     for (const route of ADMIN_NOTIFICATION_ROUTES.keys()) expect(pages).toContain(route);
-    const expected = pages.filter((p) => !p.includes("[") && p !== "/admin/notifications" && p !== "/admin/smart-picks");
+    // Phase 7.5G-2 (SG-9): /admin/sourcing is reached only from the overview row; no producer links
+    // to it, so it is not a notice destination in this slice.
+    expect(pages).toContain("/admin/sourcing");
+    expect(ADMIN_NOTIFICATION_ROUTES.has("/admin/sourcing")).toBe(false);
+    const expected = pages.filter((p) => !p.includes("[") && p !== "/admin/notifications" && p !== "/admin/smart-picks" && p !== "/admin/sourcing");
     expect([...ADMIN_NOTIFICATION_ROUTES.keys()].sort()).toEqual(expected.sort());
   });
 
