@@ -1,6 +1,6 @@
 # Phase 7.5G-2 — sourcing queue: server reader, overview row and read-only list (TRACE-159)
 
-**Status:** **MERGED BY THE OWNER BEFORE CODEX IMPLEMENTATION REVIEW AND BEFORE ANY RECORDED MIGRATION PUSH.** #220 merged at 2026-11-28 18:01:53Z as `41d34ec` (head `d3e6126`), which deploys to production (DEC-2026-037). Whether `20261206001000` is on hosted is **not known**: §6 steps 1–4 have no recorded run, and this record ran no hosted query (§6.1). Codex implementation review is still outstanding. Built stacked on the plan PR #219; #219 merged to `main` as `7a52676` before this PR was opened, so this PR targets `main` directly (§7).
+**Status:** **MERGED BY THE OWNER BEFORE CODEX IMPLEMENTATION REVIEW AND BEFORE ANY RECORDED MIGRATION PUSH.** #220 merged at 2026-11-28 18:01:53Z as `41d34ec` (head `d3e6126`), which deploys to production (DEC-2026-037). `20261206001000` was found already on hosted after the merge, and §6 step 4's readback matches (§6.1). Steps 5–8 remain. Codex implementation review is still outstanding. Built stacked on the plan PR #219; #219 merged to `main` as `7a52676` before this PR was opened, so this PR targets `main` directly (§7).
 **Date:** 2026-11-27 to 2026-11-28 (America/New_York).
 **Base:** built on #219's head `84359ea` (plan revision 2 with `main` `d47b0f4` merged in, plus the OD-4a and SG-9 records); rebased onto `main` `7a52676` (#219's merge, whose tree equals `84359ea`, so no file changed). Branch `claude/phase7-5g2-sourcing-queue`.
 **Authority:** the owner's 7.5G-2 implementation instruction (2026-11-27 ET); OD-4a approved as [DEC-2026-070](DECISION-LOG.md); [7.5G-2 plan](PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) revision 2 (Codex SG-1..SG-8 rulings, SG-9 accepted, revision 2 technically clear at `ed209ae`; §11.4); [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) Q-01, §7.2 HQ-1/HQ-2; the [7.5G-1 record](PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md) as the pattern.
@@ -269,6 +269,17 @@ The order above was not followed. #220 merged first, and steps 1–4 have no rec
 - **Either way:** step 5 checks Production READY for `41d34ec`. **Stop** on any other result and decide on rollback (`vercel promote`) before going further.
 
 This is an inference from the code at `d3e6126`. It has not been observed on Production.
+
+**Hosted readback (2026-11-28, after the merge, owner-authorized; catalog only, no function called, no request data read):**
+
+| Step | Result |
+|---|---|
+| 1 preflight | latest `20261206001000`, count 242: the migration was **already on hosted** (who pushed it, and when relative to the merge, was not recorded) |
+| 2 dry run | `Remote database is up to date`; no migration listed |
+| 3 push | not needed; nothing pushed |
+| 4 readback | summary `5d98e8493d8ccbf6bbd561f3db003710`, `{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}`, `v`, definer, `search_path=""`, owner postgres; reader `195b245cf986728412b5df5b0cf2e091`, `{postgres=X/postgres,authenticated=X/postgres}`, `s`, definer, `search_path=""`, owner postgres; execute `anon` false, `service_role` false, `authenticated` true; money `61 \| eb3f9702d45f9f22e61f6a7da17349c4`. **All match §6 step 4.** |
+
+So the first path above applies: steps 5–8 for `41d34ec` remain.
 
 Optional and separate: the plan §4's read-only legacy count (`select status, count(*) from public.service_requests where matching_status = 'sourcing' group by status`), counts only.
 
