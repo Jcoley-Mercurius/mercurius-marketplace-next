@@ -281,6 +281,8 @@ This is an inference from the code at `d3e6126`. It has not been observed on Pro
 
 So the first path above applies: steps 5–8 for `41d34ec` remain.
 
+**Step 5, Production READY (2026-11-28, owner-authorized, Vercel read-only):** deployment `dpl_8zhNDYzgLyv4hvR2dmHbYThaJKmg`: `readyState` `READY`, target `production`, `meta.githubCommitSha` `41d34ec785942d04cde2f4d25b6765f5ad638e7c` (ref `main`), created 13:01:56 ET. `vercel inspect www.mercuriusmarketplace.com` resolves to the same id. **Pass.** Rollback target if needed: `dpl_B8qQYV3pTxJSR32NaNdG5e7jejZz` (`7a52676`, READY). CI `46173623785` on `41d34ec` was still in progress at this check. Steps 6–8 remain.
+
 Optional and separate: the plan §4's read-only legacy count (`select status, count(*) from public.service_requests where matching_status = 'sourcing' group by status`), counts only.
 
 **Rollback.** Application: `vercel promote` of the previous deployment. Database: a forward migration restoring the `20261205001000` summary body (md5 `779d61f5…`), with the reader left in place or revoked. No data is written at any step.

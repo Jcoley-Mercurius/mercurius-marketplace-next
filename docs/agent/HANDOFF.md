@@ -8,7 +8,8 @@
 - **CI on `d3e6126`:** CI `46151205881` (PR) success; push run `46151144882` attempt 1 cancelled by concurrency, attempt 2 (owner re-run) success; Analytics privacy and Supabase Preview pass (record §4.7). Later commits are docs-only.
 - **Merged early:** the owner merged #220 at 18:01:53Z (`41d34ec`) before Codex review and before any recorded migration push. Post-merge hosted readback: `20261206001000` already applied (242), dry run up to date, md5s/ACLs/execute/money all match (record §6.1).
 - **Review prep (2026-11-28, branch `claude/phase7-5g2-post-merge-record`, local):** record §5.1 review index; §6 stop conditions; §8 notes a 7.5G-1 sequencing question (docs-only deploys since `1e97f95`). Still not run: browser mutant; old-client check limited to the fixture (§4.6).
-- **Next:** record §6 steps 5–8 for `41d34ec`; Codex reviews the merged code (I-1..I-10, §5.1), with fixes forward.
+- **Step 5 pass:** `dpl_8zhNDYzgLyv4hvR2dmHbYThaJKmg` READY on `41d34ec`, serving `www`; rollback `dpl_B8qQYV3pTxJSR32NaNdG5e7jejZz` (`7a52676`).
+- **Next:** record §6 steps 6–8 (HQ-1, HQ-2, manual `/admin/sourcing`); Codex reviews the merged code (I-1..I-10, §5.1), with fixes forward.
 
 # Phase 7.5G-2 plan: OD-4a approved, SG-9 accepted (TRACE-159) — 2026-11-27 ET
 
