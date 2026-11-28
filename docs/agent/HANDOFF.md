@@ -1,3 +1,11 @@
+# Phase 7 scope-freeze and closeout proposal (TRACE-162, PR #222 revision 2) — 2026-11-28 ET
+
+- **Base:** `main` `41d34ec` (unchanged). Branch `claude/phase7-closeout-register`, documentation only. Replaces the first revision's register with [the proposal](../../governance/PHASE-7-SCOPE-FREEZE-PROPOSAL.md); every earlier gap is mapped in its Appendix A. #221 not incorporated.
+- **Reconciled:** review evidence split into design rulings, implementation review and "no review found" (not "not reviewed"). 11 code rows have no implementation review found (8 with design rulings), 5 lack a re-review. 7.5G-1: R-1..R-5/C-1..C-3 recorded; I-1..I-6 no recorded ruling. Codex's hosted readback of `20261202001000` (2026-11-24) recorded; its push time stays unrecorded. PR comments #162–#222 hold no Codex ruling.
+- **Proposed (unapproved):** alert outcome AO-1..AO-5 with channel options 1–4 (no provider mandated); DEC-2026-069 manual scans kept, scheduler as PD-1; superseded checks kept as not performed, replaced by current-release verification (PD-7); 14 packages in five workstreams (matcher M2 and money-function work isolated); card X-1..X-8, PD-1..PD-11, FD-A..FD-J. Proposed first package: O1 structured logs.
+- **Not done:** no code, test, migration, hosted query, merge, deploy, email, scheduler, booking or payment change. Not Phase 7 acceptance; nothing approved.
+- **Next:** Codex reviews; owner answers the §9 card.
+
 # Phase 7.5G-2 sourcing queue implementation (TRACE-159) — 2026-11-28 ET
 
 - **Base:** built on #219's head `84359ea`; #219 merged as `7a52676` (same tree) before the push, so the commit was rebased onto it and the PR targets `main` (record §7). Branch `claude/phase7-5g2-sourcing-queue`, main checkout, `phase5-isolated` stack. Record: [7.5G-2](../../governance/PHASE-7-SOURCING-QUEUE-7-5G-2.md).
