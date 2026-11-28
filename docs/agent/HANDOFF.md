@@ -1,4 +1,23 @@
+# Phase 7.5G-2 plan: OD-4a approved, SG-9 accepted (TRACE-159) — 2026-11-27 ET
+
+- **Base:** #219 head `ed209ae` with `main` `d47b0f4` (#216 merged) merged in. Documentation only. Record: [7.5G-2 plan](../../governance/PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.4.
+- **Owner:** OD-4a approved 2026-11-27 ET: admin-only name "Sourcing", description "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." Recorded as [DEC-2026-070](../../governance/DECISION-LOG.md) and in OWNER-APPROVALS. It does not decide OD-4b, eligible-provider definitions or deadlines.
+- **Codex (relayed by the owner):** revision 2 at `ed209ae` technically clear; SG-9 accepted (no row links, no sidebar entry; the overview links to `/admin/sourcing`).
+- **Not done:** merge of #219 (not authorized), hosted query, push. TRACE-159 is updated by the implementation PR.
+- **Next:** implementation on a branch stacked on this head; retarget it to `main` after #219 merges.
+
+# Phase 7.5G-2 sourcing queue plan, revision 2 (TRACE-159) — 2026-11-27 ET
+
+- **Base:** `main` `6614691` (#218 merged at its head `c9e1b25`, revision 1; the Codex corrections were not in it). Branch `claude/phase7-5g2-sourcing-plan-r2`, documentation only. Record: [7.5G-2 plan](../../governance/PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.2.
+- **Codex rulings (conversation review, not a GitHub review):** SG-1, SG-3, SG-4, SG-5 and SG-8 accepted. SG-2 revised: `related_event_at` and `related_event` (`provider_operation`, `offer_closed`, `request_created`) with a stated tie rule, and no claim that a time is a lower bound or the exhaustion time. SG-6 revised: `plan_visit` returned, no reassignment authority. SG-7 revised: row after `applications`, before finance, linking to a read-only `/admin/sourcing` list on the same reader. Opening or refreshing it performs no business writes.
+- **Correction:** P-5 also covers withdrawals inside the 24-hour search deadline (E5), not only plan visits.
+- **Decisions:** OD-4a recommended "Sourcing" / "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." **Not approved.** SG-9 (no row link, no sidebar entry) open for Codex.
+- **Not done:** no code, test, migration, hosted query, push, merge or deploy. TRACEABILITY and #216's entries left as they are.
+- **Next:** Codex reviews revision 2; the owner decides OD-4a; then implementation in a separate PR.
+
 # Phase 7.5G-2 sourcing queue plan (TRACE-159) — 2026-11-27 ET
+
+*Revision 1. Corrected by the entry above.*
 
 - **Base:** `main` `1e97f95` (#217 merged; 7.5G-1 on `main`, release checks not done). Branch `claude/phase7-5g2-sourcing-plan`, documentation only. Record: [7.5G-2 plan](../../governance/PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md).
 - **Planned, not built:** `admin_sourcing_queue()` plus a `sourcing` summary row (`20261206001000`, SQL 134 provisional). Entry: `pending` with `exhausted`, `awaiting_consent` or legacy `sourcing`. Excluded: cancelled, `awaiting_match` (incl. `rematch_failed`), offers past expiry (as stored, not settled on read). `since` is a derived lower bound with a named basis (`provider_left`, `last_offer_closed`, `request_received`), never `updated_at`. Overlap with `blocked_inactive` offers at other terms: listed in both with an `offer_terms_block` cross-reference.

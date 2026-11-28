@@ -271,6 +271,19 @@ Acceptance of this exception is part of Josh's dated R0 go/no-go (TRACE-105) and
 
 **Required evidence:** SQL 087; `scripts/pricing-concurrency.mjs`; unit `promotion-selection`; browser `request` (offers), `promotion-selection`, `pricing-approval`. **Supersedes:** PRICING-IMPROVEMENTS §5.2 (open question).
 
+### DEC-2026-070 — OD-4a: the admin-only sourcing queue is named "Sourcing", with a fixed description
+
+**Status:** **APPROVED** by the owner (Josh), 2026-11-27 (America/New_York). **Date:** 2026-11-27.
+
+**Source of approval.** The owner's Phase 7.5G-2 implementation instruction (2026-11-27 ET), recorded verbatim in [OWNER-APPROVALS](OWNER-APPROVALS.md) ("Phase 7.5G-2 sourcing queue name — 2026-11-27").
+
+**What it settles** (against the [7.5G-2 plan](PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.1 and the [7.5G plan](PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md) §7.1):
+- **OD-4a:** the operator-facing name of the queue is "Sourcing" and its description is exactly "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." Admin pages only: the overview row label and the `/admin/sourcing` heading and description.
+
+**What it is not.** Not OD-4b (no "sourced" outcome is defined), not an eligible-provider definition or count (OD-3, C-3), not a sourcing deadline, `aged` rule or due time (OD-6). Not a customer copy change: CFG-002 and CFG-009 stand. Not authorization for hosted queries or pushes, merge, deployment, a scheduler, matching, booking or payment changes. The kind and event labels in the plan stay implementation proposals.
+
+**Implementation:** TRACE-159, Phase 7.5G-2 ([plan](PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.4). **Reads:** CFG-002, CFG-009, CFG-010; DEC-2026-063 (`offer_terms` gate off); DEC-2026-049 item 8 (plan visits stay with the plan's provider).
+
 ### DEC-2026-069 — OD-1, OD-2 and P-1..P-7: SLA-breach observation records, manual operator scans, 90-day retention
 
 **Status:** **APPROVED** by the owner (Josh), 2026-11-25 (America/New_York). **Date:** 2026-11-25.
