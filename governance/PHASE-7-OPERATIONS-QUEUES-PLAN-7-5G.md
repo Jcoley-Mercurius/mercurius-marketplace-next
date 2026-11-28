@@ -149,6 +149,8 @@ A read-only `admin_sourcing_queue()` plus an overview row, with no deadline and 
 
 The owner decides OD-4a (§7.1). Pool counts (C-3) stay out of 7.5G-2.
 
+*Dated note (2026-11-27 ET):* the detailed 7.5G-2 plan is [PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2](PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md). It answers S-1..S-5 as proposals for Codex (SG-1..SG-8). It keeps OD-4a as an owner proposal, not approved. The table above is kept as written.
+
 ## 7. Decisions
 
 ### 7.1 Owner
