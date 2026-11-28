@@ -1,6 +1,6 @@
 # Phase 7.5G-2 — sourcing queue: server reader, overview row and read-only list (TRACE-159)
 
-**Status:** **MERGED BY THE OWNER BEFORE CODEX IMPLEMENTATION REVIEW AND BEFORE ANY RECORDED MIGRATION PUSH.** #220 merged at 2026-11-28 18:01:53Z as `41d34ec` (head `d3e6126`), which deploys to production (DEC-2026-037). `20261206001000` was found already on hosted after the merge, and §6 step 4's readback matches (§6.1). Steps 5–8 remain. Codex implementation review is still outstanding. Built stacked on the plan PR #219; #219 merged to `main` as `7a52676` before this PR was opened, so this PR targets `main` directly (§7).
+**Status:** **MERGED BY THE OWNER BEFORE CODEX IMPLEMENTATION REVIEW AND BEFORE ANY RECORDED MIGRATION PUSH.** #220 merged at 2026-11-28 18:01:53Z as `41d34ec` (head `d3e6126`), which deploys to production (DEC-2026-037). `20261206001000` was found already on hosted after the merge, and §6 step 4's readback matches (§6.1). `main` CI `46173623785` on `41d34ec`: success. Step 7 (HQ-2) passed, run by Claude's session; the sourcing queue had zero items, so items were not exercised. Step 5 (Production READY) was observed by Claude's session and is **not independently verified**. Steps 6 (HQ-1) and 8 (manual page) await the owner's results. Codex implementation review is still outstanding. Access-governance finding AG-1 (two hosted admin users) is open (§6.1). Status by step: §6.2. Built stacked on the plan PR #219; #219 merged to `main` as `7a52676` before this PR was opened, so this PR targets `main` directly (§7).
 **Date:** 2026-11-27 to 2026-11-28 (America/New_York).
 **Base:** built on #219's head `84359ea` (plan revision 2 with `main` `d47b0f4` merged in, plus the OD-4a and SG-9 records); rebased onto `main` `7a52676` (#219's merge, whose tree equals `84359ea`, so no file changed). Branch `claude/phase7-5g2-sourcing-queue`.
 **Authority:** the owner's 7.5G-2 implementation instruction (2026-11-27 ET); OD-4a approved as [DEC-2026-070](DECISION-LOG.md); [7.5G-2 plan](PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) revision 2 (Codex SG-1..SG-8 rulings, SG-9 accepted, revision 2 technically clear at `ed209ae`; §11.4); [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) Q-01, §7.2 HQ-1/HQ-2; the [7.5G-1 record](PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md) as the pattern.
@@ -197,7 +197,7 @@ All completed and passed on the implementation head `d3e6126`. None was re-run b
 | Analytics privacy `46151205894` | `pull_request` | 1 | `analytics-privacy` | success |
 | Supabase Preview | — | — | — | pass |
 
-**Merge commit `41d34ec` on `main`:** CI `46173623785` and Analytics privacy `46173623747` (`push`) were **in progress** when observed at merge time and are not evidence above. Their result is the owner's to read (no rerun by Claude). This record update is documentation only and is not on `main` until merged.
+**Merge commit `41d34ec` on `main`:** CI `46173623785` and Analytics privacy `46173623747` (`push`) were **in progress** when observed at merge time. Rechecked with `gh run view` on 2026-11-28 while preparing this documentation PR: both `completed`, `success`, `headSha` `41d34ec785942d04cde2f4d25b6765f5ad638e7c`, attempt 1, so neither was re-run. `main` was still `41d34ec` at that check. This record update is documentation only and is not on `main` until merged.
 
 ## 5. Implementation decisions for Codex
 
@@ -281,9 +281,9 @@ This is an inference from the code at `d3e6126`. It has not been observed on Pro
 
 So the first path above applies: steps 5–8 for `41d34ec` remain.
 
-**Step 5, Production READY (2026-11-28, owner-authorized, Vercel read-only):** deployment `dpl_8zhNDYzgLyv4hvR2dmHbYThaJKmg`: `readyState` `READY`, target `production`, `meta.githubCommitSha` `41d34ec785942d04cde2f4d25b6765f5ad638e7c` (ref `main`), created 13:01:56 ET. `vercel inspect www.mercuriusmarketplace.com` resolves to the same id. **Pass.** Rollback target if needed: `dpl_B8qQYV3pTxJSR32NaNdG5e7jejZz` (`7a52676`, READY). CI `46173623785` on `41d34ec` was still in progress at this check. Steps 6–8 remain.
+**Step 5, Production READY (2026-11-28, owner-authorized, Vercel read-only):** deployment `dpl_8zhNDYzgLyv4hvR2dmHbYThaJKmg`: `readyState` `READY`, target `production`, `meta.githubCommitSha` `41d34ec785942d04cde2f4d25b6765f5ad638e7c` (ref `main`), created 13:01:56 ET. `vercel inspect www.mercuriusmarketplace.com` resolves to the same id. Rollback target if needed: `dpl_B8qQYV3pTxJSR32NaNdG5e7jejZz` (`7a52676`, READY). CI `46173623785` on `41d34ec` was still in progress at this check (it later completed `success`, §4.7). **Status: observed by Claude's session, values match the step 5 expectation, not independently verified.** Step 5 stays open until Codex or the owner confirms it. This documentation PR did not query Vercel again.
 
-**Step 7, HQ-2 (2026-11-28, owner-authorized, hosted read-only):** runner check: one row, `repeatable read`, `on`. HQ-2 as written in §6 step 7, with one difference in how the caller is set. Hosted has **two** admin users, so the plan's single-admin lookup could not be used. A `do` block, which returns no rows, set the claims to the one admin whose account email is the owner's, and raised an error if that match was not unique. The id was not printed or saved. A first attempt with a single-admin lookup returned 0 rows (two admins), and nothing ran under it.
+**Step 7, HQ-2 (2026-11-28, owner-authorized, hosted read-only; run by Claude's session with `npx supabase db query --linked`):** runner check: one row, `repeatable read`, `on`. HQ-2 as written in §6 step 7, with one difference in how the caller is set. Hosted has **two** admin users, so the plan's single-admin lookup could not be used. A `do` block, which returns no rows, set the claims to the one admin whose account email is the owner's, and raised an error if that match was not unique. The id was not printed or saved. A first attempt with a single-admin lookup returned 0 rows (two admins), and nothing ran under it.
 
 | Queue | State | Summary / reader count | Aged (summary / reader) | Parity |
 |---|---|---|---|---|
@@ -299,15 +299,42 @@ So the first path above applies: steps 5–8 for `41d34ec` remain.
 | **sourcing** | ready | 0 / 0 | null / null | true |
 | support | ready | 0 / 0 | 0 / 0 | true |
 
-Eleven rows; every row `repeatable read`, `read_only` `on`, `caller_is_admin` true; parity true everywhere; fulfillment, offer-terms, applications and sourcing aged null on both sides; finance `restricted` (allowed). **Pass.** The sourcing queue is empty on hosted, so this shows the reader runs read-only and agrees with the summary; it does not exercise items. Steps 6 (HQ-1) and 8 (manual page) remain, and need the owner signed in.
+Eleven rows; every row `repeatable read`, `read_only` `on`, `caller_is_admin` true; parity true everywhere; fulfillment, offer-terms, applications and sourcing aged null on both sides; finance `restricted` (allowed). **Pass.** The summary and every reader ran in one statement inside a single `REPEATABLE READ READ ONLY` transaction that ended in `rollback`, so all eleven rows come from one snapshot. The caller was the owner's admin account.
 
-**Admin count (new, not decided here):** hosted `public.user_roles` has 2 distinct admin users. DEC-2026-025 recorded a sole admin for R0 (2026-09-30). Who the second admin is was not looked up.
+**Limitation (retained):** the sourcing queue had **zero items** on hosted (0 / 0). This shows the reader runs read-only on hosted and agrees with the summary. It does not exercise any item, kind, related event, `plan_visit` or `offer_terms_block` on hosted data. Item behavior rests on the local evidence (§4) alone.
+
+Steps 6 (HQ-1) and 8 (manual page) remain and need the owner signed in. They are recorded only from the owner's actual results (§6.2).
+
+**Access-governance finding AG-1 (open, not decided here):** during the HQ-2 caller setup, hosted `public.user_roles` had **2 distinct admin users**. DEC-2026-025 makes Josh the sole administrator for R0. Its 2026-09-30 update records that the two remaining admin accounts were both Josh's. Whether the two admins seen on 2026-11-28 are those accounts was **not** checked. No account was identified, looked up beyond the count, modified or removed, and none is to be under this record. Resolution is the owner's decision. Until then, a hosted check that needs "the admin" resolves the caller by the owner's account email and refuses if the match is not unique, as step 7 did.
 
 Optional and separate: the plan §4's read-only legacy count (`select status, count(*) from public.service_requests where matching_status = 'sourcing' group by status`), counts only.
 
 **Rollback.** Application: `vercel promote` of the previous deployment. Database: a forward migration restoring the `20261205001000` summary body (md5 `779d61f5…`), with the reader left in place or revoked. No data is written at any step.
 
 **Separate, unchanged:** 7.5G-1's release checks (Production READY for `1e97f95`, HQ-1 and HQ-2 with ten rows; [7.5G-1 record](PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md) §8.6) are still outstanding and are not part of these steps. If both are run after this deploy, 7.5G-1's HQ-1/HQ-2 are subsumed by steps 6–7 here only if the owner says so.
+
+### 6.2 Verification status for review (2026-11-28 ET)
+
+| Item | Status | Run by | Evidence |
+|---|---|---|---|
+| Steps 1–2 preflight, dry run | done; migration already on hosted, up to date | owner-authorized hosted read-only | §6.1 |
+| Step 3 push | not needed (nothing pushed); who pushed `20261206001000`, and when relative to the merge, is **unrecorded** | — | §6.1 |
+| Step 4 readback | match | owner-authorized hosted read-only | §6.1 |
+| Step 5 Production READY for `41d34ec` | **open**: observed, not independently verified | Claude's session (Vercel read-only) | §6.1 |
+| Step 6 HQ-1 (`/admin`, owner signed in) | **pending**: no owner result supplied | owner | — |
+| Step 7 HQ-2 | **pass**, eleven rows, single read-only snapshot, owner-admin caller, parity true, finance restricted; sourcing had zero items | Claude's session | §6.1 |
+| Step 8 manual `/admin/sourcing` | **pending**: no owner result supplied | owner | — |
+| `main` CI on `41d34ec` | success (`46173623785`; Analytics privacy `46173623747`) | GitHub Actions, `push`, attempt 1 | §4.7 |
+| Codex implementation review of the merged code | **open** (I-1..I-10, §5.1); findings are fixed forward | Codex | §8 |
+| AG-1 two hosted admin users | **open** finding; no account action | owner | §6.1 |
+
+None of this is phase acceptance or production activation.
+
+**Overlap with 7.5G-1 (cross-reference only).** Some of the evidence above touches 7.5G-1's checks. None of it is recorded as completing them. 7.5G-1's status stays as its [record](PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md) §8.5–§8.7 states.
+
+- Step 7's HQ-2 called `admin_application_review_queue()` on hosted. The `applications` row was `ready`, 0 / 0, aged null on both sides, parity true. That shows 7.5G-1's reader exists and agrees with the summary. It ran against the **7.5G-2** summary (`5d98e849…`, eleven rows), not the ten-row `779d61f5…` summary that 7.5G-1 §8.6 step 5 expects. The reader's md5 (`3070dcdd…`) was not read.
+- Step 1's preflight found latest `20261206001000`, count 242. That is consistent with `20261205001000` still being applied, but it does not re-verify 7.5G-1's readback.
+- Step 5 observed `41d34ec`, not `1e97f95`, serving `www`. 7.5G-1 §8.6 step 2, as written, can no longer be observed.
 
 ## 7. PR and base
 
@@ -318,8 +345,11 @@ Optional and separate: the plan §4's read-only legacy count (`select status, co
 ## 8. Open items
 
 - **Codex implementation review:** I-1..I-10 (§5), the SQL 133 S1 change the plan did not foresee (§2), the two unit-test exemptions (I-7), and the untested browser mutant (§4.4).
-- **Owner, now (§6.1):** confirm whether `20261206001000` was pushed before the merge. Then authorize step 4 alone, or steps 1–4 if it was not pushed, followed by steps 5–8 for `41d34ec`. Codex review of the merged code is still outstanding; a finding is fixed forward.
+- **Owner, next (§6.2):** run steps 6 (HQ-1) and 8 (manual `/admin/sourcing`) signed in and supply the results; they stay pending until then. Optionally record who pushed `20261206001000` and when. Decide AG-1. Step 5 stays open until Codex or the owner confirms it.
+- **Codex:** review the merged code (I-1..I-10, §5.1); a finding is fixed forward. Confirm or reject step 5's READY observation.
+- **Access governance, AG-1 (§6.1):** two hosted admin users against DEC-2026-025's sole-administrator arrangement. Recorded only. No account is identified, modified or removed under this record.
+- *(Superseded 2026-11-28, kept as history: "Owner, now (§6.1): confirm whether `20261206001000` was pushed before the merge. Then authorize step 4 alone, or steps 1–4 if it was not pushed, followed by steps 5–8 for `41d34ec`." Step 4's readback has since matched; §6.1.)*
 - **Not decided here and unchanged:** OD-4b, OD-3 / C-3 (eligible-provider definitions), OD-6 (sourcing deadline), D-6, HQ-3..HQ-6, the optional hosted legacy `sourcing` count.
 - **Separate:** 7.5G-1's Production READY for `1e97f95`, HQ-1 and HQ-2, and Codex's I-1..I-6 for 7.5G-1 ([7.5G-1 record](PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md) §8.5–§8.6).
-- **Sequencing question for 7.5G-1 (not changed here):** `main` has had three documentation-only merges since `1e97f95` (`6614691`, `d47b0f4`, `7a52676`; `git diff --name-only 1e97f95 7a52676` lists only `docs/` and `governance/` files). `vercel.json` deploys every `main` commit, so 7.5G-1 §8.6 step 2's "`www` resolves to the `1e97f95` deployment" may already be unobservable. It cannot hold now that #220 has merged (`41d34ec`). Once `20261206001000` is on hosted, 7.5G-1's ten-row HQ-1 cannot be observed either. Not checked: no Vercel or hosted query was run. Codex or the owner decides whether 7.5G-1's READY, HQ-1 and HQ-2 are satisfied by steps 5–7 here (§6, last paragraph), or are recorded as superseded.
+- **Sequencing question for 7.5G-1 (not changed here):** `main` has had three documentation-only merges since `1e97f95` (`6614691`, `d47b0f4`, `7a52676`; `git diff --name-only 1e97f95 7a52676` lists only `docs/` and `governance/` files). `vercel.json` deploys every `main` commit, so 7.5G-1 §8.6 step 2's "`www` resolves to the `1e97f95` deployment" may already be unobservable. It cannot hold now that #220 has merged (`41d34ec`). Once `20261206001000` is on hosted, 7.5G-1's ten-row HQ-1 cannot be observed either. *(Update 2026-11-28: §6.1 has since found `20261206001000` on hosted and `41d34ec` serving `www`, so both conditions now hold. Overlapping evidence is cross-referenced in §6.2 and 7.5G-1 §8.7, and does not complete any 7.5G-1 check.)* Codex or the owner decides whether 7.5G-1's READY, HQ-1 and HQ-2 are satisfied by steps 5–7 here (§6, last paragraph), or are recorded as superseded.
 - **Local:** the `phase7-3d1` stack (another slice) was left running. The session was killed twice by host memory or load; the scratchpad was cleared once, losing the mutation harness and logs (results recorded above before the loss). The throwaway worktree `mercurius-phase7-5g2-oldclient` is removed after §4.6.

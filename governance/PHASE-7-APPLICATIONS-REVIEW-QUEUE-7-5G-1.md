@@ -1,6 +1,6 @@
 # Phase 7.5G-1 — applications awaiting review: server reader and overview row (TRACE-159)
 
-**Status:** **MERGED TO `main`, RELEASE NOT VERIFIED.** #217 merged #215's stacked base branch (head `a028998`) into `main` as `1e97f95` on 2026-11-27 20:23:19 ET (01:23:19 UTC on 11-28), so 7.5G-1 is on `main` (§8.4). Hosted push and readback of `20261205001000` **recorded** (§5; not re-verified since). Production deployment READY for `1e97f95`, HQ-1 and HQ-2: **not observed** (§8.6). Codex implementation review (I-1..I-6): **not recorded** (§8.5). *(Status before #217, kept as history: "IMPLEMENTED FOR REVIEW (Codex), recovered onto `main` (§8). Hosted push and readback recorded. Not merged to `main`, not deployed. #215 merged into its stacked base branch, not `main`.")*
+**Status:** **MERGED TO `main`, RELEASE NOT VERIFIED.** #217 merged #215's stacked base branch (head `a028998`) into `main` as `1e97f95` on 2026-11-27 20:23:19 ET (01:23:19 UTC on 11-28), so 7.5G-1 is on `main` (§8.4). Hosted push and readback of `20261205001000` **recorded** (§5; not re-verified since). Production deployment READY for `1e97f95`, HQ-1 and HQ-2: **not observed** (§8.6). Codex implementation review (I-1..I-6): **not recorded** (§8.5). Overlapping 7.5G-2 evidence from 2026-11-28 is cross-referenced in §8.7 and does not change this status. *(Status before #217, kept as history: "IMPLEMENTED FOR REVIEW (Codex), recovered onto `main` (§8). Hosted push and readback recorded. Not merged to `main`, not deployed. #215 merged into its stacked base branch, not `main`.")*
 **Date:** 2026-11-27 (America/New_York).
 **Base:** built stacked on #214's head `5810e60` (7.5G plan revision 2 = `main` `2039d25` plus documentation). While it was in progress, #213 merged (`main` `e3a12a1`, 18:16:58 UTC) and `main` was merged into #214 (`1b3032b`). That head was merged into this branch (`383c3fc`; one conflict, the TRACE-159 row, resolved by keeping #213's text and appending the 7.5G notes). #215 was meant to be retargeted to `main` after #214 merged; it was not, and it merged into #214's branch after #214 had merged. The replacement PR from `main` is described in §8.
 **Authority:** the owner's 7.5G-1 instruction (2026-11-27 ET); [7.5G plan](PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md) §5 and §9 (Codex R-1..R-5 and C-1..C-3, relayed in conversation); [TRACE-136 brief](PHASE-6-ADMIN-OPERATIONS-BRIEF.md) A8 and §12.4 item 4; [operations queues contract](PHASE-7-OPERATIONS-QUEUES-CONTRACT.md) Q-12; TRACE-105 and TRACE-108 (DEC-2026-032) for the existing classification.
@@ -322,3 +322,16 @@ Each step needs the owner's authorization. All are read-only. None was run for t
    **Executability (local only, 2026-11-27 ET):** this statement was run once on the idle `phase7-3d1` local stack, inside one rolled-back transaction that first applied `20261130001000`..`20261205001000` and a synthetic admin. Output: ten rows, `repeatable read`, every queue `ready` with count 0, finance `restricted`, `parity` true. The stack read back unchanged afterwards (latest `20261129001000`, reader absent, no users). That run could not be read-only, because it applied DDL. Its queues were empty, so it shows the statement runs. It is not parity evidence.
 
 Steps 1–5 do not cover 7.5G-2 or any other queue change.
+
+### 8.7 Overlapping 7.5G-2 evidence (2026-11-28 ET; cross-reference only)
+
+7.5G-2 (#220, merged as `41d34ec`) ran hosted checks after its merge. Some of them touch this slice. They are listed here so they are not lost. **None marks a step in §8.6 complete, and none changes the §8.5 review items.** Source: [7.5G-2 record](PHASE-7-SOURCING-QUEUE-7-5G-2.md) §6.1–§6.2.
+
+| 7.5G-1 step (§8.6) | Overlapping 7.5G-2 observation | Why it is not this step's result |
+|---|---|---|
+| 1 catalog recheck | Hosted latest `20261206001000`, count 242. The summary md5 is now `5d98e849…` | The reader md5 `3070dcdd…` was not read. The summary expectation `779d61f5…` is superseded by `20261206001000`, so step 1 as written would stop on the summary md5 |
+| 2 Production READY for `1e97f95` | `41d34ec` observed serving `www` (7.5G-2 step 5, itself not independently verified) | `1e97f95`'s deployment is no longer the one serving, so step 2 as written cannot be observed |
+| 3 HQ-1, ten rows | None. 7.5G-2's HQ-1 (eleven rows) is pending the owner | The ten-row summary is no longer on hosted |
+| 4–5 HQ-2 | 7.5G-2's HQ-2 passed with eleven rows on one read-only snapshot. The `applications` row was `ready`, 0 / 0, aged null on both sides, parity true | It ran against the eleven-row summary, not the ten-row one step 5 expects. The applications queue was empty, so no item was exercised |
+
+On the current hosted state, steps 1, 2, 3 and 5 as written cannot pass or cannot be observed. Step 4's runner check is unaffected. Whether they are satisfied by 7.5G-2's steps, re-specified, or recorded as superseded is for Codex or the owner to decide. Until then they stay open.
