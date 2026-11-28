@@ -17,6 +17,26 @@
 - **Not done:** no code, test, migration, hosted query (including the optional legacy count), merge or deploy. TRACEABILITY left to #216.
 - **Next:** Codex reviews the plan; the owner decides OD-4a.
 
+# Phase 7.5G-1 on main via #217: ledger reconciliation (TRACE-159) — 2026-11-27 ET
+
+- **Base:** `main` `1e97f95` (#217 merged 01:23:19 UTC on 11-28). #217 merged `claude/phase7-5g-scope-plan` (head `a028998`, which holds #215) into `main`, so 7.5G-1 is on `main`. `main`'s tree equals `a028998`; the migration blob `ca146a1` is unchanged. Record [§8.4](../../governance/PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md).
+- **#216:** `main` merged in (`8374c84`, no implementation change). It is now documentation only: this record, TRACE-159 and this handoff. The migration is not duplicated or reapplied.
+- **CI:** #217 exact head `a028998`: CI 46082028446 and Analytics privacy 46082028294 success. `main` `1e97f95`: CI 46092855229 (`backend`, `lifecycle`, `application`) and Analytics privacy 46092855233 success. Nothing rerun.
+- **Not observed:** Production READY for `1e97f95` (GitHub records deployment `8122571509`, status success), HQ-1, HQ-2, and the hosted state of `20261205001000` (recorded, not re-verified). No hosted query was run.
+- **Review outstanding (separate from CI):** Codex I-1..I-6 and V-1..V-4 (record §8.5).
+- **Next:** owner authorizes the read-only release checks in record §8.6 (optional catalog recheck, READY, HQ-1, HQ-2 runner check, HQ-2). 7.5G-2 sourcing plan is a separate documentation PR.
+
+# Phase 7.5G-1 recovery onto main (TRACE-159) — 2026-11-27 ET
+
+*Superseded by the entry above: #217 later merged 7.5G-1 into `main`.*
+
+- **Base:** `main` `294eb22` (#214 merged 21:52:04 UTC). #215 (head `9fbdc04`) was never retargeted and merged into `claude/phase7-5g-scope-plan` as `a028998` (22:59:37 UTC), so at that point 7.5G-1 had not reached `main` or deployed. Branch `claude/phase7-5g1-recovery-main`; record [§8](../../governance/PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md).
+- **Recovered:** commit `26d1594` = `main..a028998`, the 13 files of 7.5G-1, with an empty diff against `a028998`. The migration blob `ca146a1` is unchanged since `77b6160`, so it is the file the recorded push applied. A second commit reconciles the record, TRACE-159 and this handoff only.
+- **Hosted:** the push and readback of `20261205001000` are **recorded** (record §5, entry below); this recovery ran no hosted query, so they are not re-verified.
+- **Evidence:** #215's CI on `9fbdc04` is historical (stacked base). The replacement PR's exact-head CI is in its body.
+- **Not done:** merge, deploy, READY check, HQ-1/HQ-2, any hosted query or push, 7.5G-2.
+- **Next:** Codex reviews the replacement PR. The owner decides on optional read-only re-verification (record §8.3) and the release.
+
 # Phase 7.5G-1 applications awaiting review (TRACE-159) — 2026-11-27 ET
 
 - **Base:** stacked on #214's head `5810e60` (7.5G plan revision 2 = `main` `2039d25` plus documentation). Branch `claude/phase7-5g1-applications-review-queue`, main checkout, `phase5-isolated` stack. Record: [7.5G-1](../../governance/PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md). Retarget to `main` after #214 merges.
@@ -24,8 +44,8 @@
 - **Built:** migration `20261205001000`: `admin_application_review_queue()` (admin-only, `STABLE`, `{checked_at, items: [{application_id, since}]}`, `since` = application received) and `admin_operations_summary` with `applications` after `offer_terms`. `SUMMARY_QUEUES.applications`; SQL 133; parity script and fixture; unit parity test; browser rows. SQL 127 (S1–S4, S8/S9) and SQL 129 R15 (summary md5) changed on purpose.
 - **Evidence:** record §3–§4 (clean replay 241 migrations; fingerprints unchanged except the two functions; money `61 | eb3f9702…`; full SQL 126 files / 9,233 PASS; 14/14 mutants; unit 1,416; browser 52/54, then 2/2 on rerun).
 - **Local:** the host rebooted during the old-client build, which cleared the scratchpad. Another slice's `phase7-3d1` stack came back up and was left running.
-- **Not done:** hosted dry run, push and readback (record §5 gives the exact steps), merge, deploy.
-- **Next:** Codex reviews (I-1..I-6). The owner authorizes the push before merge, then merges #214 and then this PR.
+- **Not done (at implementation; the hosted steps were later run, see Hosted below):** hosted dry run, push and readback (record §5 gives the exact steps), merge, deploy.
+- **Next (at implementation; superseded by the recovery entry above):** Codex reviews (I-1..I-6). The owner authorizes the push before merge, then merges #214 and then this PR.
 - **Hosted (2026-11-27 ET, owner instructions):** dry run 20:48 UTC listed only `20261205001000`. Pushed 20:51:26–20:51:29 UTC after a guard dry run. Readback matched: latest `20261205001000` (241), reader md5 `3070dcdd…` (execute for `authenticated` only), summary md5 `779d61f5…`, money `61 | eb3f9702…` (record §5). Not merged or deployed; the release of #214, then #215, is the owner's.
 
 # Phase 7.5G scope plan (TRACE-159) — 2026-11-27 ET
