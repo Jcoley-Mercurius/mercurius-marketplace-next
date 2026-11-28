@@ -109,3 +109,14 @@ Josh approved the Phase 7.5F decisions and the 7.5F-1 database implementation (2
 > This approves implementation and local verification, including the planned concurrency CI step. It does not authorize hosted queries, migration pushes, release, production scans or purges.
 
 The same instruction scoped the work to 7.5F-1 (database foundation) and excluded 7.5F-2, any hosted action, merge, deployment, production scan or purge, scheduler, notification, email activation, booking or payment change. Plan: [7.5F](PHASE-7-SLA-BREACH-OBSERVATION-PLAN-7-5F.md); record: [7.5F-1](PHASE-7-SLA-BREACH-OBSERVATION-7-5F-1.md).
+
+## Phase 7.5G-2 sourcing queue name — 2026-11-27
+
+Josh approved OD-4a for the Phase 7.5G-2 sourcing queue (2026-11-27, America/New_York), recorded as [DEC-2026-070](DECISION-LOG.md). The instruction's approval text, verbatim:
+
+> I approve the admin-only name “Sourcing” and description:
+> “Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state.”
+>
+> Record this approval with the actual date. It does not decide OD-4b, eligible-provider definitions or sourcing deadlines.
+
+The same instruction authorized local implementation, tests, commits, pushes and PR creation for 7.5G-2, and excluded hosted queries or pushes, merge, deployment, production scans or purges, email activation, a scheduler, matching changes, booking and payments. Plan: [7.5G-2](PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.4.

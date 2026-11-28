@@ -1,3 +1,11 @@
+# Phase 7.5G-2 plan: OD-4a approved, SG-9 accepted (TRACE-159) — 2026-11-27 ET
+
+- **Base:** #219 head `ed209ae` with `main` `d47b0f4` (#216 merged) merged in. Documentation only. Record: [7.5G-2 plan](../../governance/PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.4.
+- **Owner:** OD-4a approved 2026-11-27 ET: admin-only name "Sourcing", description "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." Recorded as [DEC-2026-070](../../governance/DECISION-LOG.md) and in OWNER-APPROVALS. It does not decide OD-4b, eligible-provider definitions or deadlines.
+- **Codex (relayed by the owner):** revision 2 at `ed209ae` technically clear; SG-9 accepted (no row links, no sidebar entry; the overview links to `/admin/sourcing`).
+- **Not done:** merge of #219 (not authorized), hosted query, push. TRACE-159 is updated by the implementation PR.
+- **Next:** implementation on a branch stacked on this head; retarget it to `main` after #219 merges.
+
 # Phase 7.5G-2 sourcing queue plan, revision 2 (TRACE-159) — 2026-11-27 ET
 
 - **Base:** `main` `6614691` (#218 merged at its head `c9e1b25`, revision 1; the Codex corrections were not in it). Branch `claude/phase7-5g2-sourcing-plan-r2`, documentation only. Record: [7.5G-2 plan](../../governance/PHASE-7-SOURCING-QUEUE-PLAN-7-5G-2.md) §11.2.

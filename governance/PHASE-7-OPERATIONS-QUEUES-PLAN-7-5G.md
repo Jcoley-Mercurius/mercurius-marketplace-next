@@ -153,6 +153,8 @@ The owner decides OD-4a (§7.1). Pool counts (C-3) stay out of 7.5G-2.
 
 *Dated note (2026-11-27 ET, revision 2):* Codex ruled on SG-1..SG-8 in conversation. The 7.5G-2 plan now reports a named related-event time instead of a "since" bound, returns `plan_visit`, and links the summary row (after applications, before finance) to a read-only `/admin/sourcing` list. OD-4a's recommended description is now "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." It is still not approved. The OD-4a row in §7.1 below is kept as written.
 
+*Dated note (2026-11-27 ET, OD-4a):* the owner approved OD-4a as recommended: admin-only name "Sourcing", description "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." ([DEC-2026-070](DECISION-LOG.md); 7.5G-2 plan §11.4). It does not decide OD-4b, eligible-provider definitions or a sourcing deadline (OD-6). Codex accepted SG-9. The §7.1 row below is kept as written.
+
 ## 7. Decisions
 
 ### 7.1 Owner

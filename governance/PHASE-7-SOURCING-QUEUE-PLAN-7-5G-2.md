@@ -1,6 +1,6 @@
 # Phase 7.5G-2 — sourcing queue: plan (TRACE-159)
 
-**Status:** **PLAN, revision 2, after Codex review.** Documentation only. It approves no policy, sets no threshold or deadline, implements nothing and activates nothing. The OD-4a wording in §11.1 is **a recommendation to the owner, not approved**.
+**Status:** **PLAN, revision 2, after Codex review; OD-4a approved and SG-9 accepted (§11.4).** Documentation only. It sets no threshold or deadline, implements nothing and activates nothing. The owner approved OD-4a's wording on 2026-11-27 ET ([DEC-2026-070](DECISION-LOG.md)); that approval does not decide OD-4b, an eligible-provider definition or a sourcing deadline. Codex found revision 2 technically clear at `ed209ae` and accepted SG-9. Implementation is a separate PR (§11.4). *(Before 2026-11-27 ET §11.4: "PLAN, revision 2, after Codex review. … The OD-4a wording in §11.1 is a recommendation to the owner, not approved.")*
 **Date:** 2026-11-27 (America/New_York).
 **Base:** `main` `6614691` (#218 merged at its head `c9e1b25`, which is revision 1 of this plan). Branch `claude/phase7-5g2-sourcing-plan-r2`, from that commit.
 **Revision 2:** applies the Codex rulings SG-1..SG-8 (§11.2), relayed in conversation (not a GitHub review). Revision 1 is `c9e1b25`; the corrections Codex asked for were not in it.
@@ -212,7 +212,7 @@ Assertions: the exact item set; `kind`, `related_event_at`, `related_event` and 
 
 | ID | Decision | Needed before | Recommendation (not approved) |
 |---|---|---|---|
-| **OD-4a** | Operator-facing name and description of the queue | Implementation | **Name:** "Sourcing". **Description:** "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." Admin pages only (overview label, page heading and description). No customer copy changes. **Not approved**; the owner may choose other wording |
+| **OD-4a** | Operator-facing name and description of the queue. **Approved 2026-11-27 ET as recommended (§11.4, DEC-2026-070)**; the recommendation column is kept as written | Implementation | **Name:** "Sourcing". **Description:** "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state." Admin pages only (overview label, page heading and description). No customer copy changes. **Not approved**; the owner may choose other wording |
 | OD-4b | A "sourced" outcome | Any liquidity measure | Unchanged: option (a), none in beta |
 | OD-6 | A sourcing deadline | Any `aged` or due time | Unchanged: none until the pilot baseline |
 | — | Optional read-only legacy `sourcing` count (§4) | Implementation, if wanted | Counts only |
@@ -240,12 +240,35 @@ Opening or refreshing the list performs no business writes (Codex, with SG-7). �
 |---|---|---|
 | SG-9 | Per-row link and sidebar entry for `/admin/sourcing` | Neither in this slice. The only request page today, `/admin/requests?request=<id>`, calls `expire_stale_matches` on load, so a row link would lead straight to a page that settles offers. A later slice can add a read-only request view or a sidebar entry |
 
+*Kept as written. SG-9 is now accepted (§11.4).*
+
+### 11.4 Decisions recorded 2026-11-27 ET (owner instruction for 7.5G-2 implementation)
+
+**OD-4a: approved by the owner (Josh), 2026-11-27 (America/New_York).** Recorded as [DEC-2026-070](DECISION-LOG.md) and verbatim in [OWNER-APPROVALS](OWNER-APPROVALS.md) ("Phase 7.5G-2 sourcing queue name — 2026-11-27"). The approval text:
+
+> I approve the admin-only name "Sourcing" and description:
+> "Requests awaiting a provider or fallback consent. No sourcing deadline is set. Counts reflect stored matching state."
+>
+> Record this approval with the actual date. It does not decide OD-4b, eligible-provider definitions or sourcing deadlines.
+
+- **Settles:** the admin-only queue name "Sourcing" and the description above, exactly, for the overview row label, the `/admin/sourcing` heading and its description. No customer copy.
+- **Does not settle:** OD-4b (a "sourced" outcome; recommendation (a) unchanged), any eligible-provider definition or count (OD-3, C-3), or a sourcing deadline, `aged` rule or due time (OD-6). The kind and event labels in §4 and §5 stay implementation proposals for Codex, not owner wording.
+
+**Codex technical review (relayed by the owner in the same instruction; not a GitHub review):** "Revision 2 of #219 at `ed209ae` is technically clear." **SG-9 accepted:** no per-row links and no sidebar entry in this slice. The overview row links to `/admin/sourcing`.
+
+**What the instruction authorizes:** local implementation, tests, commits, pushes and PR creation, on a branch stacked on this plan's head while #219 is open, retargeted to `main` after the plan merges. **Not authorized:** hosted queries or pushes, merge (of this plan or the implementation), deployment, production scans or purges, email activation, a scheduler, matching changes, booking or payments. The optional legacy `sourcing` count (§4) is a hosted query and was not run.
+
+**Base after the decision.** `main` `d47b0f4` (#216 merged) was merged into this branch before recording the decisions; it touched only the 7.5G-1 record, TRACE-159 and the handoff.
+
 ## 12. Rollout and rollback
 
 Codex review of this revision, then the owner's OD-4a decision, then implementation in a separate PR. Then a dry run listing only the new migration and the push, both before merge and owner-authorized (DEC-2026-037). Then merge (deploy), a READY readback, and HQ-1/HQ-2 extended to the `sourcing` row: one `REPEATABLE READ READ ONLY` transaction, as in the [7.5G-1 record](PHASE-7-APPLICATIONS-REVIEW-QUEUE-7-5G-1.md) §8.6 step 5 with one more `readers` line. A manual check of `/admin/sourcing` as the owner after deploy only reads. Rollback: `vercel promote` of the previous deployment (no `/admin/sourcing`; the unknown summary row is dropped); the database rolls forward with a migration restoring the `20261205001000` summary body. No data is written at any step.
+
+*Dated note (2026-11-27 ET, §11.4):* Codex review of revision 2 and the OD-4a decision are done. The implementation is a separate PR stacked on this plan's head, retargeted to `main` once this plan merges, and its record carries the exact later rollout steps. Neither this plan nor the implementation is merged under that instruction.
 
 ## 13. Validation of this plan
 
 - Documentation only: this file, a dated note in the [7.5G plan](PHASE-7-OPERATIONS-QUEUES-PLAN-7-5G.md) §6, and a handoff entry. TRACEABILITY is left to #216, which edits the TRACE-159 row.
 - `git diff --check`, relative-link existence, `npm run scan:secrets`, and a merge-tree check that #216's head still merges cleanly: results in the PR body.
 - No hosted read or write.
+- *Dated note (2026-11-27 ET, §11.4):* the decision update adds §11.4, the status line, a DEC-2026-070 entry, an OWNER-APPROVALS section and a handoff entry. #216 has merged (`d47b0f4`) and is merged into this branch. TRACEABILITY's TRACE-159 row is updated by the implementation PR.
